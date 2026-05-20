@@ -54,7 +54,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs. Enemy visuals stay at base size at every wave (5.101.0) — only HP / damage / speed scale.
 - **Offensive + defensive powerups** with stacking mechanics and visual indicators — offense (Rapid Fire, Multi Shot, Homing, Big Bullets, Piercing, Explosive, Crit Chance, Crit Damage, Knockback) and defense (Health Boost, Toughness, Regen, Vampirism, Thorns, Guardian, Phase Echo) PLUS a full **health-drop family**: Triage, Lucky Drops, Field Rations, Triage Surge, Combat Medic, Salvage Plating, Triage Net, Adrenal Reserve, Field Surgeon, Blood Bank. **Buy with GOLD** in the unified shop's POWERUPS tab (6.1.0 — moved from pause menu) any time.
 - **Survivor cards every stage clear (6.1.0)** — clearing waves 3 / 6 / 9 / … / 30 opens a 3-card overlay (2 offense + 1 defense) for a free pick. Followed by a 3-card QUICK BUY overlay listing weapon upgrades tailored to the equipped primary + power. **Stage finals are boss waves, and each grants a BONUS random powerup on top of the survivor card.** Mid-stage clears (1-1 / 1-2 / 2-1 / 2-2 / etc.) give just a brisk gold bonus + WAVE CLEAR toast.
-- **Diablo-style 5-slot inventory with rolled rarities (6.0.0)** — helm, armor (HP), shield, plating (toughness), and the new **trinket** slot (regen primary). Items drop in three rarities — common / rare / **epic** — with rolled primary stats (epic ≈ 2× common at the same wave). Glow color signals tier from across the screen. **Drop suppression**: only items that are a strict upgrade over the equipped slot spawn as pickups, so anything visible is worth chasing. Auto-equip on contact; no menu interruption.
+- **5-slot inventory with rolled rarities (6.0.0; loot-feed rework 6.46.0)** — cockpit / hull (HP), shielding / chassis (toughness), and the **nanites** trinket (regen), with multi-affix rolls (common 1 / rare 2 / epic 3 affixes mirroring the passive stats — HP, toughness, vampirism, thorns, crit, dodge, speed, regen). **6.46.0** — item drops no longer spawn world pickup orbs. Each roll registers into a **left-edge loot feed** of crystalline rarity-tinted cards (distinct per-slot geometry, no halo circle) that persist ~90s and fade to ~20% when the ship or cursor is over the feed region. Drops still **auto-equip if they beat the slot**; ALL drops are kept so the **`I` inventory screen** (6.47.0) can review equipped gear and **re-equip a past drop**.
 - **Kill-streak damage tiers** — 20-tier ladder firing every 10 kills, ordered by epicness from EMPOWERED (10 kills, +25%) to RAINBOIDS GOD (200 kills, +200%). Five narrative bands of four tiers each: Momentum (EMPOWERED → RELENTLESS → UNSTOPPABLE → INDOMITABLE) → Mortal-extraordinary (OUTRAGEOUS → HERCULEAN → LEGENDARY → MYTHIC) → Divine (IMMORTAL → GODLIKE → INVINCIBLE → ETERNAL) → Cosmic (APOCALYPTIC → ASTRONOMICAL → GALACTIC → COSMIC) → Beyond physical (TRANSCENDENT → OMNIPOTENT → INFINITE → RAINBOIDS GOD). Streak resets when you take damage. LEGENDARY (70 kills) and every tier above also grants auto-explosive splash on every shot.
 - **10-stage / 30-wave speedrun campaign (6.1.0)** — `1-1` → `10-3`. Every stage final is a boss (10 bosses total). Game Complete stats screen at the end. Each stage typically introduces a new enemy type, with the boss + escort showcasing the stage's headliners.
 - **Gold-only Upgrades panel (6.27.0)** — a tabbed skill-tree UI ("UPGRADES"), opened by the prominent **UPGRADES** button at the top of the pause menu (or the 🛒 HUD button / bottom button bar). Four category tabs — **PRIMARY / POWER / DEFENSE / PASSIVE** — each showing that category's upgrade rings in a 2-column layout (Primary is the default tab). Per-node cost is hover-only (tooltip); a color key sits at the top. The shop itself is gold-only; the persistent meta layer (level / XP / SP) lives in the **STATS** screen.
@@ -87,6 +87,8 @@ Rainboids is a supercharged asteroids game featuring:
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
 - **Defensive progression**: the per-wave survivor card overlay (passives — Health, Toughness, Vampirism, Thorns, Crit Chance, Crit Damage, Evasion, Speed — obtainable ONLY from these wave-clear cards) plus the boss-wave bonus pick, the read-only PASSIVE tab in the UPGRADES panel (visualize what you hold), rolled item affixes that mirror those same stats, and the persistent **SP** layer spent in the STATS screen. *(6.35.0 — player leveling / XP / SP re-introduced as a persistent meta layer. Defensive skills returned in the DEFENSE tab; the old Q/R no-op bindings are superseded.)*
 - **Upgrades**: 🛒 button in the top-right of the HUD, or in the pause menu
+- **Inventory**: `I` (6.47.0) — review equipped gear + re-equip a recent drop
+- **Stats**: backtick `` ` `` opens the stats screen; the **STATS** pause-menu tab (6.48.0) shows the same passive stat-point allocation card ([−]/[+] to spend & redistribute SP)
 - **Pause**: Escape
 
 ### Mobile (touch) — turret-defense RPG (5.98.0)
@@ -532,6 +534,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── overlays.js    #   Title screen, wavy text, timers, ghosts
 │       │   ├── cursor.js      #   Crosshairs, targeting cursor, jitter, charge timer, laser-pointer aim (desktop-only since 5.95.1)
 │       │   ├── mobile-reticle.js #  Touch-position aiming reticle (5.95.1) — replaces desktop laser-pointer on mobile
+│       │   ├── item-feed.js   #   Left-edge item loot feed + crystalline item glyphs (6.46.0)
 │       │   └── hud-buttons.js #   Canvas SHOP/STATS/PAUSE bar + mobile PRM/PWR side buttons (5.94.0)
 │       ├── world/             # Game world entities and environment
 │       │   ├── asteroid.js    #   Asteroid entity (3D wireframe, splitting)
@@ -565,7 +568,9 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       │   ├── mobile-touch.js # Tap-to-aim-and-fire + PRM/PWR HUD routing — tower-defense mode (5.94.0)
 │       │   ├── event-setup.js #   All event listeners: input, shop, cheats, resize
 │       │   ├── radial-menu.js #   Held E/R/F radial picker for primary/power/skill
-│       │   ├── stats-overlay.js # Diablo-style stats screen (` key, 5.79.0)
+│       │   ├── stats-overlay.js # Diablo-style stats screen (` key, 5.79.0) + SP allocation
+│       │   ├── inventory-overlay.js # 'I' inventory: equipped slots + re-equip recent drops (6.47.0)
+│       │   ├── sp-allocation.js #  Shared SP stat-point card (backtick screen + STATS pause tab, 6.48.0)
 │       │   ├── icons.js       #   SVG icon registry (53 paths) + DOM/Canvas renderers (5.79.37)
 │       │   └── hint-system.js #   Onboarding hint toasts
 │       ├── performance/       # Spatial grid, depth/nebula renderers, WebGL particle/starfield/bullet renderers + atlases

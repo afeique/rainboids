@@ -59,6 +59,7 @@ import { MobileTouchHandler } from './ui/mobile-touch.js';
 import { isMobile, isPortrait } from './platform/platform-detect.js';
 import { hasSave, loadSave, writeSave, clearSave } from './core/storage.js';
 import { StatsOverlay } from './ui/stats-overlay.js';
+import { InventoryOverlay } from './ui/inventory-overlay.js';
 import { AnalogStick } from './ui/analog-stick.js';
 
 // 5.100.0 — localStorage key for the analog-stick side preference.
@@ -3604,6 +3605,18 @@ export class GameEngine {
     }
 
     isStatsScreenOpen() { return !!(this._statsOverlay && this._statsOverlay.isOpen()); }
+
+    // 6.x — Inventory management screen ('I' key). Lazy-constructed like
+    // the stats screen; pauses while open.
+    toggleInventoryScreen() {
+        if (!this._inventoryOverlay) {
+            this._inventoryOverlay = new InventoryOverlay();
+            this._inventoryOverlay.setGameEngine(this);
+        }
+        return this._inventoryOverlay.toggle();
+    }
+
+    isInventoryScreenOpen() { return !!(this._inventoryOverlay && this._inventoryOverlay.isOpen()); }
 
     // 6.36.0 — Open the STATS screen as a wave-clear level-up step. The
     // game is already paused by the wave-clear flow; `onClose` continues

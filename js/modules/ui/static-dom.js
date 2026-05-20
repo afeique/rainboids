@@ -36,6 +36,7 @@ export function buildStaticDom() {
     _buildShopSuggestOverlay();
     _buildShopOverlay();
     _buildStatsOverlay();
+    _buildInventoryOverlay();
     _buildCustomizationOverlay();
     _buildHintOverlay();
     _buildTutorialOverlay();
@@ -248,6 +249,7 @@ function _buildPauseMenu() {
     const tabs = el('div', { className: 'pause-tabs' });
     const tabDefs = [
         { key: 'controls', label: 'CONTROLS', active: true },
+        { key: 'stats',    label: 'STATS' },
         { key: 'primary',  label: 'PRIMARY' },
         { key: 'power',    label: 'POWER' },
         ...(mobile ? [] : [{ key: 'assists', label: 'ASSISTS' }]),
@@ -264,6 +266,9 @@ function _buildPauseMenu() {
 
     // ── Tab content stubs ──
     menu.appendChild(el('div', { id: 'controls-tab', className: 'pause-tab-content active' }));
+    // STATS tab — populated by ui-manager.updateStatsTab() with the
+    // shared SP-allocation card (passive stat icons + [−]/[+] controls).
+    menu.appendChild(el('div', { id: 'stats-tab',    className: 'pause-tab-content' }));
     menu.appendChild(el('div', { id: 'primary-tab',  className: 'pause-tab-content' }));
     menu.appendChild(el('div', { id: 'power-tab',    className: 'pause-tab-content' }));
     // Assists tab content only appended on desktop; mobile has no
@@ -820,6 +825,51 @@ function _buildStatsOverlay() {
     const hint = el('span', { className: 'stats-hint' });
     hint.appendChild(document.createTextNode('Hover stats for details · Press '));
     hint.appendChild(el('kbd', { text: '`' }));
+    hint.appendChild(document.createTextNode(' or '));
+    hint.appendChild(el('kbd', { text: 'Esc' }));
+    hint.appendChild(document.createTextNode(' to close'));
+    footer.appendChild(hint);
+    panel.appendChild(footer);
+
+    overlay.appendChild(panel);
+}
+
+// ── Inventory overlay (6.x — 'I' key) ──────────────────────────────
+function _buildInventoryOverlay() {
+    const overlay = document.getElementById('inventory-overlay');
+    if (!overlay || !markBuilt(overlay, 'inventory-v1')) return;
+    overlay.replaceChildren();
+    overlay.className = 'ui-element';
+    Object.assign(overlay.style, {
+        display: 'none',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+        height: '100%',
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        zIndex: '9000',
+        pointerEvents: 'auto',
+    });
+
+    const panel = el('div', { id: 'inventory-panel' });
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'Inventory');
+
+    const header = el('div', { id: 'inventory-header' });
+    header.appendChild(el('h2', { id: 'inventory-title', text: 'INVENTORY' }));
+    const close = el('button', { id: 'inventory-close', text: '×' });
+    close.setAttribute('aria-label', 'Close inventory');
+    header.appendChild(close);
+    panel.appendChild(header);
+
+    panel.appendChild(el('div', { id: 'inventory-body' }));
+
+    const footer = el('div', { id: 'inventory-footer' });
+    const hint = el('span', { className: 'stats-hint' });
+    hint.appendChild(document.createTextNode('Press '));
+    hint.appendChild(el('kbd', { text: 'I' }));
     hint.appendChild(document.createTextNode(' or '));
     hint.appendChild(el('kbd', { text: 'Esc' }));
     hint.appendChild(document.createTextNode(' to close'));

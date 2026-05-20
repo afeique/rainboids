@@ -8,6 +8,7 @@ import { DEFENSE_SKILLS, PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 import { xpForLevel, MAX_LEVEL } from '../core/sp-stats.js';
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
+import { drawItemFeed } from './item-feed.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 // 5.92.0 — Mobile HUD simplification: hide the coins readout,
 // survival timer, and loadout/weapon meters in mobile mode so the
@@ -47,6 +48,8 @@ export function drawHUD() {
             if (this.mobile && this.analogStick && this.game.state !== GAME_STATES.TITLE_SCREEN) {
                 this.analogStick.draw(this.ctx);
             }
+            // 6.x — Left-edge item loot feed (replaces world pickup orbs).
+            drawItemFeed.call(this, this.ctx);
         } else {
             // Clear stale rects so input handlers don't act on them.
             this._hudButtonRects = null;

@@ -5,7 +5,7 @@ import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, DEFENSE_SKILLS } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
-import { createItem, isUpgrade } from '../world/item-system.js';
+import { createItem } from '../world/item-system.js';
 import { rollRarity } from '../world/item-names.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
@@ -965,23 +965,19 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         this.lastHealthOrbDropAt = now;
     }
 
-    // ── Stat pickups (6.0.0) ──
-    // Five slots: helm, armor (HP), shield, plating (toughness), and
-    // the new trinket (regen). Three independent rolls per enemy
-    // kill — one HP, one toughness, one trinket. Boss kills bias the
-    // rarity roll toward rare+ (so a boss feels jackpot-y) and bump
-    // base rates. Drops are pre-rolled and SUPPRESSED when they're
-    // not a strict upgrade over the equipped item, so anything that
-    // actually appears on screen is worth chasing.
-    if (isEnemy && this.statPickupPool) {
+    // ── Item drops (6.x — left-edge loot feed) ──
+    // Five slots across HP (cockpit/hull), toughness (shielding/chassis),
+    // and trinket (nanites). Three independent rolls per enemy kill. Boss
+    // kills bias rarity toward rare+ and bump base rates. Drops no longer
+    // spawn world-space pickup orbs — each roll is registered into the
+    // player's left-edge loot feed (player.registerItemDrop), which
+    // auto-equips it if it beats the slot. ALL drops are kept (not just
+    // upgrades) so the 'I' inventory can re-equip a past one.
+    if (isEnemy && player && typeof player.registerItemDrop === 'function') {
         const boss = !!(entity && entity.isBoss);
         const hpRate     = boss ? 0.085 : 0.025;
         const toughRate  = boss ? 0.075 : 0.020;
         const trinkRate  = boss ? 0.060 : 0.015;
-        // 6.0.1 — Boss rarity bias trimmed (was +20% rare / +15% epic).
-        // Combined with the +0.27/0.08 base weights an old boss roll
-        // saw ~23% epic; the new numbers settle epic at ~16% which
-        // still feels jackpot-y without trivializing the rarity drip.
         const bonusRare  = boss ? 0.10  : 0;
         const bonusEpic  = boss ? 0.08  : 0;
 
@@ -989,12 +985,7 @@ export function dropOrbsFromEntity(x, y, entity = null) {
             if (Math.random() >= rate) return;
             const rarity = rollRarity(bonusRare, bonusEpic);
             const item = createItem(slot, wave, rarity);
-            // Suppression — only spawn the pickup if the item beats
-            // the currently-equipped slot. Keeps the screen clean
-            // (everything visible is a true upgrade).
-            const cur = player.equippedItems ? player.equippedItems[slot] : null;
-            if (!isUpgrade(cur, item)) return;
-            this.statPickupPool.get(x, y, slot, wave, item);
+            player.registerItemDrop(item);
         };
 
         tryRoll(Math.random() < 0.5 ? 'cockpit' : 'hull', hpRate);

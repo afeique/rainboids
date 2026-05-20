@@ -207,6 +207,12 @@ export class Player {
         this.equippedItems = {
             cockpit: null, hull: null, shielding: null, chassis: null, nanites: null,
         };
+        // 6.x — Left-edge loot feed. Recent item drops (newest first),
+        // capped; rendered as cards on the left HUD edge. Replaces the
+        // world-space stat-pickup orbs — drops register directly here and
+        // auto-equip if they beat the slot (see registerItemDrop).
+        this.lootFeed = [];
+        this._lootFeedSeq = 0;
 
         this.initializePlayer();
     }
@@ -294,7 +300,28 @@ export class Player {
      *   - HP items grow getEffectiveMaxHealth → bump current health by
      *     the bonus delta so the wider bar isn't visibly empty.
      */
-    equipItem(item) {
+    // 6.x — Register a dropped item into the left-edge loot feed and
+    // auto-equip it if it beats the equipped slot. All drops are kept
+    // (newest first, capped) so the 'I' inventory can re-equip a past
+    // one. Returns the feed entry.
+    registerItemDrop(item) {
+        if (!item || !item.slot) return null;
+        const res = this.equipItem(item);
+        const equipped = !!(res && res.equipped);
+        if (!this.lootFeed) this.lootFeed = [];
+        const entry = {
+            id: ++this._lootFeedSeq,
+            item,
+            equipped,
+            born: (typeof performance !== 'undefined' ? performance.now() : Date.now()),
+        };
+        this.lootFeed.unshift(entry);
+        const MAX_FEED = 7;
+        if (this.lootFeed.length > MAX_FEED) this.lootFeed.length = MAX_FEED;
+        return entry;
+    }
+
+    equipItem(item, opts = {}) {
         if (!item || !item.slot) return { equipped: false, current: null };
         if (!this.equippedItems) {
             this.equippedItems = {
@@ -302,9 +329,13 @@ export class Player {
             };
         }
         const prev = this.equippedItems[item.slot] || null;
-        if (prev && scoreItem(item) <= scoreItem(prev)) {
+        // `force` (manual re-equip from the 'I' inventory) bypasses the
+        // equip-if-better gate so the player can deliberately choose a
+        // lower-scored item. Auto-equip from drops omits force.
+        if (!opts.force && prev && scoreItem(item) <= scoreItem(prev)) {
             return { equipped: false, current: prev };
         }
+        if (prev === item) return { equipped: false, current: prev };
         // 6.32.0 — items are multi-affix now. Bump current HP by the net
         // max-HP gain (new item's hp affixes minus the replaced item's)
         // so equipping an HP roll heals the delta, like before.

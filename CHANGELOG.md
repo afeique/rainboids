@@ -11,6 +11,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.48.0] - 2026-05-20
+
+### Added — STATS pause-menu tab + refined stats screen
+
+- New **STATS tab** in the pause menu (next to CONTROLS / PRIMARY) showing
+  the passive stat-point allocation card — the same icons + **[−] / [+]**
+  controls as the backtick STATS overlay, so SP can be spent and freely
+  redistributed without leaving the pause menu.
+- Extracted the SP-allocation card into a shared `ui/sp-allocation.js`
+  (`renderSpAllocation`), now used by BOTH the backtick STATS overlay and
+  the pause STATS tab (single source of truth + icons).
+
+### Changed — backtick STATS screen visual polish + spacing
+
+Rebalanced the STATS overlay spacing: rounded panel, roomier body/column
+gaps, summary cells rendered as bordered chips, larger section padding,
+faint per-row separators, and taller rows (better breathing room between
+all the text).
+
+## [6.47.0] - 2026-05-20
+
+### Added — 'I' inventory management screen
+
+Press **I** (or close with I / Esc) to open an inventory overlay that
+pauses the game and shows:
+- The five **equipped** gear slots (cockpit / hull / shielding / chassis
+  / nanites) with their crystalline glyph, rarity, level, and rolled
+  affixes — empty slots dimmed.
+- The **recent drops** (the loot feed). Clicking a drop **force-equips**
+  it to its slot (manual override of the auto-equip-if-better rule, via
+  `equipItem(item, { force: true })`). The equipped one is tagged.
+
+New `js/modules/ui/inventory-overlay.js` (`InventoryOverlay`, modeled on
+the stats screen's pause-capture/restore), `#inventory-overlay` DOM, and
+styles; reuses `drawItemGlyph` from the loot feed via per-item canvases.
+
+## [6.46.0] - 2026-05-20
+
+### Changed — item drops are now a left-edge loot feed (no world orbs)
+
+Item drops no longer spawn world-space pickup orbs that you fly into.
+Each roll registers into a new **left-edge loot feed** (`player.lootFeed`,
+newest-first, capped at 7) and **auto-equips if it beats the slot**
+(unchanged equip-if-better logic). ALL drops are now kept (the old
+suppression of non-upgrades is gone) so a future inventory screen can
+re-equip a past one.
+
+- New `js/modules/hud/item-feed.js`: draws the feed as cards on the left
+  HUD edge. Cards persist ~90s and fade to ~20% alpha when the ship or
+  cursor is over the feed region, so they never block gameplay.
+- **Cool item geometry** (`drawItemGlyph`): distinct crystalline per-slot
+  silhouettes (cockpit spike, hull hexagon, shielding heater-shield,
+  chassis octagon, nanite star), rarity-tinted edge + faceted inner
+  highlight. The big colored rarity-halo circle around drops is **removed**.
+- `combat-manager.dropOrbsFromEntity` routes item rolls through
+  `player.registerItemDrop`; the world `StatPickup` orbs are no longer
+  spawned.
+
 ## [6.45.2] - 2026-05-20
 
 ### Changed — TAB activates the defense ability/skill

@@ -11,6 +11,7 @@ import { iconSpriteCache } from '../core/utils.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { getStageLabel as stageLabelFor, GAME_STATES } from '../core/constants.js';
 import { renderIconHTML } from './icons.js';
+import { renderSpAllocation } from './sp-allocation.js';
 import {
     SP_STATS,
     SP_STAT_MAX_POINTS,
@@ -405,83 +406,14 @@ export class StatsOverlay {
     // so the player can redistribute at any time. + spends an unspent
     // SP (capped at 20/stat); − pulls one back into the unspent pool.
     _renderSpAllocation(cols, player) {
-        if (!player || !player.spStats) return;
-        const sp = player.sp | 0;
-
-        const card = document.createElement('div');
-        card.className = 'stats-section stats-section--sp';
-
-        const title = document.createElement('div');
-        title.className = 'stats-section-title';
-        title.textContent = sp > 0 ? `STAT POINTS — ${sp} TO SPEND` : 'STAT POINTS';
-        if (sp > 0) title.classList.add('stats-section-title--hot');
-        card.appendChild(title);
-
-        for (const def of SP_STATS) {
-            const pts = player.spStats[def.id] | 0;
-            const val = spStatValue(def.id, pts);
-            const atCap = pts >= SP_STAT_MAX_POINTS;
-            const canAdd = sp > 0 && !atCap;
-            const canRemove = pts > 0;
-
-            const row = document.createElement('div');
-            row.className = 'sp-alloc-row';
-            row.dataset.tip = def.label(val);
-
-            const icon = document.createElement('span');
-            icon.className = 'sp-alloc-icon';
-            icon.innerHTML = renderIconHTML(def.icon, { size: 22, fallback: '?' });
-            row.appendChild(icon);
-
-            const info = document.createElement('div');
-            info.className = 'sp-alloc-info';
-            const name = document.createElement('span');
-            name.className = 'sp-alloc-name';
-            name.textContent = def.name;
-            const eff = document.createElement('span');
-            eff.className = 'sp-alloc-value';
-            eff.textContent = pts > 0 ? def.label(val) : '—';
-            info.appendChild(name);
-            info.appendChild(eff);
-            row.appendChild(info);
-
-            const minus = document.createElement('button');
-            minus.type = 'button';
-            minus.className = 'sp-alloc-btn sp-alloc-minus';
-            minus.textContent = '−';
-            minus.disabled = !canRemove;
-            minus.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._adjustSp(def.id, -1);
-            });
-            row.appendChild(minus);
-
-            const dots = document.createElement('span');
-            dots.className = 'sp-alloc-points';
-            if (atCap) dots.classList.add('sp-alloc-points--max');
-            dots.textContent = atCap ? `${pts}/${SP_STAT_MAX_POINTS} MAX` : `${pts}/${SP_STAT_MAX_POINTS}`;
-            row.appendChild(dots);
-
-            const plus = document.createElement('button');
-            plus.type = 'button';
-            plus.className = 'sp-alloc-btn sp-alloc-plus';
-            plus.textContent = '+';
-            plus.disabled = !canAdd;
-            plus.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._adjustSp(def.id, +1);
-            });
-            row.appendChild(plus);
-
-            // Hover tip explains the effect (mirrors the derived-stat rows).
-            row.addEventListener('mouseenter', () => this._showTip(row));
-            row.addEventListener('mousemove',  (e) => this._moveTip(e));
-            row.addEventListener('mouseleave', () => this._hideTip());
-
-            card.appendChild(row);
-        }
-
-        cols.appendChild(card);
+        // 6.x — Delegated to the shared sp-allocation module so the pause
+        // STATS tab reuses the exact same card + icons + controls.
+        renderSpAllocation(cols, player, {
+            onChange: () => this.render(),
+            onHover: (row) => this._showTip(row),
+            onMove:  (e) => this._moveTip(e),
+            onLeave: () => this._hideTip(),
+        });
     }
 
     // Apply a +1/−1 SP change and re-render. Re-syncs HUD-derived numbers

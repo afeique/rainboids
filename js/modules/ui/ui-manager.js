@@ -5,6 +5,7 @@ import { SPEEDRUN_TIERS, speedrunTierFor } from '../core/constants.js';
 import { loadSettings, saveSettings } from '../core/storage.js';
 import { renderIconHTML } from './icons.js';
 import { isMobile } from '../platform/platform-detect.js';
+import { renderSpAllocation } from './sp-allocation.js';
 
 // Format an elapsed-time milliseconds value as M:SS for the pause-menu
 // TIMER tab. Mirrors the same formatter that lives in shop-dom.js for
@@ -374,7 +375,7 @@ export class UIManager {
                     // 6.1.1 — Dash row added. SHIFT is the dodge button:
                     // 135 px burst over 250 ms, 1.5 s cooldown, i-frames
                     // during the burst. Critical for late-game survival.
-                    { action: 'Dash (i-frames)', keys: [
+                    { action: 'Dash', keys: [
                         { kind: 'sprite', file: 'SHIFT.png', alt: 'Shift' },
                     ] },
                 ],
@@ -384,18 +385,18 @@ export class UIManager {
                 accent: 'orange',
                 iconPath: 'M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 Z M12 8 A4 4 0 1 0 12 16 A4 4 0 1 0 12 8 Z M12 11 A1 1 0 1 0 12 13 A1 1 0 1 0 12 11 Z',
                 rows: [
-                    { action: 'Aim Reticle', keys: [
+                    { action: 'Aim', keys: [
                         { kind: 'mouse', side: 'none' },
                         { kind: 'or' },
                         { kind: 'sprite', file: 'ARROWLEFT.png', alt: 'Left' },
                         { kind: 'sprite', file: 'ARROWRIGHT.png', alt: 'Right' },
                     ] },
-                    { action: 'Fire Primary Weapon', keys: [
+                    { action: 'Fire Primary', keys: [
                         { kind: 'mouse', side: 'left' },
                         { kind: 'or' },
                         { kind: 'sprite', file: 'ARROWUP.png', alt: 'Up' },
                     ] },
-                    { action: 'Fire Power Weapon', keys: [
+                    { action: 'Fire Power', keys: [
                         { kind: 'mouse', side: 'right' },
                         { kind: 'or' },
                         { kind: 'sprite', file: 'SPACE.png', alt: 'Space' },
@@ -412,10 +413,10 @@ export class UIManager {
                 accent: 'pink',
                 iconPath: 'M13 2 L4 14 H10 L9 22 L20 9 H13 Z',
                 rows: [
-                    { action: 'Cycle Primary Weapon', keys: [
+                    { action: 'Cycle Primary', keys: [
                         { kind: 'sprite', file: 'R.png', alt: 'R' },
                     ] },
-                    { action: 'Cycle Power Weapon', keys: [
+                    { action: 'Cycle Power', keys: [
                         { kind: 'sprite', file: 'F.png', alt: 'F' },
                     ] },
                     { action: 'Cycle Skill', keys: [
@@ -540,7 +541,7 @@ export class UIManager {
                 accent: 'cyan',
                 rows: [
                     { action: 'Move ship', glyph: '🎮', detail: 'Drag the analog stick at the bottom corner' },
-                    { action: 'Dash (i-frames)', glyph: '⚡', detail: 'TAP anywhere outside the stick. 1.5s cooldown' },
+                    { action: 'Dash', glyph: '⚡', detail: 'TAP anywhere outside the stick. 1.5s cooldown' },
                 ],
             },
             {
@@ -821,6 +822,26 @@ export class UIManager {
     // All DOM is built with createElement / textContent (no innerHTML) to
     // keep XSS risk impossible even if a future weapon-data entry contains
     // markup-flavored characters.
+    // 6.x — Pause-menu STATS tab. Reuses the shared SP-allocation card
+    // (passive stat icons + [−]/[+] controls) so the player can spend and
+    // freely redistribute stat points without leaving the pause menu.
+    // The backtick stats overlay renders the same card.
+    updateStatsTab() {
+        const tab = document.getElementById('stats-tab');
+        if (!tab) return;
+        const player = this.gameEngine && this.gameEngine.player;
+        tab.replaceChildren();
+        const h2 = document.createElement('h2');
+        h2.textContent = 'STATS';
+        tab.appendChild(h2);
+        const subtitle = document.createElement('div');
+        subtitle.className = 'pause-tab-subtitle';
+        subtitle.textContent = 'Spend & freely redistribute passive stat points';
+        tab.appendChild(subtitle);
+        if (!player) return;
+        renderSpAllocation(tab, player, { onChange: () => this.updateStatsTab() });
+    }
+
     updatePrimaryTab() {
         // 5.79.59 — Owns the entire #primary-tab now (h2 + subtitle +
         //   list). Was scoped to the inner #primary-weapon-list
@@ -1711,6 +1732,7 @@ export class UIManager {
         if (tabName === 'primary') this.updatePrimaryTab();
         if (tabName === 'power') this.updatePowerTab();
         if (tabName === 'skills') this.updateSkillsTab();
+        if (tabName === 'stats') this.updateStatsTab();
         if (tabName === 'assists') this.syncAssistsTab();
 
         // 6.1.0 — Powerups tab moved to the shop overlay; no

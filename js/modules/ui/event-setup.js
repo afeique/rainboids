@@ -50,7 +50,25 @@ export function setupEventListeners() {
                 this.toggleStatsScreen();
                 return;
             }
+            // 6.x — Esc closes the inventory screen first too.
+            if (this.isInventoryScreenOpen && this.isInventoryScreenOpen()) {
+                this.toggleInventoryScreen();
+                return;
+            }
             this.togglePause();
+        }
+        // 6.x — 'I' opens the inventory management screen (review equipped
+        // gear + re-equip a recent drop). Same allowed states as stats.
+        if (e.code === 'KeyI' && !e.repeat) {
+            const allowed =
+                this.game.state === GAME_STATES.PLAYING ||
+                this.game.state === GAME_STATES.WAVE_TRANSITION ||
+                this.game.state === GAME_STATES.PAUSED;
+            if (allowed && this.toggleInventoryScreen) {
+                this.toggleInventoryScreen();
+                e.preventDefault();
+                return;
+            }
         }
         // 5.79.0 — backtick (`) opens the Diablo-style stats screen.
         // Allowed in PLAYING / WAVE_TRANSITION / PAUSED. Pressing it
