@@ -641,11 +641,18 @@ function _titleLetterDraw(ctx, drawWavyText, ch, x, y, scale, alpha, opts = {}) 
         const idx = Math.floor((opts.letterIndex / opts.totalLetters) * palette.length);
         colors = [palette[idx % palette.length]];
     }
+    // 6.x.0 — Keep the black stroke during fly-around animations. The
+    // static title (drawTitleScreen) opts into `outline`; the animated
+    // letters route through here, so enable it by default and size the
+    // stroke off the font like the static title (max(3, fontSize/12)).
+    const fontSize = opts.fontSize || TITLE_FONT_SIZE;
     drawWavyText(ch, 0, 0, {
-        fontSize: opts.fontSize || TITLE_FONT_SIZE,
+        fontSize,
         colors,
         speed: opts.speed || 0.55,
         colorSpeed: opts.colorSpeed || 0.22,
+        outline: opts.outline !== false,
+        outlineWidth: opts.outlineWidth || Math.max(3, Math.floor(fontSize / 12)),
     });
     ctx.restore();
 }

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.45.1] - 2026-05-20
+
+### Fixed — title text keeps its black stroke during the fly-around animation
+
+The animated title letters lost their black outline the moment the
+fly-around animation started. All six animation styles (Twister,
+Explosion, Wave, Cascade, Warpdrive, Pinwheel) render letters through
+the shared `_titleLetterDraw()` helper, which called `drawWavyText()`
+without the `outline` option — so it defaulted off, even though the
+static title opts in. `_titleLetterDraw()` now enables the outline by
+default and sizes it off the font (`max(3, fontSize/12)`) to match the
+static title; the stroke reads `baseAlpha`, so it fades in sync with
+each letter.
+
 ## [6.45.0] - 2026-05-20
 
 ### Added — Tractor Shield REDIRECTION
