@@ -27,6 +27,7 @@ import {
     ITEM_BASES, ITEM_PREFIXES,
     SLOT_BONUS_TYPE, SLOT_LABEL, SLOT_ACCENT, SLOT_ORDER,
     RARITY_TIERS, RARITY_ORDER, rollRarity,
+    ITEM_AFFIX_POOL, AFFIX_SCORE_WEIGHT,
 } from './item-names.js';
 
 export function getHpBonusForLevel(level) {
@@ -78,52 +79,55 @@ function _rollRegenAffix(level) {
  */
 export function createItem(slot, level, rarityKey = null) {
     if (!ITEM_BASES[slot]) slot = 'cockpit';
-    const bonusType = SLOT_BONUS_TYPE[slot];
     const rarity = rarityKey || rollRarity();
     const tier = RARITY_TIERS[rarity] || RARITY_TIERS.common;
-    const mult = _rollMult(rarity);
+    const L = Math.max(1, level | 0);
 
-    // 6.2.1 — Name template: `[RarityAdj?] [Prefix] [Base]`. The old
-    // `of the X` suffix dropped along with the medieval-armor theme;
-    // space-engineering names read tighter as 2 words (e.g.
-    // "Ablative Hull", "Adaptive Nanites").
-    const prefix = _pick(ITEM_PREFIXES[bonusType] || ITEM_PREFIXES.hp);
+    // 6.32.0 — Roll AFFIXES that mirror the passive stat set. Affix
+    // count by rarity: common 1, rare 2, epic 3. Each affix value is
+    // wave-scaled × an independent rarity-mult roll, so two epics of
+    // the same slot still differ.
+    const affixCount = rarity === 'epic' ? 3 : (rarity === 'rare' ? 2 : 1);
+    const pool = ITEM_AFFIX_POOL.slice();
+    // Fisher-Yates shuffle, take the first `affixCount` distinct affixes.
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0;
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const chosen = pool.slice(0, affixCount);
+
+    const affixes = chosen.map((def) => {
+        const raw = (def.base + (L - 1) * def.perWave) * _rollMult(rarity);
+        const value = def.pct
+            ? Math.max(def.min, Math.round(raw * 10) / 10)
+            : (def.type === 'regen'
+                ? Math.max(def.min, Math.round(raw * 100) / 100)
+                : Math.max(def.min, Math.round(raw)));
+        return { type: def.type, value, label: def.label(value) };
+    });
+
+    const bonusLabel = affixes.map((a) => a.label).join(' · ');
+
+    // Name: prefix family keyed off the first affix's flavor bucket.
+    const primary = chosen[0];
+    const prefix = _pick(ITEM_PREFIXES[primary.prefix] || ITEM_PREFIXES.hp);
     const base   = _pick(ITEM_BASES[slot]);
     const adj = tier.rarityAdjective ? `${tier.rarityAdjective} ` : '';
     const name = `${adj}${prefix} ${base}`;
 
-    let bonus;
-    let regenBonus;
-    let bonusLabel;
-
-    if (bonusType === 'regen') {
-        // Trinket: regen IS the primary. No HP/tough on this slot.
-        const baseRegen = getRegenBonusForLevel(level);
-        const rolled = Math.round(baseRegen * mult * 100) / 100;
-        bonus = rolled;
-        regenBonus = rolled;
-        bonusLabel = `+${rolled}/s REGEN`;
-    } else if (bonusType === 'hp') {
-        const baseHp = getHpBonusForLevel(level);
-        bonus = Math.max(1, Math.round(baseHp * mult));
-        regenBonus = _rollRegenAffix(level);
-        bonusLabel = `+${bonus} MAX HP`;
-        if (regenBonus > 0) bonusLabel += ` · +${regenBonus}/s REGEN`;
-    } else {
-        // toughness
-        const baseTough = getToughnessBonusForLevel(level);
-        bonus = Math.round(baseTough * mult * 10) / 10;
-        regenBonus = _rollRegenAffix(level);
-        bonusLabel = `+${bonus}% DEF`;
-        if (regenBonus > 0) bonusLabel += ` · +${regenBonus}/s REGEN`;
-    }
+    // Legacy fields kept for any straggler reads / display: primary
+    // affix becomes `bonus`/`bonusType`, and `regenBonus` sums any
+    // regen affixes (getEffectiveRegen now reads affixes directly).
+    const first = affixes[0];
+    const regenBonus = affixes.filter((a) => a.type === 'regen').reduce((s, a) => s + a.value, 0);
 
     return {
         slot,
-        level: Math.max(1, level | 0),
+        level: L,
         name,
-        bonus,
-        bonusType,
+        affixes,
+        bonus: first.value,
+        bonusType: first.type,
         bonusLabel,
         regenBonus,
         rarity,
@@ -143,14 +147,21 @@ export function createItem(slot, level, rarityKey = null) {
  */
 export function scoreItem(item) {
     if (!item) return 0;
+    // 6.32.0 — Sum every affix's weighted value (normalized to an
+    // "effective HP" scale via AFFIX_SCORE_WEIGHT).
+    if (Array.isArray(item.affixes)) {
+        let s = 0;
+        for (const a of item.affixes) {
+            s += (a.value || 0) * (AFFIX_SCORE_WEIGHT[a.type] || 1);
+        }
+        return s;
+    }
+    // Legacy single-bonus fallback.
     let s = 0;
     if (item.bonusType === 'hp')        s += item.bonus || 0;
     else if (item.bonusType === 'toughness') s += (item.bonus || 0) * 8;
     else if (item.bonusType === 'regen')     s += (item.bonus || 0) * 16;
-    // Secondary regen affix (always weighted at 8 since it's bonus, not primary).
-    if (item.bonusType !== 'regen' && item.regenBonus) {
-        s += item.regenBonus * 8;
-    }
+    if (item.bonusType !== 'regen' && item.regenBonus) s += item.regenBonus * 8;
     return s;
 }
 

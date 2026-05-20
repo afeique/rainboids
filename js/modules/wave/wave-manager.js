@@ -1561,29 +1561,48 @@ export function closeWavePickOverlay() {
         this.player.resumeChargeShot();
     }
     const frame = this._popResumeFrame ? this._popResumeFrame() : null;
-    if (frame && frame.fromWaveClear) {
-        this.game.state = GAME_STATES.WAVE_TRANSITION;
-        if (typeof this.startNextWave === 'function') this.startNextWave();
-    } else if (this.game && this.game.waveComplete) {
-        // 6.26.2 — Defensive recovery for the "post-shop ghost" bug.
-        //   When this branch was reached previously, the engine flipped
-        //   to PLAYING without calling startNextWave, leaving the run
-        //   in a stuck state: pools un-spawned, currentWave un-incremented,
-        //   spawn timers never scheduled. checkWaveComplete then re-fired
-        //   openWaveClearPowerupsMenu the next tick → overlay pop-up
-        //   loop, OR (with the pool's last-frame entity refs cleaned up)
-        //   the canvas appeared "empty" of player/asteroids/enemies
-        //   while the WebGL layers (bullets, starfield) kept rendering.
-        //   If we reach this fallback with waveComplete still true, the
-        //   only safe recovery is to flip to WAVE_TRANSITION and start
-        //   the next wave anyway — that's what the missing/dropped
-        //   resume frame would have routed to.
-        this.game.state = GAME_STATES.WAVE_TRANSITION;
-        if (typeof this.startNextWave === 'function') this.startNextWave();
-    } else {
-        // True defensive fallback — neither path applies, just restore PLAYING.
-        this.game.state = GAME_STATES.PLAYING;
+
+    // The next-wave routing, deferred into a closure so we can interpose
+    // the level-up STATS screen before it runs.
+    const proceed = () => {
+        if (frame && frame.fromWaveClear) {
+            this.game.state = GAME_STATES.WAVE_TRANSITION;
+            if (typeof this.startNextWave === 'function') this.startNextWave();
+        } else if (this.game && this.game.waveComplete) {
+            // 6.26.2 — Defensive recovery for the "post-shop ghost" bug.
+            //   When this branch was reached previously, the engine flipped
+            //   to PLAYING without calling startNextWave, leaving the run
+            //   in a stuck state: pools un-spawned, currentWave un-incremented,
+            //   spawn timers never scheduled. checkWaveComplete then re-fired
+            //   openWaveClearPowerupsMenu the next tick → overlay pop-up
+            //   loop, OR (with the pool's last-frame entity refs cleaned up)
+            //   the canvas appeared "empty" of player/asteroids/enemies
+            //   while the WebGL layers (bullets, starfield) kept rendering.
+            //   If we reach this fallback with waveComplete still true, the
+            //   only safe recovery is to flip to WAVE_TRANSITION and start
+            //   the next wave anyway — that's what the missing/dropped
+            //   resume frame would have routed to.
+            this.game.state = GAME_STATES.WAVE_TRANSITION;
+            if (typeof this.startNextWave === 'function') this.startNextWave();
+        } else {
+            // True defensive fallback — neither path applies, just restore PLAYING.
+            this.game.state = GAME_STATES.PLAYING;
+        }
+    };
+
+    // 6.36.0 — If the player leveled up during the wave just cleared,
+    // interpose the STATS screen so they can spend the freshly-earned SP
+    // before the next wave begins. Closing it continues into proceed().
+    // The game is still PAUSED here, which the deferred STATS mode relies
+    // on (it must not touch togglePause).
+    if (this.player && this.player._leveledUpPending
+        && typeof this.openStatsForLevelUp === 'function') {
+        this.player._leveledUpPending = false;
+        const opened = this.openStatsForLevelUp(proceed);
+        if (opened) return; // proceed() fires when the STATS screen closes
     }
+
+    proceed();
 }
 
 // 5.101.0 — Shop-suggest overlay. Fires immediately after the player

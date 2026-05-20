@@ -1105,36 +1105,25 @@ export function fireMissiles(bulletPool, config) {
     const extraOrdnanceStacks = this.getPowerupStacks('EXTRA_ORDNANCE');
     const count = config.missileCount + extraOrdnanceStacks;
 
-    // Pre-assign one distinct target per missile so the salvo spreads
-    // across multiple threats instead of stacking on the nearest. Enemies
-    // first (nearest-first), then asteroids as fallback. If we run out
-    // of candidates, the remaining missiles launch unguided and will
-    // re-acquire later (skills.js handles that path, also de-duped).
+    // 6.34.0 — Missile Salvo concentrates ALL missiles on a SINGLE
+    // target (nearest enemy, else nearest asteroid) to maximize burst
+    // damage. If that target dies, each missile re-acquires the new
+    // nearest target in flight (see updateMissiles in skills.js).
     const eng = this.gameEngine;
     const enemies = (eng && eng.enemyPool && eng.enemyPool.activeObjects) || [];
     const asteroids = (eng && eng.asteroidPool && eng.asteroidPool.activeObjects) || [];
-    const enemyCandidates = [];
+    let sharedTarget = null;
+    let bestD = Infinity;
     for (const e of enemies) {
         if (!e.active || e._deathFlash > 0) continue;
-        enemyCandidates.push({ ent: e, d: Math.hypot(e.x - this.x, e.y - this.y) });
+        const d = Math.hypot(e.x - this.x, e.y - this.y);
+        if (d < bestD) { bestD = d; sharedTarget = e; }
     }
-    enemyCandidates.sort((a, b) => a.d - b.d);
-    const asteroidCandidates = [];
-    for (const a of asteroids) {
-        if (!a.active || a._deathFlash > 0 || a.warping) continue;
-        asteroidCandidates.push({ ent: a, d: Math.hypot(a.x - this.x, a.y - this.y) });
-    }
-    asteroidCandidates.sort((a, b) => a.d - b.d);
-    const initialTargets = new Array(count).fill(null);
-    let ti = 0;
-    for (let i = 0; i < count && ti < enemyCandidates.length; i++, ti++) {
-        initialTargets[i] = enemyCandidates[ti].ent;
-    }
-    let aj = 0;
-    for (let i = 0; i < count; i++) {
-        if (initialTargets[i]) continue;
-        if (aj < asteroidCandidates.length) {
-            initialTargets[i] = asteroidCandidates[aj++].ent;
+    if (!sharedTarget) {
+        for (const a of asteroids) {
+            if (!a.active || a._deathFlash > 0 || a.warping) continue;
+            const d = Math.hypot(a.x - this.x, a.y - this.y);
+            if (d < bestD) { bestD = d; sharedTarget = a; }
         }
     }
 
@@ -1166,7 +1155,7 @@ export function fireMissiles(bulletPool, config) {
             life: 3000,
             maxLife: 3000,
             radius: 5,
-            target: initialTargets[i],
+            target: sharedTarget, // 6.34.0 — whole salvo locks one target
             active: true,
             speed: config.missileSpeed,
         });

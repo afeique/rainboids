@@ -282,11 +282,22 @@ button:not([disabled]),
 
 #stats-summary {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
     gap: 12px;
     background: rgba(0, 0, 0, 0.35);
     padding: 12px;
     border: 1px solid rgba(194, 153, 47, 0.25);
+}
+#stats-summary .stats-summary-cell--hot {
+    background: rgba(255, 200, 64, 0.12);
+    border-radius: 4px;
+    box-shadow: 0 0 10px rgba(255, 200, 64, 0.35);
+    animation: sp-cell-pulse 1.4s ease-in-out infinite;
+}
+#stats-summary .stats-summary-cell--hot .stats-summary-value { color: #ffe27a; }
+@keyframes sp-cell-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255, 200, 64, 0.25); }
+    50%      { box-shadow: 0 0 16px rgba(255, 200, 64, 0.6); }
 }
 #stats-summary .stats-summary-cell {
     display: flex;
@@ -337,6 +348,85 @@ button:not([disabled]),
 }
 .stats-row .stats-key   { color: #c8b986; }
 .stats-row .stats-value { color: #fff4c4; font-weight: bold; }
+
+/* 6.36.0 — SP allocation card. Spans both columns; one row per stat
+   with a [−] points/cap [+] control. */
+.stats-section--sp { grid-column: 1 / -1; }
+.stats-section-title--hot {
+    color: #fff0b0;
+    text-shadow: 0 0 8px rgba(255, 210, 90, 0.7);
+}
+.sp-alloc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px;
+    font-size: 12px;
+    cursor: help;
+    border-radius: 3px;
+}
+.sp-alloc-row:hover { background: rgba(255, 200, 64, 0.07); }
+.sp-alloc-icon {
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffe5a0;
+}
+.sp-alloc-info {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.sp-alloc-name  { color: #e8d7a4; font-weight: bold; letter-spacing: 0.5px; }
+.sp-alloc-value { color: #9fb4ff; font-size: 10px; }
+.sp-alloc-points {
+    flex: 0 0 auto;
+    min-width: 58px;
+    text-align: center;
+    color: #fff4c4;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+}
+.sp-alloc-points--max { color: #c79bff; font-size: 10px; }
+.sp-alloc-btn {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    font-size: 18px;
+    line-height: 1;
+    font-weight: bold;
+    color: #ffe5a0;
+    background: rgba(255, 200, 64, 0.12);
+    border: 1px solid rgba(194, 153, 47, 0.55);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.12s, transform 0.06s;
+    pointer-events: auto;
+}
+.sp-alloc-btn:hover:not(:disabled) {
+    background: rgba(255, 200, 64, 0.28);
+    box-shadow: 0 0 8px rgba(255, 200, 64, 0.4);
+}
+.sp-alloc-btn:active:not(:disabled) { transform: scale(0.9); }
+.sp-alloc-plus:not(:disabled) {
+    color: #b6ffb0;
+    border-color: rgba(120, 220, 110, 0.6);
+    background: rgba(120, 220, 110, 0.14);
+}
+.sp-alloc-minus:not(:disabled) {
+    color: #ffb0b0;
+    border-color: rgba(220, 120, 110, 0.55);
+    background: rgba(220, 120, 110, 0.12);
+}
+.sp-alloc-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+    pointer-events: none;
+}
 
 #stats-tooltip {
     position: absolute;
@@ -4071,6 +4161,14 @@ body.mobile-portrait .shop-help-icon {
     font-size: 12px;
     color: #ffd700;
     font-weight: bold;
+}
+
+.shop-tree-tooltip-sellhint {
+    font-size: 8px;
+    color: #888;
+    letter-spacing: 1px;
+    margin-top: 8px;
+    text-transform: uppercase;
 }
 
 /* ── Responsive — narrow viewports ───────────────────────────────── */

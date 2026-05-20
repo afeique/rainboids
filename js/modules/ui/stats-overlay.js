@@ -10,6 +10,14 @@ import { POWERUP_TYPES } from '../world/powerup.js';
 import { iconSpriteCache } from '../core/utils.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { getStageLabel as stageLabelFor, GAME_STATES } from '../core/constants.js';
+import { renderIconHTML } from './icons.js';
+import {
+    SP_STATS,
+    SP_STAT_MAX_POINTS,
+    spStatValue,
+    xpForLevel,
+    MAX_LEVEL,
+} from '../core/sp-stats.js';
 
 // Helper: percent-format with 1 decimal of headroom for tiny gains.
 function pct(v) { return `${(v * 100).toFixed(1)}%`; }
@@ -238,11 +246,42 @@ export class StatsOverlay {
         return true;
     }
 
+    // 6.36.0 — Open the screen as a wave-clear LEVEL-UP step. The game is
+    // already PAUSED by the wave-clear flow, so we must NOT touch
+    // togglePause (open or close) — that would desync the state machine.
+    // Closing runs `onClose`, which the caller uses to continue into the
+    // next wave once the player is done spending SP.
+    openForLevelUp(onClose) {
+        if (!this.elements.overlay) return false;
+        const ge = this.gameEngine;
+        if (!ge?.player) return false;
+        this._deferredOnClose = typeof onClose === 'function' ? onClose : null;
+        this._isOpen = true;
+        // Mark so close() skips the pause-restore branches entirely.
+        this._wasPaused = true;
+        this._cameFromPauseMenu = false;
+        this.elements.overlay.style.display = 'flex';
+        const pauseDom = document.getElementById('pause-overlay');
+        if (pauseDom) pauseDom.style.display = 'none';
+        this.render();
+        return true;
+    }
+
     close() {
         if (!this._isOpen) return;
         this._isOpen = false;
         if (this.elements.overlay) this.elements.overlay.style.display = 'none';
         if (this.elements.tooltip) this.elements.tooltip.style.display = 'none';
+        // 6.36.0 — Deferred wave-clear mode: don't restore pause; hand
+        // control back to the wave flow via the stored continuation.
+        if (this._deferredOnClose) {
+            const cb = this._deferredOnClose;
+            this._deferredOnClose = null;
+            this._cameFromPauseMenu = false;
+            this._wasPaused = false;
+            cb();
+            return;
+        }
         // Restore based on the captured source, NOT on current overlay
         // visibility (which we've been mutating).
         const ge = this.gameEngine;
@@ -277,7 +316,16 @@ export class StatsOverlay {
             // 6.1.0 — STAGE label (S-W format like the HUD shield)
             // replaces the bare wave number. Gold stays as-is.
             const wave = ge.game?.currentWave ?? 1;
+            const player = ge.player;
+            const lvl = player?.level | 0 || 1;
+            const sp = player?.sp | 0;
+            const xpNow = player?.xp | 0;
+            const xpNeed = lvl >= MAX_LEVEL ? 0 : xpForLevel(lvl);
+            const xpLabel = lvl >= MAX_LEVEL ? 'MAX' : `${xpNow} / ${xpNeed}`;
             const cells = [
+                { label: 'LEVEL', value: `${lvl}` },
+                { label: `SP${sp > 0 ? ' ●' : ''}`, value: `${sp}`, hot: sp > 0 },
+                { label: 'XP', value: xpLabel },
                 { label: 'STAGE', value: stageLabelFor(wave) },
                 {
                     label: 'GOLD', value: `${ge.game?.money ?? 0}`, icon: 'coin',
@@ -285,7 +333,7 @@ export class StatsOverlay {
             ];
             for (const c of cells) {
                 const cell = document.createElement('div');
-                cell.className = 'stats-summary-cell';
+                cell.className = 'stats-summary-cell' + (c.hot ? ' stats-summary-cell--hot' : '');
                 const lbl = document.createElement('div');
                 lbl.className = 'stats-summary-label';
                 lbl.textContent = c.label;
@@ -321,6 +369,8 @@ export class StatsOverlay {
         const cols = this.elements.columns;
         if (cols) {
             cols.replaceChildren();
+            // SP allocation card first — the actionable part of this screen.
+            this._renderSpAllocation(cols, ge.player);
             for (const sec of model.sections) {
                 const card = document.createElement('div');
                 card.className = 'stats-section';
@@ -348,6 +398,109 @@ export class StatsOverlay {
                 cols.appendChild(card);
             }
         }
+    }
+
+    // 6.36.0 — SP allocation card. One row per permanent stat with a
+    // [−] points/cap [+] control. Points are freely refundable (−),
+    // so the player can redistribute at any time. + spends an unspent
+    // SP (capped at 20/stat); − pulls one back into the unspent pool.
+    _renderSpAllocation(cols, player) {
+        if (!player || !player.spStats) return;
+        const sp = player.sp | 0;
+
+        const card = document.createElement('div');
+        card.className = 'stats-section stats-section--sp';
+
+        const title = document.createElement('div');
+        title.className = 'stats-section-title';
+        title.textContent = sp > 0 ? `STAT POINTS — ${sp} TO SPEND` : 'STAT POINTS';
+        if (sp > 0) title.classList.add('stats-section-title--hot');
+        card.appendChild(title);
+
+        for (const def of SP_STATS) {
+            const pts = player.spStats[def.id] | 0;
+            const val = spStatValue(def.id, pts);
+            const atCap = pts >= SP_STAT_MAX_POINTS;
+            const canAdd = sp > 0 && !atCap;
+            const canRemove = pts > 0;
+
+            const row = document.createElement('div');
+            row.className = 'sp-alloc-row';
+            row.dataset.tip = def.label(val);
+
+            const icon = document.createElement('span');
+            icon.className = 'sp-alloc-icon';
+            icon.innerHTML = renderIconHTML(def.icon, { size: 22, fallback: '?' });
+            row.appendChild(icon);
+
+            const info = document.createElement('div');
+            info.className = 'sp-alloc-info';
+            const name = document.createElement('span');
+            name.className = 'sp-alloc-name';
+            name.textContent = def.name;
+            const eff = document.createElement('span');
+            eff.className = 'sp-alloc-value';
+            eff.textContent = pts > 0 ? def.label(val) : '—';
+            info.appendChild(name);
+            info.appendChild(eff);
+            row.appendChild(info);
+
+            const minus = document.createElement('button');
+            minus.type = 'button';
+            minus.className = 'sp-alloc-btn sp-alloc-minus';
+            minus.textContent = '−';
+            minus.disabled = !canRemove;
+            minus.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._adjustSp(def.id, -1);
+            });
+            row.appendChild(minus);
+
+            const dots = document.createElement('span');
+            dots.className = 'sp-alloc-points';
+            if (atCap) dots.classList.add('sp-alloc-points--max');
+            dots.textContent = atCap ? `${pts}/${SP_STAT_MAX_POINTS} MAX` : `${pts}/${SP_STAT_MAX_POINTS}`;
+            row.appendChild(dots);
+
+            const plus = document.createElement('button');
+            plus.type = 'button';
+            plus.className = 'sp-alloc-btn sp-alloc-plus';
+            plus.textContent = '+';
+            plus.disabled = !canAdd;
+            plus.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._adjustSp(def.id, +1);
+            });
+            row.appendChild(plus);
+
+            // Hover tip explains the effect (mirrors the derived-stat rows).
+            row.addEventListener('mouseenter', () => this._showTip(row));
+            row.addEventListener('mousemove',  (e) => this._moveTip(e));
+            row.addEventListener('mouseleave', () => this._hideTip());
+
+            card.appendChild(row);
+        }
+
+        cols.appendChild(card);
+    }
+
+    // Apply a +1/−1 SP change and re-render. Re-syncs HUD-derived numbers
+    // (max HP can change with the HEALTH stat).
+    _adjustSp(statId, delta) {
+        const player = this.gameEngine?.player;
+        if (!player) return;
+        const ok = delta > 0
+            ? (player.allocateSp && player.allocateSp(statId))
+            : (player.deallocateSp && player.deallocateSp(statId));
+        if (!ok) return;
+        // Allocating HEALTH raises max HP; clamp current HP up isn't
+        // desired, but make sure current never exceeds the new max.
+        if (typeof player.getEffectiveMaxHealth === 'function') {
+            const maxHp = player.getEffectiveMaxHealth();
+            if (player.health > maxHp) player.health = maxHp;
+        }
+        this._hideTip();
+        this.render();
     }
 
     _showTip(row) {

@@ -392,12 +392,13 @@ export function draw(ctx) {
     // never disappears — it just stays at peak intensity until the
     // player fires, then the cycle restarts.
     {
+        // 6.31.0 — Charge Shot keeps its hold-to-charge body glow. The
+        // old cooldown-based power-weapon body glow is gone (power
+        // weapons run on energy now); the ship-tip ring shows the
+        // defense-skill charge instead (see drawCooldownTimer).
         const cfg = this.getActivePowerConfig?.();
-        const isChargeBased = !!(cfg && cfg.isChargeBased);
-        if (isChargeBased) {
-            if (this.isCharging) this.drawChargingEffects(ctx);
-        } else if (cfg) {
-            this.drawCooldownChargingEffects(ctx);
+        if (cfg && cfg.isChargeBased && this.isCharging) {
+            this.drawChargingEffects(ctx);
         }
     }
 
@@ -600,33 +601,17 @@ export function drawLevelUpEffects(ctx) {
 // ── Cooldown timer ────────────────────────────────────────────────────────
 
 export function drawCooldownTimer(ctx) {
-    // Universal power-weapon readiness ring — used for both:
-    //   • Charge-based weapons (CHARGE_SHOT) — `charge` from chargeLevel
-    //     while the player is holding right-click / Space.
-    //   • Cooldown-based weapons (Mine Layer, Nova, Lightning, Missiles)
-    //     — `charge` is `1 - powerCooldown/powerCooldownMax`. The ring
-    //     fills as the cooldown elapses, then pulses fully-charged when
-    //     the weapon is ready to fire again.
-    const cfg = this.getActivePowerConfig?.();
-    const isChargeBased = !!(cfg && cfg.isChargeBased);
+    // 6.31.0 — Ship-tip charge ring now shows the active DEFENSE SKILL's
+    // auto-recharge (was the power-weapon readiness ring; power weapons
+    // run on the energy meter now). The ring fills as the skill's
+    // cooldown elapses and pulses fully-charged when it's ready to use.
+    const skillCfg = this.getActiveSkillConfig?.();
+    if (!skillCfg) return;
 
-    let charge = 0;
-    let isFullyCharged = false;
-    let visible = false;
-
-    if (isChargeBased) {
-        if (!this.isCharging) return;
-        charge = this.chargeLevel;
-        isFullyCharged = !!this.isFullyCharged;
-        visible = true;
-    } else {
-        const max = this.powerCooldownMax || (cfg && cfg.cooldown) || 1;
-        const remaining = Math.max(0, this.powerCooldown || 0);
-        charge = 1 - Math.min(1, remaining / max);
-        isFullyCharged = remaining <= 0;
-        visible = true; // always show readiness for cooldown-based powers
-    }
-    if (!visible) return;
+    const max = this.activeSkillCooldownMax || skillCfg.cooldown || 1;
+    const remaining = Math.max(0, this.activeSkillCooldown || 0);
+    const charge = 1 - Math.min(1, remaining / max);
+    const isFullyCharged = remaining <= 0;
 
     const tipX = 0;
     const tipY = -this.radius - 14;

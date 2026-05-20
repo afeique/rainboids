@@ -91,6 +91,11 @@ export class Player {
         this.experienceToNextLevel = Infinity;
         this.skillPoints = 0;
 
+        // 6.35.0 — Load persistent meta progression (level / XP / SP /
+        // per-stat allocations) from localStorage. Overwrites level=1
+        // above with the saved value. NOT reset between runs.
+        progression.initMeta.call(this);
+
         // 6.29.0 — Energy meter (replaces the vestigial XP bar). Energy
         // builds as the player lands hits and is spent to fire power
         // weapons; each power weapon costs a different amount
@@ -249,6 +254,7 @@ export class Player {
         this.scatterShotCount = 0;
         this.lastPrimaryFireTime = 0;
         this.activeSkillCooldown = 0;
+        this.activeSkillCooldownMax = 0;
         this.activeSkillEffects = new Map();
         this.deflectorOrbs = [];
         this.isDashing = false;
@@ -295,14 +301,17 @@ export class Player {
         if (prev && scoreItem(item) <= scoreItem(prev)) {
             return { equipped: false, current: prev };
         }
-        const prevHp = prev && prev.bonusType === 'hp' ? (prev.bonus || 0) : 0;
+        // 6.32.0 — items are multi-affix now. Bump current HP by the net
+        // max-HP gain (new item's hp affixes minus the replaced item's)
+        // so equipping an HP roll heals the delta, like before.
+        const affixHp = (it) => (it && Array.isArray(it.affixes))
+            ? it.affixes.filter((a) => a.type === 'hp').reduce((s, a) => s + a.value, 0)
+            : 0;
+        const hpGain = affixHp(item) - affixHp(prev);
         this.equippedItems[item.slot] = item;
-        if (item.bonusType === 'hp') {
-            const gain = (item.bonus || 0) - prevHp;
-            if (gain > 0) {
-                const newMax = this.getEffectiveMaxHealth();
-                this.health = Math.min(newMax, this.health + gain);
-            }
+        if (hpGain > 0) {
+            const newMax = this.getEffectiveMaxHealth();
+            this.health = Math.min(newMax, this.health + hpGain);
         }
         return { equipped: true, replaced: prev };
     }
@@ -858,7 +867,18 @@ export class Player {
     getPowerupStacks(type) {
         return progression.getPowerupStacks.call(this, type);
     }
-    
+
+    getItemAffixTotal(type) {
+        return progression.getItemAffixTotal.call(this, type);
+    }
+
+    // 6.35.0 — Meta progression (level / XP / SP).
+    addXp(amount) { return progression.addXp.call(this, amount); }
+    allocateSp(statId) { return progression.allocateSp.call(this, statId); }
+    deallocateSp(statId) { return progression.deallocateSp.call(this, statId); }
+    getSpStatValue(statId) { return progression.spStatTotal.call(this, statId); }
+    saveMetaState() { return progression.saveMetaState.call(this); }
+
     fireWeapons(bulletPool, audioManager) {
         return weapons.fireWeapons.call(this, bulletPool, audioManager);
     }

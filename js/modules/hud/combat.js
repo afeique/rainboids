@@ -444,6 +444,14 @@ export function syncPowerupHUD() {
         const hudEl = document.getElementById('powerup-hud');
         if (!hudEl) return;
 
+        // 6.33.0 — Right-edge powerup HUD retired. Per-weapon upgrades,
+        // SP stats, and the energy meter cover progression now; the
+        // floating powerup chips (and their in-game hover tooltips) are
+        // gone. Keep the element cleared so nothing renders there.
+        if (hudEl.childNodes.length) hudEl.innerHTML = '';
+        if (this._powerupHudCache && this._powerupHudCache.size) this._powerupHudCache.clear();
+        return;
+        // eslint-disable-next-line no-unreachable
         if (!this.player || !this.player.powerups ||
                 this.game.state === GAME_STATES.TITLE_SCREEN) {
             hudEl.innerHTML = '';

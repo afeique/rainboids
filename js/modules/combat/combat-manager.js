@@ -1133,6 +1133,14 @@ export function onEnemyKill(enemy) {
     this.killStreakCount++;
     this.killStreakTimer = Date.now();
 
+    // 6.35.0 — XP toward the persistent meta level. Bosses are worth a
+    // big chunk; regular kills a flat trickle. Tuned slow so a full run
+    // is ~3-4 levels early on and reaching 100 is a long cross-run grind.
+    if (this.player && typeof this.player.addXp === 'function') {
+        const isBoss = !!(enemy && enemy.isBoss);
+        this.player.addXp(isBoss ? 120 : 12);
+    }
+
     // 5.74.3 — kill-streak coin bonuses removed. Gold is pickup-only;
     // the streak still grants its damage-tier buff below.
 
@@ -1376,8 +1384,11 @@ export function applyVampirism(damageDealt) {
     const stacks = this.player.getPowerupStacks
         ? this.player.getPowerupStacks('VAMPIRISM')
         : 0;
-    if (stacks <= 0) return 0;
-    const lifestealFrac = stacks * 0.05; // 5% per stack
+    // 6.32.0 — item vampirism affixes; 6.35.0 — SP VAMPIRISM allocation.
+    const itemVamp = this.player.getItemAffixTotal ? this.player.getItemAffixTotal('vampirism') : 0;
+    const spVamp = this.player.getSpStatValue ? this.player.getSpStatValue('VAMPIRISM') : 0;
+    const lifestealFrac = stacks * 0.05 + (itemVamp + spVamp) / 100; // 5% per stack
+    if (lifestealFrac <= 0) return 0;
     const wouldHeal = damageDealt * lifestealFrac;
     if (!(wouldHeal > 0)) return 0;
     const cap = this.player.getEffectiveMaxHealth();
@@ -1410,8 +1421,11 @@ export function applyThorns(damageTaken, source) {
     const stacks = this.player.getPowerupStacks
         ? this.player.getPowerupStacks('THORNS')
         : 0;
-    if (stacks <= 0) return 0;
-    const reflectFrac = stacks * 0.25; // 25% per stack
+    // 6.32.0 — item thorns affixes; 6.35.0 — SP THORNS allocation.
+    const itemThorns = this.player.getItemAffixTotal ? this.player.getItemAffixTotal('thorns') : 0;
+    const spThorns = this.player.getSpStatValue ? this.player.getSpStatValue('THORNS') : 0;
+    const reflectFrac = stacks * 0.25 + (itemThorns + spThorns) / 100; // 25% per stack
+    if (reflectFrac <= 0) return 0;
     const reflected = damageTaken * reflectFrac;
     if (!(reflected > 0)) return 0;
 

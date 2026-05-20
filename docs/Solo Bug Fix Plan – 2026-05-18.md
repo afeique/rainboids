@@ -273,3 +273,66 @@ Otherwise, internal bug fixes don't trigger README updates per CLAUDE.md.
 3. **Quadtree:** archive `js/modules/performance/quadtree.js` if it's confirmed dead?
 4. **Verification first?** Want me to run Phase 0 (verify 10 highest-leverage HIGH findings) before starting any edits?
 5. **Starting point:** Phase 1 in priority order, or jump straight to the collision pipeline (Phase 2)?
+
+---
+
+## Phase 0 RE-VERIFICATION (2026-05-20, at VERSION 6.37.1)
+
+The original audit/plan were written at 6.15.1. Between then and 6.37.1 a
+6.18.x stability series, a weapon redesign (6.28.0), a HUD/leveling
+rework, and a gold-drop overhaul landed. Five read-only subagents
+re-checked every finding against current code. Verdicts below; user
+direction received: **list dead upgrades, Phase 5 = one MINOR, archive
+quadtree.js, fix every still-present bug starting at Phase 1.**
+
+### Already FIXED since the audit (no action — verified correct now)
+- touchstart-listener-leak (main.js:150, 6.18.2)
+- pool-reset-leak → `pool.drainActive()` (game-engine.js:983, 6.18.4)
+- particle-pool-undersized → `MAX_PARTICLES`=2500 (game-engine.js:849, 6.18.8)
+- survivaltime-during-pause → tick accumulation (game-engine.js:2588, 6.18.5)
+- cleanup-interval-tick-storm → `_lastCleanupSecond` gate (game-engine.js:2799, 6.18.6)
+- input-bind-per-frame-alloc → bound once (game-engine.js:351, 6.18.7)
+- eventbus-emit-unsub-skip → `list.slice()` (event-bus.js:42, 6.18.3)
+- stats-state-case-mismatch → `GAME_STATES.PAUSED` (stats-overlay.js:238, 6.18.9)
+- applyHealthOrbToTanks condition (lifecycle.js:251; correct, TANK_OVERFLOW_HP=40)
+- hud-button-touchend tracker (event-setup.js:337; mouseup clears unconditionally)
+- background-star / color-star resize (now prefer live `gameField` dims; powerup.js still stale — see below)
+- particle-streak-NaN (only explosionShrapnel maps to 'streak'; always sets `_speed`)
+- bullet restore supported-flip (draw gate is `_contextLost`, which restore clears)
+
+### OBSOLETE (code path removed / upgrade retired — drop from plan)
+- maintainDistance-wrong-pool-field & enemy-fire-update-lastShot-pre-fire → `js/sim/` no longer in live source
+- kinetic-impact-knockback → MASS_DRIVER/KINETIC_IMPACT retired in 6.28.0 (stacks always 0; `bullet.knockback` never set)
+- guardian-uses-wrong-timer-field → typo lives in an unreachable else; primary path calls `makeInvincible()`
+- wrapvalue-negative → `wrapValue` has zero callers (dead)
+- applyHoming-dead-code → actually has a live caller (bullet.js:232); not dead
+- shop-tab-click-listener-stacks → delegated, attached once at boot
+- POISON_TIP/SUPPRESSION/STATIC_CHARGE/SHRAPNEL/THROUGH_AND_THROUGH → retired (legacy comment only)
+
+### LIVE dead upgrades (Phase 3 — implement or remove; answer to user Q1)
+Still in currently-exported objects with NO effective consumer:
+- **Power weapon:** DAISY_CHAIN (weapon-data.js:600; sets `mine.daisyChain`, no cascade), AFTERSHOCK (:622; sets `ring.aftershock`, no slow), CLUSTER_WARHEAD (:635; sets `missile.cluster`, never split)
+- **DEFLECTOR_ORBS skill:** EXTRA_ORB (:833), HARDENED_ORBS (:834), REFLECT (:835) — all dead because orbs are never spawned at all (skills.js:354)
+- **Other defense-skill mods:** RETALIATION (:820, BULWARK), FORTIFY (:818, BULWARK dur), EMERGENCY_PROTOCOL (:825, REPAIR), EXTENDED_CARE (:824, REPAIR dur), EMP_OVERLOAD (:839), CASCADE (:840), REDIRECTION (:845, TRACTOR_SHIELD)
+- Plus the two **placebo skills**: DEFLECTOR_ORBS never spawns orbs (skills.js:354-380); EMP_PULSE never stuns / never sets renderer flags (skills.js:354-380).
+
+### STILL PRESENT — to fix (current file:line)
+**Phase 1 HIGH (file-isolated):**
+- explosive-bullet-skips-kill-pipeline — bullet.js:505-563 (hardcoded dmg, direct `enemyPool.release`, no onEnemyKill)
+- explosive-bullet-explosion-ignores-asteroids/mines — bullet.js:523-562
+- pool-recycle-state-leak — enemy.js `initializeEnemy` (45-249)
+- pool-recycle-boss-flags-leak — wave-manager.js `applyEnemyLevelScaling` 764-776 + enemy.js
+- sentinel-bursts-stuck-on-recycle — firing.js:1231 (folds into state-leak reset)
+- knight-undefined-bounds — movement.js:673-674
+- spawnWaveAsteroids-setTimeout-race — wave-manager.js:1228-1235
+- titan-tonahawk-typo (+ missile_shape mismatch) — firing.js:496-502
+- powerup-resize-stale-dimensions — powerup.js:679-680,845
+- spatial-grid-out-of-bounds-truncated — spatial-grid.js:33-36
+- starfield-no-context-loss-recovery — webgl-starfield-renderer.js:267-276
+- mobile-touch-shop-state-no-routing (game-over restart) — mobile-touch.js:87-90,193
+
+**Phase 2:** collision-damage-bypasses-takeDamage — collision-system.js:2085, 2266, 2414 (folds in lastDamageAt + tank/static-shield/LAST_STAND).
+
+**Phase 4 MED (still present):** frameclock-stale-in-catchup (game-engine.js:3274,3365); savefile-null-snapshot (game-engine.js:1202); survival-record-string-write (game-engine.js:3671); mine-blast-uses-current-stacks (collision-system.js:1210); piercing-bullet-explosion-per-hit (collision-system.js:300,889 — balance call); tier4-phase-message-on-corpse (boss-rage.js:43); spiralAngle-name-collision (firing.js:193 + movement.js:687); shootPulse-setTimeout-pause-leak (firing.js:532); asteroid-radius-mean-not-bounding (asteroid.js:281); line-debris-degenerate-atan2 (line-debris.js:31); particle-spawnparticle-vel-explodes (particle.js:548); gold-coin/gold-shape/stat-pickup snap-accel (gold-coin.js:145, gold-shape.js:195, stat-pickup.js:129); audio-mutating-manifest (audio-manager.js:339); audio-throttle-blocks-when-buffer-missing (audio-manager.js:432); music loadtrack-race/auto-skip-runaway/toggleShuffle/divide-by-zero (music-player.js:224,129,293,321); vfx-telemetry-ring-buffer (vfx-telemetry.js:142); bullet-init-listeners-before-initgl (webgl-bullet-renderer.js:230); bullet-charge-quad-too-small (:127,357); bullet-fragment-discard-cuts-aa (:148,152); blur-toggles-pause-unconditionally (event-setup.js:249); icons-getIconImage-async-blank (icons.js:235); shop-purchase-double-click (shop-dom.js:112); shop-money-not-floored (shop-manager.js:555,608,660); mobile-stick-touch-id-not-released (mobile-touch.js:290).
+
+**Phase 5 LOW (one MINOR bundle):** quadtree.js deletion (confirmed dead — zero imports); dead-canvas-shop-handlers (event-setup.js:342-464); `_buildSkillsTab`/`updateSkillsTab` dead (static-dom.js:288 / ui-manager.js:1838); customization-overlay-no-listeners (static-dom.js:158); shop-money-int-bitwise-overflow (ui-manager.js:1055,1185); input-screenAimX-init (input-handler.js:30); wrap-single-add (utils.js:13); particle-phantom-duplicate-case (particle.js:478,488); spatial-grid-not-idempotent latent (spatial-grid.js:16); depth-bucket-0-invisible (depth-batch-renderer.js:86); nebula dead-code allocates sprites (nebula-renderer.js:79,237); dodgeEnemyBullets-foreach-alloc (ai.js:623); dodgePlayerBullets-divide-by-zero mitigated (ai.js:510).

@@ -3583,6 +3583,17 @@ export class GameEngine {
 
     isStatsScreenOpen() { return !!(this._statsOverlay && this._statsOverlay.isOpen()); }
 
+    // 6.36.0 — Open the STATS screen as a wave-clear level-up step. The
+    // game is already paused by the wave-clear flow; `onClose` continues
+    // into the next wave once the player finishes spending SP.
+    openStatsForLevelUp(onClose) {
+        if (!this._statsOverlay) {
+            this._statsOverlay = new StatsOverlay(this.uiManager);
+            this._statsOverlay.setGameEngine(this);
+        }
+        return this._statsOverlay.openForLevelUp(onClose);
+    }
+
     togglePause() {
         // 6.1.2 — Guard against ESC resuming while a modal "must-pick"
         // overlay is still on screen. The survivor-card overlay (wave-
@@ -3975,6 +3986,7 @@ export class GameEngine {
     drawSpawnTimer() { return hudOverlays.drawSpawnTimer.call(this); }
     drawStreakIndicator() { return hudOverlays.drawStreakIndicator.call(this); }
     drawXPBar(ctx, barX, barY, barWidth, barHeight) { return hudStatus.drawXPBar.call(this, ctx, barX, barY, barWidth, barHeight); }
+    drawXPLevelBar(ctx) { return hudStatus.drawXPLevelBar.call(this, ctx); }
     drawCircularTimer(ctx, x, y, radius, progress, color, icon, timeRemaining) { return hudOverlays.drawCircularTimer.call(this, ctx, x, y, radius, progress, color, icon, timeRemaining); }
     drawRespawnCountdown() { return hudOverlays.drawRespawnCountdown.call(this); }
     drawInvincibilityCountdown() { return hudOverlays.drawInvincibilityCountdown.call(this); }

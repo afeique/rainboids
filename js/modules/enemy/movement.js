@@ -668,10 +668,12 @@ export function startKnightMove() {
     this.knightTargetX = this.x + (move.x * moveDistance);
     this.knightTargetY = this.y + (move.y * moveDistance);
 
-    // Keep target within screen bounds
+    // Keep target within screen bounds. Enemy instances have no
+    // `this.width`/`this.height` (those are undefined → NaN clamp → NaN
+    // velocity), so clamp against the live play-field dimensions.
     const margin = 50;
-    this.knightTargetX = Math.max(margin, Math.min(this.width - margin, this.knightTargetX));
-    this.knightTargetY = Math.max(margin, Math.min(this.height - margin, this.knightTargetY));
+    this.knightTargetX = Math.max(margin, Math.min(GameDimensions.width - margin, this.knightTargetX));
+    this.knightTargetY = Math.max(margin, Math.min(GameDimensions.height - margin, this.knightTargetY));
 
     // Start the move
     this.knightMoving = true;

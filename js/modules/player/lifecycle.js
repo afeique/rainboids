@@ -57,11 +57,15 @@ function getMobileIncomingDamageMultiplier(wave) {
 export function takeDamage(damageAmount = this.baseDamage) {
     if (this.player.invincible) return;
 
-    // 6.28.0 — DODGE passive: flat % chance to ignore a hit entirely
-    // (5%/stack, cap 50%). Rolls before REFLEXES so a lucky dodge
-    // doesn't burn the 30s REFLEXES free-dodge cooldown.
+    // 6.28.0 — DODGE: flat % chance to ignore a hit entirely. Rolls
+    // before REFLEXES so a lucky dodge doesn't burn the 30s REFLEXES
+    // free-dodge cooldown. 6.32.0 — chance = passive stacks (5%/stack)
+    // + item dodge affixes (rolled %), capped at 50%.
     const dodgeStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('DODGE') : 0;
-    if (dodgeStacks > 0 && Math.random() < Math.min(0.5, dodgeStacks * 0.05)) {
+    const itemDodge = this.player.getItemAffixTotal ? this.player.getItemAffixTotal('dodge') : 0;
+    const spDodge = this.player.getSpStatValue ? this.player.getSpStatValue('DODGE') : 0;
+    const dodgeChance = Math.min(0.5, dodgeStacks * 0.05 + (itemDodge + spDodge) / 100);
+    if (dodgeChance > 0 && Math.random() < dodgeChance) {
         if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
         return;
     }
@@ -232,16 +236,18 @@ const HUD_TRIFORCE_LEFT_X = 36;
 const HUD_BAR_CENTER_Y = 35;
 
 // 5.88.0 — health-pickup overflow → tank progress.
-// 5.114.0 — Threshold is now FLAT 100 HP of overflow per tank (was
-//   maxHp-worth, which scaled the cost with HEALTH_BOOST stacks). A
-//   crisp number tells the player "every 100 wasted HP earns you a
-//   triforce piece." Inventory regen and the REGEN powerup both feed
-//   into this via accumulateOverflowToTank (called from the regen
-//   tick when health is at cap).
+// 6.35.0 — Threshold lowered 100 → 40 HP of overflow per tank. At 100
+//   HP, regaining a triforce tank after losing one took ~10+ overheals
+//   and felt like it "did nothing" / the excess was ignored. 40 HP
+//   makes a regain land in ~2-4 overheals so the triforce-appearance
+//   animation (spawnTankRecharge) actually fires and reads as a reward.
+//   NOTE: tanks cap at MAX_HEALTH_TANKS (3 = the triforce slots), so
+//   while the triforce is full the overflow is intentionally inert —
+//   it only rebuilds tanks the player has LOST.
 //
 // `amountHealed` is the actual HP delta (post-cap); `orbAmount` is the
 // original orb value before cap.
-const TANK_OVERFLOW_HP = 100;
+const TANK_OVERFLOW_HP = 40;
 export function applyHealthOrbToTanks(orbAmount, amountHealed) {
     const overflow = Math.max(0, orbAmount - amountHealed);
     if (overflow <= 0 && this.player.health < this.player.getEffectiveMaxHealth()) return;

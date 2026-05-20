@@ -4,7 +4,8 @@
  * Tests the weapon acquisition and shop economy changes:
  *   • Free primary weapon auto-unlock at wave milestones
  *   • Wave-gating: weapons locked in shop until unlockWave reached
- *   • Reduced upgrade costs enable earlier build investment
+ *   • Upgrades are scarce, deliberate purchases (high cost + per-stack ramp)
+ *   • Selling refunds at-cost so players can freely respec
  *   • AI weapon switching produces diverse weapon usage
  *   • Shop purchase flow with flash feedback
  *   • Overall economy curve across simulated waves
@@ -113,14 +114,16 @@ test.describe('E2E-10: Weapon economy & gameplay flow', () => {
         const startSnap = await snapshot('start');
         console.log(`  Start: wave=${startSnap.wave} money=${startSnap.money} weapons=[${startSnap.ownedPrimaries.join(', ')}]`);
 
-        // Simulate 15 waves with realistic money/XP accumulation
-        // Wave clear bonus: 50 + wave*25 coins, 20 + wave*10 XP
-        // Plus enemy kill money: ~50-200 per wave depending on enemy count
+        // Simulate 15 waves of money accumulation. Real income is drop-based
+        // and hard-capped at ~250/kill, so a full 30-wave run yields ~100k and
+        // upgrades (cheapest stack-1 ~15.5k, ramping up per stack) are scarce.
+        // Grant a realistic per-wave figure (~2-6k) so this analysis still
+        // exercises the buy flow against the post-rework prices.
         const WAVES = 15;
 
         for (let w = 1; w <= WAVES; w++) {
-            // Simulate enemy kill earnings (scales with wave)
-            const killMoney = 30 + w * 20 + Math.floor(Math.random() * 50);
+            // Simulate enemy kill earnings (scales with wave, drop-cap aware)
+            const killMoney = 1500 + w * 250 + Math.floor(Math.random() * 1000);
 
             await page.evaluate((earnings) => {
                 const ge = window.gameEngine;
@@ -396,46 +399,69 @@ test.describe('E2E-10: Weapon economy & gameplay flow', () => {
         expect(result.fail).toContain('255, 60, 60');
     });
 
-    test('upgrade cost reduction enables early purchases', async ({ page }) => {
+    test('upgrades are scarce, ramped, and refund at-cost', async ({ page }) => {
         await loadGame(page);
         await startGame(page);
 
         const analysis = await page.evaluate(() => {
             const ge = window.gameEngine;
-            ge.game.money = 800;
-            ge.game.currentWave = 4;
-            ge.player.skillPoints = 2;
+            ge.game.currentWave = 12;
             ge.openShop();
-
-            ge.shopCategory = 'OFFENSE';
+            ge.shopCategory = 'TREE';
             ge._rebuildShopCache();
-            const affordableOffense = ge.shopFilteredItems?.filter(i =>
-                !i.isWeapon && !i.isSkill && (i.cost || 0) > 0 && (i.cost || 0) <= 800
-            ).map(i => ({ id: i.id, name: i.name, cost: i.cost })) ?? [];
 
-            ge.shopCategory = 'PRIMARY';
-            ge._rebuildShopCache();
-            const visibleWeapons = ge.shopFilteredItems?.filter(i => i.isWeapon)
-                .map(i => ({ id: i.id, name: i.name, cost: i.cost })) ?? [];
-            const affordableUpgrades = ge.shopFilteredItems?.filter(i =>
-                i.isWeaponUpgrade && (i.cost || 0) <= 800
-            ).map(i => ({ id: i.id, name: i.name, cost: i.cost })) ?? [];
+            const upgrades = (ge.shopFilteredItems || [])
+                .filter(i => i.isWeaponUpgrade && (i.cost || 0) > 0);
+            const costs = upgrades.map(i => i.cost);
+            const cheapest = Math.min(...costs);
 
-            return { affordableOffense, visibleWeapons, affordableUpgrades,
-                total: affordableOffense.length + affordableUpgrades.length };
+            // A pocketful of change buys nothing — upgrades are deliberate.
+            ge.game.money = 800;
+            const affordableAt800 = upgrades.filter(i => i.cost <= 800).length;
+
+            // Per-stack ramp: a multi-stack upgrade's costOverrides ascend.
+            const ramped = upgrades.find(i =>
+                Array.isArray(i.costOverrides) && i.costOverrides.length >= 2);
+            const rampAscends = ramped
+                ? ramped.costOverrides.every((c, k) =>
+                    k === 0 || c > ramped.costOverrides[k - 1])
+                : false;
+
+            // At-cost respec: buy a stack, then sell it — money nets to zero.
+            // (Re-fetch the item after setting a big budget so affordability
+            // isn't the limiter.)
+            ge.game.money = 200_000;
+            const target = upgrades.find(i => i.costOverrides) || upgrades[0];
+            const before = ge.game.money;
+            const bought = ge.buyShopItem(target.id);
+            const afterBuy = ge.game.money;
+            const sold = ge.sellShopItem(target.id);
+            const afterSell = ge.game.money;
+
+            return {
+                upgradeCount: upgrades.length, cheapest, affordableAt800,
+                rampAscends, rampSample: ramped ? ramped.costOverrides : null,
+                bought, sold, paid: before - afterBuy, refunded: afterSell - afterBuy,
+                netZero: afterSell === before,
+            };
         });
 
-        console.log('\n  ── Affordability at 800 coins, wave 4 ──');
-        console.log(`  Offense upgrades: ${analysis.affordableOffense.length}`);
-        analysis.affordableOffense.forEach(i => console.log(`    ${i.name}: ${i.cost}`));
-        console.log(`  Visible weapons: ${analysis.visibleWeapons.length}`);
-        analysis.visibleWeapons.forEach(i => console.log(`    ${i.name}: ${i.cost} (free)`));
-        console.log(`  Weapon upgrades: ${analysis.affordableUpgrades.length}`);
-        analysis.affordableUpgrades.forEach(i => console.log(`    ${i.name}: ${i.cost}`));
-        console.log(`  Total affordable: ${analysis.total}`);
+        console.log('\n  ── Post-rework economy (wave 12) ──');
+        console.log(`  Upgrades on offer: ${analysis.upgradeCount}, cheapest: ${analysis.cheapest}`);
+        console.log(`  Affordable at 800g: ${analysis.affordableAt800} (expect 0)`);
+        console.log(`  Per-stack ramp ascends: ${analysis.rampAscends} ${JSON.stringify(analysis.rampSample)}`);
+        console.log(`  Respec: paid ${analysis.paid}, refunded ${analysis.refunded}, net-zero: ${analysis.netZero}`);
 
-        expect(analysis.total).toBeGreaterThanOrEqual(3);
-        expect(analysis.visibleWeapons.length).toBeGreaterThanOrEqual(2);
+        // Scarcity — nothing trivially cheap, and pocket change buys nothing.
+        expect(analysis.cheapest).toBeGreaterThanOrEqual(10_000);
+        expect(analysis.affordableAt800).toBe(0);
+        // Progression — multi-stack traits cost more per stack.
+        expect(analysis.rampAscends).toBe(true);
+        // Free respec — selling refunds exactly what was paid.
+        expect(analysis.bought).toBe(true);
+        expect(analysis.sold).toBe(true);
+        expect(analysis.refunded).toBe(analysis.paid);
+        expect(analysis.netZero).toBe(true);
     });
 
     test('Pulse Cannon rebalance — weapon differentiation', async ({ page }) => {

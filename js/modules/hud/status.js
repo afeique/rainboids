@@ -2,9 +2,10 @@
 // Each function is called with `.call(this)` where `this` is the GameEngine instance,
 // so all `this.*` references work exactly as they did as class methods.
 
-import { GAME_STATES, getStageLabel } from '../core/constants.js';
+import { GAME_STATES } from '../core/constants.js';
 import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '../core/utils.js';
-import { DEFENSE_SKILLS } from '../combat/weapon-data.js';
+import { DEFENSE_SKILLS, PRIMARY_WEAPONS } from '../combat/weapon-data.js';
+import { xpForLevel, MAX_LEVEL } from '../core/sp-stats.js';
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
@@ -712,12 +713,10 @@ export function drawCanvasTriforce(ctx, spareTanks, triforceLeftX, centerY) {
 }
 
 export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
-        // 6.0.1 — LV shield repurposed as WAVE shield. Wave is the new
-        // progression axis (player leveling retired in 6.0.0). Same
-        // layout/position so the HUD reads identical, just a different
-        // semantic. Hide entirely if no engine is attached (defensive).
-        const wave = (this.game && this.game.currentWave) | 0;
-        if (!wave) return;
+        // 6.34.0 — Shield badge shows the player LEVEL again ("LV" inside
+        // the shield + the level number to its right), and the power-
+        // weapon energy SPHERE sits to the right of that.
+        const level = ((this.player && this.player.level) | 0) || 1;
         const shieldIconSize = 28;
         const shieldCenterX = barX + 220 + 10 + shieldIconSize / 2; // 10px gap right of bar (barWidth=220)
         const shieldCenterY = barY + barHeight / 2;
@@ -726,34 +725,128 @@ export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
 
         drawCachedShieldIcon(ctx, shieldCenterX, shieldCenterY, shieldIconSize);
 
-        // "S" inside the shield (was "STG" in 6.1.0; shortened per
-        // request — single letter reads cleaner inside the small
-        // shield icon and centers better at 10 px). The "S-W" label
-        // to the right of the shield still spells out stage-wave.
+        // "LV" inside the shield.
         ctx.save();
-        // Bump font size since we have more space with one letter.
-        ctx.font = "14px 'Press Start 2P', monospace";
+        ctx.font = "9px 'Press Start 2P', monospace";
         ctx.fillStyle = '#102342';
         ctx.strokeStyle = '#155379';
         ctx.lineWidth = 1;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.strokeText('S', shieldCenterX, shieldCenterY);
-        ctx.fillText('S', shieldCenterX, shieldCenterY);
+        ctx.strokeText('LV', shieldCenterX, shieldCenterY);
+        ctx.fillText('LV', shieldCenterX, shieldCenterY);
         ctx.restore();
 
-        const stageLabelX = shieldCenterX + shieldIconSize / 2 + 8;
+        const levelLabelX = shieldCenterX + shieldIconSize / 2 + 8;
         ctx.font = "14px 'Press Start 2P', monospace";
-        ctx.fillStyle = '#4A90E2';
+        ctx.fillStyle = '#ffd700';
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.lineWidth = 1;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        const stageText = getStageLabel(wave);
-        ctx.strokeText(stageText, stageLabelX, shieldCenterY);
-        ctx.fillText(stageText, stageLabelX, shieldCenterY);
+        const levelText = `${level}`;
+        ctx.strokeText(levelText, levelLabelX, shieldCenterY);
+        ctx.fillText(levelText, levelLabelX, shieldCenterY);
+
+        // Energy sphere — right of the level number.
+        const levelTextW = ctx.measureText(levelText).width;
+        const sphereR = barHeight * 0.6;
+        const sphereCX = levelLabelX + levelTextW + 16 + sphereR;
+        drawEnergySphere.call(this, ctx, sphereCX, shieldCenterY, sphereR);
 
         ctx.restore();
+}
+
+// 6.34.0 — Power-weapon energy SPHERE. A glass orb whose interior fills
+// from the center outward (like a brightening light) as energy banks.
+// The fill is tinted by the active primary weapon's color and styled
+// like a Bose-Einstein condensate — a glowing gaseous core with faint
+// laser-diffraction streaks. Pulses a gold rim once enough energy is
+// banked to fire the active power weapon.
+const _ENERGY_HEX_CACHE = {};
+function _energyRgb(hex) {
+    if (_ENERGY_HEX_CACHE[hex]) return _ENERGY_HEX_CACHE[hex];
+    let h = (hex || '#00ccff').replace('#', '');
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    const r = parseInt(h.slice(0, 2), 16) || 0;
+    const g = parseInt(h.slice(2, 4), 16) || 0;
+    const b = parseInt(h.slice(4, 6), 16) || 0;
+    const rgb = { r, g, b };
+    _ENERGY_HEX_CACHE[hex] = rgb;
+    return rgb;
+}
+function drawEnergySphere(ctx, cx, cy, r) {
+    const player = this.player;
+    if (!player) return;
+    const maxE = player.maxEnergy || 100;
+    const frac = Math.max(0, Math.min(1, (player.energy || 0) / maxE));
+    const cfg = PRIMARY_WEAPONS[player.activePrimary];
+    const color = (cfg && cfg.color) || '#00ccff';
+    const { r: cr, g: cg, b: cb } = _energyRgb(color);
+    const now = Date.now();
+
+    ctx.save();
+
+    // Dark glass interior backdrop.
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(8, 12, 22, 0.78)';
+    ctx.fill();
+
+    // Inner condensate — clip to the glass, fill center-outward.
+    if (frac > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 1.5, 0, Math.PI * 2);
+        ctx.clip();
+
+        const coreR = Math.max(1, r * frac);
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+        grad.addColorStop(0,    `rgba(255,255,255,${0.85 * frac + 0.15})`);
+        grad.addColorStop(0.45, `rgba(${cr},${cg},${cb},0.75)`);
+        grad.addColorStop(1,    `rgba(${cr},${cg},${cb},0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
+        // Laser-diffraction streaks through the gas (additive).
+        ctx.globalCompositeOperation = 'lighter';
+        const t = now * 0.001;
+        for (let i = 0; i < 5; i++) {
+            const a = t * 0.6 + i * (Math.PI / 5);
+            const alpha = (0.10 + 0.07 * Math.sin(t * 2 + i)) * frac;
+            ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(a) * coreR, cy + Math.sin(a) * coreR);
+            ctx.lineTo(cx - Math.cos(a) * coreR, cy - Math.sin(a) * coreR);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // Glass rim + specular highlight.
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(200, 230, 255, 0.55)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.32, cy - r * 0.34, r * 0.18, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.fill();
+
+    // Ready pulse — gold rim once a power shot is affordable.
+    const cost = (typeof player.getPowerEnergyCost === 'function') ? player.getPowerEnergyCost() : 30;
+    if ((player.energy || 0) >= cost) {
+        const pulse = 0.4 + 0.3 * Math.sin(now * 0.012);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 240, 160, ${pulse})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    ctx.restore();
 }
 
 // 5.72.2 — Gold readout: bottom-right above the timer, with two
@@ -940,68 +1033,58 @@ export function drawBottomRightGold(ctx) {
         }
 }
 
-export function drawXPBar(ctx, barX, barY, barWidth, barHeight) {
-        // 6.29.0 — Repurposed as the ENERGY meter (was the retired XP
-        // bar). Draws in the bottom strip of the health bar. Fill =
-        // energy / maxEnergy; a tick marks the active power weapon's
-        // cost, and the fill pulses bright once enough is banked to fire.
+export function drawXPBar() {
+        // 6.34.0 — Health-strip bar retired. Power-weapon energy moved to
+        // the glass sphere (drawEnergySphere) and the level XP bar moved
+        // to the page bottom (drawXPLevelBar). This is now a no-op so the
+        // health bar's bottom strip reads clean.
+}
+
+// 6.34.0 — Level XP bar: a thin segmented gold bar across the very
+// bottom of the screen showing progress toward the next level
+// (white → goldenrod → darker-gold gradient, bordered). Full bar at
+// MAX_LEVEL.
+export function drawXPLevelBar(ctx) {
         const player = this.player;
         if (!player) return;
-        const maxEnergy = player.maxEnergy || 100;
-        const energy = Math.max(0, Math.min(maxEnergy, player.energy || 0));
-        const frac = energy / maxEnergy;
+        const level = (player.level | 0) || 1;
+        const W = this.canvas.width;
+        const barH = 6;
+        const y = this.canvas.height - barH;
 
-        const eH = 8;
-        const eY = barY + barHeight - eH;
-        const bevelSize = 12;
-
-        ctx.save();
-        // Clip to the health-bar silhouette, then to the bottom strip.
-        ctx.beginPath();
-        ctx.moveTo(barX + bevelSize, barY);
-        ctx.lineTo(barX + barWidth - bevelSize * 0.5, barY);
-        ctx.lineTo(barX + barWidth, barY + bevelSize);
-        ctx.lineTo(barX + barWidth, barY + barHeight - bevelSize);
-        ctx.lineTo(barX + barWidth - bevelSize, barY + barHeight);
-        ctx.lineTo(barX + bevelSize * 0.5, barY + barHeight);
-        ctx.lineTo(barX, barY + barHeight - bevelSize);
-        ctx.lineTo(barX, barY + bevelSize);
-        ctx.closePath();
-        ctx.clip();
-        ctx.beginPath();
-        ctx.rect(barX - 5, eY, barWidth + 10, eH);
-        ctx.clip();
-
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.fillRect(barX - 5, eY, barWidth + 10, eH);
-
-        const cost = (typeof player.getPowerEnergyCost === 'function') ? player.getPowerEnergyCost() : 30;
-        const ready = energy >= cost;
-
-        if (frac > 0) {
-            const w = barWidth * frac;
-            if (!this._energyBarGradient) {
-                const g = ctx.createLinearGradient(barX, eY, barX, eY + eH);
-                g.addColorStop(0, '#7fe7ff');
-                g.addColorStop(0.5, '#33aaff');
-                g.addColorStop(1, '#1166cc');
-                this._energyBarGradient = g;
-            }
-            ctx.fillStyle = this._energyBarGradient;
-            ctx.fillRect(barX, eY, w, eH);
-            if (ready) {
-                const pulse = 0.22 + 0.22 * Math.sin(Date.now() * 0.012);
-                ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
-                ctx.fillRect(barX, eY, w, eH);
-            }
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-            ctx.fillRect(barX, eY, w, 1);
+        let frac;
+        if (level >= MAX_LEVEL) {
+            frac = 1;
+        } else {
+            const need = xpForLevel(level) || 1;
+            frac = Math.max(0, Math.min(1, (player.xp || 0) / need));
         }
 
-        // Active-power cost tick.
-        const tickX = barX + barWidth * Math.min(1, cost / maxEnergy);
-        ctx.fillStyle = ready ? 'rgba(255, 255, 160, 0.9)' : 'rgba(255, 255, 255, 0.5)';
-        ctx.fillRect(tickX - 0.5, eY, 1, eH);
+        ctx.save();
+        // Track.
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(0, y, W, barH);
+
+        // Gold fill.
+        if (frac > 0) {
+            const fillW = Math.max(1, W * frac);
+            const g = ctx.createLinearGradient(0, y, fillW, y);
+            g.addColorStop(0.0, '#fffbe6'); // near-white
+            g.addColorStop(0.5, '#daa520'); // goldenrod
+            g.addColorStop(1.0, '#8a6508'); // darker gold
+            ctx.fillStyle = g;
+            ctx.fillRect(0, y, fillW, barH);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.fillRect(0, y, fillW, 1); // top highlight
+        }
+
+        // Segment ticks every 40px.
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        for (let x = 40; x < W; x += 40) ctx.fillRect(x, y, 1, barH);
+
+        // Top border (thin gold edge).
+        ctx.fillStyle = 'rgba(218, 165, 32, 0.65)';
+        ctx.fillRect(0, y - 1, W, 1);
 
         ctx.restore();
 }
@@ -1342,6 +1425,9 @@ export function updateHUD() {
             this.drawSurvivalTimer(ctx);
             this.drawBottomRightGold(ctx);
         }
+
+        // 6.34.0 — Level XP bar across the very bottom of the screen.
+        this.drawXPLevelBar(ctx);
 
         // 5.78.0 — defense indicators moved to drawHUD's outer scope so
         // they render during PAUSED / SHOP / WAVE_TRANSITION too.

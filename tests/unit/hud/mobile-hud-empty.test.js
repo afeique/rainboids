@@ -102,6 +102,7 @@ function makeEngineThis(canvasCtx) {
         game: { state: 'playing', currentWave: 1 },
         drawCanvasTriforce: () => {},
         drawXPBar: () => {},
+        drawXPLevelBar: () => {},
         drawLevelAndCoinsDisplay: () => {},
         drawEquippedWeaponSquares: () => {},
         drawSurvivalTimer: () => {},

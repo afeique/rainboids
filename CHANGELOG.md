@@ -11,6 +11,204 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.37.1] - 2026-05-20
+
+### Fixed — unit suite realigned to the post-redesign behavior (test-only)
+
+Brought 26 stale unit tests back to green. They asserted pre-redesign
+behavior from earlier this session; none were real regressions (the
+game code was correct). No runtime change.
+
+- **HUD harnesses** (`healthbar-low-hp`, `mobile-hud-empty`): stub the
+  new `drawXPLevelBar` that `updateHUD` now calls (the bottom XP bar),
+  so the harness no longer throws.
+- **`mobile-auto-fire`**: power weapons are energy-gated now
+  (`isPowerReady()` checks banked energy), so the player is given full
+  energy in setup — the tests pin the cooldown/charge contract, not the
+  energy economy.
+- **`passive-upgrades`**: rewritten for the 6.30.0 passive pool — the 8
+  reward-only defensive/utility stats (no cost, no hidden flag), offensive
+  traits asserted absent, and the per-weapon HOMING/PIERCING matrix
+  updated (all four kinetic primaries get both now).
+- **`cluster-launcher`**: dropped the retired bespoke tuners
+  (`CLUSTER_PAYLOAD`/`MORE_BOMBLETS`/`SHORT_FUSE`/`MEGA_CLUSTER`) and
+  pinned the shared-trait set (`CLUSTER_MULTI`/`CLUSTER_STUN`/
+  `CLUSTER_KNOCK`); detonation mechanics tests unchanged.
+
+## [6.37.0] - 2026-05-20
+
+### Changed — upgrades are now rare, ramped, and respec-able
+
+Upgrades drastically rescaled so each is a deliberate, meaningful
+purchase rather than a fistful-of-gold dump. A full 30-wave run yields
+~100k gold (drops are hard-capped at ~250/kill), so the player can only
+afford roughly 2-3 upgrades per playthrough — about 10 waves of
+mid-game income per single upgrade.
+
+- **Scale + per-stack ramp** (`weapon-data.js`): two tunable constants —
+  `UPGRADE_COST_MULT` (13×) and `UPGRADE_STACK_RAMP` (1.6) — drive every
+  weapon/power/skill upgrade price. Stack 1 = scaled base; stack N =
+  base · 1.6ⁿ⁻¹, rounded to 500. `costOverrides` arrays are generated at
+  module load. Examples: Multishot stacks 23.5k → 37.5k → 60k; Charge
+  Power ramps 21k → … → 218k to fully max; capstones land ~97-117k.
+- Defense-skill upgrades routed through the same curve (SP→gold ×
+  `UPGRADE_COST_MULT`, then the ramp).
+
+### Added — sell an upgrade at-cost to respec
+
+Right-click any owned upgrade node in the shop to sell one stack back
+for a full at-cost refund. Buy and sell read the same per-stack
+`costOverrides`, so selling one trait to fund another nets zero gold —
+free experimentation with builds. The tooltip shows the refund and a
+"Right-click to sell" hint.
+
+### Removed
+
+- Dead hardcoded `CHARGE_SPEED` price branches in `shop-manager.js`
+  (the live path reads the ramped `costOverrides`).
+
+## [6.36.0] - 2026-05-20
+
+### Added — SP allocation in the STATS screen (freely redistributable)
+
+The STATS screen (HUD STATS button, next to UPGRADES, or the `` ` ``
+key) now opens with a **STAT POINTS** card at the top:
+
+- Header shows unspent SP and pulses when points are available; the
+  summary strip gains LEVEL / SP / XP-to-next cells.
+- One row per permanent stat (Health, Toughness, Vampirism, Thorns,
+  Crit Chance, Crit Damage, Evasion, Speed) with a **[−] points/20 [+]**
+  control. **[+]** spends an unspent SP; **[−]** refunds a point back
+  to the pool — so the player can take points *out* of one stat and
+  move them into another at any time, with no reset cost.
+- Buttons disable at the per-stat 20-point cap or when no SP / no
+  points are available; allocating Health re-clamps current HP to the
+  new max. Hovering a row explains its current effect.
+
+### Added — auto-open STATS on level-up
+
+When the player levels up during a wave, the STATS screen now opens
+automatically once that wave's reward/shop steps finish, so the new SP
+can be spent before the next wave begins. Closing it continues into the
+next wave (the screen runs in a deferred mode that doesn't disturb the
+wave-clear pause state).
+
+## [6.35.0] - 2026-05-20
+
+### Fixed — health overflow can rebuild energy tanks again
+
+Lowered the overflow-to-tank threshold 100 → 40 HP. At 100, regaining
+a lost triforce tank took ~10+ overheals and felt like the excess was
+ignored / tanks were unrecoverable. At 40, a regain lands in ~2-4
+overheals so the triforce-appearance animation (`spawnTankRecharge`)
+actually fires. (Tanks still cap at the 3 triforce slots, so overflow
+is intentionally inert while the triforce is full — it only rebuilds
+tanks the player has lost.)
+
+### Added — meta leveling (level / XP / SP), persisted across runs
+
+- XP is earned on kills (regular 12, boss 120) toward a persistent
+  level (cap 100). Each level grants 1 SP. The curve is slow — a full
+  run is ~3-4 levels early, tapering so 100 is a long cross-playthrough
+  grind (the "keep coming back" hook).
+- Level / XP / unspent SP / per-stat allocations persist to
+  localStorage (`core/storage.loadMeta`/`saveMeta`); not cleared by
+  New Game.
+- SP allocations feed the effective-stat getters alongside passive
+  cards + item affixes: Health, Toughness, Crit Chance, Crit Damage,
+  Vampirism, Thorns, Dodge, Speed — each capped at 20 points,
+  per-point = stat-max / 20 (e.g. Vampirism 50% → 2.5%/pt).
+
+Still to come: the STATS menu button + SP allocation UI, and
+auto-opening it after a level-up wave.
+
+
+
+### Changed — Missile Salvo concentrates fire
+
+All missiles in a salvo now lock the SAME target (nearest enemy, else
+nearest asteroid) for maximum burst damage instead of spreading across
+distinct threats. When the target dies, the whole salvo re-acquires
+one shared new nearest target in flight (`weapons.fireMissiles` +
+`skills.updateMissiles`).
+
+### Changed — power-weapon energy is now a glass sphere
+
+Retired the energy bar under the health bar. Power-weapon energy now
+fills a **glass sphere** to the right of the health bar + level badge.
+The sphere fills from the center outward like a brightening light,
+tinted by the active primary weapon's color (each primary reads
+distinctly), with a Bose-Einstein-condensate look — a glowing gaseous
+core threaded with faint laser-diffraction streaks — and a gold rim
+pulse once a power shot is affordable. (`hud/status.drawEnergySphere`)
+
+### Added — level HUD + bottom XP bar (groundwork)
+
+- The shield badge shows **"LV" + the player level** again (was the
+  wave/stage badge).
+- A thin **segmented gold XP bar** spans the page bottom
+  (white → goldenrod → darker-gold gradient, bordered) showing
+  progress to the next level.
+- New `core/sp-stats.js` defines the SP meta-progression config: 8
+  stats (Health, Toughness, Vampirism, Thorns, Crit Chance, Crit
+  Damage, Evasion, Speed), each capped at 20 points with per-point =
+  max/20 (e.g. Vampirism 50% max → 2.5%/pt), plus the level XP curve
+  (`xpForLevel`) and `MAX_LEVEL = 100`. The leveling mechanic, SP
+  spend menu, and stat wiring land next.
+
+### Removed — in-game powerup HUD + tooltips
+
+The floating right-edge powerup-chip HUD (and its in-game hover
+tooltips) is retired — per-weapon upgrades, SP stats, and the energy
+sphere cover progression now (`hud/combat.syncPowerupHUD` no-op).
+
+
+
+### Changed — inventory items roll the full passive stat set
+
+The inventory system is kept and now **mirrors the passive stats**:
+dropped items roll affixes from the same pool the passives draw from —
+HP, Toughness, Vampirism, Thorns, Crit Chance, Crit Damage, Evasion
+(dodge), Speed, and Regen. So gear and wave-clear passives reinforce
+the same build axes.
+
+- `item-names.js` — new `ITEM_AFFIX_POOL` (wave-scaled base × rarity
+  mult per affix) + `AFFIX_SCORE_WEIGHT`.
+- `item-system.createItem` rolls 1 / 2 / 3 affixes by rarity
+  (common / rare / epic) into an `affixes[]` array; `bonusLabel`
+  joins them; `scoreItem` sums weighted affixes so the upgrade-
+  suppression (only show strict upgrades) still works across mixed
+  affix types.
+- New `player.getItemAffixTotal(type)` sums equipped-item affixes of a
+  type. Every effective-stat getter now adds it on top of the passive
+  stacks: max HP, toughness, crit chance, crit damage, regen, speed,
+  vampirism (`applyVampirism`), thorns (`applyThorns`), and dodge
+  (`takeDamage`).
+- `equipItem` heals the net max-HP delta from HP affixes on equip.
+
+
+
+### Changed — ship-tip charge ring now shows the defense-skill charge
+
+The charge ring at the ship's tip (previously the power-weapon
+readiness ring — now redundant since power weapons run on the energy
+meter) is repurposed to show the active **defense skill's**
+auto-recharge. It fills as the skill's cooldown elapses and pulses
+fully-charged when the skill is ready to use — so the player has a
+clear "defense ready" cue right on the ship.
+
+- `activateSkill` stores `activeSkillCooldownMax` so the ring can
+  compute fill; reset with the rest of the run state.
+- `renderer.drawCooldownTimer` reads the active-skill cooldown
+  (via `getActiveSkillConfig`) instead of the power-weapon cooldown.
+- The stale cooldown-based power-weapon body glow was removed; Charge
+  Shot keeps its hold-to-charge body glow.
+
+Defense skills already recharge automatically over time (cooldown
+decay), matching the "charges automatically, not from hits" model.
+
+---
+
 ## [6.30.0] - 2026-05-19
 
 ### Changed — passives are now wave-clear rewards only

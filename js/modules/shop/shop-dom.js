@@ -128,6 +128,25 @@ export function initShopDom(gameEngine) {
             renderShopDom();
         });
 
+        // Right-click any owned node to sell one stack back at-cost. The
+        // refund equals what was paid for the last stack (sellShopItem reads
+        // the same ramped costOverrides), so selling a trait to buy another
+        // nets zero gold — free respec.
+        _elements.tree.addEventListener('contextmenu', (e) => {
+            const node = e.target.closest('.shop-node');
+            if (!node || node.dataset.sellable !== '1') return;
+            e.preventDefault();
+            const id = node.dataset.id;
+            if (!id || !_engine.sellShopItem) return;
+            if (_engine.sellShopItem(id)) {
+                node.classList.remove('shop-node--flash');
+                void node.offsetWidth;
+                node.classList.add('shop-node--flash');
+                _hideTooltip();
+            }
+            renderShopDom();
+        });
+
         // Tooltip — show on pointerover, hide on pointerout, follow cursor.
         _elements.tree.addEventListener('pointerover', (e) => {
             const node = e.target.closest('.shop-node');
@@ -407,6 +426,17 @@ function _buildUpgradeNode(upg, player) {
         cost = upg.costOverrides[Math.min(currentStacks, upg.costOverrides.length - 1)] || cost;
     }
 
+    // At-cost sell refund — the price of the LAST stack owned. Mirrors
+    // sellShopItem in shop-manager.js (both read costOverrides) so the
+    // displayed refund matches the gold actually returned; selling one
+    // trait to buy another nets zero.
+    let refund = 0;
+    if (isOwned) {
+        refund = upg.costOverrides
+            ? (upg.costOverrides[Math.min(currentStacks - 1, upg.costOverrides.length - 1)] || upg.cost)
+            : upg.cost;
+    }
+
     const money = (_engine && _engine.game && _engine.game.money) || 0;
     const canAfford = !isMaxed && money >= cost;
 
@@ -446,6 +476,12 @@ function _buildUpgradeNode(upg, player) {
     node.dataset.tooltipCost = String(cost);
     node.dataset.tooltipStacks = `${currentStacks}/${maxStacks}`;
     node.dataset.tooltipState = state;
+    // Owned nodes can be sold back at-cost via right-click (see the
+    // contextmenu handler in initShopDom). Stash the refund for the tooltip.
+    if (isOwned) {
+        node.dataset.sellable = '1';
+        node.dataset.tooltipRefund = String(refund);
+    }
     if (locked && upg.requires) {
         node.dataset.tooltipLock = `Locked — needs ${upg.requires.id} ×${upg.requires.stacks || 1}`;
     }
@@ -523,7 +559,18 @@ function _showTooltip(node, e) {
         } else {
             metaEl.appendChild(_makeMeta('COST', cost));
         }
+        // Owned upgrades can be sold back at-cost via right-click.
+        if (node.dataset.sellable === '1') {
+            metaEl.appendChild(_makeMeta('SELL', node.dataset.tooltipRefund || ''));
+        }
         tip.appendChild(metaEl);
+
+        if (node.dataset.sellable === '1') {
+            const sellHint = document.createElement('div');
+            sellHint.className = 'shop-tree-tooltip-sellhint';
+            sellHint.textContent = 'Right-click to sell (at-cost)';
+            tip.appendChild(sellHint);
+        }
     }
 
     tip.style.display = 'block';

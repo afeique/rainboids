@@ -1,9 +1,15 @@
 /**
  * tests/unit/cluster-launcher.test.js — Phase 6 Cluster Launcher tests.
  *
- * Pins the cluster-bomb stage machine, sub-bomblet spawn behavior, and
- * the per-weapon upgrade tuners (CLUSTER_PAYLOAD / MORE_BOMBLETS /
- * SHORT_FUSE / MEGA_CLUSTER) defined in `weapon-data.js`.
+ * Pins the cluster-bomb flight model, sub-bomblet spawn behavior, and
+ * the per-weapon upgrades defined in `weapon-data.js`.
+ *
+ * 6.28.0 weapon redesign — the bespoke cluster tuners (CLUSTER_PAYLOAD /
+ * MORE_BOMBLETS / SHORT_FUSE / MEGA_CLUSTER) were RETIRED. Cluster
+ * Launcher now gets only the shared-trait set: Multishot (CLUSTER_MULTI),
+ * Stun% (CLUSTER_STUN), and Knockback% (CLUSTER_KNOCK). The detonation
+ * MECHANICS (5 sub-bombs by default, blast-radius falloff) are unchanged
+ * and still exercised directly via detonateCluster with synthetic config.
  *
  * The Bullet class is exercised directly with synthetic config so we
  * don't have to spin up the full game engine. The detonateCluster /
@@ -11,13 +17,12 @@
  * pools to confirm AoE damage radius + sub-bomb spawn count.
  *
  * Covered:
- *   • ClusterBomb transitions to armed when velocity drops below 0.3
- *   • Armed timer detonates after 800ms (default) or sooner with SHORT_FUSE
- *   • Enemy within 60px proximity triggers detonation early
- *   • Detonation spawns 5 sub-bombs by default
- *   • MORE_BOMBLETS upgrade adds correct number of sub-bombs
+ *   • Cluster bomb flies straight (single 'flying' stage, 6.26.0)
+ *   • Enemy/asteroid within contact radius triggers detonation
+ *   • Detonation spawns 5 sub-bombs by default; count param respected
+ *   • detonateCluster blast-radius damage + falloff
  *   • Cluster bombs do NOT have homing or piercing flags
- *   • MEGA_CLUSTER upgrade extends primary blast radius
+ *   • Cluster upgrades = CLUSTER_MULTI / CLUSTER_STUN / CLUSTER_KNOCK
  */
 
 // ── Browser shims (must happen before module imports) ──────────────────
@@ -117,22 +122,30 @@ describe('PRIMARY_WEAPONS.CLUSTER_LAUNCHER — config sanity', () => {
         expect(cfg.piercing).toBe(0); // Cluster bombs do not pierce by spec
     });
 
-    test('all four per-weapon upgrades exist with correct stack caps', () => {
-        expect(PRIMARY_UPGRADES.CLUSTER_PAYLOAD).toBeDefined();
-        expect(PRIMARY_UPGRADES.CLUSTER_PAYLOAD.maxStacks).toBe(3);
-        expect(PRIMARY_UPGRADES.CLUSTER_PAYLOAD.weapon).toBe('CLUSTER_LAUNCHER');
+    test('cluster gets the shared Multishot / Stun / Knockback upgrades (6.28.0)', () => {
+        expect(PRIMARY_UPGRADES.CLUSTER_MULTI).toBeDefined();
+        expect(PRIMARY_UPGRADES.CLUSTER_MULTI.maxStacks).toBe(2);
+        expect(PRIMARY_UPGRADES.CLUSTER_MULTI.weapon).toBe('CLUSTER_LAUNCHER');
 
-        expect(PRIMARY_UPGRADES.MORE_BOMBLETS).toBeDefined();
-        expect(PRIMARY_UPGRADES.MORE_BOMBLETS.maxStacks).toBe(2);
+        expect(PRIMARY_UPGRADES.CLUSTER_STUN).toBeDefined();
+        expect(PRIMARY_UPGRADES.CLUSTER_STUN.maxStacks).toBe(3);
+        expect(PRIMARY_UPGRADES.CLUSTER_STUN.weapon).toBe('CLUSTER_LAUNCHER');
 
-        expect(PRIMARY_UPGRADES.SHORT_FUSE).toBeDefined();
-        expect(PRIMARY_UPGRADES.SHORT_FUSE.maxStacks).toBe(2);
-
-        expect(PRIMARY_UPGRADES.MEGA_CLUSTER).toBeDefined();
-        expect(PRIMARY_UPGRADES.MEGA_CLUSTER.maxStacks).toBe(2);
+        expect(PRIMARY_UPGRADES.CLUSTER_KNOCK).toBeDefined();
+        expect(PRIMARY_UPGRADES.CLUSTER_KNOCK.maxStacks).toBe(3);
+        expect(PRIMARY_UPGRADES.CLUSTER_KNOCK.weapon).toBe('CLUSTER_LAUNCHER');
     });
 
-    test('no CLUSTER_HOMING / CLUSTER_PIERCING upgrade exists (Phase 2 design)', () => {
+    test('retired bespoke cluster tuners are gone (6.28.0 redesign)', () => {
+        // Cluster gets only the shared-trait set now; the bespoke
+        // damage/sub-bomb/fuse/blast tuners were retired.
+        expect(PRIMARY_UPGRADES.CLUSTER_PAYLOAD).toBeUndefined();
+        expect(PRIMARY_UPGRADES.MORE_BOMBLETS).toBeUndefined();
+        expect(PRIMARY_UPGRADES.SHORT_FUSE).toBeUndefined();
+        expect(PRIMARY_UPGRADES.MEGA_CLUSTER).toBeUndefined();
+    });
+
+    test('no CLUSTER_HOMING / CLUSTER_PIERCING upgrade exists (cluster has no seek/pierce)', () => {
         expect(PRIMARY_UPGRADES.CLUSTER_HOMING).toBeUndefined();
         expect(PRIMARY_UPGRADES.CLUSTER_PIERCING).toBeUndefined();
     });
@@ -306,10 +319,10 @@ describe('detonateCluster — sub-bomblet spawn count', () => {
         }
     });
 
-    test('MORE_BOMBLETS adds +1 sub-bomb per stack (capstone +2 = 7 total)', () => {
+    test('detonateCluster spawns exactly the sub-bomb count it is given (e.g. 7)', () => {
         const spawned = [];
         const ge = makeStubEngine(spawned);
-        // Simulate the fireCluster baked-in math: subBombCount + 2 = 7.
+        // detonateCluster spawns whatever count the caller passes.
         detonateCluster.call(
             ge, 500, 500, 50, 90, 7,
             { subBombSpeed: 4, subBombFriction: 0.94, subBombLifeFrames: 20,
@@ -357,21 +370,14 @@ describe('detonateCluster — primary blast damage', () => {
     });
 });
 
-describe('MEGA_CLUSTER upgrade — extends primary blast radius', () => {
-    test('MEGA_CLUSTER upgrade definition is +30px per stack, max 2 stacks', () => {
-        const upg = PRIMARY_UPGRADES.MEGA_CLUSTER;
-        expect(upg).toBeDefined();
-        expect(upg.maxStacks).toBe(2);
-        expect(upg.weapon).toBe('CLUSTER_LAUNCHER');
-        expect(upg.description).toMatch(/30/);
-    });
-
-    test('with 2 MEGA_CLUSTER stacks, blast radius = 150 hits enemies outside default 90px', () => {
-        // Synthesize the fireCluster math: blastRadius + 30 * stacks
+describe('detonateCluster — blast radius scales the AoE hit', () => {
+    test('a larger blastRadius arg reaches enemies outside the default 90px', () => {
+        // 6.28.0 — MEGA_CLUSTER (the +30px/stack blast-radius tuner) was
+        // retired, but detonateCluster still honors whatever blastRadius
+        // it's handed. Pin that radius→AoE relationship directly.
         const baseRadius = PRIMARY_WEAPONS.CLUSTER_LAUNCHER.blastRadius;
         expect(baseRadius).toBe(90);
-        const buffedRadius = baseRadius + 2 * 30; // 150
-        expect(buffedRadius).toBe(150);
+        const buffedRadius = 150;
 
         // Enemy at 130px should be inside 150 but outside 90.
         const e = makeEnemy(630, 500, 200); // 130px from (500,500)

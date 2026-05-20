@@ -69,3 +69,25 @@ export function writeSave(snapshot) {
 export function clearSave() {
     try { localStorage.removeItem(SAVE_KEY); } catch {}
 }
+
+// ── Meta progression (6.35.0) ──────────────────────────────────────────
+// Persistent account-level progression that survives across runs (the
+// "keep coming back" hook): player level, total XP toward the next
+// level, unspent SP, and per-stat SP allocations. NOT cleared by New
+// Game — only an explicit reset would wipe it.
+const META_KEY = 'rainboidsMeta';
+
+export function loadMeta() {
+    try {
+        const raw = localStorage.getItem(META_KEY);
+        if (!raw) return null;
+        const m = JSON.parse(raw);
+        return (m && typeof m === 'object') ? m : null;
+    } catch { return null; }
+}
+
+export function saveMeta(meta) {
+    try {
+        localStorage.setItem(META_KEY, JSON.stringify(meta));
+    } catch {}
+}

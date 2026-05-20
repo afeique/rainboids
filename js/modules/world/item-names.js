@@ -55,6 +55,30 @@ export const ITEM_PREFIXES = {
     ],
 };
 
+// 6.32.0 — Items now roll AFFIXES that mirror the passive stat set, so
+// an item can grant any combination of HP / Toughness / Vampirism /
+// Thorns / Crit Chance / Crit Damage / Dodge / Speed / Regen. Each
+// affix value = (base + (wave-1) × perWave) × rarity-mult. `pct` marks
+// percentage stats (rounded to 1 dp) vs flat (HP int, regen 1 dp).
+export const ITEM_AFFIX_POOL = [
+    { type: 'hp',         base: 8,   perWave: 2,    pct: false, min: 1,   prefix: 'hp',        label: (v) => `+${v} MAX HP` },
+    { type: 'toughness',  base: 3,   perWave: 0.3,  pct: true,  min: 1,   prefix: 'toughness', label: (v) => `+${v}% DEF` },
+    { type: 'vampirism',  base: 2,   perWave: 0.1,  pct: true,  min: 1,   prefix: 'regen',     label: (v) => `+${v}% LIFESTEAL` },
+    { type: 'thorns',     base: 6,   perWave: 0.4,  pct: true,  min: 2,   prefix: 'toughness', label: (v) => `+${v}% THORNS` },
+    { type: 'critChance', base: 3,   perWave: 0.2,  pct: true,  min: 1,   prefix: 'hp',        label: (v) => `+${v}% CRIT` },
+    { type: 'critDamage', base: 8,   perWave: 0.5,  pct: true,  min: 3,   prefix: 'hp',        label: (v) => `+${v}% CRIT DMG` },
+    { type: 'dodge',      base: 2,   perWave: 0.1,  pct: true,  min: 1,   prefix: 'toughness', label: (v) => `+${v}% DODGE` },
+    { type: 'speed',      base: 6,   perWave: 0.3,  pct: true,  min: 2,   prefix: 'regen',     label: (v) => `+${v}% SPEED` },
+    { type: 'regen',      base: 0.3, perWave: 0.05, pct: false, min: 0.1, prefix: 'regen',     label: (v) => `+${v}/s REGEN` },
+];
+
+// Score weights — normalize each affix to an "effective HP" value so
+// cross-affix item comparison (isUpgrade suppression) is sane.
+export const AFFIX_SCORE_WEIGHT = {
+    hp: 1, toughness: 8, vampirism: 8, thorns: 4,
+    critChance: 6, critDamage: 3, dodge: 8, speed: 3, regen: 16,
+};
+
 // Slot → bonus type. Centralized so callers don't repeat the mapping.
 export const SLOT_BONUS_TYPE = {
     cockpit:   'hp',

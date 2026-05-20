@@ -73,12 +73,26 @@ export function updateActiveSkills(dt) {
     // smooth angular interpolation so rotation reads naturally.
     const enemies = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
     const asteroidsForMissiles = (this.gameEngine && this.gameEngine.asteroidPool && this.gameEngine.asteroidPool.activeObjects) || [];
-    // Targets currently held by *other* live missiles — used to spread
-    // re-acquisition across distinct threats instead of stacking on the
-    // nearest one. Built once per frame.
-    const claimedTargets = new Set();
-    for (const om of this.activeMissiles) {
-        if (om.active && om.target && om.target.active) claimedTargets.add(om.target);
+    // 6.34.0 — Missile Salvo concentrates fire. Compute ONE shared salvo
+    // target per frame (nearest active enemy to the ship, else nearest
+    // asteroid). Any missile whose target died re-acquires this shared
+    // target, so the whole salvo keeps hammering one threat for max
+    // burst damage instead of spreading out.
+    let salvoTarget = null;
+    {
+        let bestD = Infinity;
+        for (const e of enemies) {
+            if (!e.active) continue;
+            const d = Math.hypot(e.x - this.x, e.y - this.y);
+            if (d < bestD) { bestD = d; salvoTarget = e; }
+        }
+        if (!salvoTarget) {
+            for (const ast of asteroidsForMissiles) {
+                if (!ast.active) continue;
+                const d = Math.hypot(ast.x - this.x, ast.y - this.y);
+                if (d < bestD) { bestD = d; salvoTarget = ast; }
+            }
+        }
     }
     for (let i = this.activeMissiles.length - 1; i >= 0; i--) {
         const m = this.activeMissiles[i];
@@ -88,43 +102,9 @@ export function updateActiveSkills(dt) {
             continue;
         }
 
-        // (Re-)acquire target if needed. First pass prefers enemies that
-        // no other missile has claimed; if every enemy is taken, allow
-        // duplicates; if no enemies at all, fall back to asteroids
-        // (also de-duped first).
+        // Re-acquire the shared salvo target if this missile's target died.
         if (!m.target || !m.target.active) {
-            let bestDist = Infinity, best = null;
-            for (const e of enemies) {
-                if (!e.active || claimedTargets.has(e)) continue;
-                const d = Math.hypot(e.x - m.x, e.y - m.y);
-                if (d < bestDist) { bestDist = d; best = e; }
-            }
-            if (!best) {
-                bestDist = Infinity;
-                for (const e of enemies) {
-                    if (!e.active) continue;
-                    const d = Math.hypot(e.x - m.x, e.y - m.y);
-                    if (d < bestDist) { bestDist = d; best = e; }
-                }
-            }
-            if (!best) {
-                bestDist = Infinity;
-                for (const ast of asteroidsForMissiles) {
-                    if (!ast.active || claimedTargets.has(ast)) continue;
-                    const d = Math.hypot(ast.x - m.x, ast.y - m.y);
-                    if (d < bestDist) { bestDist = d; best = ast; }
-                }
-            }
-            if (!best) {
-                bestDist = Infinity;
-                for (const ast of asteroidsForMissiles) {
-                    if (!ast.active) continue;
-                    const d = Math.hypot(ast.x - m.x, ast.y - m.y);
-                    if (d < bestDist) { bestDist = d; best = ast; }
-                }
-            }
-            m.target = best;
-            if (best) claimedTargets.add(best);
+            m.target = salvoTarget;
         }
 
         // Steer toward the target via smooth angle interpolation.
@@ -380,6 +360,9 @@ export function activateSkill() {
     if (!config) return false;
 
     this.activeSkillCooldown = config.cooldown;
+    // 6.31.0 — stash the max so the ship-tip charge ring can show the
+    // skill's auto-recharge fill.
+    this.activeSkillCooldownMax = config.cooldown;
     this.activeSkillEffects.set(skillId, {
         timeRemaining: config.duration,
     });

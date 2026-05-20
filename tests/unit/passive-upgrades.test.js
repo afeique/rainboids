@@ -1,16 +1,21 @@
 /**
- * tests/unit/passive-upgrades.test.js — Phase 1 (2026-05-19)
+ * tests/unit/passive-upgrades.test.js
  *
- * Verifies the new PASSIVE_UPGRADES export in weapon-data.js. PASSIVE
- * is the fourth upgrade category alongside PRIMARY / POWER / SKILL —
- * always-on, weapon-agnostic, skill-agnostic.
+ * Verifies the PASSIVE_UPGRADES export in weapon-data.js.
  *
- * Acceptance criteria (from the plan doc):
- *   - PASSIVE_UPGRADES exports correctly
- *   - All expected IDs are present
- *   - getPassiveUpgrades() iterates and filters hidden entries
- *   - Each entry has the minimum shape required by the shop builder
- *     (id, name, description, cost, maxStacks, icon, passive: true)
+ * 6.28.0 / 6.30.0 redesign — PASSIVE is now the WAVE-CLEAR REWARD pool
+ * ONLY (no shop tab, no gold cost). Offensive traits (Rapid Fire, Multi
+ * Shot, Explosive, Executioner, Iron Will) were dropped from passives —
+ * they are now per-weapon upgrades. The passive pool is purely the eight
+ * defensive / utility stats, and they carry NO `cost` (reward-only) and
+ * NO `hidden` flag (the old retired-but-reserved IDs are gone).
+ *
+ * Acceptance criteria:
+ *   - PASSIVE_UPGRADES exports the 8 stat IDs
+ *   - Each entry has the reward-card shape (id, name, description,
+ *     maxStacks, icon, passive: true) — no cost
+ *   - PASSIVE_REWARD_IDS matches the pool the survivor cards draw from
+ *   - Offensive traits are NOT in the passive pool
  *
  * weapon-data.js is a pure module with no browser dependencies, so no
  * shims are needed.
@@ -18,6 +23,7 @@
 
 import {
     PASSIVE_UPGRADES,
+    PASSIVE_REWARD_IDS,
     getPassiveUpgrades,
     PRIMARY_UPGRADES,
     POWER_UPGRADES,
@@ -27,22 +33,17 @@ import {
 // PASSIVE_UPGRADES export
 // ---------------------------------------------------------------------------
 
-describe('PASSIVE_UPGRADES (Phase 1 — 2026-05-19)', () => {
+describe('PASSIVE_UPGRADES (6.30.0 — wave-reward stat pool)', () => {
     test('is exported as an object', () => {
         expect(PASSIVE_UPGRADES).toBeDefined();
         expect(typeof PASSIVE_UPGRADES).toBe('object');
         expect(PASSIVE_UPGRADES).not.toBeNull();
     });
 
-    // The plan-doc list of IDs that must live in PASSIVE.
+    // The 8 defensive / utility stats that make up the reward pool.
     const EXPECTED_PASSIVE_IDS = [
-        // Offensive passives
-        'RAPID_FIRE', 'MULTI_SHOT', 'CRIT_CHANCE', 'CRIT_DAMAGE',
-        'EXPLOSIVE', 'EXECUTIONER',
-        // Defensive passives
-        'HEALTH_BOOST', 'SHIELD_BOOST', 'VAMPIRISM', 'THORNS', 'IRON_WILL',
-        // Retired-but-reserved
-        'SPEED_BOOST', 'LONG_RANGE', 'SPARE_SHIP',
+        'CRIT_CHANCE', 'CRIT_DAMAGE', 'HEALTH_BOOST', 'SHIELD_BOOST',
+        'VAMPIRISM', 'THORNS', 'DODGE', 'SPEED_BOOST',
     ];
 
     test.each(EXPECTED_PASSIVE_IDS)('contains expected ID %s', (id) => {
@@ -50,38 +51,60 @@ describe('PASSIVE_UPGRADES (Phase 1 — 2026-05-19)', () => {
         expect(PASSIVE_UPGRADES[id].id).toBe(id);
     });
 
-    test('every entry has the minimum required shape', () => {
+    test('the pool is EXACTLY those 8 stats (no extras)', () => {
+        expect(Object.keys(PASSIVE_UPGRADES).sort()).toEqual([...EXPECTED_PASSIVE_IDS].sort());
+    });
+
+    test('every entry has the reward-card shape (no cost — reward-only)', () => {
         for (const [key, upg] of Object.entries(PASSIVE_UPGRADES)) {
             expect(upg.id).toBe(key);                          // key matches id
             expect(typeof upg.name).toBe('string');
             expect(upg.name.length).toBeGreaterThan(0);
             expect(typeof upg.description).toBe('string');
-            expect(typeof upg.cost).toBe('number');
-            expect(upg.cost).toBeGreaterThanOrEqual(0);
             expect(typeof upg.maxStacks).toBe('number');
             expect(upg.maxStacks).toBeGreaterThanOrEqual(1);
             expect(upg.passive).toBe(true);
             expect(typeof upg.icon).toBe('string');
+            // 6.30.0 — passives are reward-only; they carry no gold cost.
+            expect(upg.cost).toBeUndefined();
         }
     });
 
-    test('keeps IDs UNCHANGED (no rename) for back-compat with getPowerupStacks()', () => {
-        // The plan locks in: "Keep the IDs themselves UNCHANGED — only
-        // the category they live in changes." This guards against an
-        // accidental rename in a future refactor.
-        const id = PASSIVE_UPGRADES.THORNS.id;
-        expect(id).toBe('THORNS');
+    test('keeps stat IDs stable for back-compat with getPowerupStacks()', () => {
+        // Guards against an accidental rename in a future refactor —
+        // getPowerupStacks() keys off these IDs.
+        expect(PASSIVE_UPGRADES.THORNS.id).toBe('THORNS');
         expect(PASSIVE_UPGRADES.HEALTH_BOOST.id).toBe('HEALTH_BOOST');
         expect(PASSIVE_UPGRADES.VAMPIRISM.id).toBe('VAMPIRISM');
-        expect(PASSIVE_UPGRADES.RAPID_FIRE.id).toBe('RAPID_FIRE');
+        expect(PASSIVE_UPGRADES.DODGE.id).toBe('DODGE');
     });
 
-    test('retired IDs (SPEED_BOOST / LONG_RANGE / SPARE_SHIP) are marked hidden', () => {
-        // These IDs are reserved for future restoration; the shop
-        // browse path filters them via `cfg.hidden`.
-        expect(PASSIVE_UPGRADES.SPEED_BOOST.hidden).toBe(true);
-        expect(PASSIVE_UPGRADES.LONG_RANGE.hidden).toBe(true);
-        expect(PASSIVE_UPGRADES.SPARE_SHIP.hidden).toBe(true);
+    test('offensive traits are NOT passives anymore (per-weapon upgrades now)', () => {
+        // 6.28.0 — Rapid Fire / Multi Shot / Explosive / Executioner /
+        // Iron Will were removed from the passive pool.
+        for (const id of ['RAPID_FIRE', 'MULTI_SHOT', 'EXPLOSIVE', 'EXECUTIONER', 'IRON_WILL']) {
+            expect(PASSIVE_UPGRADES[id]).toBeUndefined();
+        }
+    });
+
+    test('no passive carries a hidden flag (retired-reserved IDs are gone)', () => {
+        for (const upg of Object.values(PASSIVE_UPGRADES)) {
+            expect(upg.hidden).toBeFalsy();
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// PASSIVE_REWARD_IDS — the ordered survivor-card draw pool
+// ---------------------------------------------------------------------------
+
+describe('PASSIVE_REWARD_IDS', () => {
+    test('matches the PASSIVE_UPGRADES keys (every reward is a real passive)', () => {
+        expect(Array.isArray(PASSIVE_REWARD_IDS)).toBe(true);
+        expect(PASSIVE_REWARD_IDS.length).toBe(Object.keys(PASSIVE_UPGRADES).length);
+        for (const id of PASSIVE_REWARD_IDS) {
+            expect(PASSIVE_UPGRADES[id]).toBeDefined();
+        }
     });
 });
 
@@ -94,18 +117,9 @@ describe('getPassiveUpgrades() iteration', () => {
         const visible = getPassiveUpgrades();
         expect(Array.isArray(visible)).toBe(true);
         expect(visible.length).toBeGreaterThan(0);
-        // No hidden entries surface by default.
         for (const upg of visible) {
             expect(upg.hidden).toBeFalsy();
         }
-    });
-
-    test('respects { includeHidden: true } and surfaces retired IDs', () => {
-        const all = getPassiveUpgrades({ includeHidden: true });
-        const ids = all.map(u => u.id);
-        expect(ids).toEqual(expect.arrayContaining([
-            'SPEED_BOOST', 'LONG_RANGE', 'SPARE_SHIP',
-        ]));
     });
 
     test('every returned upgrade has passive: true', () => {
@@ -119,11 +133,15 @@ describe('getPassiveUpgrades() iteration', () => {
 // Phase 2 — per-weapon HOMING / PIERCING upgrades
 // ---------------------------------------------------------------------------
 
-describe('Per-weapon HOMING / PIERCING (Phase 2 — 2026-05-19)', () => {
-    // Applicability matrix from the plan doc + user spec.
+describe('Per-weapon HOMING / PIERCING (6.28.0 redesign)', () => {
+    // 6.28.0 — all four kinetic primaries now get Homing AND Piercing as
+    // shared-trait upgrades; Charge Shot gets both; Missile Salvo gets
+    // pierce (its homing is innate).
     const HOMING_IDS = [
         ['PULSE_CANNON',  'PULSE_HOMING'],
         ['STORM_NEEDLES', 'NEEDLE_HOMING'],
+        ['SCATTER_GUN',   'SCATTER_HOMING'],
+        ['RAIL_DRIVER',   'RAIL_HOMING'],
         ['CHARGE_SHOT',   'CHARGE_HOMING'],
     ];
     const PIERCING_IDS = [
@@ -154,13 +172,14 @@ describe('Per-weapon HOMING / PIERCING (Phase 2 — 2026-05-19)', () => {
     });
 
     test('weapons that do NOT receive HOMING / PIERCING have no per-weapon upgrade', () => {
-        // From the plan's applicability matrix.
+        // The beam / lobbed / area power weapons don't get seek or pierce.
         const noHomingWeapons = [
-            'SCATTER_GUN', 'RAIL_DRIVER', 'LANCE_BEAM', 'MINE_LAYER',
-            'NOVA_BLAST', 'LIGHTNING_ARC',
+            'LANCE_BEAM', 'MINE_LAYER', 'NOVA_BLAST', 'LIGHTNING_ARC',
+            'MISSILE_SALVO', 'CLUSTER_LAUNCHER',
         ];
         const noPiercingWeapons = [
             'LANCE_BEAM', 'MINE_LAYER', 'NOVA_BLAST', 'LIGHTNING_ARC',
+            'CLUSTER_LAUNCHER',
         ];
         const allUpgrades = { ...PRIMARY_UPGRADES, ...POWER_UPGRADES };
         for (const weapon of noHomingWeapons) {

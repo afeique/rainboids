@@ -14,6 +14,11 @@
  *   - Mobile + cooldown power ready + fireSecondary=true → fires.
  *   - Mobile + CHARGE_SHOT + isFullyCharged → auto-fires.
  *   - Desktop: unchanged (no auto-fire without input).
+ *
+ * 6.29.0 — isPowerReady() is now ALSO energy-gated (energy >= the
+ * weapon's POWER_ENERGY_COST). These tests are about the cooldown/charge
+ * contract, not the energy economy, so each player is given full energy
+ * in beforeEach to satisfy the gate.
  */
 
 // Browser shims — must happen before any game module import.
@@ -92,6 +97,7 @@ describe('Player.update — mobile cooldown power weapons (5.100.0)', () => {
         player.active = true;
         player.activePower = 'NOVA_BLAST';
         player.powerCooldown = 0;
+        player.energy = player.maxEnergy; // satisfy the 6.29.0 energy gate
         player.novaRings = [];
         player.firingDisabled = false;
         installFakeEngine();
@@ -168,6 +174,7 @@ describe('Player.update — mobile CHARGE_SHOT (charge-based, still auto-fires) 
         player.active = true;
         player.activePower = 'CHARGE_SHOT';
         player.isFullyCharged = false;
+        player.energy = player.maxEnergy; // satisfy the 6.29.0 energy gate
         player.firingDisabled = false;
         installFakeEngine();
     });

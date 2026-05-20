@@ -674,6 +674,65 @@ export const POWER_UPGRADES = {
     },
 };
 
+// ─── UPGRADE ECONOMY: SCALE + PER-STACK RAMP ────────────────────────────────
+//
+// 6.x.0 — Upgrades are now rare, deliberate purchases. A full 30-wave run
+// yields ~100k gold (drops are hard-capped at 250/kill), so the player can
+// only afford a handful of upgrades per playthrough. Two levers:
+//
+//   1. UPGRADE_COST_MULT — every weapon/power/skill upgrade's legacy cost is
+//      multiplied by this. ~10 waves of mid-game income ≈ one upgrade.
+//   2. UPGRADE_STACK_RAMP — each owned stack makes the NEXT stack of the same
+//      trait cost more (geometric ramp), so stacking deep is a real
+//      commitment and gives a sense of progression. Stack 1 = base,
+//      stack N = base · ramp^(N-1).
+//
+// Selling refunds the exact at-cost price of the last stack owned (see
+// shop-manager.sellShopItem) so the ramp stays net-zero — players can freely
+// respec by selling one trait and buying another.
+//
+// Both are the only knobs to tune the economy; the per-stack `costOverrides`
+// arrays below are generated from them at module load.
+export const UPGRADE_COST_MULT = 13;
+export const UPGRADE_STACK_RAMP = 1.6;
+
+function _roundCost(n) {
+    return Math.max(500, Math.round(n / 500) * 500);
+}
+
+// Build a per-stack cost array from an already-scaled stack-1 base:
+// [base, base·ramp, base·ramp², …] for `maxStacks` entries, rounded to 500.
+export function buildStackCosts(base1, maxStacks) {
+    const out = [];
+    for (let s = 0; s < Math.max(1, maxStacks | 0); s++) {
+        out.push(_roundCost(base1 * Math.pow(UPGRADE_STACK_RAMP, s)));
+    }
+    return out;
+}
+
+// Apply scale + ramp to an upgrade table in place. Reads each entry's
+// pre-scale base (its flat `cost`, or costOverrides[0] if it already had a
+// ramp), multiplies by UPGRADE_COST_MULT, and regenerates `costOverrides` as
+// a ramped per-stack array. Single-stack upgrades get the scaled flat cost.
+function _scaleUpgradeTable(table) {
+    for (const upg of Object.values(table)) {
+        const legacyBase = (upg.costOverrides && upg.costOverrides.length)
+            ? upg.costOverrides[0] : (upg.cost || 0);
+        if (!legacyBase) continue; // free / weapon-unlock rows stay free
+        const base1 = legacyBase * UPGRADE_COST_MULT;
+        const maxStacks = upg.maxStacks || 1;
+        if (maxStacks > 1) {
+            upg.costOverrides = buildStackCosts(base1, maxStacks);
+            upg.cost = upg.costOverrides[0];
+        } else {
+            upg.cost = _roundCost(base1);
+            if (upg.costOverrides) upg.costOverrides = [upg.cost];
+        }
+    }
+}
+_scaleUpgradeTable(PRIMARY_UPGRADES);
+_scaleUpgradeTable(POWER_UPGRADES);
+
 // ─── DEFENSE SKILLS (Number Keys 1-4) ───────────────────────────────────────
 
 export const DEFENSE_SKILLS = {

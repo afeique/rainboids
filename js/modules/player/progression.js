@@ -16,6 +16,86 @@
 export function gainExperience(/* amount */) { /* no-op since 6.0.0 */ }
 export function levelUp() { return false; }
 
+// ── Meta progression (6.35.0) ───────────────────────────────────────────
+// Persistent level / XP / SP across playthroughs. `level`, `xp`, `sp`,
+// and `spStats` live on the player but are saved to localStorage so they
+// carry between runs.
+import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-stats.js';
+import { loadMeta, saveMeta } from '../core/storage.js';
+
+// Initialize the player's meta fields from storage (called in ctor).
+export function initMeta() {
+    const m = loadMeta() || {};
+    this.level = Math.max(1, Math.min(MAX_LEVEL, m.level | 0 || 1));
+    this.xp = Math.max(0, m.xp | 0);
+    this.sp = Math.max(0, m.sp | 0);
+    this.spStats = {};
+    for (const s of SP_STATS) {
+        const v = (m.spStats && m.spStats[s.id]) | 0;
+        this.spStats[s.id] = Math.max(0, Math.min(SP_STAT_MAX_POINTS, v));
+    }
+}
+
+export function saveMetaState() {
+    saveMeta({ level: this.level, xp: this.xp, sp: this.sp, spStats: this.spStats });
+}
+
+// Award XP toward the next level. Rolls over multiple levels if needed;
+// each level grants +1 SP. Sets `_leveledUpPending` so the wave-clear
+// flow knows to open the STATS screen. Persists on any level gain.
+export function addXp(amount) {
+    if (!(amount > 0) || this.level >= MAX_LEVEL) return;
+    this.xp = (this.xp || 0) + amount;
+    let leveled = false;
+    while (this.level < MAX_LEVEL) {
+        const need = xpForLevel(this.level);
+        if (this.xp < need) break;
+        this.xp -= need;
+        this.level += 1;
+        this.sp = (this.sp || 0) + 1;
+        leveled = true;
+    }
+    if (this.level >= MAX_LEVEL) this.xp = 0;
+    if (leveled) {
+        this._leveledUpPending = true;
+        this.saveMetaState();
+    }
+}
+
+// Spend one SP on a stat (respecting the 20-point cap + unspent SP).
+// Returns true on success. Persists on change.
+export function allocateSp(statId) {
+    if (!this.spStats || !(statId in this.spStats)) return false;
+    if ((this.sp || 0) <= 0) return false;
+    if (this.spStats[statId] >= SP_STAT_MAX_POINTS) return false;
+    this.spStats[statId] += 1;
+    this.sp -= 1;
+    this.saveMetaState();
+    return true;
+}
+
+// 6.36.0 — Pull one SP back out of a stat (refund to the unspent pool)
+// so the player can freely redistribute. Returns true on success.
+export function deallocateSp(statId) {
+    if (!this.spStats || !(statId in this.spStats)) return false;
+    if ((this.spStats[statId] | 0) <= 0) return false;
+    this.spStats[statId] -= 1;
+    this.sp = (this.sp || 0) + 1;
+    this.saveMetaState();
+    return true;
+}
+
+// Effective value of an SP stat (points × max/20).
+function _spVal(player, statId) {
+    const def = SP_STATS.find((s) => s.id === statId);
+    if (!def || !player || !player.spStats) return 0;
+    const pts = player.spStats[statId] | 0;
+    return pts * (def.max / SP_STAT_MAX_POINTS);
+}
+export function spStatTotal(statId) {
+    return _spVal(this, statId);
+}
+
 export function grantLevelUpBonus() {
     // 6.0.0 — no-op. Wave-clear survivor cards replace the old 45s
     // dual-buff cadence.
@@ -212,13 +292,32 @@ export function getPowerupStacks(type) {
     return this.powerups.has(type) ? this.powerups.get(type).stacks : 0;
 }
 
+// 6.32.0 — Sum the rolled affix values of a given type across all
+// equipped inventory items. Items mirror the passive stat set, so the
+// effective-stat getters add this on top of the passive-stack bonus.
+export function getItemAffixTotal(type) {
+    let total = 0;
+    if (this.equippedItems) {
+        for (const slot of Object.keys(this.equippedItems)) {
+            const it = this.equippedItems[slot];
+            if (it && Array.isArray(it.affixes)) {
+                for (const a of it.affixes) {
+                    if (a.type === type) total += (a.value || 0);
+                }
+            }
+        }
+    }
+    return total;
+}
+
 // ── Effective stat calculations ───────────────────────────────────────────
 
 export function getMovementSpeedMultiplier() {
     const speedBoostStacks = this.getPowerupStacks('SPEED_BOOST');
-    // Each stack: +65% thrust (was +50%) — bumped to make a single
-    // pickup decisively change ship feel given the new lower drop rates.
-    return speedBoostStacks > 0 ? (1 + speedBoostStacks * 0.65) : 1;
+    // Each stack: +65% thrust. 6.32.0 — item speed affixes; 6.35.0 — SP
+    // SPEED allocation; both add their rolled percentage on top.
+    const itemSpeedPct = (this.getItemAffixTotal('speed') + _spVal(this, 'SPEED')) / 100;
+    return 1 + speedBoostStacks * 0.65 + itemSpeedPct;
 }
 
 // 6.0.0 — Gold Find now scales with WAVE, not player level. Same
@@ -262,14 +361,7 @@ export function getEffectiveRegen() {
     let regen = 0;
     const stacks = this.getPowerupStacks ? this.getPowerupStacks('REGEN') : 0;
     if (stacks > 0) regen += stacks * 0.5;
-    if (this.equippedItems) {
-        for (const slot of Object.keys(this.equippedItems)) {
-            const it = this.equippedItems[slot];
-            if (it && typeof it.regenBonus === 'number') {
-                regen += it.regenBonus;
-            }
-        }
-    }
+    regen += this.getItemAffixTotal('regen'); // 6.32.0 — item regen affixes
     return Math.min(REGEN_RATE_CAP, regen);
 }
 
@@ -285,15 +377,11 @@ export function getEffectiveShield() {
     // `bonus` directly to the shield percentage. Stacks on top of
     // SHIELD_BOOST. `this.shield` (the base 15% damage reduction) is
     // a different concept and unrelated to the inventory slot.
-    let itemBonus = 0;
-    if (this.equippedItems) {
-        const s = this.equippedItems.shielding;
-        const c = this.equippedItems.chassis;
-        if (s && s.bonusType === 'toughness') itemBonus += s.bonus;
-        if (c && c.bonusType === 'toughness') itemBonus += c.bonus;
-    }
+    // 6.32.0 — Any equipped item rolling a toughness affix contributes,
+    // regardless of slot. 6.35.0 — + SP TOUGHNESS allocation.
+    const itemBonus = this.getItemAffixTotal('toughness');
 
-    const totalShield = baseShield + shieldBoostAmount + itemBonus;
+    const totalShield = baseShield + shieldBoostAmount + itemBonus + _spVal(this, 'TOUGHNESS');
     return Math.min(75, totalShield); // Cap at 75%
 }
 
@@ -305,13 +393,9 @@ export function getEffectiveMaxHealth() {
     // 5.99.4 — Diablo defensive items (HP slots). Each equipped HP
     // item (cockpit, hull — slot keys rethemed in 6.2.2) adds its
     // `bonus` to max health. Stacks on top of HEALTH_BOOST.
-    let itemBonus = 0;
-    if (this.equippedItems) {
-        const c = this.equippedItems.cockpit;
-        const h = this.equippedItems.hull;
-        if (c && c.bonusType === 'hp') itemBonus += c.bonus;
-        if (h && h.bonusType === 'hp') itemBonus += h.bonus;
-    }
+    // 6.32.0 — Any equipped item rolling an HP affix contributes.
+    // 6.35.0 — + SP HEALTH allocation.
+    const itemBonus = this.getItemAffixTotal('hp') + _spVal(this, 'HEALTH');
 
     const totalMaxHealth = baseMaxHealth + healthBoostAmount + itemBonus;
     // Cap raised to 600 to accommodate the higher per-stack value while
@@ -324,7 +408,9 @@ export function getEffectiveCritChance() {
     const critChanceStacks = this.getPowerupStacks('CRIT_CHANCE');
     const critChanceBonus = critChanceStacks * 7; // +7% per stack (was +5%)
 
-    const totalCritChance = baseCritChance + critChanceBonus;
+    // 6.32.0 — item critChance affixes. 6.35.0 — + SP CRIT_CHANCE.
+    const totalCritChance = baseCritChance + critChanceBonus
+        + this.getItemAffixTotal('critChance') + _spVal(this, 'CRIT_CHANCE');
     return Math.min(60, totalCritChance); // Cap raised 50% → 60%
 }
 
@@ -332,9 +418,11 @@ export function getEffectiveCritDamage() {
     const critDamageStacks = this.getPowerupStacks('CRIT_DAMAGE');
     const critDamageBonus = critDamageStacks * 15; // +15% per stack (was +10%)
 
-    // Randomize between 2x (200%) and 3x (300%) base, plus stacks
+    // Randomize between 2x (200%) and 3x (300%) base, plus stacks +
+    // 6.32.0 item critDamage affixes.
+    const itemCritDmg = this.getItemAffixTotal('critDamage') + _spVal(this, 'CRIT_DAMAGE');
     const minCrit = this.baseCritDamage; // 200%
-    const maxCrit = 300 + critDamageBonus; // 300% + stacks
+    const maxCrit = 300 + critDamageBonus + itemCritDmg; // 300% + stacks + items + SP
     const totalCritDamage = minCrit + Math.random() * (maxCrit - minCrit);
     return Math.min(550, totalCritDamage); // Cap raised 500% → 550%
 }

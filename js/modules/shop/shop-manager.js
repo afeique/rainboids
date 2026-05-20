@@ -15,7 +15,15 @@ import {
     getPowerUpgrades,
     getSkillUpgrades,
     getPassiveUpgrades,
+    UPGRADE_COST_MULT,
+    buildStackCosts,
 } from '../combat/weapon-data.js';
+
+// Defense-skill upgrades are authored in skill points (SP); this is the
+// SP→gold conversion, kept on the same economy curve as weapon upgrades
+// (the legacy ×800 base, then the shared UPGRADE_COST_MULT scale + per-stack
+// ramp via buildStackCosts). See weapon-data.js for the economy knobs.
+const SKILL_SP_TO_GOLD = 800;
 import { POWERUP_TYPES, powerupGoldCost } from '../world/powerup.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { showShopDom, hideShopDom, renderShopDom, updateShopCurrencyDom } from './shop-dom.js';
@@ -35,13 +43,13 @@ export function sellShopItem(itemId) {
         const currentStacks = this.player.getPowerupStacks(itemId);
         if (currentStacks === 0) return false;
 
+        // Refund the exact at-cost price of the LAST stack owned. Every
+        // upgrade now carries a ramped `costOverrides` array (see
+        // weapon-data._scaleUpgradeTable + shop-manager skill build), so this
+        // single branch covers weapon, power, and skill upgrades alike.
         let lastStackCost = item.cost;
         if (item.costOverrides) {
             lastStackCost = item.costOverrides[Math.min(currentStacks - 1, item.costOverrides.length - 1)] || item.cost;
-        } else if (item.id === 'CHARGE_SPEED') {
-            if (currentStacks === 1) lastStackCost = 1500;
-            else if (currentStacks === 2) lastStackCost = 3000;
-            else if (currentStacks >= 3) lastStackCost = 5000;
         }
         // Full at-cost refund — players don't lose currency when selling
         // (lets them experiment with builds; the upgrade tree is a
@@ -263,13 +271,17 @@ export function _buildTreeItems() {
     // effectively free.
     for (const s of Object.values(DEFENSE_SKILLS)) {
         for (const upg of getSkillUpgrades(s.id)) {
+            // Same economy as weapon upgrades: SP→gold, scaled, then a
+            // per-stack ramp so stacking a skill trait escalates in cost.
+            const base1 = (upg.cost || 0) * SKILL_SP_TO_GOLD * UPGRADE_COST_MULT;
+            const costOverrides = buildStackCosts(base1, upg.maxStacks || 1);
             items.push({
                 id: upg.id,
                 name: upg.name,
                 description: upg.description,
                 icon: upg.icon,
-                cost: (upg.cost || 0) * 800,
-                costOverrides: null,
+                cost: costOverrides[0],
+                costOverrides,
                 maxStacks: upg.maxStacks,
                 category: 'SKILLS',
                 currency: 'COINS',
@@ -584,10 +596,6 @@ export function buyShopItem(itemId) {
             let actualCost = item.cost;
             if (item.flatCost) {
                 actualCost = item.cost;
-            } else if (item.id === 'CHARGE_SPEED') {
-                if (currentStacks === 0) actualCost = 1500;
-                else if (currentStacks === 1) actualCost = 3000;
-                else if (currentStacks === 2) actualCost = 5000;
             } else if (item.stackCostIncrement) {
                 // 5.79.53 — Linear stack-scaling for SP-priced powerups.
                 //   actualCost = base + stacks × increment.
