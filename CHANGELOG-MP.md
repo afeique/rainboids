@@ -8,6 +8,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 MP stays in `0.x` while experimental; promotes to `1.0.0` when stable.
 
+## [0.12.1] - 2026-05-19
+
+**MP ships + enemies now render via solo's shared shape helpers.**
+Finishes the shared-draw interface started in 0.12.0 (asteroids): MP
+no longer keeps its own simplified ship/enemy silhouettes — it draws
+the *same* art solo does, from `js/modules/render/shapes.js`.
+
+- **Ships**: local (cyan) + remote (per-slot palette) + downed (gray)
+  ships draw through the shared `drawShipShape` winged hull instead of
+  the old flat triangle.
+- **Enemies**: `mp-renderer.js`'s `drawEnemy` maps the sim's kind u8 →
+  solo type string and calls the shared `drawEnemyShapeByType` (pre-
+  translated + rotated to facing, kind color pre-set). MP has no turret
+  charge/firing state, so the per-kind idle defaults render (forward
+  TITAN barrel, idle WEAVER turret, un-boosted DRIFTER core).
+- The bespoke MP primitives (`drawShipTriangle`, `drawEnemyPolygon/
+  Triangle/Diamond/CircleCross`) are deleted — dead after the swap.
+- No sim/wire change (WIRE_VERSION stays 9); `enemy_radius` accessor
+  already existed. QA-13 4/4 pass with the shared shapes live; solo
+  enemy e2e renders without crashing.
+
 ## [0.12.0] - 2026-05-19
 
 **Full solo-parity graphics: WebGL bloom + starfield in `/mp`.** MP

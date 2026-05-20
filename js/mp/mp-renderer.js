@@ -39,7 +39,42 @@ import {
     projectAsteroidVertices,
     ASTEROID_EDGES,
     ASTEROID_FOV,
+    drawShipShape,
+    drawEnemyShapeByType,
 } from "../modules/render/shapes.js";
+
+// MP enemy kind discriminator (u8) → solo enemy type string. Matches
+// wave_table::KIND_* ordering (HUNTER=0 … TITAN=9).
+const MP_ENEMY_KIND_TO_TYPE = [
+    "HUNTER", "GUARDIAN", "WASP", "STALKER", "DRIFTER",
+    "TANGERINE", "WEAVER", "SENTINEL", "PROWLER", "TITAN",
+];
+
+// Ship draw radius for the shared winged-hull silhouette. ~13 keeps a
+// footprint close to the old 15px triangle while reading as a proper ship.
+const MP_SHIP_RADIUS = 13;
+
+// Build a `drawShipShape` palette tinted by a single player color.
+// `color` is a #rrggbb hex; appended alpha bytes give the translucent
+// wing fill. Local ship + each remote slot get their own hue this way.
+function mpShipPalette(color) {
+    return {
+        wingFill: color + "66",
+        wingStroke: color,
+        hullFill: "rgba(18, 20, 32, 0.92)",
+        hullStroke: color,
+        cockpitFill: "#ffffff",
+        cockpitStroke: color,
+    };
+}
+const MP_SHIP_PALETTE_DOWNED = {
+    wingFill: "rgba(160, 160, 170, 0.30)",
+    wingStroke: "#bbbbbb",
+    hullFill: "rgba(30, 30, 36, 0.85)",
+    hullStroke: "#999999",
+    cockpitFill: "#dddddd",
+    cockpitStroke: "#aaaaaa",
+};
 
 const WORLD_BG = "#000000";
 const WORLD_BOUNDS_COLOR = "rgba(140, 140, 160, 0.35)";
@@ -327,6 +362,8 @@ export function render(ctx, canvas, world, aim, remoteShips = [], opts = {}) {
             // Older WASM builds may not expose enemy_kind; default to
             // HUNTER (0) so the renderer stays back-compatible.
             typeof world.enemy_kind === "function" ? world.enemy_kind(i) : 0,
+            typeof world.enemy_radius === "function" ? world.enemy_radius(i) : 18,
+            nowMs,
             scale,
         );
     }
@@ -375,29 +412,30 @@ export function render(ctx, canvas, world, aim, remoteShips = [], opts = {}) {
         if (r.downed) {
             ctx.save();
             ctx.globalAlpha = DOWNED_ALPHA;
-            drawShipTriangle(ctx, r.x, r.y, r.angle, DOWNED_SHIP_FILL, DOWNED_SHIP_STROKE, scale);
+            drawShipShape(ctx, r.x, r.y, r.angle, { radius: MP_SHIP_RADIUS, palette: MP_SHIP_PALETTE_DOWNED });
             ctx.restore();
             drawReviveHint(ctx, r.x, r.y, tick, scale);
             drawRemoteLabel(ctx, r.x, r.y, r.player_id, DOWNED_SHIP_STROKE, scale);
         } else {
             const color = REMOTE_PALETTE[r.player_id % REMOTE_PALETTE.length];
-            drawShipTriangle(ctx, r.x, r.y, r.angle, color, color, scale);
+            drawShipShape(ctx, r.x, r.y, r.angle, { radius: MP_SHIP_RADIUS, palette: mpShipPalette(color) });
             drawRemoteLabel(ctx, r.x, r.y, r.player_id, color, scale);
         }
     }
 
-    // Local ship — pulled directly from the WASM World.
+    // Local ship — pulled directly from the WASM World. Cyan palette so
+    // "you" reads distinct from the magenta/palette remotes.
     const sx = world.ship_x();
     const sy = world.ship_y();
     const sa = world.ship_angle();
     if (world.ship_downed()) {
         ctx.save();
         ctx.globalAlpha = DOWNED_ALPHA;
-        drawShipTriangle(ctx, sx, sy, sa, DOWNED_SHIP_FILL, DOWNED_SHIP_STROKE, scale);
+        drawShipShape(ctx, sx, sy, sa, { radius: MP_SHIP_RADIUS, palette: MP_SHIP_PALETTE_DOWNED });
         ctx.restore();
         drawReviveHint(ctx, sx, sy, tick, scale);
     } else {
-        drawShipTriangle(ctx, sx, sy, sa, SHIP_FILL, SHIP_STROKE, scale);
+        drawShipShape(ctx, sx, sy, sa, { radius: MP_SHIP_RADIUS, palette: mpShipPalette("#3df1ff") });
     }
 
     // Charge-up indicator (CHARGE_SHOT pre-fire halo around the local
@@ -407,26 +445,8 @@ export function render(ctx, canvas, world, aim, remoteShips = [], opts = {}) {
     }
 }
 
-// Isoceles triangle pointing toward +x (right) in local space; ctx
-// rotation by `angle` aims it where the ship is looking. Same
-// geometry for local and remote ships so the visual scale is
-// consistent.
-function drawShipTriangle(ctx, x, y, angle, fillStyle, strokeStyle, scale) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.beginPath();
-    ctx.moveTo(SHIP_HALF_HEIGHT, 0);
-    ctx.lineTo(-SHIP_HALF_HEIGHT * 0.6, -SHIP_HALF_WIDTH);
-    ctx.lineTo(-SHIP_HALF_HEIGHT * 0.6, SHIP_HALF_WIDTH);
-    ctx.closePath();
-    ctx.fillStyle = fillStyle;
-    ctx.fill();
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = 1 / scale;
-    ctx.stroke();
-    ctx.restore();
-}
+// (6.x — drawShipTriangle removed; ships now use the shared winged-hull
+// drawShipShape from js/modules/render/shapes.js.)
 
 // Floating "P<player_id>" label above a remote ship. Drawn in the
 // ship's palette color, centered horizontally, in screen-stable pixel
@@ -484,45 +504,24 @@ function drawAsteroid(ctx, x, y, rot, radius, hp, maxHp, scale) {
 // solo's full renderer): color + general silhouette is enough for
 // gameplay legibility. HP bar is always shown since enemies are always
 // combat-relevant.
-function drawEnemy(ctx, x, y, angle, hp, maxHp, kind, scale) {
+function drawEnemy(ctx, x, y, angle, hp, maxHp, kind, radius, now, scale) {
+    const type = MP_ENEMY_KIND_TO_TYPE[kind] || "HUNTER";
     const color = ENEMY_KIND_COLORS[kind] || ENEMY_FILL;
-    const stroke = color;
-    switch (kind) {
-        case 0: // HUNTER — triangle (same as ship geometry).
-            drawShipTriangle(ctx, x, y, angle, color, stroke, scale);
-            break;
-        case 1: // GUARDIAN — octagon.
-            drawEnemyPolygon(ctx, x, y, angle, 18, 8, color, stroke, scale);
-            break;
-        case 2: // WASP — small sharp triangle.
-            drawEnemyTriangle(ctx, x, y, angle, 12, 7, color, stroke, scale);
-            break;
-        case 3: // STALKER — diamond.
-            drawEnemyDiamond(ctx, x, y, angle, 16, 10, color, stroke, scale);
-            break;
-        case 4: // DRIFTER — pentagon.
-            drawEnemyPolygon(ctx, x, y, angle, 16, 5, color, stroke, scale);
-            break;
-        case 5: // TANGERINE — circle with cross.
-            drawEnemyCircleCross(ctx, x, y, 14, color, stroke, scale);
-            break;
-        case 6: // WEAVER — hexagon.
-            drawEnemyPolygon(ctx, x, y, angle, 16, 6, color, stroke, scale);
-            break;
-        case 7: // SENTINEL — rotated square / diamond.
-            drawEnemyDiamond(ctx, x, y, angle + Math.PI * 0.25, 14, 14, color, stroke, scale);
-            break;
-        case 8: // PROWLER — elongated triangle.
-            drawEnemyTriangle(ctx, x, y, angle, 22, 10, color, stroke, scale);
-            break;
-        case 9: // TITAN — large hexagon with inner detail (boss feel).
-            drawEnemyPolygon(ctx, x, y, angle, 32, 6, color, stroke, scale);
-            drawEnemyPolygon(ctx, x, y, -angle, 16, 6, color, stroke, scale);
-            break;
-        default:
-            drawShipTriangle(ctx, x, y, angle, color, stroke, scale);
-            break;
-    }
+    // Shared per-kind silhouette (same art solo draws). The helper
+    // assumes ctx is pre-translated to the enemy + rotated to its
+    // facing, with strokeStyle/fillStyle pre-set to the kind color —
+    // mirroring solo's `Enemy.draw` → `drawEnemyShape` setup. MP has no
+    // turret charge/firing state, so the per-kind defaults render the
+    // idle silhouette (forward-pointing TITAN barrel, un-boosted DRIFTER
+    // core, idle WEAVER turret).
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle); // solo rotates by faceAngle; MP enemy_angle matches
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color + "40";
+    ctx.lineWidth = 2;
+    drawEnemyShapeByType(ctx, type, { radius: radius || 18, color, now: now || 0 });
+    ctx.restore();
     drawHpBar(
         ctx,
         x,
@@ -535,90 +534,10 @@ function drawEnemy(ctx, x, y, angle, hp, maxHp, kind, scale) {
     );
 }
 
-// Regular N-gon centered on (x,y), rotated by `angle`. Stroked
-// (wireframe) so enemies read as line-art against the dark backdrop.
-function drawEnemyPolygon(ctx, x, y, angle, radius, sides, fillStyle, strokeStyle, scale) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.beginPath();
-    for (let i = 0; i < sides; i++) {
-        const theta = (i / sides) * Math.PI * 2;
-        const px = Math.cos(theta) * radius;
-        const py = Math.sin(theta) * radius;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
-    ctx.fill();
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = 1.5 / scale;
-    ctx.stroke();
-    ctx.restore();
-}
-
-// Isoceles triangle pointing along +x in local space, parameterized so
-// WASP (short/sharp) and PROWLER (long) can share the same primitive.
-function drawEnemyTriangle(ctx, x, y, angle, length, halfWidth, fillStyle, strokeStyle, scale) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.beginPath();
-    ctx.moveTo(length, 0);
-    ctx.lineTo(-length * 0.6, -halfWidth);
-    ctx.lineTo(-length * 0.6, halfWidth);
-    ctx.closePath();
-    ctx.fillStyle = fillStyle;
-    ctx.fill();
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = 1 / scale;
-    ctx.stroke();
-    ctx.restore();
-}
-
-// Diamond / kite. `length` is half-length along +x (point), `width` is
-// half-width across +y.
-function drawEnemyDiamond(ctx, x, y, angle, length, width, fillStyle, strokeStyle, scale) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.beginPath();
-    ctx.moveTo(length, 0);
-    ctx.lineTo(0, -width);
-    ctx.lineTo(-length, 0);
-    ctx.lineTo(0, width);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
-    ctx.fill();
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = 1.5 / scale;
-    ctx.stroke();
-    ctx.restore();
-}
-
-// Filled disc with a cross overlay. Used by TANGERINE for the citrus
-// look — round body + a faint cross to suggest segmenting.
-function drawEnemyCircleCross(ctx, x, y, radius, fillStyle, strokeStyle, scale) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.fillStyle = fillStyle;
-    ctx.fill();
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = 1.5 / scale;
-    ctx.stroke();
-    // Cross — counter-scaled lineWidth so the cross reads at any
-    // letterbox scale.
-    ctx.beginPath();
-    ctx.moveTo(-radius, 0); ctx.lineTo(radius, 0);
-    ctx.moveTo(0, -radius); ctx.lineTo(0, radius);
-    ctx.lineWidth = 1 / scale;
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
-    ctx.stroke();
-    ctx.restore();
-}
+// (6.x — the bespoke MP enemy-silhouette primitives drawEnemyPolygon /
+// drawEnemyTriangle / drawEnemyDiamond / drawEnemyCircleCross were
+// removed when MP adopted solo's shared per-kind enemy art via
+// drawEnemyShapeByType. See js/modules/render/shapes.js.)
 
 // Mines — stationary red discs with a faint warning ring. The ring
 // alpha pulses on tick so the hazard reads as live even though it's
