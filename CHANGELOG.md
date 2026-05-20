@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.45.2] - 2026-05-20
+
+### Changed — TAB activates the defense ability/skill
+
+The equipped defense skill had no real activation key (the old Q bind
+was commented out; the tutorial wrongly listed SPACE/SHIFT, which are
+power-weapon/dash). **TAB** now activates it (one-shot, cooldown-gated;
+`preventDefault` keeps focus on the canvas). Tutorial + README controls
+updated.
+
 ## [6.45.1] - 2026-05-20
 
 ### Fixed — title text keeps its black stroke during the fly-around animation

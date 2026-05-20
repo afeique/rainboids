@@ -83,8 +83,8 @@ function _buildTutorialOverlay() {
         'Move — WASD / arrow keys (drag to move on mobile).',
         'Aim — mouse (auto-aim on mobile).',
         'Primary weapon — hold LEFT CLICK to fire continuously.',
-        'Power weapon — RIGHT CLICK (costs energy — see below).',
-        'Defense ability — SPACE / SHIFT when fully charged.',
+        'Power weapon — RIGHT CLICK / SPACE (costs energy — see below).',
+        'Defense ability — TAB when charged.   Dash — SHIFT.',
         'Pause — ESC.   Stats — backtick (`).',
     ]));
     body.appendChild(section('PRIMARY WEAPONS', [

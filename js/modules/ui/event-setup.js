@@ -103,9 +103,9 @@ export function setupEventListeners() {
             this.radialMenu.openFor(radialKey);
             hideHint();
         }
-        // Tab is no longer a game binding (Q took over skill-activate
-        // in 5.68.4) but we still preventDefault so an accidental TAB
-        // doesn't shift browser focus off the canvas.
+        // TAB activates the equipped defense ability/skill (6.x; the
+        // pulse is set in input-handler.handleKeyDown). preventDefault
+        // here too so TAB never shifts browser focus off the canvas.
         if (e.code === 'Tab') {
             e.preventDefault();
         }

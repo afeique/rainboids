@@ -174,16 +174,15 @@ export class InputHandler {
                 this.input.fireSecondary = true;
                 e.preventDefault();
                 break;
-            // Q (5.68.4) — was the defense-skill activate. 5.101.0:
-            // defensive skills retired (game is primary + power
-            // weapons only); Q is now a no-op. Left in the keymap so
-            // muscle memory doesn't trigger an "unbound key" surprise
-            // and so a future skill revival has a slot reserved.
-            // case 'KeyQ':
-            //     if (!e.shiftKey) {
-            //         this.input.activateSkill = true;
-            //     }
-            //     break;
+            // TAB (6.x) — activate the equipped defense ability/skill.
+            // One-shot pulse consumed by Player.update (cooldown guard
+            // lives in activateSkill). preventDefault stops Tab from
+            // moving DOM focus off the canvas. Auto-repeat ignored so
+            // holding Tab doesn't spam re-activations.
+            case 'Tab':
+                if (!e.repeat) this.input.activateSkill = true;
+                e.preventDefault();
+                break;
             // 5.93.0 — SHIFT triggers the core dash movement primitive.
             // Set `shift` (continuous-state mirror) so callers can read
             // the held state if needed, plus a one-shot `dashPulse` on

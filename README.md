@@ -79,6 +79,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Aim**: Mouse cursor (ship faces cursor); ←/→ arrows rotate the aim at a constant rate. A red laser-pointer beam shows where your next primary shot will land — with a tick at the bullet's max range, a reticle around the first enemy/asteroid in line, and fading reticles around any further targets piercing builds will punch through. (Desktop-only since 5.95.1.)
 - **Fire primary**: Hold left-click or ↑ arrow
 - **Fire / charge power weapon**: Spacebar, right-click, or ↓ arrow
+- **Activate defense ability/skill**: Tab (6.x) — fires the equipped defense skill when charged
 - **Pick primary weapon (radial menu)**: Hold F — aim with mouse, click to equip, release to cancel
 - **Pick power weapon (radial menu)**: Hold E — same flow
 - **Assists** (pause menu → ASSISTS tab — persisted): Aim Assist (cursor snap to nearest target), Auto Aim (lock onto nearest threat), Auto Fire (auto-trigger primary + power)
