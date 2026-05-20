@@ -2,7 +2,7 @@
 import { GAME_CONFIG, GAME_STATES, getEnemyDropProfile } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { hsl } from '../core/color-cache.js';
-import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult } from './weapon-data.js';
+import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, DEFENSE_SKILLS } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { createItem, isUpgrade } from '../world/item-system.js';
@@ -1173,6 +1173,21 @@ export function onEnemyKill(enemy) {
             `${this.killCount} targets destroyed`, 2500);
     }
 
+    // CASCADE — killing a STUNNED enemy stuns nearby enemies, chaining
+    // the EMP lockdown. Only fires if the slain enemy was still stunned.
+    if (enemy && enemy.stunUntil && enemy.stunUntil > frameClock.now
+        && this.player && this.player.getPowerupStacks
+        && this.player.getPowerupStacks('CASCADE') > 0
+        && this.enemyPool && typeof this.applyStun === 'function') {
+        const CASCADE_RADIUS = 160;
+        const dur = (DEFENSE_SKILLS.EMP_PULSE && DEFENSE_SKILLS.EMP_PULSE.duration) || 2000;
+        for (const e of this.enemyPool.activeObjects) {
+            if (!e.active || e === enemy) continue;
+            const dist = Math.hypot(e.x - enemy.x, e.y - enemy.y);
+            if (dist <= CASCADE_RADIUS) this.applyStun(e, dur);
+        }
+    }
+
     // 5.75.0 — mission progress hooks.
     if (typeof this.checkMissionOnKill === 'function') this.checkMissionOnKill();
 }
@@ -1910,6 +1925,20 @@ export function applyStun(enemy, durationMs = 1500) {
     // applications while already stunned push the end-time out further
     // — no immunity gap by design.
     enemy.stunUntil = Math.max(enemy.stunUntil || 0, proposed);
+}
+
+// `applySlow(enemy, durationMs, factor)` — Nova AFTERSHOCK. Scales the
+// enemy's movement by `factor` (e.g. 0.7 = 30% slower) until the timer
+// expires; firing is unaffected. Refresh-style like applyStun. Takes the
+// STRONGER (lower) factor if re-applied while already slowed.
+export function applySlow(enemy, durationMs = 2000, factor = 0.7) {
+    if (!enemy || !enemy.active) return;
+    if (enemy.warping || enemy._deathFlash > 0) return;
+    const now = frameClock.now;
+    enemy.slowUntil = Math.max(enemy.slowUntil || 0, now + durationMs);
+    // Keep the strongest slow currently in effect.
+    const cur = (enemy.slowUntil > now) ? (enemy.slowFactor || 1) : 1;
+    enemy.slowFactor = Math.min(cur, factor);
 }
 
 // ─── Mine Defensive Plasma Shield Zone ───────────────────────────────────────

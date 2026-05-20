@@ -2338,6 +2338,7 @@ export class GameEngine {
     // immunity gap on repeated stun (user requirement).
     applyBurn(enemy, sourceDmg, durationMs) { return combat.applyBurn(enemy, sourceDmg, durationMs); }
     applyStun(enemy, durationMs) { return combat.applyStun(enemy, durationMs); }
+    applySlow(enemy, durationMs, factor) { return combat.applySlow(enemy, durationMs, factor); }
 
     // Phase 6 (2026-05-19) — Cluster Launcher detonation hooks. Called
     // from `Bullet._detonate` when a cluster bomb's armed timer expires

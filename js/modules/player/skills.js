@@ -16,6 +16,17 @@ export function updateActiveSkills(dt) {
         this.health = Math.min(this.getEffectiveMaxHealth(), this.health + healThisTick);
     }
 
+    // EMERGENCY_PROTOCOL — auto-fire Repair Nanites when HP drops below
+    // 20% (only when Repair is the equipped skill, off cooldown, and not
+    // already running) so the heal lands without a manual panic-tap.
+    if (this.activeSkill === 'REPAIR_NANITES'
+        && this.getPowerupStacks('EMERGENCY_PROTOCOL') > 0
+        && this.activeSkillCooldown <= 0
+        && !this.activeSkillEffects.has('REPAIR_NANITES')
+        && this.health < this.getEffectiveMaxHealth() * 0.2) {
+        this.activateSkill();
+    }
+
     // Bulwark: set flag for damage reduction
     this.bulwarkActive = this.activeSkillEffects.has('BULWARK');
 
@@ -293,12 +304,22 @@ export function updateActiveSkills(dt) {
         }
     }
 
-    // Update deflector orbs positions
+    // Update deflector orbs positions — orbit the player at a fixed
+    // radius. checkDeflectorOrbCollisions() reads orb.x/orb.y.
     if (this.deflectorOrbs.length > 0) {
         const orbitSpeed = 0.003;
+        const orbitRadius = 45;
         for (const orb of this.deflectorOrbs) {
             orb.angle += orbitSpeed * (1000 / GAME_CONFIG.LOGIC_HZ);
+            orb.x = this.x + Math.cos(orb.angle) * orbitRadius;
+            orb.y = this.y + Math.sin(orb.angle) * orbitRadius;
         }
+    }
+
+    // EMP pulse ring is a 500ms visual; clear the flag once it's faded so
+    // the renderer stops drawing a zero-alpha arc.
+    if (this.empPulseActive && Date.now() - (this.empPulseStartTime || 0) > 500) {
+        this.empPulseActive = false;
     }
 }
 
@@ -363,9 +384,48 @@ export function activateSkill() {
     // 6.31.0 — stash the max so the ship-tip charge ring can show the
     // skill's auto-recharge fill.
     this.activeSkillCooldownMax = config.cooldown;
+    // FORTIFY / EXTENDED_CARE extend the active duration per stack.
+    let duration = config.duration;
+    if (skillId === 'BULWARK') {
+        duration += this.getPowerupStacks('FORTIFY') * 1000;
+    } else if (skillId === 'REPAIR_NANITES') {
+        duration += this.getPowerupStacks('EXTENDED_CARE') * 2000;
+    }
     this.activeSkillEffects.set(skillId, {
-        timeRemaining: config.duration,
+        timeRemaining: duration,
     });
+
+    // 6.x — Per-skill ON-ACTIVATE effects (previously DEFLECTOR_ORBS and
+    // EMP_PULSE were placebos — they set the timer + sound but did
+    // nothing). The collision / render / stun scaffolding already exists;
+    // these wire the missing trigger.
+    if (skillId === 'DEFLECTOR_ORBS') {
+        const orbCount = config.orbCount + this.getPowerupStacks('EXTRA_ORB');
+        const hits = config.hitsPerOrb + this.getPowerupStacks('HARDENED_ORBS') * 2;
+        this.deflectorOrbs = [];
+        for (let i = 0; i < orbCount; i++) {
+            const angle = (i / orbCount) * Math.PI * 2;
+            this.deflectorOrbs.push({
+                angle,
+                x: this.x + Math.cos(angle) * 45,
+                y: this.y + Math.sin(angle) * 45,
+                hits,
+                active: true,
+            });
+        }
+    } else if (skillId === 'EMP_PULSE') {
+        this.empPulseActive = true;
+        this.empPulseStartTime = Date.now();
+        const ge = this.gameEngine;
+        if (ge && ge.enemyPool && typeof ge.applyStun === 'function') {
+            const radius = config.radius + this.getPowerupStacks('WIDE_BAND') * 60;
+            for (const enemy of ge.enemyPool.activeObjects) {
+                if (!enemy.active) continue;
+                const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
+                if (dist <= radius) ge.applyStun(enemy, config.duration);
+            }
+        }
+    }
 
     // Play the per-skill activation sound (5.68.9). Falls back to the
     // generic shield sound if a specific clip isn't registered.

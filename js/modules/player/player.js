@@ -165,6 +165,10 @@ export class Player {
         // Deflector orbs state
         this.deflectorOrbs = [];
 
+        // EMP pulse visual state (set on EMP_PULSE activation).
+        this.empPulseActive = false;
+        this.empPulseStartTime = 0;
+
         // Dash state (5.93.0 — was PHASE_DASH defense skill, now a
         // SHIFT-key core movement primitive).
         //   isDashing      — true during the active dash burst; doubles as

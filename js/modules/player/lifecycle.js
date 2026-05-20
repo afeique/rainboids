@@ -164,6 +164,22 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         if (opts.source && typeof this.applyThorns === 'function') {
             this.applyThorns(finalDamage, opts.source);
         }
+        // RETALIATION — taking a hit while BULWARK is active emits an AoE
+        // damage pulse around the ship.
+        if (this.player.activeSkillEffects && this.player.activeSkillEffects.has('BULWARK')
+            && this.player.getPowerupStacks && this.player.getPowerupStacks('RETALIATION') > 0
+            && this.enemyPool && typeof this.damageEnemy === 'function') {
+            const PULSE_R = 180;
+            const PULSE_DMG = 8;
+            const px = this.player.x, py = this.player.y;
+            for (const e of this.enemyPool.activeObjects.slice()) {
+                if (!e.active) continue;
+                if (Math.hypot(e.x - px, e.y - py) <= PULSE_R) this.damageEnemy(e, PULSE_DMG);
+            }
+            if (this.particlePool) {
+                this.particlePool.get(px, py, 'explosionRingColored', PULSE_R, '#88ccff');
+            }
+        }
     }
 
     if (finalDamage > 0 && typeof this.checkMissionOnDamage === 'function') {

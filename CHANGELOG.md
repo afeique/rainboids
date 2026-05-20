@@ -11,6 +11,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.45.0] - 2026-05-20
+
+### Added — Tractor Shield REDIRECTION
+
+While Tractor Shield is up, **30% of absorbed bullets now fire back** at
+the nearest enemy as a player bullet (was a no-op flag). [Phase 3]
+
+## [6.44.0] - 2026-05-20
+
+### Added — Repair Nanites EXTENDED_CARE + EMERGENCY_PROTOCOL
+
+- **EXTENDED_CARE**: +2s Repair Nanites duration per stack (was unread).
+- **EMERGENCY_PROTOCOL**: auto-fires Repair Nanites when HP drops below
+  20% (when Repair is the equipped skill, off cooldown, not already
+  running) — no more panic-tapping. [Phase 3]
+
+## [6.43.0] - 2026-05-20
+
+### Added — Bulwark FORTIFY + RETALIATION
+
+- **FORTIFY**: +1s Bulwark duration per stack (was unread).
+- **RETALIATION**: taking a hit while Bulwark is active emits a 180px AoE
+  damage pulse around the ship. [Phase 3]
+
+## [6.42.0] - 2026-05-20
+
+### Added — enemy SLOW status + Nova Blast AFTERSHOCK
+
+New generic enemy **slow** status (scales movement, leaves firing intact)
+mirroring the stun status. **AFTERSHOCK** now applies a 30% slow for 2s to
+every enemy a Nova ring passes through (was a no-op flag). [Phase 3]
+
+## [6.41.0] - 2026-05-20
+
+### Added — Missile Salvo CLUSTER_WARHEAD
+
+Missiles flagged by CLUSTER_WARHEAD now **split into 3 homing fragments**
+on impact (60% damage each, never re-split). Fragments are appended after
+the collision pass so they don't re-detonate at the impact point. [Phase 3]
+
+## [6.40.0] - 2026-05-20
+
+### Added — Mine Layer DAISY_CHAIN
+
+A detonating mine now **chain-detonates other armed mines within 220px**
+(which cascade in turn), reusing the full blast path. Was a no-op flag. [Phase 3]
+
+## [6.39.0] - 2026-05-20
+
+### Added — EMP Pulse now works (+ EMP_OVERLOAD + CASCADE)
+
+**EMP_PULSE** was a placebo — it played the sound and ran the cooldown but
+never stunned anything. It now stuns every enemy within its radius
+(+WIDE_BAND) on activation, using the existing stun status + renderer hooks.
+- **EMP_OVERLOAD**: stunned enemies take +20% damage.
+- **CASCADE**: killing a stunned enemy stuns other enemies within 160px. [Phase 3]
+
+## [6.38.0] - 2026-05-20
+
+### Added — Deflector Orbs now works (+ EXTRA_ORB + HARDENED_ORBS + REFLECT)
+
+**DEFLECTOR_ORBS** was a placebo — `activateSkill` never spawned any orbs,
+so the (already-implemented) bullet-block collision, REFLECT consumer, and
+renderer were all dead. Activation now spawns the orbiting orbs and
+positions them each frame.
+- **EXTRA_ORB**: +1 orb per stack.
+- **HARDENED_ORBS**: +2 hits per orb per stack.
+- **REFLECT**: blocked bullets fire back at the nearest enemy (consumer
+  already existed; now reachable). [Phase 3]
+
 ## [6.37.11] - 2026-05-20
 
 ### Fixed — one unified player-damage pipeline (collisions no longer bypass it)

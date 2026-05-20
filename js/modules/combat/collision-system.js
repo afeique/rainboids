@@ -7,6 +7,7 @@ import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { createItem } from '../world/item-system.js';
 import { SLOT_LABEL } from '../world/item-names.js';
+import { frameClock } from '../core/frame-clock.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
 //   Duplicated here (rather than imported) because wave-manager.js bundles
@@ -1375,6 +1376,20 @@ export function checkMineCollisions() {
         }
         if (this.events) this.events.emit('audio:explosion');
 
+        // DAISY_CHAIN — this detonation triggers other nearby armed mines,
+        // which cascade in turn. Flag them `expired` so they detonate when
+        // this loop reaches them (or next frame), reusing the full blast
+        // path above rather than duplicating it.
+        if (p.getPowerupStacks && p.getPowerupStacks('DAISY_CHAIN') > 0) {
+            const CHAIN_R = 220;
+            for (const other of p.activeMines) {
+                if (other === mine || !other.active || !other.armed || other.expired) continue;
+                if (Math.hypot(other.x - mine.x, other.y - mine.y) <= CHAIN_R) {
+                    other.expired = true;
+                }
+            }
+        }
+
         mine.active = false;
     }
 }
@@ -1450,6 +1465,8 @@ export function checkNovaCollisions() {
             ? p.getPowerupStacks('NOVA_LIGHTNING') : 0;
         const chainStacks    = (typeof p.getPowerupStacks === 'function')
             ? p.getPowerupStacks('NOVA_CHAIN') : 0;
+        const aftershockStacks = (typeof p.getPowerupStacks === 'function')
+            ? p.getPowerupStacks('AFTERSHOCK') : 0;
         // Initial novas default to 3 hops; secondaries carry an explicit
         // (decremented) counter set by `_spawnSecondaryNova`. Clamp to
         // [0,3] for defense — a malformed ring can never exceed the cap.
@@ -1488,6 +1505,11 @@ export function checkNovaCollisions() {
                     if (Math.random() < 0.30 * lightningStacks) {
                         this.applyStun(enemy);
                     }
+                }
+                // AFTERSHOCK — always-on 30% slow for 2s on every enemy
+                // the ring passes through (no roll; the upgrade is the proc).
+                if (aftershockStacks > 0 && !wasKilled && typeof this.applySlow === 'function') {
+                    this.applySlow(enemy, 2000, 0.7);
                 }
                 // Phase 4 — CHAIN: only on kills, and only if the ring
                 // still has hop budget. Decrement and pass the remaining
@@ -1805,6 +1827,35 @@ export function checkMissileCollisions() {
         }
     };
 
+    // CLUSTER_WARHEAD — a missile flagged `cluster` spawns 3 homing
+    // fragments on impact. Collect them and append AFTER the loop so they
+    // first fly next frame (no instant re-collision at the impact point);
+    // fragments are `cluster:false` so they never re-split.
+    const clusterFragments = [];
+    const splitCluster = (missile) => {
+        if (!missile.cluster) return;
+        const baseAng = Math.atan2(missile.vel?.y || 0, missile.vel?.x || 1);
+        const speed = missile.speed || POWER_WEAPONS.MISSILE_SALVO.missileSpeed || 4;
+        const fragDmg = ((missile.damage != null) ? missile.damage
+            : POWER_WEAPONS.MISSILE_SALVO.missileDamage) * 0.6;
+        for (let i = -1; i <= 1; i++) {
+            const ang = baseAng + i * 0.5;
+            clusterFragments.push({
+                x: missile.x, y: missile.y,
+                vel: { x: Math.cos(ang) * speed, y: Math.sin(ang) * speed },
+                angle: ang,
+                damage: fragDmg,
+                homingStrength: 0.12,
+                cluster: false,
+                life: 1200, maxLife: 1200,
+                radius: 4,
+                target: null, // updateMissiles re-acquires the nearest target
+                active: true,
+                speed,
+            });
+        }
+    };
+
     for (const missile of p.activeMissiles) {
         if (!missile.active) continue;
 
@@ -1833,6 +1884,7 @@ export function checkMissileCollisions() {
                 }
                 missile.active = false;
                 explode(missile.x, missile.y);
+                splitCluster(missile);
                 hit = true;
                 break;
             }
@@ -1855,10 +1907,15 @@ export function checkMissileCollisions() {
                 }
                 missile.active = false;
                 explode(missile.x, missile.y);
+                splitCluster(missile);
                 break;
             }
         }
     }
+
+    // Append cluster fragments after the loop so they don't re-collide at
+    // the impact point this same frame.
+    if (clusterFragments.length) p.activeMissiles.push(...clusterFragments);
 }
 
 // ─── Deflector Orbs (block enemy bullets) ───────────────────────
@@ -1897,6 +1954,7 @@ export function checkTractorShieldCollisions() {
         const skill = DEFENSE_SKILLS.TRACTOR_SHIELD;
         const arc = skill.shieldArc + p.getPowerupStacks('WIDE_ANGLE') * (Math.PI / 6);
         const coinsPerBullet = skill.coinsPerBullet + p.getPowerupStacks('PROFIT') * 5;
+        const redirect = p.getPowerupStacks('REDIRECTION') > 0;
 
         this.enemyBulletPool.activeObjects.forEach(bullet => {
             if (!bullet.active) return;
@@ -1907,8 +1965,18 @@ export function checkTractorShieldCollisions() {
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
             if (Math.abs(diff) < arc / 2) {
+                const bx = bullet.x, by = bullet.y;
                 bullet.active = false;
                 this.game.money += coinsPerBullet;
+                // REDIRECTION — 30% of absorbed bullets fire back at the
+                // nearest enemy as a player bullet.
+                if (redirect && Math.random() < 0.30) {
+                    const nearest = this.findNearestEnemy();
+                    if (nearest) {
+                        const ang = Math.atan2(nearest.y - by, nearest.x - bx);
+                        this.bulletPool.get(bx, by, ang, 8, 2, 3, 600, '#ff88ff', this.player);
+                    }
+                }
             }
         });
     }
@@ -2003,6 +2071,13 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
             }
         }
         return { blocked: true, destroyed: false };
+    }
+
+    // EMP_OVERLOAD — stunned enemies take +20% damage.
+    if (enemy.stunUntil && enemy.stunUntil > frameClock.now
+        && this.player && this.player.getPowerupStacks
+        && this.player.getPowerupStacks('EMP_OVERLOAD') > 0) {
+        damage *= 1.2;
     }
 
     enemy.health -= damage;

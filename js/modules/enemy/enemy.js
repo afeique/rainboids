@@ -235,6 +235,10 @@ export class Enemy {
         this.brnTickAt = 0;
         this.brnSourceDmg = 0;
         this.stunUntil = 0;
+        // SLOW: scales movement speed by `slowFactor` while
+        // `slowUntil > frameClock.now` (Nova AFTERSHOCK). Reset on spawn.
+        this.slowUntil = 0;
+        this.slowFactor = 1;
 
         // Circulating shield indicator with music sync
         this.shield = {
@@ -529,9 +533,11 @@ export class Enemy {
             this.vel.y = 0;
         }
 
-        // Position update (scaled for tick rate).
-        this.x += this.vel.x * GAME_CONFIG.TICK_SCALE;
-        this.y += this.vel.y * GAME_CONFIG.TICK_SCALE;
+        // Position update (scaled for tick rate). SLOW scales movement
+        // while active (Nova AFTERSHOCK) — firing is unaffected.
+        const slowMul = (this.slowUntil > frameClock.now) ? (this.slowFactor || 0.7) : 1;
+        this.x += this.vel.x * GAME_CONFIG.TICK_SCALE * slowMul;
+        this.y += this.vel.y * GAME_CONFIG.TICK_SCALE * slowMul;
 
         this.updateLightTrail();
         this.createTrailParticles(gameEngine);
