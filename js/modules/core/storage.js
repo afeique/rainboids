@@ -86,8 +86,12 @@ export function loadMeta() {
     } catch { return null; }
 }
 
-export function saveMeta(meta) {
+// Merge-write so partial updates don't clobber other meta fields — the
+// level/XP/SP path (saveMetaState) and the persistent-profile path
+// (money / upgrades / gear) both write into the same `rainboidsMeta`.
+export function saveMeta(patch) {
     try {
-        localStorage.setItem(META_KEY, JSON.stringify(meta));
+        const cur = loadMeta() || {};
+        localStorage.setItem(META_KEY, JSON.stringify({ ...cur, ...patch }));
     } catch {}
 }

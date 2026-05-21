@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.49.0] - 2026-05-21
+
+### Added — persistent cross-run progression (NEW GAME keeps gold + upgrades)
+
+The game now keeps a persistent **profile** in `rainboidsMeta` that carries
+across EVERY run — including **NEW GAME**: your **gold**, all purchased
+**upgrades / passives** (powerup stacks), **equipped gear**, and
+**level / XP / SP** persist. NEW GAME now only re-rolls the loadout
+(primary / power / skill) and resets the wave/score/position — it no
+longer wipes your accumulated progression.
+
+- `game-engine.savePersistentProfile()` writes the profile (merge into
+  meta) on every wave-start save and on player death; temporary buffs are
+  excluded (only permanent upgrades persist).
+- `game-engine.applyPersistentProfile()` restores it onto each fresh run
+  in `init()` (after the loadout is set), re-syncing HP to the restored
+  effective max. CONTINUE still overlays its exact run snapshot on top.
+- `storage.saveMeta()` is now a merge-write so the level/XP/SP path and
+  the gold/upgrades/gear path don't clobber each other.
+
+## [6.48.11] - 2026-05-21
+
+### Fixed — enemy pulse burst no longer fires through pause / from corpses
+
+`shootPulse`'s 3 `setTimeout`-staggered shots now bail if the enemy died /
+is warping / death-flashing, and skip while the game isn't PLAYING (the
+wall-clock timer otherwise fired during pause or from a recycled pool
+slot). [Phase 4 — BUG-shootPulse-setTimeout-pause-leak]
+
 ## [6.48.10] - 2026-05-20
 
 ### Fixed — shuffle OFF restores the original track order

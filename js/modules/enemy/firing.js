@@ -6,7 +6,7 @@
 // route through the one-liner delegators back on Enemy, keeping the same API.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { GAME_CONFIG, ENEMY_BULLET_CONFIG, getEnemyFiringCooldown } from '../core/constants.js';
+import { GAME_CONFIG, GAME_STATES, ENEMY_BULLET_CONFIG, getEnemyFiringCooldown } from '../core/constants.js';
 import { frameClock } from '../core/frame-clock.js';
 
 // ── Burst Shooting State Machine ─────────────────────────────────────────────
@@ -540,9 +540,14 @@ export function shootPulse(gameEngine, targetX, targetY) {
     // faceAngle smoothly updated by updateFaceDirection() — no snap
     for (let i = 0; i < 3; i++) {
         setTimeout(() => {
-            if (this.active) {
-                this.createEnemyBullet(gameEngine, baseAngle, 4, '#ffff00', false, 'pulse');
-            }
+            // setTimeout is wall-clock, so guard the deferred shots:
+            // skip if the enemy died / is warping / was recycled into a
+            // death-flash, and skip while the game is paused or in the
+            // shop (otherwise the burst fires through pause / from a
+            // pool slot that's now a different enemy).
+            if (!this.active || this._deathFlash > 0 || this.warping) return;
+            if (gameEngine && gameEngine.game && gameEngine.game.state !== GAME_STATES.PLAYING) return;
+            this.createEnemyBullet(gameEngine, baseAngle, 4, '#ffff00', false, 'pulse');
         }, i * 100);
     }
 }

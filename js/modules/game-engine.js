@@ -57,7 +57,7 @@ import { showHint, updateHintDimming } from './ui/hint-system.js';
 import { RadialMenu } from './ui/radial-menu.js';
 import { MobileTouchHandler } from './ui/mobile-touch.js';
 import { isMobile, isPortrait } from './platform/platform-detect.js';
-import { hasSave, loadSave, writeSave, clearSave } from './core/storage.js';
+import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './core/storage.js';
 import { StatsOverlay } from './ui/stats-overlay.js';
 import { InventoryOverlay } from './ui/inventory-overlay.js';
 import { AnalogStick } from './ui/analog-stick.js';
@@ -1026,6 +1026,11 @@ export class GameEngine {
         //   appends moving orbs to the suffix.
         if (this.starfieldRenderer.setBaseline) this.starfieldRenderer.setBaseline();
         
+        // 6.x — Carry over the persistent profile (gold / upgrades / gear
+        // / level-XP-SP) onto this fresh run. Runs for NEW GAME + boot;
+        // the CONTINUE path overlays its exact run snapshot afterward.
+        this.applyPersistentProfile();
+
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
         this.game.waveComplete = false;
@@ -1210,6 +1215,9 @@ export class GameEngine {
             const snap = this.serializeRunState();
             if (snap) writeSave(snap);
         } catch {}
+        // Persist the cross-run profile too so gold / upgrades / gear /
+        // level carry into the next NEW GAME.
+        this.savePersistentProfile();
     }
 
     restoreRunState(snap) {
@@ -1278,6 +1286,79 @@ export class GameEngine {
         // the canvas, so there's no DOM update to dispatch here.
         if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
         return true;
+    }
+
+    // 6.x — PERSISTENT PROFILE (cross-run progression). Distinct from the
+    // wave-start CONTINUE save (a full run snapshot that resumes mid-
+    // campaign): this carries the player's earned GOLD, UPGRADES/passives
+    // (powerup stacks), equipped gear, and level/XP/SP across EVERY new
+    // run — including NEW GAME, which only re-rolls the loadout + resets
+    // the wave. Shares the `rainboidsMeta` store (merge-written).
+    savePersistentProfile() {
+        const p = this.player;
+        if (!p) return;
+        const powerups = {};
+        if (p.powerups && typeof p.powerups.forEach === 'function') {
+            p.powerups.forEach((pw, type) => {
+                if (pw.isPermanent === false) return; // don't persist temporary buffs
+                const n = pw.stacks | 0;
+                if (n > 0) powerups[type] = n;
+            });
+        }
+        const equippedItems = {};
+        if (p.equippedItems) {
+            for (const slot of Object.keys(p.equippedItems)) {
+                equippedItems[slot] = p.equippedItems[slot] || null;
+            }
+        }
+        try {
+            saveMeta({
+                level: p.level | 0, xp: p.xp | 0, sp: p.sp | 0,
+                spStats: p.spStats || {},
+                money: this.game.money | 0,
+                powerups,
+                equippedItems,
+            });
+        } catch {}
+    }
+
+    // Apply the persistent profile onto a freshly-initialized run. Called
+    // from init() AFTER the player + loadout are set up, so it overrides
+    // the wave-1 baseline (gold 0 / no upgrades) with carried-over
+    // progression. On CONTINUE, restoreRunState() runs afterward and
+    // overlays the exact saved run state on top.
+    applyPersistentProfile() {
+        const p = this.player;
+        if (!p) return;
+        const meta = loadMeta();
+        if (!meta) return;
+        if (typeof meta.money === 'number') {
+            this.game.money = Math.max(0, meta.money | 0);
+        }
+        if (meta.powerups && typeof meta.powerups === 'object') {
+            p.powerups = new Map();
+            for (const [type, stacks] of Object.entries(meta.powerups)) {
+                const n = Math.max(1, stacks | 0);
+                p.powerups.set(type, {
+                    stacks: n, timeRemaining: Infinity,
+                    config: POWERUP_TYPES[type] || {}, isPermanent: true,
+                });
+            }
+        }
+        if (meta.equippedItems && typeof meta.equippedItems === 'object' && p.equippedItems) {
+            for (const slot of Object.keys(p.equippedItems)) {
+                if (meta.equippedItems[slot]) p.equippedItems[slot] = meta.equippedItems[slot];
+            }
+        }
+        // Re-sync HP to the (possibly higher) effective max from restored
+        // HEALTH upgrades + gear so a carried-over run starts at full HP,
+        // not under-healed against the base maxHealth.
+        if (typeof p.getEffectiveMaxHealth === 'function') {
+            const mh = p.getEffectiveMaxHealth();
+            p.maxHealth = mh;
+            p.health = mh;
+        }
+        if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
     }
 
     startContinueRun() {
@@ -3998,7 +4079,13 @@ export class GameEngine {
 
     
     takeDamage(damageAmount = this.baseDamage, opts = {}) { return lifecycle.takeDamage.call(this, damageAmount, opts); }
-    handlePlayerDeath() { return lifecycle.handlePlayerDeath.call(this); }
+    handlePlayerDeath() {
+        // Persist the run's earned gold / upgrades / gear / level into the
+        // cross-run profile BEFORE the death transition, so they carry
+        // into the next NEW GAME.
+        this.savePersistentProfile();
+        return lifecycle.handlePlayerDeath.call(this);
+    }
     createPlayerShipDebris(x, y, angle) { return lifecycle.createPlayerShipDebris.call(this, x, y, angle); }
     _consumeTank() { return lifecycle._consumeTank.call(this); }
     applyHealthOrbToTanks(orbAmount, amountHealed) { return lifecycle.applyHealthOrbToTanks.call(this, orbAmount, amountHealed); }
