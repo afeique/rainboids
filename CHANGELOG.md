@@ -11,6 +11,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.48.6] - 2026-05-20
+
+### Fixed — music auto-skip no longer loops forever on total load failure
+
+The track `error` handler retried via `next()` every second; if every
+track failed (missing assets) it span forever. Added a consecutive-
+failure counter that stops auto-skip once all tracks have failed, and
+resets on a successful load. [Phase 4 — BUG-music-auto-skip-on-error-runaway]
+
+## [6.48.5] - 2026-05-20
+
+### Fixed — music progress guards divide-by-zero
+
+`handleTimeUpdate` divided by `duration` before metadata loads (NaN/0),
+emitting NaN/Infinity progress. Now clamps to a finite 0 until duration
+is known. [Phase 4 — BUG-music-handleTimeUpdate-divide-by-zero]
+
+## [6.48.4] - 2026-05-20
+
+### Fixed — survival-record write wrapped in try/catch
+
+`checkSurvivalRecord` ran `localStorage.setItem` unguarded on the death
+path; a private-mode / quota throw would abort the game-over sequence.
+Now wrapped. [Phase 4 — BUG-survival-record-string-write]
+
+## [6.48.3] - 2026-05-20
+
+### Fixed — wave-start save never persists a null snapshot
+
+`persistWaveStartSave` wrote `serializeRunState()` directly; when the
+player was missing it returned null and a malformed save overwrote the
+previous good one. Now guards against null. [Phase 4 — BUG-savefile-null-snapshot]
+
+## [6.48.2] - 2026-05-20
+
+### Fixed — boss rage no longer ticks on a dying/warping boss
+
+`updateBossRage` now early-returns when the boss is inactive, mid-death-
+flash, or warping, so the phase timer can't activate rage (telegraph /
+invuln) on a corpse. [Phase 4 — BUG-tier4-phase-message-while-not-triggered]
+
+## [6.48.1] - 2026-05-20
+
+### Fixed — line debris no longer all flies in one direction
+
+`atan2(0,0)` returns 0, so a shard whose edge midpoint sat on the local
+origin sent every piece flying +x. Degenerate midpoints now fall back to
+a random direction so debris fans out. [Phase 4 — BUG-line-debris-degenerate-atan2]
+
 ## [6.48.0] - 2026-05-20
 
 ### Added — STATS pause-menu tab + refined stats screen

@@ -122,13 +122,25 @@ export class MusicPlayer {
         const handlers = {
             timeupdate: this.handleTimeUpdate.bind(this),
             ended: this.handleTrackEnd.bind(this),
-            loadedmetadata: () => { track.duration = audio.duration; },
+            loadedmetadata: () => {
+                track.duration = audio.duration;
+                this._consecutiveLoadFailures = 0; // a track loaded OK
+            },
             // 'progress' fires repeatedly while the browser fetches more
             // audio data — perfect for updating the "buffered" fill.
             progress: () => this._emitBufferedUpdate(audio),
             error: (e) => {
                 if (audio._disposing) return; // Ignore errors caused by our own teardown
                 console.error('Failed to load track:', track.path, e);
+                // Stop the auto-skip-on-error loop if EVERY track fails
+                // (e.g. assets missing) — otherwise next()→error→next()
+                // spins forever once per second with no user signal.
+                this._consecutiveLoadFailures = (this._consecutiveLoadFailures || 0) + 1;
+                const limit = (this.playlist && this.playlist.length) || 12;
+                if (this._consecutiveLoadFailures >= limit) {
+                    console.warn('[MusicPlayer] all tracks failed to load — stopping auto-skip.');
+                    return;
+                }
                 setTimeout(() => this.next(), 1000);
             },
         };
@@ -320,8 +332,11 @@ export class MusicPlayer {
 
     handleTimeUpdate() {
         if (this.currentAudio && this.onProgressUpdate) {
-            const progress = this.currentAudio.currentTime / this.currentAudio.duration;
-            this.onProgressUpdate(progress, this.currentAudio.currentTime, this.currentAudio.duration);
+            // duration is NaN/0 before metadata loads — guard so progress
+            // is a finite 0..1 (NaN/Infinity would corrupt the progress UI).
+            const dur = this.currentAudio.duration;
+            const progress = (dur > 0) ? (this.currentAudio.currentTime / dur) : 0;
+            this.onProgressUpdate(progress, this.currentAudio.currentTime, dur || 0);
         }
     }
 

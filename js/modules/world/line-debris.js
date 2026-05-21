@@ -27,10 +27,15 @@ export class LineDebris {
             this.hueShift = random(2, 5); // Speed of color change
         }
 
-        // Calculate velocity based on midpoint
+        // Calculate velocity based on midpoint. atan2(0,0) returns 0, so
+        // an edge midpoint sitting on the origin would send every shard
+        // flying +x — fall back to a random direction in that degenerate
+        // case so debris fans out naturally.
         const midX = (p1.x + p2.x) / 2;
         const midY = (p1.y + p2.y) / 2;
-        const ang = Math.atan2(midY, midX);
+        const ang = (Math.abs(midX) < 0.01 && Math.abs(midY) < 0.01)
+            ? random(0, Math.PI * 2)
+            : Math.atan2(midY, midX);
         const spd = random(2, 5);
 
         this.vel = { x: Math.cos(ang) * spd, y: Math.sin(ang) * spd };

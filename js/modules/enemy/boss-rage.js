@@ -42,6 +42,10 @@ export function bossRageBlocksDamage(enemy) {
 // per-tier mechanics, and Tier-4 phase cycling.
 export function updateBossRage(enemy, gameEngine) {
     if (!enemy || !enemy.isBoss) return;
+    // Don't tick rage telegraph/phase logic on a dying or warping boss —
+    // the phase timer could otherwise activate rage on a corpse (firing a
+    // telegraph/invuln on an enemy that's mid-death-flash or warping in).
+    if (!enemy.active || enemy._deathFlash > 0 || enemy.warping) return;
 
     // ── Tier-2 partner death → immediate rage trigger ───────────────
     if (!enemy._rageTriggered && enemy._bossPair && enemy._partnerDied) {

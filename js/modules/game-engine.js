@@ -1203,7 +1203,13 @@ export class GameEngine {
         // Called by wave-manager.nextWave right after currentWave is
         // bumped. Failures (private mode, full quota) are swallowed —
         // the run keeps going.
-        try { writeSave(this.serializeRunState()); } catch {}
+        // Guard against a null snapshot (serializeRunState returns null
+        // when the player is missing) — writing null would persist a
+        // malformed save that masks the previous good one.
+        try {
+            const snap = this.serializeRunState();
+            if (snap) writeSave(snap);
+        } catch {}
     }
 
     restoreRunState(snap) {
@@ -3703,7 +3709,12 @@ export class GameEngine {
     checkSurvivalRecord() {
         if (this.game.survivalTime > this.game.survivalRecord) {
             this.game.survivalRecord = this.game.survivalTime;
-            localStorage.setItem('rainboidsSurvivalRecord', this.game.survivalRecord);
+            // Wrap — localStorage.setItem throws in private mode / when the
+            // quota is full, and this runs on the death path; an unhandled
+            // throw there would abort the game-over sequence.
+            try {
+                localStorage.setItem('rainboidsSurvivalRecord', this.game.survivalRecord);
+            } catch {}
         }
     }
     
