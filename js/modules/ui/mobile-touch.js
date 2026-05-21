@@ -225,6 +225,25 @@ export class MobileTouchHandler {
 
         if (!this._isPlayableState()) return;
         e.preventDefault();
+        // Recover from a DROPPED touchend (iOS sometimes coalesces/drops
+        // the end event): if we still think a touch is active but its id
+        // isn't in the live touch list, it ended silently. Release the
+        // stale state — otherwise the single-finger guard below blocks ALL
+        // future input and the analog stick stays deflected.
+        if (this._touchId !== null) {
+            let stillActive = false;
+            for (const tt of e.touches) {
+                if (tt.identifier === this._touchId) { stillActive = true; break; }
+            }
+            if (!stillActive) {
+                if (this._touchKind === 'stick' && this.engine.analogStick) {
+                    this.engine.analogStick.onTouchEnd();
+                    this._writeStickInput();
+                }
+                if (this.engine) this.engine._hudPressedButton = null;
+                this._reset();
+            }
+        }
         if (this._touchId !== null) return; // single-finger only
         const t = e.changedTouches[0];
         if (!t) return;

@@ -429,7 +429,10 @@ export class AudioManager {
         const minInterval = SOUND_THROTTLE_MS[name] || 30;
         const last = this.lastPlayedAt.get(name) || 0;
         if (now - last < minInterval) return true;
-        this.lastPlayedAt.set(name, now);
+        // NOTE: lastPlayedAt is committed AFTER a buffer actually plays
+        // (below) — a cache-miss that only kicks off a lazy-load must NOT
+        // consume the throttle window, or the sound stays silent until the
+        // window passes even though the buffer is now ready.
 
         // 6.1.4 — Pick a random bucket. For variant-expanded sounds
         // (the manifest gave us N alternates of one underlying SFX),
@@ -471,6 +474,7 @@ export class AudioManager {
         //   currentTime guarantees immediate playback the moment the
         //   context is processing samples.
         const startAt = this.audioContext.currentTime;
+        let played = false;
         for (const f of files) {
             const path = SFX_BASE + f;
             const buf = this.audioBuffers.get(path);
@@ -492,11 +496,14 @@ export class AudioManager {
                 gain.gain.value = gainAmount;
                 src.connect(gain).connect(this.audioContext.destination);
                 src.start(startAt);
+                played = true;
             } catch (e) {
                 // Browser may throw on rapid play during context state shifts;
                 // soft-fail so a bad call never crashes gameplay.
             }
         }
+        // Only consume the throttle window if a buffer actually played.
+        if (played) this.lastPlayedAt.set(name, now);
         return true;
     }
 

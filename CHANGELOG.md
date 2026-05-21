@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.49.4] - 2026-05-21
+
+### Fixed — mobile analog stick recovers from a dropped touchend
+
+If iOS coalesced/dropped the `touchend`, `_touchId` stayed set and the
+single-finger guard blocked ALL further input with the stick stuck
+deflected. `_onTouchStart` now detects a tracked touch that's no longer
+in the live touch list and releases the stale state. [Phase 4 — BUG-mobile-stick-touch-id-not-released]
+
+## [6.49.3] - 2026-05-21
+
+### Fixed — SFX cache-miss no longer wastes the throttle window
+
+`playSound` set `lastPlayedAt` before checking the buffer; a cache-miss
+(which only kicks off a lazy-load, no sound) consumed the throttle so the
+sound stayed silent until the window passed. The throttle is now committed
+only after a buffer actually plays. [Phase 4 — BUG-audio-throttle-blocks-when-buffer-missing]
+
+## [6.49.2] - 2026-05-21
+
+### Fixed — shop buy clicks debounced
+
+A double-click / double-fire could purchase two stacks for one intent.
+Buy clicks within 200ms of the last are now ignored. [Phase 4 — BUG-shop-purchase-during-shop-event-bubble]
+
+## [6.49.1] - 2026-05-21
+
+### Fixed — music delayed-play no longer races on rapid next/prev
+
+`loadTrack`'s 100ms `setTimeout(play)` could fire multiple stale `play()`
+calls (targeting the replaced `currentAudio`) on rapid track changes. The
+pending timer is now cancelled before scheduling a fresh one. [Phase 4 — BUG-music-loadtrack-settimeout-race]
+
 ## [6.49.0] - 2026-05-21
 
 ### Added — persistent cross-run progression (NEW GAME keeps gold + upgrades)

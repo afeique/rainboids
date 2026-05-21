@@ -235,10 +235,15 @@ export class MusicPlayer {
         if (this.onBufferedUpdate) this.onBufferedUpdate(0);
         this._emitBufferedUpdate(this.currentAudio);
 
-        // Start playing if we were playing before
+        // Start playing if we were playing before. Cancel any pending
+        // delayed-play from a previous loadTrack first — rapid next/prev
+        // within 100ms would otherwise fire multiple play() calls, the
+        // stale ones targeting the now-replaced currentAudio.
+        clearTimeout(this._pendingPlayTimer);
+        this._pendingPlayTimer = null;
         if (this.isPlaying) {
             // Delay play slightly to ensure audio element is ready
-            setTimeout(() => this.play(), 100);
+            this._pendingPlayTimer = setTimeout(() => this.play(), 100);
         }
     }
 

@@ -59,6 +59,9 @@ let _elements = null;
 // 6.27.0 — Active category tab. Drives which cluster is visible. CSS
 // gates visibility off `#shop-tree[data-active-tab]`.
 let _activeTab = 'primary';
+// 6.x — debounce buy clicks so an accidental double-fire / double-click
+// doesn't purchase two stacks for one intent.
+let _lastBuyAt = 0;
 
 function $(id) { return document.getElementById(id); }
 
@@ -118,6 +121,11 @@ export function initShopDom(gameEngine) {
             // Parent nodes (weapon/skill themselves) are not buyable;
             // only upgrade nodes carry a non-empty `data-buyable`.
             if (node.dataset.buyable !== '1') return;
+            // Ignore a second buy within 200ms (double-click / double-fire)
+            // so a single intent can't buy two stacks before the re-render.
+            const nowT = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+            if (_lastBuyAt && nowT - _lastBuyAt < 200) return;
+            _lastBuyAt = nowT;
             const ok = _engine.buyShopItem(id);
             if (ok) {
                 node.classList.remove('shop-node--flash');
