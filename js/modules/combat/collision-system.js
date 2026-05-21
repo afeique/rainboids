@@ -1208,7 +1208,12 @@ export function checkMineCollisions() {
     for (const mine of p.activeMines) {
         if (!mine.active || !mine.armed) continue;
         const triggerR = mine.triggerRadius || 60;
-        const blastR = (POWER_WEAPONS.MINE_LAYER.blastRadius || 80) + p.getPowerupStacks('BLAST_RADIUS') * 30;
+        // Use the blast radius + damage STAMPED on the mine at lay time —
+        // not live player stacks. Otherwise buying/selling BLAST_RADIUS
+        // after laying a mine retro-scales its blast.
+        const blastR = mine.blastRadius
+            || ((POWER_WEAPONS.MINE_LAYER.blastRadius || 80) + p.getPowerupStacks('BLAST_RADIUS') * 30);
+        const mineDmg = (mine.damage != null) ? mine.damage : POWER_WEAPONS.MINE_LAYER.mineDamage;
 
         // Trigger on enemies OR asteroids passing through the trigger
         // ring, OR on lifetime expiry (seeker mine self-detonates).
@@ -1238,7 +1243,7 @@ export function checkMineCollisions() {
             if (!enemy.active) continue;
             const dist = Math.hypot(enemy.x - mine.x, enemy.y - mine.y);
             if (dist >= blastR) continue;
-            const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
+            const dmg = mineDmg * (1 - dist / blastR * 0.5);
             this.damageEnemy(enemy, dmg);
             if (dist > 0.001 && enemy.vel) {
                 const kx = (enemy.x - mine.x) / dist;
@@ -1259,7 +1264,7 @@ export function checkMineCollisions() {
             if (!ast.active || ast.warping) continue;
             const dist = Math.hypot(ast.x - mine.x, ast.y - mine.y);
             if (dist >= blastR) continue;
-            const dmg = POWER_WEAPONS.MINE_LAYER.mineDamage * (1 - dist / blastR * 0.5);
+            const dmg = mineDmg * (1 - dist / blastR * 0.5);
             ast.health = Math.max(0, (ast.health || 0) - dmg);
             ast._hitFlashTimer = 4;
             if (dist > 0.001) {

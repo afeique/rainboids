@@ -552,7 +552,7 @@ export function buyShopItem(itemId) {
                 if (stacks >= (cfg.maxStacks || 99)) return false;
                 const cost = powerupGoldCost(cfg, stacks);
                 if (this.game.money < cost) return false;
-                this.game.money -= cost;
+                this.game.money = Math.max(0, Math.floor(this.game.money) - cost);
                 this.player.addPowerup(itemId, { ...cfg, duration: Infinity }, true);
                 this.events.emit('audio:coin');
                 this._rebuildShopCache();
@@ -605,7 +605,7 @@ export function buyShopItem(itemId) {
             // 6.0.1 — Gold-only. SP / PICKS legacy currency tags are no
             // longer interpreted; everything deducts from game.money.
             if (this.game.money < actualCost) return false;
-            this.game.money -= actualCost;
+            this.game.money = Math.max(0, Math.floor(this.game.money) - actualCost);
 
             // 5.88.0 — SPARE_SHIP retired (was a +1 life purchase). Any
             // legacy code path that still tags an item as SPARE_SHIP is
@@ -657,7 +657,7 @@ export function _handleUpgradeBuy(item) {
 
         // 6.0.0 — SP retired; all upgrade costs deduct from GOLD.
         if (this.game.money < actualCost) return false;
-        this.game.money -= actualCost;
+        this.game.money = Math.max(0, Math.floor(this.game.money) - actualCost);
 
         // Add as permanent powerup
         const powerupConfig = this.getPowerupConfig(item.id) || {

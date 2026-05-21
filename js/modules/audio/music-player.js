@@ -41,6 +41,9 @@ export class MusicPlayer {
                 : track.path;
             return { ...track, path, duration: 0 };
         });
+        // Snapshot the canonical (un-shuffled) order so toggling shuffle
+        // OFF can restore it later.
+        this._originalPlaylist = this.playlist.slice();
 
         // Shuffle playlist on initialization
         this.shufflePlaylist();
@@ -304,13 +307,18 @@ export class MusicPlayer {
 
     toggleShuffle() {
         this.isShuffled = !this.isShuffled;
+        const currentTrack = this.playlist[this.currentTrackIndex];
         if (this.isShuffled) {
             // Re-shuffle, keeping current track at the beginning
-            const currentTrack = this.playlist[this.currentTrackIndex];
             this.playlist.splice(this.currentTrackIndex, 1);
             this.shufflePlaylist();
             this.playlist.unshift(currentTrack);
             this.currentTrackIndex = 0;
+        } else if (this._originalPlaylist) {
+            // Restore the canonical order; keep the current track selected.
+            this.playlist = this._originalPlaylist.slice();
+            const idx = this.playlist.indexOf(currentTrack);
+            this.currentTrackIndex = idx >= 0 ? idx : 0;
         }
         return this.isShuffled;
     }

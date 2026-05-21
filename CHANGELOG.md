@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.48.10] - 2026-05-20
+
+### Fixed — shuffle OFF restores the original track order
+
+`toggleShuffle` shuffled the playlist in place with no way back. The
+canonical order is now snapshotted at load and restored when shuffle is
+turned off (keeping the current track selected). [Phase 4 — BUG-music-toggleShuffle-mutates-without-snapshot]
+
+## [6.48.9] - 2026-05-20
+
+### Fixed — window-blur auto-pause confirms real focus loss
+
+The `blur` handler paused on any blur (incl. transient/intra-page focus
+shifts). It now defers a tick and only pauses when `document.hasFocus()`
+is false, so a real alt-tab still pauses but a flicker doesn't. [Phase 4 — BUG-blur-toggles-pause-unconditionally]
+
+## [6.48.8] - 2026-05-20
+
+### Fixed — shop gold deductions floor the balance
+
+Shop purchases now floor the balance on deduction so stored gold matches
+the floored display (no stranded fractional gold from Gold-Find rolls).
+[Phase 4 — BUG-shop-money-not-floored-on-deduction]
+
+## [6.48.7] - 2026-05-20
+
+### Fixed — mine blast uses the radius/damage stamped at lay time
+
+Mine detonation recomputed its blast radius from LIVE BLAST_RADIUS stacks
+and used the base config damage; buying/selling the upgrade after laying
+a mine retro-scaled its blast. It now uses the `blastRadius`/`damage`
+stamped on the mine when it was laid. [Phase 4 — BUG-mine-blast-uses-current-stacks]
+
 ## [6.48.6] - 2026-05-20
 
 ### Fixed — music auto-skip no longer loops forever on total load failure

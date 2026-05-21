@@ -248,11 +248,18 @@ export function setupEventListeners() {
         _runGameOverAction(hasSavedRun ? 'restartWave' : 'newGame');
     });
 
-    // Auto-pause when window loses focus
+    // Auto-pause when the window loses focus (alt-tab). Defer one tick
+    // and confirm the document really lost focus — a transient blur
+    // (intra-page focus shift, devtools docking, etc.) where focus
+    // returns immediately should NOT spuriously pause the game.
     window.addEventListener('blur', () => {
-        if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
-            this.togglePause();
-        }
+        if (this.game.state !== GAME_STATES.PLAYING && this.game.state !== GAME_STATES.WAVE_TRANSITION) return;
+        setTimeout(() => {
+            if (typeof document.hasFocus === 'function' && document.hasFocus()) return;
+            if (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION) {
+                this.togglePause();
+            }
+        }, 0);
     });
 
     // Entity targeting click handling (for gameplay)
