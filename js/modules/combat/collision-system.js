@@ -5,8 +5,6 @@ import { random, collision, starCollision, triggerHapticFeedback } from '../core
 import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
-import { createItem } from '../world/item-system.js';
-import { SLOT_LABEL } from '../world/item-names.js';
 import { frameClock } from '../core/frame-clock.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
@@ -593,95 +591,10 @@ export function handleCollisions() {
             }
         }
 
-        // 5.98.0 → 5.99.4 — Diablo-style defensive item pickups.
-        // Mobile-only spawn (combat-manager.dropOrbsFromEntity gates),
-        // but the collision path stays generic so a dev-spawned drop
-        // still collects on desktop.
-        //
-        // On contact:
-        //   1. createItem(slot, level) generates a randomly-named,
-        //      wave-scaled item.
-        //   2. player.equipItem(item) replaces the slot's current item
-        //      iff the new bonus exceeds the current bonus.
-        //   3. Toast confirms either EQUIPPED (item name + bonus) or
-        //      FOUND (no upgrade) so the player understands the outcome.
-        if (this.statPickupPool) {
-            for (let i = this.statPickupPool.activeObjects.length - 1; i >= 0; i--) {
-                const pickup = this.statPickupPool.activeObjects[i];
-                if (!pickup.active || !starCollision(this.player, pickup)) continue;
-
-                const slot = pickup.kind;
-                const level = pickup.level || 1;
-                // 6.0.0 — Prefer the pre-rolled item stamped on the pickup
-                // at drop time (so the rarity glow matches what the player
-                // gets). Legacy path stays as a fallback for any caller
-                // that still spawns pickups without an item attached.
-                const item = pickup.item || createItem(slot, level);
-                const result = (typeof this.player.equipItem === 'function')
-                    ? this.player.equipItem(item)
-                    : { equipped: false, current: null };
-
-                // Slot category drives the toast accent + audio cue.
-                const isHp = item.bonusType === 'hp';
-                const accent = item.accentColor || (isHp ? '#33ddff' : '#ffae3a');
-                if (this.events?.emit) {
-                    this.events.emit(isHp ? 'audio:health-regen' : 'audio:shield');
-                }
-
-                if (typeof this.triggerPickupToast === 'function') {
-                    // 6.0.1 — Rarity tag prefix so the player reads
-                    // tier at a glance. Toast accent picks the rarity
-                    // color over the slot accent when an item rolled
-                    // a rarity (rare+) — common stays slot-accent so
-                    // the strip isn't all-grey.
-                    const rarityLabel = item.rarityLabel || 'COMMON';
-                    const isPremium = rarityLabel === 'RARE' || rarityLabel === 'EPIC';
-                    const toastAccent = isPremium ? (item.rarityColor || accent) : accent;
-                    if (result.equipped) {
-                        this.triggerPickupToast({
-                            title: `[${rarityLabel}] ${item.name}`,
-                            subtitle: `${SLOT_LABEL[slot] || slot} · ${item.bonusLabel}`,
-                            accentColor: toastAccent,
-                            duration: 2400,
-                        });
-                    } else {
-                        // "Found but no upgrade" — shorter / dimmer toast.
-                        this.triggerPickupToast({
-                            title: `[${rarityLabel}] ${item.name}`,
-                            subtitle: 'NO UPGRADE',
-                            accentColor: 'rgba(160, 170, 190, 0.85)',
-                            duration: 1200,
-                        });
-                    }
-                }
-
-                // Pickup burst — color-matched to the slot's accent.
-                const burstColor = accent;
-                const blip = this.particlePool.get(pickup.x, pickup.y, 'starBlip');
-                if (blip) {
-                    blip.color = burstColor;
-                    blip.radius = 6;
-                    blip.life = 0.6;
-                    blip.fadeRate = 0.1;
-                    blip.growthRate = 0.25;
-                }
-                for (let s = 0; s < 12; s++) {
-                    const angle = (s / 12) * Math.PI * 2;
-                    const sparkle = this.particlePool.get(
-                        pickup.x + Math.cos(angle) * 14,
-                        pickup.y + Math.sin(angle) * 14,
-                        'starSparkle'
-                    );
-                    if (sparkle) {
-                        sparkle.color = burstColor;
-                        sparkle.radius = 2.5;
-                        sparkle.life = 0.9;
-                        sparkle.vel = { x: Math.cos(angle) * 2.2, y: Math.sin(angle) * 2.2 };
-                    }
-                }
-                this.statPickupPool.release(pickup);
-            }
-        }
+        // 6.46.0 — World-space item pickups removed. Item drops now
+        // register directly into the player's left-edge loot feed
+        // (combat-manager.dropOrbsFromEntity → player.registerItemDrop)
+        // and auto-equip there; there is no world pickup to collide with.
     }
 
     // Player-powerup collisions

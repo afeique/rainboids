@@ -485,9 +485,8 @@ export class Particle {
                 }
                 break;
 
-            case 'phantom':
-                this.life -= 0.05 * TS;
-                break;
+            // ('phantom' is handled in the fall-through group above; the
+            // duplicate standalone case here was dead/unreachable.)
 
             case 'playerExplosion':
                 this.life -= 0.02 * TS;

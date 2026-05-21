@@ -1234,7 +1234,6 @@ export class UIManager {
         this.updatePowerTab();
         // 6.1.0 — Powerups pre-render removed (POWERUPS tab moved to
         // the shop; pause-menu powerups-tab DOM was deleted).
-        if (this.updateSkillsTab) this.updateSkillsTab();
         if (this.updateTimerTab) this.updateTimerTab();
     }
 
@@ -1731,7 +1730,6 @@ export class UIManager {
         // Refresh equip lists when their tabs are opened.
         if (tabName === 'primary') this.updatePrimaryTab();
         if (tabName === 'power') this.updatePowerTab();
-        if (tabName === 'skills') this.updateSkillsTab();
         if (tabName === 'stats') this.updateStatsTab();
         if (tabName === 'assists') this.syncAssistsTab();
 
@@ -1852,29 +1850,4 @@ export class UIManager {
         }
     }
 
-    // ── Pause-menu SKILLS tab (5.64.11) ────────────────────────────────────
-    // Lists every defense skill. Click a row to equip it. Skills are now
-    // free and always available — same model as primaries / powers.
-    // Replaces the previous 4-slot assignment UI; a single equipped skill
-    // is shown on the HUD and activated with Space.
-    updateSkillsTab() {
-        const list = document.getElementById('skill-list');
-        if (!list) return;
-        const ge = this.gameEngine;
-        const player = ge && ge.player;
-        if (!player) return;
-        const SKILLS = ge._defenseSkillsRef;
-        if (!SKILLS) {
-            list.replaceChildren();
-            return;
-        }
-        list.replaceChildren();
-        for (const id of Object.keys(SKILLS)) {
-            const equipped = player.activeSkill === id;
-            list.appendChild(this._buildWeaponRow(SKILLS[id], id, equipped, '#ff88dd', () => {
-                player.equipSkill(id);
-                this.updateSkillsTab();
-            }));
-        }
-    }
 }

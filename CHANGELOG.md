@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.51.0] - 2026-05-21
+
+### Removed / Changed — Phase 5 dead-code sweep + polish
+
+A consolidated cleanup of code with no live consumers (no behavior change):
+- **Deleted `performance/quadtree.js`** — superseded by SpatialGrid
+  (OPT-8); zero imports remained.
+- **Deleted `world/stat-pickup.js`** (`StatPickup`) — orphaned by the
+  6.46.0 loot-feed rework (item drops register into `player.lootFeed`,
+  no world pickup orbs). Removed its pool, per-frame update, draw call,
+  drain, import, and the now-unreachable collision/equip block in
+  `collision-system.js` (~160 LOC).
+- **Removed the dead pause-menu SKILLS tab path** — `_buildSkillsTab`
+  (never mounted), `updateSkillsTab` + its call sites and the
+  `switchTab('skills')` branch.
+- **Removed the inert customization overlay builder** (`Save & Close`
+  button had no handler).
+- Removed an unreachable duplicate `case 'phantom'` in `particle.js`.
+- Depth-batch renderer skips bucket 0 (rendered at `globalAlpha = 0` —
+  invisible work).
+
 ## [6.50.5] - 2026-05-21
 
 ### Fixed — VFX telemetry ring buffer overwrites the oldest frame

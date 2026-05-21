@@ -485,9 +485,10 @@ export function _buildPowerTabItems(weaponId = null) {
 }
 
 // 5.79.62 — `_buildSkillsTabItems` removed. The SKILLS shop tab was
-//   suspended in 5.79.57 along with DEFENSE; skills now live exclusively
-//   in the pause-menu SKILLS tab (see ui-manager.updateSkillsTab). The
-//   builder was never called by `_rebuildShopCache` after that patch
+//   suspended in 5.79.57 along with DEFENSE; defense skills are equipped
+//   via the radial menu / DEFENSE shop tab. (The dead pause-menu SKILLS
+//   tab + its updateSkillsTab builder were removed in the 6.51.0 sweep.)
+//   The builder was never called by `_rebuildShopCache` after that patch
 //   and the items it produced (`isSkill: true` / `isSkillUpgrade: true`)
 //   never reached the shop list. Removed alongside `_handleSkillBuy`
 //   (the corresponding purchase handler) in the same cleanup.

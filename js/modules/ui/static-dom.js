@@ -37,7 +37,6 @@ export function buildStaticDom() {
     _buildShopOverlay();
     _buildStatsOverlay();
     _buildInventoryOverlay();
-    _buildCustomizationOverlay();
     _buildHintOverlay();
     _buildTutorialOverlay();
 }
@@ -156,20 +155,6 @@ function _buildHudPauseBtn() {
 // ── Customization overlay ──────────────────────────────────────────
 // 5.102.0 — Stub now empty in index.html; builder owns the markup.
 
-function _buildCustomizationOverlay() {
-    const overlay = document.getElementById('customization-overlay');
-    if (!overlay || !markBuilt(overlay, 'customization-v1')) return;
-    overlay.replaceChildren();
-    overlay.appendChild(el('h2', { text: 'Control Layout' }));
-    overlay.appendChild(el('p', {
-        text: 'Drag the controls to your desired positions, then press Save.',
-    }));
-    overlay.appendChild(el('button', {
-        id: 'save-layout-button',
-        text: 'Save & Close',
-    }));
-}
-
 // ── Hint overlay ───────────────────────────────────────────────────
 // 5.102.0 — `.hint-text` child built here so hint-system can find it
 // at module init without inline markup in index.html.
@@ -286,24 +271,6 @@ function _pauseActionBtn(id, icon, label) {
         children: [
             el('span', { className: 'pause-btn-icon', text: icon }),
             el('span', { className: 'pause-btn-label', text: label }),
-        ],
-    });
-}
-
-function _buildSkillsTab() {
-    return el('div', {
-        id: 'skills-tab',
-        className: 'pause-tab-content',
-        children: [
-            el('h2', { text: 'DEFENSE SKILL' }),
-            el('div', {
-                style: { marginBottom: '15px', color: '#aaa', fontSize: '12px', textAlign: 'center' },
-                text: 'Click a skill to equip it',
-            }),
-            el('div', {
-                id: 'skill-list',
-                style: { display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' },
-            }),
         ],
     });
 }

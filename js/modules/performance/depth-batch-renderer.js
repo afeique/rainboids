@@ -77,6 +77,9 @@ export class DepthBatchRenderer {
         // Iterate buckets in index order (0→10 = opacity 0.0→1.0, back to front)
         // No sorting needed — indices are already in ascending opacity order
         for (let i = 0; i < BUCKET_COUNT; i++) {
+            // Bucket 0 renders at globalAlpha = 0/10 = 0 (fully invisible),
+            // so skip it — it only cost path-building work for nothing.
+            if (i === 0) continue;
             const bg = this._bgBuckets[i];
             const color = this._colorBuckets[i];
             if (bg.length === 0 && color.length === 0) continue;
