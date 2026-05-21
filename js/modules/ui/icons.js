@@ -236,15 +236,38 @@ function _rasterize(slug, sizePx, color) {
     if (typeof document === 'undefined') return null;
     const d = ICON_PATHS[slug];
     if (!d) return null;
-    const svg =
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${sizePx}" height="${sizePx}" viewBox="0 0 24 24">` +
-        `<path d="${d}" fill="${color}" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>` +
-        `</svg>`;
     const canvas = document.createElement('canvas');
     canvas.width = sizePx;
     canvas.height = sizePx;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return canvas;
 
+    // 6.x — Draw the icon SYNCHRONOUSLY via Path2D. The old path went
+    // through an SVG Blob → Image().onload, so the FIRST request returned
+    // (and cached) a blank canvas that only filled in a frame or two
+    // later — icons popped in on first paint. The icon paths are plain
+    // SVG `d` strings at viewBox 24×24, so Path2D renders them inline.
+    if (typeof Path2D === 'function') {
+        const scale = sizePx / 24;
+        ctx.save();
+        ctx.scale(scale, scale);
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.6;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        const path = new Path2D(d);
+        ctx.fill(path);
+        ctx.stroke(path);
+        ctx.restore();
+        return canvas;
+    }
+
+    // Fallback for engines without Path2D — async SVG blob (the old path).
+    const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${sizePx}" height="${sizePx}" viewBox="0 0 24 24">` +
+        `<path d="${d}" fill="${color}" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>` +
+        `</svg>`;
     const blob = new Blob([svg], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
     const img = new Image();

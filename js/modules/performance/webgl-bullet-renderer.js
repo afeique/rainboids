@@ -145,9 +145,12 @@ void main() {
 
     // 5.79.61 — Flat body only, no glow / no core / no gradient.
     // Cheapest possible bullet: SDF + 1px antialiased edge.
-    if (d > 0.005) discard;
-
+    // 6.x — Compute the AA width FIRST and discard only beyond it. The
+    // old d>0.005 early-discard cut the outer half of the AA band
+    // (the 0.005..aa range), giving small / distant bullets a hard edge.
     float aa = fwidth(d);
+    if (d > aa) discard;
+
     float bodyMask = 1.0 - smoothstep(-aa, aa, d);
     if (bodyMask < 0.005) discard;
 
@@ -227,8 +230,6 @@ export class WebGLBulletRenderer {
             return false;
         }
         this.gl = gl;
-        this.canvas.addEventListener('webglcontextlost', this._onContextLost, false);
-        this.canvas.addEventListener('webglcontextrestored', this._onContextRestored, false);
         try {
             this._initGL();
         } catch (err) {
@@ -236,6 +237,10 @@ export class WebGLBulletRenderer {
             this.supported = false;
             return false;
         }
+        // Attach context-loss listeners only AFTER a successful init so a
+        // failed init doesn't leave orphaned listeners on the canvas.
+        this.canvas.addEventListener('webglcontextlost', this._onContextLost, false);
+        this.canvas.addEventListener('webglcontextrestored', this._onContextRestored, false);
         this.supported = true;
         return true;
     }

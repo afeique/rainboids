@@ -190,11 +190,15 @@ export function shootRapid(gameEngine, targetX, targetY) {
 }
 
 export function shootSpiral(gameEngine, targetX, targetY) {
-    if (!this.spiralAngle) this.spiralAngle = 0;
-    this.spiralAngle += 0.3;
+    // 6.x — Use a firing-specific angle field. `this.spiralAngle` is
+    // OWNED by spiralBurstMovement (movement.js); sharing it meant an
+    // enemy that both spiral-fires and spiral-moves had its orbit jerked
+    // +0.3/shot and its fire angle perturbed by the movement increment.
+    if (!this._spiralFireAngle) this._spiralFireAngle = 0;
+    this._spiralFireAngle += 0.3;
 
     // Single bullet with spiral movement pattern
-    this.createEnemyBullet(gameEngine, this.spiralAngle, 2, this.color, false, 'spiral');
+    this.createEnemyBullet(gameEngine, this._spiralFireAngle, 2, this.color, false, 'spiral');
 }
 
 export function shootBurst(gameEngine, targetX, targetY) {

@@ -138,10 +138,16 @@ export function recordVFXFrame(ge) {
         pools,
     };
 
-    // Ring buffer: overwrite oldest when full
+    // Ring buffer: overwrite oldest when full. Use a dedicated wrapping
+    // write cursor — `frame % MAX_FRAMES` doesn't continue from where the
+    // initial push() sequence ended (frame isn't a multiple of MAX when
+    // the buffer fills), so it overwrote an arbitrary slot, not the
+    // oldest, jumbling the captured history.
     if (buf.length < MAX_FRAMES) {
         buf.push(record);
     } else {
-        buf[frame % MAX_FRAMES] = record;
+        if (typeof buf._writeIdx !== 'number') buf._writeIdx = 0;
+        buf[buf._writeIdx] = record;
+        buf._writeIdx = (buf._writeIdx + 1) % MAX_FRAMES;
     }
 }

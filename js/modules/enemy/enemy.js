@@ -285,6 +285,7 @@ export class Enemy {
         this.sentinelSweepAngle = undefined;
         this.sentinelSweepLastDamage = undefined;
         this.spiralAngle = undefined;
+        this._spiralFireAngle = undefined;
         this.squareBurstState = undefined;
         this.tacticalState = undefined;
         this.tankState = undefined;

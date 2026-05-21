@@ -11,6 +11,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.50.5] - 2026-05-21
+
+### Fixed — VFX telemetry ring buffer overwrites the oldest frame
+
+The debug frame ring buffer used `frame % MAX_FRAMES` to overwrite once
+full, which didn't continue from where the initial fill ended — it
+clobbered an arbitrary slot, jumbling the captured history. Now uses a
+dedicated wrapping write cursor. [Phase 4 — BUG-vfx-telemetry-ring-buffer-overwrite-by-index]
+
+## [6.50.4] - 2026-05-21
+
+### Fixed — icons rasterize synchronously (no first-paint blank)
+
+`getIconImage` went through an async SVG-Blob → Image().onload, so the
+first request returned (and cached) a blank canvas that filled a frame or
+two later — icons popped in. They now render synchronously via `Path2D`
+(the async blob path stays as a fallback for engines without Path2D).
+[Phase 4 — BUG-icons-getIconImage-async-rasterize-returns-blank-canvas]
+
+## [6.50.3] - 2026-05-21
+
+### Fixed — WebGL bullet renderer attaches context listeners after init
+
+The `webglcontextlost/restored` listeners were attached before
+`_initGL()`; a failed init left them orphaned on the canvas. They're now
+attached only after a successful init. [Phase 4 — BUG-bullet-init-listeners-before-initgl]
+
+## [6.50.2] - 2026-05-21
+
+### Fixed — bullet edge antialiasing no longer cut on small/distant bullets
+
+The fragment shader discarded at `d > 0.005` before computing the AA
+width, clipping the outer half of the antialiased edge (hard edge on
+small/distant bullets). It now computes `fwidth(d)` first and discards
+only beyond it. [Phase 4 — BUG-bullet-fragment-discard-cuts-aa]
+
+## [6.50.1] - 2026-05-21
+
+### Fixed — spiral firing + spiral movement no longer share one angle field
+
+`shootSpiral` (firing) and `spiralBurstMovement` (movement) both
+read/wrote `this.spiralAngle`; an enemy doing both had its orbit jerked
++0.3 per shot and its fire angle perturbed by the movement increment.
+Firing now uses its own `_spiralFireAngle` (reset on pool recycle).
+[Phase 4 — BUG-spiralAngle-name-collision]
+
 ## [6.50.0] - 2026-05-21
 
 ### Added — regular autosave + cross-attempt accumulation
