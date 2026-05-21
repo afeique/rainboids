@@ -262,6 +262,17 @@ export function setupEventListeners() {
         }, 0);
     });
 
+    // 6.x — Flush progress when the tab is hidden / closed (mobile app
+    // switch, desktop tab close) so accumulated gold / XP / SP / upgrades
+    // and the resume bookmark survive even without a clean wave-clear or
+    // death. visibilitychange→hidden is the reliable mobile signal;
+    // pagehide covers desktop unload.
+    const flushOnExit = () => { if (this.saveProgress) this.saveProgress(); };
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flushOnExit();
+    });
+    window.addEventListener('pagehide', flushOnExit);
+
     // Entity targeting click handling (for gameplay)
     this.canvas.addEventListener('click', (e) => {
         // 5.99.0 — On mobile, ALL canvas interaction is owned by

@@ -1361,6 +1361,22 @@ export class GameEngine {
         if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
     }
 
+    // 6.x — Persist progress NOW (periodic autosave + on tab-close). When
+    // a live run is in progress it writes the full resume snapshot + the
+    // accumulated profile; otherwise (title / game-over) it still flushes
+    // the profile so earned gold/XP/SP/upgrades are never lost.
+    saveProgress() {
+        const s = this.game && this.game.state;
+        const liveRun = this.player
+            && s !== GAME_STATES.TITLE_SCREEN
+            && s !== GAME_STATES.GAME_OVER;
+        if (liveRun) {
+            this.persistWaveStartSave(); // writes run snapshot + profile
+        } else {
+            this.savePersistentProfile();
+        }
+    }
+
     startContinueRun() {
         // Convenience: do a full init() first to put pools / stars / wave
         // intro in their wave-1 baseline, then overlay the saved snapshot.
@@ -1369,7 +1385,19 @@ export class GameEngine {
         const snap = loadSave();
         if (!snap) return false;
         this.init({ writeWave1Save: false });
-        return this.restoreRunState(snap);
+        const ok = this.restoreRunState(snap);
+        // 6.x — The persistent profile is the source of truth for
+        // accumulated progression (gold / upgrades / gear / level-XP-SP).
+        // restoreRunState just overwrote those with the (older, wave-start)
+        // snapshot values, so re-apply the profile to win — this is what
+        // lets gold/XP/SP earned in failed attempts carry into a CONTINUE.
+        // Preserve the snapshot's current health (don't full-heal a resume).
+        const savedHealth = this.player ? this.player.health : null;
+        this.applyPersistentProfile();
+        if (savedHealth != null && this.player) {
+            this.player.health = Math.min(savedHealth, this.player.getEffectiveMaxHealth());
+        }
+        return ok;
     }
 
     // 6.x — Canonical GAME OVER button action, shared by the desktop
@@ -3473,6 +3501,17 @@ export class GameEngine {
             this.logicAccumulator += dt;
             let steps = 0;
             while (this.logicAccumulator >= this.logicTickRate && steps < this.maxLogicStepsPerFrame) {
+                // 6.x — Advance the frame clock per CATCH-UP step (the top
+                // frameClock.advance() only ran once for the render frame).
+                // Without this, every catch-up update() shares one
+                // now/tick, so per-tick reads (cooldown timestamps, AI
+                // frame-parity) stall across the extra steps. The first
+                // step keeps the render frame's wall-clock now; extra steps
+                // advance by one logic tick each (re-synced next frame).
+                if (steps > 0) {
+                    frameClock.now += this.logicTickRate;
+                    frameClock.tick = (frameClock.tick + 1) | 0;
+                }
                 // Advance the audio scheduling cursor before running the
                 // tick so any sounds emitted by this update() get stamped
                 // at this tick's logical time, not the wall-clock instant
@@ -3489,6 +3528,15 @@ export class GameEngine {
         } else {
             this.audioManager.beginLogicTick(GAME_CONFIG.LOGIC_TICK_MS || 16.6667);
             this.update();
+        }
+
+        // 6.x — Periodic autosave (every ~15s) so closing the tab mid-wave
+        // never loses accumulated gold / XP / SP / upgrades. On-close
+        // listeners (event-setup) flush a final save on top of this.
+        if (!this._lastProgressSaveAt) this._lastProgressSaveAt = frameStart;
+        if (frameStart - this._lastProgressSaveAt > 15000) {
+            this._lastProgressSaveAt = frameStart;
+            this.saveProgress();
         }
 
         this.ctx.save();

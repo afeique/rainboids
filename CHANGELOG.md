@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.50.0] - 2026-05-21
+
+### Added — regular autosave + cross-attempt accumulation
+
+Progress now saves automatically so nothing earned is lost on close/reset:
+- **Periodic autosave** every ~15s during play, plus a flush on tab
+  hide/close (`visibilitychange`→hidden / `pagehide`) — `saveProgress()`
+  writes the resume snapshot + the persistent profile.
+- **CONTINUE now keeps everything earned across attempts**: the persistent
+  profile (gold / upgrades / gear / level-XP-SP) is re-applied after the
+  run snapshot, so gold/XP/SP earned in a failed attempt carry into the
+  resume (the snapshot's wave/position/health still drive *where* you
+  resume). Repeatedly dying on a section keeps accumulating progression.
+
+## [6.49.5] - 2026-05-21
+
+### Fixed — frame clock advances per catch-up step
+
+The fixed-timestep catch-up loop ran up to 4 `update()`s per render frame
+but `frameClock.advance()` ran once, so all catch-up steps shared one
+now/tick (stalling per-tick cooldown timestamps + AI frame-parity). Extra
+catch-up steps now advance the clock by one logic tick each. [Phase 4 — BUG-frameclock-stale-in-catchup]
+
 ## [6.49.4] - 2026-05-21
 
 ### Fixed — mobile analog stick recovers from a dropped touchend
