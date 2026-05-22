@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.61.0] - 2026-05-22
+
+### Changed — 4-slot skill loadout now playable: input + HUD (Phases B.S2 + B.S3)
+
+- **Input (B.S2):** number keys **1–4** (and Numpad 1–4) each activate the
+  matching equipped skill slot (rising-edge one-shot, auto-repeat ignored). The
+  old single-skill **TAB**/Q binding is retired. The player update loop consumes
+  a per-slot pulse array and calls `activateSkill(slot)`. The gamepad's single
+  skill button still maps to slot 0 for now (a full 4-button gamepad mapping is
+  a follow-up that owns `gamepad-handler.js`). 6 unit tests.
+- **HUD (B.S3):** a 4-slot skill bar renders above the PRM/PWR loadout — each
+  slot shows its skill icon, a `1`–`4` keybind label, and a bottom-up cooldown
+  overlay with a seconds readout (reusing the existing icon/cooldown draw);
+  empty slots render a dim placeholder. Reads the 4-slot arrays directly. 8
+  smoke tests (mock 2D context).
+
 ## [6.60.0] - 2026-05-22
 
 ### Added — 8-tier item rarity ladder (Phase C.I1)

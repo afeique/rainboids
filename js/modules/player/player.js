@@ -942,11 +942,25 @@ export class Player {
             this.spawnChargeBeamParticles(particlePool);
         }
 
-        // Defense skill — TAB activates the equipped skill (5.64.14;
-        // was SPACE in 5.64.11). Skill cycling lives directly in
-        // event-setup.js's F-key handler — no input flag required.
+        // Defense skills — B.S2 number keys 1–4 activate the four
+        // equipped skill slots. Each input.activateSkillSlot[i] is a
+        // one-shot rising-edge pulse from input-handler.js; consume each
+        // true pulse and clear it (the per-slot cooldown / empty-slot
+        // guard lives in Player.activateSkill(slot)).
+        const skillSlots = input.activateSkillSlot;
+        if (skillSlots) {
+            for (let slot = 0; slot < skillSlots.length; slot++) {
+                if (skillSlots[slot]) {
+                    this.activateSkill(slot);
+                    skillSlots[slot] = false; // consume one-shot pulse
+                }
+            }
+        }
+        // Back-compat slot-0 pulse: the gamepad path (gamepad-handler.js,
+        // BTN_CIRCLE) still raises the legacy input.activateSkill flag.
+        // Map it to slot 0 until the gamepad gains a 4-slot mapping.
         if (input.activateSkill) {
-            this.activateSkill();
+            this.activateSkill(0);
             input.activateSkill = false; // consume one-shot pulse
         }
 

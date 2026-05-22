@@ -4,7 +4,7 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '../core/utils.js';
-import { DEFENSE_SKILLS, PRIMARY_WEAPONS } from '../combat/weapon-data.js';
+import { DEFENSE_SKILLS, PRIMARY_WEAPONS, SKILLS } from '../combat/weapon-data.js';
 import { xpForLevel, MAX_LEVEL } from '../core/sp-stats.js';
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
@@ -1614,6 +1614,14 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         powerGlow,
     );
 
+    // ── Skill bar (B.S3) — 4 adjacent slots above the PRM/PWR row ───
+    // The skill system is a 4-slot model: player.equippedSkills[0..3]
+    // with parallel skillCooldowns / skillCooldownsMax arrays. Slots
+    // are slightly smaller than the loadout squares and sit in their
+    // own row directly above PRM/PWR (anchored at the same left edge),
+    // each labeled with its keybind (1–4).
+    drawSkillSlotBar.call(this, ctx, groupX, groupY - 8);
+
     // 5.101.0 — Defensive SKILL square suspended. Defensive skills are
     // retired (game is primary + power weapons only); defensive picks
     // now live in the pause-menu POWERUPS tab + survivor cards +
@@ -1668,6 +1676,114 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     //     ctx.stroke();
     //     ctx.restore();
     // }
+}
+
+// B.S3 — 4-slot skill bar. Renders player.equippedSkills[0..3] as a row
+// of adjacent squares whose BOTTOM edge sits at `bottomY` (the bar grows
+// upward from there). Each slot shows the equipped skill's icon (reusing
+// the same resolveIconSlug + getIconImage cached-SVG mechanism as the
+// PRM/PWR loadout squares), a keybind label (1–4) in the corner, and a
+// bottom-up cooldown fill driven by skillCooldowns / skillCooldownsMax
+// (the same dark-overlay clip the old single-skill HUD used). Empty
+// slots render a dim placeholder so the player can see all four slots.
+// Exported so the unit smoke test can drive it with a mock ctx/player.
+export function drawSkillSlotBar(ctx, leftX, bottomY) {
+    if (!this.player) return;
+    const equipped = this.player.equippedSkills || [];
+    const cooldowns = this.player.skillCooldowns || [];
+    const cooldownsMax = this.player.skillCooldownsMax || [];
+
+    const slotSize = 38;            // smaller than the 50px loadout squares
+    const slotGap = 8;
+    const radius = 9;
+    const top = bottomY - slotSize; // bar grows upward from bottomY
+
+    for (let slot = 0; slot < 4; slot++) {
+        const sx = leftX + slot * (slotSize + slotGap);
+        const cx = sx + slotSize / 2;
+        const cy = top + slotSize / 2;
+        const half = slotSize / 2;
+
+        const skillId = equipped[slot];
+        const cfg = (skillId && SKILLS[skillId]) || null;
+
+        ctx.save();
+
+        // Background panel.
+        _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.fill();
+
+        if (cfg) {
+            // Border in the skill's accent color.
+            ctx.strokeStyle = cfg.color || '#ff88dd';
+            ctx.lineWidth = 2;
+            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
+            ctx.stroke();
+
+            // Icon — reuse the cached-SVG mechanism from drawWeaponSquare.
+            const slug = resolveIconSlug(cfg.icon);
+            const iconPx = Math.round(slotSize * 0.55);
+            if (slug) {
+                const img = getIconImage(slug, iconPx, '#ffffff');
+                if (img) ctx.drawImage(img, cx - iconPx / 2, cy - iconPx / 2, iconPx, iconPx);
+            } else {
+                ctx.font = `${iconPx}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(cfg.icon || '?', cx, cy + 1);
+            }
+
+            // Cooldown overlay — bottom-up dark fill clipped to the slot,
+            // identical visual to the retired single-skill cooldown HUD.
+            const cdRemaining = cooldowns[slot] || 0;
+            const cdTotal = cooldownsMax[slot] || cfg.cooldown || 1;
+            const cdRatio = cdRemaining > 0 && cdTotal > 0
+                ? Math.min(1, cdRemaining / cdTotal)
+                : 0;
+            if (cdRatio > 0) {
+                ctx.save();
+                _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
+                ctx.clip();
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(sx, top + slotSize * (1 - cdRatio), slotSize, slotSize * cdRatio);
+                ctx.restore();
+                // Seconds remaining, centered.
+                const secs = Math.ceil(cdRemaining / 1000);
+                ctx.font = "bold 9px 'Press Start 2P', monospace";
+                ctx.fillStyle = '#FF8888';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${secs}`, cx, cy);
+            }
+        } else {
+            // Empty slot — dim dashed placeholder.
+            ctx.globalAlpha = 0.35;
+            ctx.strokeStyle = '#778899';
+            ctx.lineWidth = 1.5;
+            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
+
+        ctx.restore();
+
+        // Keybind label (1–4) in the slot's top-left corner. Drawn after
+        // the cooldown overlay so it stays legible while on cooldown.
+        ctx.save();
+        ctx.font = "8px 'Press Start 2P', monospace";
+        ctx.fillStyle = cfg ? '#ffffff' : 'rgba(255, 255, 255, 0.45)';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        const keyLabel = `${slot + 1}`;
+        ctx.strokeText(keyLabel, sx + 3, top + 3);
+        ctx.fillText(keyLabel, sx + 3, top + 3);
+        ctx.restore();
+    }
 }
 
 function _roundedRectPath(ctx, x, y, w, h, r) {
