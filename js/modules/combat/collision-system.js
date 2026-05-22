@@ -2355,7 +2355,7 @@ export function handlePlayerEnemyCollision(player, enemy) {
         // impact point. Returns the HP actually lost (0 if dodged /
         // i-framed) so the screen-shake can scale.
         const baseDamage = enemy.getLevelScaledDamage(25);
-        const dealt = this.takeDamage(baseDamage, { source: enemy, fxX: enemy.x, fxY: enemy.y });
+        const dealt = this.takeDamage(baseDamage, { source: enemy, fxX: enemy.x, fxY: enemy.y, element: enemy.element }); // E5 — ram carries the enemy's element
         if (player.health <= 0) return; // died with no save — skip post-hit FX + bounce
 
         // ── JUICE: hitstop + camera kick + damage-scaled shake ──
@@ -2492,7 +2492,7 @@ export function handlePlayerEnemyBulletCollision(player, bullet) {
     // plain enemy bullets have no shooter ref, so applyThorns falls back
     // to the nearest enemy as the proxy source.
     const baseDamage = bullet.damage || 15;
-    this.takeDamage(baseDamage, { source: bullet, fxX: bullet.x, fxY: bullet.y });
+    this.takeDamage(baseDamage, { source: bullet, fxX: bullet.x, fxY: bullet.y, element: bullet.element }); // E5 — enemy shot carries its element
     if (player.health <= 0) return; // died with no save
 
     // ── JUICE: hitstop only (no camera kick or screen shake for bullets) ──

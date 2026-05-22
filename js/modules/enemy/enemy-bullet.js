@@ -31,6 +31,10 @@ export class EnemyBullet {
         this.color = color;
         this.explosive = explosive;
         this.active = true;
+        // E5 — element of this enemy shot (drives player elemental resistance
+        // in lifecycle.takeDamage). Defaults KINETIC; the firing enemy stamps
+        // its own element here once the roster is elemental (E8).
+        this.element = 'KINETIC';
         this.life = 1.0;
         this.creationTime = frameClock.now;
 

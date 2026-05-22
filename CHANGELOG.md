@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.64.0] - 2026-05-22
+
+### Added — Enemy→player elemental resistance (Phase E5)
+
+The symmetric counterpart to E2 (enemy-side resist). **Inert until E8** gives
+enemy attacks a non-Kinetic element.
+
+- Enemy bullets carry an `element` (default KINETIC; the firing enemy stamps
+  its own element here once the roster is elemental in E8).
+- `lifecycle.takeDamage` scales incoming damage by the player's resistance to
+  the hit's element via the new `playerElementResistMult(player, element)`
+  helper — clamped to [0, 0.9] so gear can't grant full immunity. Item resist
+  affixes (E7) feed `player.getElementResist`.
+- The two player-damage collision sites (enemy ram + enemy bullet) thread the
+  source's `element` into `takeDamage`.
+- Player-side status *effects* (enemy hits applying burn/chill to the player) +
+  the player status HUD are folded into E8, where elemental enemies actually
+  apply them.
+- 6 unit tests pin the resist multiplier (clamp / wrong-element / safe defaults).
+
 ## [6.63.0] - 2026-05-22
 
 ### Added — Elemental synergy reactions (Phase E4)

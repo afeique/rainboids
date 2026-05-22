@@ -54,6 +54,17 @@ function getMobileIncomingDamageMultiplier(wave) {
     return table[w - 1] || 1;
 }
 
+// E5 — player elemental-resistance multiplier. `getElementResist` (player.js)
+// sums the per-element item resist affixes (E7) as a fraction; clamp to
+// [0, 0.9] so gear can't grant full immunity and a (future) negative roll
+// can't amplify. Returns the damage multiplier (1 = no resist). Exported for
+// unit tests; applied in takeDamage after the shield reduction.
+export function playerElementResistMult(player, element) {
+    if (!player || !element || typeof player.getElementResist !== 'function') return 1;
+    const r = player.getElementResist(element) || 0;
+    return 1 - Math.min(0.9, Math.max(0, r));
+}
+
 // 6.x — SINGLE player-damage pipeline. Previously the three collision
 // sites (player↔enemy, player↔enemy-bullet, player↔asteroid) each
 // inlined their own `player.health -= …`, bypassing this function
@@ -111,6 +122,12 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
 
     const effectiveShield = this.player.getEffectiveShield();
     let reducedDamage = damageAmount * (1 - effectiveShield / 100);
+
+    // E5 — elemental resistance vs the incoming hit's element (the symmetric
+    // counterpart to E2's enemy-side resist). Item resist affixes (E7) feed
+    // `player.getElementResist`; clamped so items can't make the player fully
+    // immune. Inert until enemy attacks carry a non-Kinetic element (E8).
+    reducedDamage *= playerElementResistMult(this.player, opts.element);
 
     // 5.98.0 — Mobile early-wave incoming damage reduction. Stacks with
     // the shield/SHIELD_BOOST formula above. Cap-friendly (multiplier
