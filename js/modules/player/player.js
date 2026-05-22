@@ -13,6 +13,8 @@ import { scoreItem } from '../world/item-system.js';
 // unchanged; isMobile() returns false off touch devices unless the
 // `?mobile=1` URL param is set.
 import { isMobile } from '../platform/platform-detect.js';
+import { frameClock } from '../core/frame-clock.js';
+import { initPlayerStatus, tickPlayerStatus } from './player-status.js';
 
 export class Player {
     constructor() {
@@ -264,6 +266,8 @@ export class Player {
         this.invincible = false;
         this.invincibilityTimer = 0;
         this.firingDisabled = false;
+        // A.E9-S1 — player-side elemental status timers (chill/corrode).
+        initPlayerStatus(this);
         // 5.88.0 — `justRespawned` retired with the respawn system; tank
         // consumption (lifecycle._consumeTank) refills HP in place with no
         // post-hit invuln window, so there's nothing to flag here.
@@ -582,6 +586,9 @@ export class Player {
     
     update(input, particlePool, bulletPool, audioManager, starPool, tractorEngaged, gameField = null) {
         if (!this.active) return;
+
+        // A.E9-S1 — decay/expire player-side elemental statuses (chill/corrode).
+        tickPlayerStatus(this, frameClock.now);
 
         // Store previous position to track movement
         const prevX = this.x;

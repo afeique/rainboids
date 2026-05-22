@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.75.0] - 2026-05-22
+
+### Added — Player-side elemental statuses (Phase A.E9-S1)
+
+The first enabling system: enemy elemental attacks now afflict the *player*
+(the mirror of the enemy E3 status engine), so elemental enemies finally bite.
+Kept light + cleansable.
+
+- **CHILL** (enemy Cryo hits) — slows the player's thrust/top speed (×0.7 for
+  1.5s) via `getMovementSpeedMultiplier`.
+- **CORRODE** (enemy Toxic hits) — amplifies incoming damage (+15%/stack, cap 2,
+  3s) via `takeDamage`.
+- Applied from `takeDamage(opts.element)` when an elemental hit lands (after the
+  dodge/i-frame gate). New pure, unit-tested `player-status.js` module (apply /
+  tick / decay / mults), wired into player init + update. 7 unit tests; AI
+  survival e2e passes.
+- **PLAYER BURN (DoT)** is deferred to S1b — it can be lethal, so it needs the
+  `takeDamage` death pipeline refactored to be reusable first. SHOCK deferred.
+  Once S1b lands, the Cinder contact-ignite / Plaguebearer corrode-trail /
+  Frost Lance chill-graze flourishes (A.E10-U3) unlock.
+
 ## [6.74.0] - 2026-05-22
 
 ### Added — Warden: adaptive-resist anti-meta enemy (Phase E8e)

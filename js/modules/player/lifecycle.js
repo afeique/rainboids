@@ -31,6 +31,8 @@
 import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { isMobile } from '../platform/platform-detect.js';
+import { frameClock } from '../core/frame-clock.js';
+import { applyPlayerStatus, playerCorrodeMult } from './player-status.js';
 
 // 6.1.1 — Cap stays at 3 (matches the visible triforce HUD slots).
 // The starting count was lowered from 3 → 1 in game-engine.js so the
@@ -129,6 +131,10 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     // immune. Inert until enemy attacks carry a non-Kinetic element (E8).
     reducedDamage *= playerElementResistMult(this.player, opts.element);
 
+    // A.E9-S1 — CORRODE (from enemy Toxic hits) amplifies incoming damage while
+    // active (+15%/stack). The vulnerability counterpart to resistance.
+    reducedDamage *= playerCorrodeMult(this.player, frameClock.now);
+
     // 5.98.0 — Mobile early-wave incoming damage reduction. Stacks with
     // the shield/SHIELD_BOOST formula above. Cap-friendly (multiplier
     // never exceeds 1.0 so it can't accidentally amplify damage).
@@ -167,6 +173,11 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         }
     }
     this.player._lastDamageAt = Date.now();
+
+    // A.E9-S1 — an elemental enemy hit that landed applies its player-side
+    // status (CRYO→chill, TOXIC→corrode; Pyro burn lands in S1b). The hit
+    // wasn't dodged/i-framed (those returned early above), so the status sticks.
+    if (opts.element) applyPlayerStatus(this.player, opts.element, frameClock.now);
 
     // Round to an integer so HP, damage numbers, and stats stay clean
     // (the collision sites used to round; the generic path didn't).

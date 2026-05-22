@@ -22,6 +22,8 @@ export function levelUp() { return false; }
 // carry between runs.
 import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-stats.js';
 import { loadMeta, saveMeta } from '../core/storage.js';
+import { frameClock } from '../core/frame-clock.js';
+import { playerChillSpeedMult } from './player-status.js';
 
 // Initialize the player's meta fields from storage (called in ctor).
 export function initMeta() {
@@ -317,7 +319,8 @@ export function getMovementSpeedMultiplier() {
     // Each stack: +65% thrust. 6.32.0 — item speed affixes; 6.35.0 — SP
     // SPEED allocation; both add their rolled percentage on top.
     const itemSpeedPct = (this.getItemAffixTotal('speed') + _spVal(this, 'SPEED')) / 100;
-    return 1 + speedBoostStacks * 0.65 + itemSpeedPct;
+    // A.E9-S1 — CHILL (from enemy Cryo hits) slows the player's thrust/top speed.
+    return (1 + speedBoostStacks * 0.65 + itemSpeedPct) * playerChillSpeedMult(this, frameClock.now);
 }
 
 // 6.0.0 — Gold Find now scales with WAVE, not player level. Same
