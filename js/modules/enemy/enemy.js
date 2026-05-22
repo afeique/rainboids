@@ -98,6 +98,8 @@ export class Enemy {
         this.resist = this.config.resist ? { ...this.config.resist } : {};
         // E8a — flat armor floor (GUARDIAN); subtracted per hit in applyDamageToEnemy.
         this.armor = this.config.armor || 0;
+        // E8a — frontal shield (SENTINEL); blocks hits from the player's bearing.
+        this.frontalShield = this.config.frontalShield || null;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player

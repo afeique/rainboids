@@ -718,6 +718,7 @@ export function handleCollisions() {
                     isCrit: !!(bullet.isCrit || bullet.isCritical),
                     isEmpowered: !!bullet.isEmpowered,
                     element: bullet.element, // E2 — bullet carries its weapon's element
+                    hitX: bullet.x, hitY: bullet.y, // E8a — SENTINEL frontal-shield angle check
                 });
                 // 5.107.0 — Vampirism lifesteal on the damage actually
                 // applied to the enemy (clamps overkill so we don't
@@ -2217,6 +2218,22 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     // to Corrode." Inert on enemies with no armor (most).
     if (enemy.armor > 0 && damage > 0) {
         damage = Math.max(damage * 0.25, damage - enemy.armor);
+    }
+
+    // E8a — SENTINEL FRONTAL SHIELD: hits arriving from the player's bearing
+    // (within `arc` of the enemy→player direction) are reduced; flanking,
+    // wall-bounced (Caroms), returning (Boomerang), or pulled-around shots land
+    // in full. Uses the hit point (opts.hitX/Y) vs the live player position, so
+    // it doesn't depend on the enemy's render facing. Only the bullet path
+    // passes a hit point; AoE/beam sources (no hitX) bypass the shield.
+    if (enemy.frontalShield && this.player && opts.hitX != null && damage > 0) {
+        const toPlayer = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
+        const toHit = Math.atan2(opts.hitY - enemy.y, opts.hitX - enemy.x);
+        let diff = Math.abs(toHit - toPlayer) % (Math.PI * 2);
+        if (diff > Math.PI) diff = Math.PI * 2 - diff;
+        if (diff < enemy.frontalShield.arc / 2) {
+            damage *= (1 - enemy.frontalShield.reduction);
+        }
     }
 
     enemy.health -= damage;

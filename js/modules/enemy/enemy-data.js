@@ -419,10 +419,19 @@ const ENEMY_RESISTS = {
 const ENEMY_ARMOR = {
     GUARDIAN: 1.0,
 };
+// E8a behavior — FRONTAL SHIELD (SENTINEL bastion): hits arriving from the
+// player's direction (within `arc` of the enemy→player bearing) are reduced by
+// `reduction`; flanking / bounced / returning shots land in full. The player
+// must reposition (or use wall-bounce Caroms / returning Boomerang / a pull) to
+// crack it. Evaluated in applyDamageToEnemy using the hit point + player pos.
+const ENEMY_FRONTAL_SHIELD = {
+    SENTINEL: { arc: 2.4, reduction: 0.8 }, // ~137° frontal cone, 80% blocked
+};
 for (const [key, def] of Object.entries(ENEMY_TYPES)) {
     def.element = ENEMY_ELEMENTS[key] || 'KINETIC';
     def.resist = ENEMY_RESISTS[key] || {};
     def.armor = ENEMY_ARMOR[key] || 0;
+    def.frontalShield = ENEMY_FRONTAL_SHIELD[key] || null;
 }
 
 // ── Convenience Lookups ────────────────────────────────────────────────────

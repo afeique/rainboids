@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.69.0] - 2026-05-22
+
+### Added — SENTINEL frontal shield archetype (Phase E8a, behavior 2)
+
+- The **SENTINEL** now projects a **frontal shield**: hits arriving from the
+  player's bearing (within a ~137° cone of the enemy→player direction) are
+  reduced 80%, while **flanking, wall-bounced (Caroms), returning (Boomerang),
+  or pulled-around shots land in full**. It's computed from the hit point vs the
+  live player position (not the enemy's render facing), so it's robust; the
+  bullet path passes a hit point, while AoE/beam sources bypass the shield.
+  The enemy instance copies its shield config on spawn. 5 unit tests.
+- Second E8a archetype behavior (after GUARDIAN armor). WASP swarm + Warden
+  (folded into the new-types batch) still pending.
+
 ## [6.68.0] - 2026-05-22
 
 ### Added — GUARDIAN armor archetype (Phase E8a, behavior 1)
