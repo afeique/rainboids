@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.76.0] - 2026-05-22
+
+### Added — Player BURN (lethal-safe DoT) + elemental enemy flourishes (Phase A.E9-S1b)
+
+- **Player BURN** (enemy Pyro hits) — a light DoT (1 dmg/tick/stack, 0.5s
+  cadence, 2s, cap 3 stacks). Applied via `takeDamage`'s new `isPlayerBurn`
+  path, which **bypasses** dodge/shield/resist/corrode (already mitigated when
+  lit) but runs the shared death pipeline so a burn can be **lethal safely**.
+  The status engine tick lives in the engine update loop.
+- **Refactor:** extracted the player death-resolution (guardian save →
+  last-stand → energy tank → death) from `takeDamage` into a reusable
+  `_resolvePlayerLethal`, so both normal hits and the burn DoT honor the same
+  save pipeline. Verified non-regressing (full suite + AI survival e2e deaths).
+- **Flourishes now live (A.E10-U3, automatic):** because enemy elemental hits
+  drive the matching player status, **Cinder now ignites you on contact**,
+  **Plaguebearer corrodes** (its Toxic mines/contact), and **Frost Lance chills**
+  — no per-enemy code needed; the element system handles it.
+- 4 new burn unit tests (apply/tick/stacks/cap); full suite green (458). SHOCK
+  + status HUD indicators still deferred.
+
 ## [6.75.0] - 2026-05-22
 
 ### Added — Player-side elemental statuses (Phase A.E9-S1)

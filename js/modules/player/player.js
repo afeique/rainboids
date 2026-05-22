@@ -13,8 +13,7 @@ import { scoreItem } from '../world/item-system.js';
 // unchanged; isMobile() returns false off touch devices unless the
 // `?mobile=1` URL param is set.
 import { isMobile } from '../platform/platform-detect.js';
-import { frameClock } from '../core/frame-clock.js';
-import { initPlayerStatus, tickPlayerStatus } from './player-status.js';
+import { initPlayerStatus } from './player-status.js';
 
 export class Player {
     constructor() {
@@ -586,9 +585,6 @@ export class Player {
     
     update(input, particlePool, bulletPool, audioManager, starPool, tractorEngaged, gameField = null) {
         if (!this.active) return;
-
-        // A.E9-S1 — decay/expire player-side elemental statuses (chill/corrode).
-        tickPlayerStatus(this, frameClock.now);
 
         // Store previous position to track movement
         const prevX = this.x;

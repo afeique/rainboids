@@ -13,6 +13,12 @@ const CHILL_SPEED = 0.7;         // thrust/speed ×this while chilled
 const CORRODE_DUR = 3000;        // ms
 const CORRODE_PER_STACK = 0.15;  // +15% incoming damage per stack
 const CORRODE_MAX_STACKS = 2;
+// S1b — PLAYER BURN (Pyro hits): a light DoT. Lethal-safe — applied via
+// takeDamage's isPlayerBurn path so it runs the shared death pipeline.
+const BURN_TICK_MS = 500;
+const BURN_DUR = 2000;
+const BURN_DMG = 1;              // per tick per stack
+const BURN_MAX_STACKS = 3;
 
 /** Reset all player status timers (spawn + Second Wind cleanse). */
 export function initPlayerStatus(player) {
@@ -20,6 +26,9 @@ export function initPlayerStatus(player) {
     player.pChillUntil = 0;
     player.pCorrodeUntil = 0;
     player.pCorrodeStacks = 0;
+    player.pBurnUntil = 0;
+    player.pBurnStacks = 0;
+    player.pBurnTickAt = 0;
 }
 
 /** Cleanse all player statuses (the Second Wind ability). */
@@ -29,8 +38,8 @@ export function cleansePlayerStatus(player) {
 
 /**
  * Apply the status matching an incoming hit's element. Light + refresh-style.
- * CRYO → CHILL (slows thrust); TOXIC → CORRODE (+damage taken, stacks). PYRO
- * burn (S1b) and VOLT shock are intentionally not applied yet.
+ * CRYO → CHILL (slows thrust); TOXIC → CORRODE (+damage taken, stacks);
+ * PYRO → BURN (DoT, S1b). VOLT shock still deferred.
  */
 export function applyPlayerStatus(player, element, now) {
     if (!player || !element) return;
@@ -39,17 +48,37 @@ export function applyPlayerStatus(player, element, now) {
     } else if (element === 'TOXIC') {
         player.pCorrodeStacks = Math.min(CORRODE_MAX_STACKS, (player.pCorrodeStacks || 0) + 1);
         player.pCorrodeUntil = now + CORRODE_DUR;
+    } else if (element === 'PYRO') {
+        const wasInactive = !(player.pBurnStacks > 0) || (player.pBurnUntil || 0) <= now;
+        player.pBurnStacks = Math.min(BURN_MAX_STACKS, (player.pBurnStacks || 0) + 1);
+        player.pBurnUntil = now + BURN_DUR;
+        if (wasInactive) player.pBurnTickAt = now + BURN_TICK_MS;
     }
 }
 
-/** Per-frame decay/expiry of timed player statuses (called from player.update). */
+/**
+ * Per-frame decay/expiry of timed player statuses. RETURNS the burn damage to
+ * apply this frame (the engine update routes it through takeDamage's
+ * isPlayerBurn path so it's lethal-safe). CHILL needs no decay (the speed mult
+ * reads its timer).
+ */
 export function tickPlayerStatus(player, now) {
-    if (!player) return;
+    if (!player) return 0;
     if (player.pCorrodeStacks > 0 && now > player.pCorrodeUntil) {
         player.pCorrodeStacks = 0;
         player.pCorrodeUntil = 0;
     }
-    // CHILL needs no explicit decay — playerChillSpeedMult reads the timer.
+    let burnDmg = 0;
+    if (player.pBurnStacks > 0 && player.pBurnUntil > 0) {
+        while (now >= player.pBurnTickAt && player.pBurnTickAt <= player.pBurnUntil) {
+            burnDmg += BURN_DMG * player.pBurnStacks;
+            player.pBurnTickAt += BURN_TICK_MS;
+        }
+        if (now > player.pBurnUntil) {
+            player.pBurnStacks = 0; player.pBurnUntil = 0; player.pBurnTickAt = 0;
+        }
+    }
+    return burnDmg;
 }
 
 /** Movement-speed multiplier from CHILL (1 = none). Read in getMovementSpeedMultiplier. */

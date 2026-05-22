@@ -11,6 +11,8 @@ import {
     playerChillSpeedMult, playerCorrodeMult,
 } from '../../js/modules/player/player-status.js';
 
+// (tickPlayerStatus now returns the burn damage to apply this frame — S1b.)
+
 function mkPlayer() { const p = {}; initPlayerStatus(p); return p; }
 const NOW = 10000;
 
@@ -41,18 +43,39 @@ describe('A.E9-S1 player elemental statuses', () => {
         expect(playerCorrodeMult(p, NOW + 100)).toBeCloseTo(1.30);
     });
 
-    test('PYRO / VOLT do not apply a status in S1 (burn = S1b, shock deferred)', () => {
+    test('PYRO hit applies BURN (S1b); VOLT shock still deferred', () => {
         const p = mkPlayer();
         applyPlayerStatus(p, 'PYRO', NOW);
-        applyPlayerStatus(p, 'VOLT', NOW);
+        expect(p.pBurnStacks).toBe(1);
+        expect(p.pBurnUntil).toBe(NOW + 2000);
+        applyPlayerStatus(p, 'VOLT', NOW); // no-op
         expect(p.pChillUntil).toBe(0);
         expect(p.pCorrodeStacks).toBe(0);
     });
 
-    test('tickPlayerStatus clears CORRODE after its window', () => {
+    test('BURN ticks return damage (scaling with stacks) over its window, then clear', () => {
+        const p = mkPlayer();
+        applyPlayerStatus(p, 'PYRO', NOW); // 1 stack, first tick at NOW+500
+        applyPlayerStatus(p, 'PYRO', NOW); // 2 stacks
+        expect(p.pBurnStacks).toBe(2);
+        expect(tickPlayerStatus(p, NOW + 100)).toBe(0);   // before first tick
+        expect(tickPlayerStatus(p, NOW + 500)).toBe(2);   // 1 tick × 2 stacks × 1 dmg
+        // run out the window → stacks clear, no more damage
+        tickPlayerStatus(p, NOW + 5000);
+        expect(p.pBurnStacks).toBe(0);
+        expect(tickPlayerStatus(p, NOW + 6000)).toBe(0);
+    });
+
+    test('BURN stacks cap at 3', () => {
+        const p = mkPlayer();
+        for (let i = 0; i < 6; i++) applyPlayerStatus(p, 'PYRO', NOW);
+        expect(p.pBurnStacks).toBe(3);
+    });
+
+    test('tickPlayerStatus clears CORRODE after its window (returns 0 burn)', () => {
         const p = mkPlayer();
         applyPlayerStatus(p, 'TOXIC', NOW);
-        tickPlayerStatus(p, NOW + 100);
+        expect(tickPlayerStatus(p, NOW + 100)).toBe(0);
         expect(p.pCorrodeStacks).toBe(1); // still active
         tickPlayerStatus(p, NOW + 4000);  // past 3000ms window
         expect(p.pCorrodeStacks).toBe(0);

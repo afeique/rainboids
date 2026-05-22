@@ -7,6 +7,7 @@ import { nebulaRenderer } from './performance/nebula-renderer.js';
 import { SpatialGrid } from './performance/spatial-grid.js';
 import { PoolManager } from './core/pool-manager.js';
 import { frameClock } from './core/frame-clock.js';
+import { tickPlayerStatus } from './player/player-status.js';
 import { Player } from './player/player.js';
 import { Bullet } from './player/bullet.js';
 import { Asteroid } from './world/asteroid.js';
@@ -2824,6 +2825,12 @@ export class GameEngine {
 
             // Normal gameplay updates
             this.player.update(input, this.particlePool, this.bulletPool, this.audioManager, this.colorStarPool, tractorEngaged, this.gameField);
+
+            // A.E9-S1b — player elemental status tick: decay chill/corrode + the
+            // burn DoT. Burn routes through takeDamage's isPlayerBurn path so it
+            // honors the shared death pipeline (lethal-safe).
+            const _playerBurn = tickPlayerStatus(this.player, frameClock.now);
+            if (_playerBurn > 0) this.takeDamage(_playerBurn, { isPlayerBurn: true });
 
             // 6.23.0 (2026-05-19) — Mine shield zone tracking.
             //   Originally (Phase 5) we fired a one-shot crossing sparkle

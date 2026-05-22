@@ -79,6 +79,42 @@ export function playerElementResistMult(player, element) {
 // Returns the final (post-reduction, rounded) damage dealt — 0 if the
 // hit was dodged / i-framed / invincible — so callers can scale their
 // own screen-shake / bounce off it.
+
+// A.E9-S1b — shared lethal-damage resolution (extracted from takeDamage):
+// guardian save → last-stand → energy tank → death. Returns the dealt amount.
+// Called by both takeDamage and the player-burn DoT path so both honor the same
+// save pipeline. `this` is the engine context.
+function _resolvePlayerLethal(finalDamage) {
+    if (typeof this.tryConsumeGuardian === 'function' && this.tryConsumeGuardian()) {
+        return finalDamage;
+    }
+    const lastStandStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('LAST_STAND') : 0;
+    if (lastStandStacks > 0 && !this.player._lastStandUsed) {
+        this.player._lastStandUsed = true;
+        this.player.health = 1;
+        this.player.makeInvincible(2500);
+        if (typeof this.events?.emit === 'function') {
+            this.events.emit('ui:show-message', { title: 'LAST STAND', subtitle: 'Saved at 1 HP', duration: 1600 });
+            this.events.emit('audio:powerup');
+            this.events.emit('audio:player-explosion');
+        }
+        if (this.particlePool) {
+            for (let i = 0; i < 24; i++) {
+                const a = (i / 24) * Math.PI * 2;
+                const p = this.particlePool.get(this.player.x, this.player.y, 'explosion');
+                if (p) { p.color = '#ff4444'; p.vel.x = Math.cos(a) * 5; p.vel.y = Math.sin(a) * 5; }
+            }
+        }
+        return finalDamage;
+    }
+    if (this.healthTanks > 0) {
+        this._consumeTank();
+        return finalDamage;
+    }
+    this.handlePlayerDeath();
+    return finalDamage;
+}
+
 export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     if (this.player.invincible) return 0;
 
@@ -86,6 +122,20 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     // honored at the enemy / enemy-bullet sites; asteroid collisions
     // ignored it — now uniform.
     if (this.player.isDashIFrameActive && this.player.isDashIFrameActive()) return 0;
+
+    // A.E9-S1b — PLAYER BURN tick. A DoT that was already mitigated when first
+    // applied, so it BYPASSES dodge / reflexes / shield / resist / corrode, but
+    // still respects invuln (handled above) and runs the shared death pipeline
+    // so a burn can be lethal safely. No thorns/retaliation/status re-apply.
+    if (opts.isPlayerBurn) {
+        const burnDmg = Math.max(0, Math.round(damageAmount));
+        if (burnDmg <= 0) return 0;
+        this.player.health = Math.max(0, this.player.health - burnDmg);
+        this.player._lastDamageAt = Date.now();
+        if (this.game && this.game.stats) this.game.stats.totalDamageTaken += burnDmg;
+        if (this.player.health <= 0) return _resolvePlayerLethal.call(this, burnDmg);
+        return burnDmg;
+    }
 
     // 6.28.0 — DODGE: flat % chance to ignore a hit entirely. Rolls
     // before REFLEXES so a lucky dodge doesn't burn the 30s REFLEXES
@@ -215,48 +265,11 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         this.checkMissionOnDamage();
     }
 
+    // A.E9-S1b — death resolution extracted into `_resolvePlayerLethal` so the
+    // player-burn DoT (and any future lethal-DoT source) can run the same
+    // guardian → last-stand → tank → death pipeline.
     if (this.player.health <= 0) {
-        // 5.108.0 — GUARDIAN gets first dibs: clamps to 1 HP + grants
-        // invuln (one save per wave), bypassing LAST_STAND + the tank.
-        // Was applied inline at the collision sites; centralized here.
-        if (typeof this.tryConsumeGuardian === 'function' && this.tryConsumeGuardian()) {
-            return finalDamage;
-        }
-        // 5.75.0 — LAST_STAND: one-time-per-run survive at 1 HP.
-        const lastStandStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('LAST_STAND') : 0;
-        if (lastStandStacks > 0 && !this.player._lastStandUsed) {
-            this.player._lastStandUsed = true;
-            this.player.health = 1;
-            this.player.makeInvincible(2500);
-            if (typeof this.events?.emit === 'function') {
-                this.events.emit('ui:show-message', { title: 'LAST STAND', subtitle: 'Saved at 1 HP', duration: 1600 });
-                this.events.emit('audio:powerup');
-                this.events.emit('audio:player-explosion');
-            }
-            // 6.17.1 — LAST_STAND flash + shake removed alongside the
-            // broader "damage doesn't flash/shake" rule. The save still
-            // reads loud thanks to the audio cue, the banner toast,
-            // and the 24-sparkle radial spawn below.
-            if (this.particlePool) {
-                for (let i = 0; i < 24; i++) {
-                    const a = (i / 24) * Math.PI * 2;
-                    const p = this.particlePool.get(this.player.x, this.player.y, 'explosion');
-                    if (p) {
-                        p.color = '#ff4444';
-                        p.vel.x = Math.cos(a) * 5;
-                        p.vel.y = Math.sin(a) * 5;
-                    }
-                }
-            }
-            return finalDamage;
-        }
-
-        if (this.healthTanks > 0) {
-            this._consumeTank();
-            return finalDamage;
-        }
-        this.handlePlayerDeath();
-        return finalDamage;
+        return _resolvePlayerLethal.call(this, finalDamage);
     }
 
     this.events.emit('audio:hit');
