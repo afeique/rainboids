@@ -401,7 +401,7 @@ export const ENEMY_TYPES = {
         points: 110,
         movement: { pattern: 'wasp_zigzag', turnSpeed: 0.12, rotationSpeed: { min: -0.02, max: 0.02 } },
         firing: { pattern: 'wasp_machinegun', burstCount: 1, burstDelay: 0, cooldown: { min: 500, max: 2200 } },
-        visual: { shape: 'wasp_ship', glowColor: '#ffaa44', trailLength: 15 },
+        visual: { shape: 'cinder_ember', glowColor: '#ffaa44', trailLength: 15 },
         ai: { evasion: 0.6, preferredRange: 180, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
 
@@ -420,7 +420,7 @@ export const ENEMY_TYPES = {
         points: 250,
         movement: { pattern: 'square', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'guardian_spread', burstCount: 3, burstDelay: 105, cooldown: { min: 2500, max: 8000 } },
-        visual: { shape: 'emerald_guardian', glowColor: '#bbf0ff', trailLength: 15 },
+        visual: { shape: 'ice_crystal', glowColor: '#bbf0ff', trailLength: 15 },
         ai: { evasion: 0.2, preferredRange: 320, dodgeBullets: false, microMovements: true, fishMotion: true },
     },
 
@@ -439,7 +439,7 @@ export const ENEMY_TYPES = {
         points: 150,
         movement: { pattern: 'arc', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'charged_laser', burstCount: 1, burstDelay: 0, cooldown: { min: 1500, max: 6000 } },
-        visual: { shape: 'stalker_sword', glowColor: '#bbf0ff', trailLength: 15 },
+        visual: { shape: 'icicle_lance', glowColor: '#bbf0ff', trailLength: 15 },
         ai: { evasion: 0.6, preferredRange: 220, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
 
@@ -460,7 +460,7 @@ export const ENEMY_TYPES = {
         deathFlare: { radius: 130, damage: 12 },
         movement: { pattern: 'hunter_arc', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'hunter_single', burstCount: 2, burstDelay: 90, cooldown: { min: 900, max: 3500 } },
-        visual: { shape: 'spiked_circle', glowColor: '#ffaa66', trailLength: 15 },
+        visual: { shape: 'cracked_bomb', glowColor: '#ffaa66', trailLength: 15 },
         ai: { evasion: 0.4, preferredRange: 220, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
 
@@ -482,7 +482,7 @@ export const ENEMY_TYPES = {
         points: 150,
         movement: { pattern: 'hunter_arc', turnSpeed: 0.12, rotationSpeed: { min: -0.02, max: 0.02 } },
         firing: { pattern: 'arc_lightning', burstCount: 1, burstDelay: 0, cooldown: { min: 1500, max: 5500 } },
-        visual: { shape: 'laser_turret', glowColor: '#c890ff', trailLength: 15 },
+        visual: { shape: 'arc_node', glowColor: '#c890ff', trailLength: 15 },
         ai: { evasion: 0.65, preferredRange: 260, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
 
@@ -502,7 +502,7 @@ export const ENEMY_TYPES = {
         points: 200,
         movement: { pattern: 'chase', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'lay_mine', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 7000 }, mineLifetime: 18000 },
-        visual: { shape: 'spiked_circle', glowColor: '#aaff66', trailLength: 15 },
+        visual: { shape: 'plague_sac', glowColor: '#aaff66', trailLength: 15 },
         ai: { evasion: 0.2, preferredRange: 150, dodgeBullets: false, microMovements: true, fishMotion: true },
     },
 
@@ -526,7 +526,7 @@ export const ENEMY_TYPES = {
         adaptive: true,
         movement: { pattern: 'keep_distance', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 }, preferredDistance: 400 },
         firing: { pattern: 'missile', burstCount: 1, burstDelay: 0, cooldown: { min: 900, max: 3500 } },
-        visual: { shape: 'missile_turret', glowColor: '#e0c8ff', trailLength: 15 },
+        visual: { shape: 'prism_facet', glowColor: '#e0c8ff', trailLength: 15 },
         ai: { evasion: 0.3, preferredRange: 400, dodgeBullets: false, microMovements: true, fishMotion: true },
     },
 };
@@ -615,4 +615,12 @@ export const SHAPE_DRAW_MAP = {
     missile_turret:  'drawMissileTurret',
     pulse_turret:    'drawPulseTurret',
     shield_turret:   'drawShieldTurret',
+    // A.E10-U1 — distinct silhouettes for the 7 new elemental enemy types
+    cinder_ember:    'drawCinderEmber',
+    ice_crystal:     'drawIceCrystal',
+    icicle_lance:    'drawIcicleLance',
+    cracked_bomb:    'drawCrackedBomb',
+    arc_node:        'drawArcNode',
+    plague_sac:      'drawPlagueSac',
+    prism_facet:     'drawPrismFacet',
 };

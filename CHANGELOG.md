@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.77.0] - 2026-05-22
+
+### Fixed
+
+- The 7 new elemental enemy types (Cinder, Glacier, Frost Lance, Ashen
+  Detonator, Tesla Wraith, Plaguebearer, Warden) were rendering as the
+  **default triangle** — the live render path is `drawEnemyShape`'s
+  `switch(this.type)`, which had no cases for them (the `SHAPE_DRAW_MAP`
+  reuses they were tagged with are unused future data). They now render
+  distinct silhouettes.
+
+### Added — Distinct enemy silhouettes (Phase A.E10-U1)
+
+- New draw methods in `enemy/shapes.js` give each new type its own shape:
+  Cinder = ember mote, Glacier = ice crystal, Frost Lance = icicle lance,
+  Ashen Detonator = cracked bomb, Tesla Wraith = arc node, Plaguebearer =
+  bloated sac, Warden = faceted prism. 16 smoke tests (draw methods don't
+  throw + shape-name wiring). The 10 original types are untouched.
+
 ## [6.76.0] - 2026-05-22
 
 ### Added — Player BURN (lethal-safe DoT) + elemental enemy flourishes (Phase A.E9-S1b)

@@ -377,6 +377,30 @@ export function drawEnemyShape(ctx) {
         case 'SENTINEL':
             this.drawShieldTurret(drawCtx);
             break;
+        // A.E10-U1 — the 7 new elemental types get their own silhouettes.
+        // Called via the module-local functions (.call(this, …)) so they need no
+        // Enemy-class delegator wired up in enemy.js.
+        case 'CINDER':
+            drawCinderEmber.call(this, drawCtx);
+            break;
+        case 'GLACIER':
+            drawIceCrystal.call(this, drawCtx);
+            break;
+        case 'FROST_LANCE':
+            drawIcicleLance.call(this, drawCtx);
+            break;
+        case 'ASHEN_DETONATOR':
+            drawCrackedBomb.call(this, drawCtx);
+            break;
+        case 'TESLA_WRAITH':
+            drawArcNode.call(this, drawCtx);
+            break;
+        case 'PLAGUEBEARER':
+            drawPlagueSac.call(this, drawCtx);
+            break;
+        case 'WARDEN':
+            drawPrismFacet.call(this, drawCtx);
+            break;
         default:
             this.drawTriangle(drawCtx);
     }
@@ -515,6 +539,191 @@ export function drawStalkerSword(ctx) {
         radius: this.radius,
         now: frameClock.now,
     });
+}
+
+// ── A.E10-U1 — distinct silhouettes for the 7 new elemental enemy types ──────
+// Each follows the same convention as drawSquare/drawDiamond/drawHexagon above:
+//   export function drawX(ctx) — `this` is the Enemy instance, drawn centered at
+//   the origin (the caller already translated/rotated to the enemy + set the
+//   base strokeStyle = this.color and fillStyle = this.color + '40'). They lean
+//   on those inherited styles and add a glow accent so the shape reads cleanly,
+//   and never assume a non-origin center. Kept to ~a dozen path ops each.
+
+/** CINDER — a small jagged ember / flame mote. */
+export function drawCinderEmber(ctx) {
+    const size = this.radius * 0.75;
+    // Flame mote: an upward teardrop body with a flickering jagged crown.
+    ctx.beginPath();
+    ctx.moveTo(0, -size);                       // flame tip (forward)
+    ctx.quadraticCurveTo(size * 0.7, -size * 0.1, size * 0.45, size * 0.45);
+    ctx.quadraticCurveTo(0, size * 0.9, -size * 0.45, size * 0.45);
+    ctx.quadraticCurveTo(-size * 0.7, -size * 0.1, 0, -size);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner ember spikes — a few jagged sparks for the "cinder" read.
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + (i / 5) * Math.PI * 2;
+        const r = (i % 2 === 0) ? size * 0.5 : size * 0.22;
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r * 0.9 + size * 0.05;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+}
+
+/** GLACIER — a chunky angular ice block / crystal. */
+export function drawIceCrystal(ctx) {
+    const s = this.radius * 0.8;
+    // Chunky hexagonal ice block with a beveled top edge.
+    ctx.beginPath();
+    ctx.moveTo(0, -s);                  // top point
+    ctx.lineTo(s * 0.85, -s * 0.45);
+    ctx.lineTo(s * 0.85, s * 0.5);
+    ctx.lineTo(0, s);                   // bottom point
+    ctx.lineTo(-s * 0.85, s * 0.5);
+    ctx.lineTo(-s * 0.85, -s * 0.45);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Internal facet lines (the crystalline "chunk" read).
+    ctx.beginPath();
+    ctx.moveTo(0, -s);
+    ctx.lineTo(0, s);
+    ctx.moveTo(-s * 0.85, -s * 0.45);
+    ctx.lineTo(s * 0.4, s * 0.25);
+    ctx.moveTo(s * 0.85, -s * 0.45);
+    ctx.lineTo(-s * 0.4, s * 0.25);
+    ctx.stroke();
+}
+
+/** FROST_LANCE — a sharp elongated icicle / lance. */
+export function drawIcicleLance(ctx) {
+    const len = this.radius * 1.25;
+    const w = this.radius * 0.3;
+    // Long forward-pointing icicle: a narrow diamond stretched along +X.
+    ctx.beginPath();
+    ctx.moveTo(len, 0);                 // sharp tip (forward)
+    ctx.lineTo(-len * 0.15, -w);
+    ctx.lineTo(-len * 0.55, 0);         // notched tail
+    ctx.lineTo(-len * 0.15, w);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Frost segment ridges along the spine.
+    ctx.beginPath();
+    for (let i = 1; i <= 3; i++) {
+        const x = len * (0.5 - i * 0.28);
+        const h = w * (1 - i * 0.18);
+        ctx.moveTo(x, -h);
+        ctx.lineTo(x, h);
+    }
+    ctx.stroke();
+}
+
+/** ASHEN_DETONATOR — a round bomb with fracture lines (it bursts on death). */
+export function drawCrackedBomb(ctx) {
+    const r = this.radius * 0.7;
+    // Round bomb body.
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Fuse stub at the top.
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * 0.25, -r * 1.4);
+    ctx.stroke();
+
+    // Fracture lines radiating from the core (the "about to burst" read).
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + 0.4;
+        const midR = r * 0.35;
+        ctx.moveTo(Math.cos(a) * midR, Math.sin(a) * midR);
+        const a2 = a + 0.25;
+        ctx.lineTo(Math.cos(a2) * r * 0.95, Math.sin(a2) * r * 0.95);
+    }
+    ctx.stroke();
+}
+
+/** TESLA_WRAITH — a node with radiating electric arcs / spokes. */
+export function drawArcNode(ctx) {
+    const r = this.radius * 0.45;
+    // Central node.
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Radiating jagged arcs (electric spokes).
+    const reach = this.radius * 0.95;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const midX = Math.cos(a) * reach * 0.55 + Math.cos(a + 1.2) * reach * 0.18;
+        const midY = Math.sin(a) * reach * 0.55 + Math.sin(a + 1.2) * reach * 0.18;
+        ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(Math.cos(a) * reach, Math.sin(a) * reach);
+    }
+    ctx.stroke();
+}
+
+/** PLAGUEBEARER — a bloated, lumpy sac. */
+export function drawPlagueSac(ctx) {
+    const base = this.radius * 0.7;
+    // Bloated lumpy blob: a closed loop whose radius bulges in/out per vertex.
+    const lumps = [1.0, 0.78, 1.12, 0.7, 1.05, 0.82, 1.15, 0.74];
+    ctx.beginPath();
+    for (let i = 0; i < lumps.length; i++) {
+        const a = (i / lumps.length) * Math.PI * 2;
+        const r = base * lumps[i];
+        const x = Math.cos(a) * r;
+        const y = Math.sin(a) * r * 1.1;        // slightly squashed → "bloated"
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // A couple of inner pustule rings for the toxic-sac read.
+    ctx.beginPath();
+    ctx.arc(base * 0.25, -base * 0.2, base * 0.22, 0, Math.PI * 2);
+    ctx.moveTo(-base * 0.3 + base * 0.18, base * 0.25);
+    ctx.arc(-base * 0.3, base * 0.25, base * 0.18, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+/** WARDEN — a faceted prism / gem (signals its adaptive resist). */
+export function drawPrismFacet(ctx) {
+    const s = this.radius * 0.8;
+    // Gem outline: a kite / faceted diamond with a flat crown.
+    ctx.beginPath();
+    ctx.moveTo(0, -s);                  // crown apex (forward)
+    ctx.lineTo(s * 0.65, -s * 0.3);
+    ctx.lineTo(s * 0.4, s);
+    ctx.lineTo(-s * 0.4, s);
+    ctx.lineTo(-s * 0.65, -s * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Internal facet lines from the apex → the adaptive-prism look.
+    ctx.beginPath();
+    ctx.moveTo(0, -s);
+    ctx.lineTo(s * 0.4, s);
+    ctx.moveTo(0, -s);
+    ctx.lineTo(-s * 0.4, s);
+    ctx.moveTo(-s * 0.65, -s * 0.3);
+    ctx.lineTo(s * 0.65, -s * 0.3);     // crown girdle
+    ctx.stroke();
 }
 
 export function drawPulsatingCircle(ctx) {
