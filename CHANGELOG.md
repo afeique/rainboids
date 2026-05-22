@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.65.0] - 2026-05-22
+
+### Added — Item elemental-resistance affixes (Phase E7)
+
+- Items can now roll **per-element resistance affixes** — `pyroResist`,
+  `cryoResist`, `voltResist`, `toxicResist`, `voidResist`, `radiantResist`
+  (percentage, defensive-flavored) — added to `ITEM_AFFIX_POOL` with matching
+  `AFFIX_SCORE_WEIGHT` entries. The `type` strings match the
+  `player.getElementResist` contract (`<element>.toLowerCase() + 'Resist'`),
+  so equipping a resist item now measurably reduces that element's damage via
+  the E5 player damage path. Existing loot-feed / inventory displays render the
+  pre-formatted affix labels generically (no display change). 7 unit tests.
+
 ## [6.64.0] - 2026-05-22
 
 ### Added — Enemy→player elemental resistance (Phase E5)

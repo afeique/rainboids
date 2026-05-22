@@ -70,6 +70,18 @@ export const ITEM_AFFIX_POOL = [
     { type: 'dodge',      base: 2,   perWave: 0.1,  pct: true,  min: 1,   prefix: 'toughness', label: (v) => `+${v}% DODGE` },
     { type: 'speed',      base: 6,   perWave: 0.3,  pct: true,  min: 2,   prefix: 'regen',     label: (v) => `+${v}% SPEED` },
     { type: 'regen',      base: 0.3, perWave: 0.05, pct: false, min: 0.1, prefix: 'regen',     label: (v) => `+${v}/s REGEN` },
+    // Phase A.E7 — per-element RESISTANCE affixes (one per non-Kinetic
+    // element). `type` is exactly `<elementLowercase>Resist` so
+    // `Player.getElementResist(element)` finds them via
+    // `getItemAffixTotal(element.toLowerCase() + 'Resist')`. Percentage
+    // damage reduction vs that element: getElementResist returns
+    // affixTotal/100. Defensive (toughness) flavor.
+    { type: 'pyroResist',    base: 5, perWave: 0.5, pct: true, min: 2, prefix: 'toughness', label: (v) => `+${v}% PYRO RESIST` },
+    { type: 'cryoResist',    base: 5, perWave: 0.5, pct: true, min: 2, prefix: 'toughness', label: (v) => `+${v}% CRYO RESIST` },
+    { type: 'voltResist',    base: 5, perWave: 0.5, pct: true, min: 2, prefix: 'toughness', label: (v) => `+${v}% VOLT RESIST` },
+    { type: 'toxicResist',   base: 5, perWave: 0.5, pct: true, min: 2, prefix: 'toughness', label: (v) => `+${v}% TOXIC RESIST` },
+    { type: 'voidResist',    base: 5, perWave: 0.5, pct: true, min: 2, prefix: 'toughness', label: (v) => `+${v}% VOID RESIST` },
+    { type: 'radiantResist', base: 5, perWave: 0.5, pct: true, min: 2, prefix: 'toughness', label: (v) => `+${v}% RADIANT RESIST` },
 ];
 
 // Score weights — normalize each affix to an "effective HP" value so
@@ -77,6 +89,11 @@ export const ITEM_AFFIX_POOL = [
 export const AFFIX_SCORE_WEIGHT = {
     hp: 1, toughness: 8, vampirism: 8, thorns: 4,
     critChance: 6, critDamage: 3, dodge: 8, speed: 3, regen: 16,
+    // Phase A.E7 — per-element resist %. Situational defensive value
+    // (only matters vs one element), so weighted at 4 — in the same
+    // ballpark as thorns, below the always-on toughness/dodge.
+    pyroResist: 4, cryoResist: 4, voltResist: 4,
+    toxicResist: 4, voidResist: 4, radiantResist: 4,
 };
 
 // Slot → bonus type. Centralized so callers don't repeat the mapping.
