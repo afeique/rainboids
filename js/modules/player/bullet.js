@@ -50,6 +50,12 @@ export class Bullet {
         this.rangeMultiplier = 1.0; // Set by player before firing
         this.fadeFactor = 1.0;
 
+        // E1 (Element & Resistance) — every bullet carries an element so the
+        // damage path can apply enemy resistance. Defaults to the KINETIC
+        // baseline; primary fire paths stamp the firing weapon's element via
+        // applyGlobalBulletUpgrades. Read by the damage path starting in E2.
+        this.element = 'KINETIC';
+
         // Powerup effects (will be set by player when creating bullets)
         this.homing = false;
         this.homingStrength = 0;

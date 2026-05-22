@@ -1007,6 +1007,18 @@ export class Player {
         return progression.getItemAffixTotal.call(this, type);
     }
 
+    // E1 (Element & Resistance) — the player's resistance to an incoming
+    // element, as a fraction (0 = neutral, 0.5 = −50% damage, 1 = immune,
+    // negative = weakness). Base 0; E7 adds per-element resist affixes on
+    // items (keyed `<element>Resist`, e.g. 'pyroResist'). Returns 0 today
+    // since no such affixes exist yet — read by the enemy→player damage
+    // path in E5.
+    getElementResist(element) {
+        if (!element) return 0;
+        const affix = this.getItemAffixTotal(element.toLowerCase() + 'Resist');
+        return (affix || 0) / 100;
+    }
+
     // 6.35.0 — Meta progression (level / XP / SP).
     addXp(amount) { return progression.addXp.call(this, amount); }
     allocateSp(statId) { return progression.allocateSp.call(this, statId); }

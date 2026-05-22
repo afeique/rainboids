@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.57.0] - 2026-05-22
+
+### Added — Element & Resistance System foundation (Phase E1)
+
+First phase of the Element & Resistance System (see
+`docs/Element & Resistance System — Implementation Plan – 2026-05-22.md`).
+Pure foundation — **no gameplay change yet**; later phases wire behavior.
+
+- New `js/modules/combat/elements.js`: the 7-element taxonomy (Kinetic, Pyro,
+  Cryo, Volt, Toxic, Void, Radiant) with per-element color + signature status,
+  and the `elementalMultiplier(resistMap, element)` damage helper (resist >0
+  reduces, =1 immune, <0 weakness, clamped 0–2).
+- Every primary/power weapon now carries an `element` (assigned via a central
+  table in `weapon-data.js`; most KINETIC, with Gravity Lance/Singularity →
+  Void, Nova/Arc → Volt, Lance/Prism → Radiant, Cryo Burst → Cryo).
+- Every enemy type carries an `element` + `resist` map (neutral defaults; the
+  real per-type retrofit lands in Phase E8).
+- Bullets carry `element`, stamped from the firing weapon in
+  `applyGlobalBulletUpgrades` (KINETIC baseline in `Bullet.reset`).
+- `Player.getElementResist(element)` added (returns 0 today; reads per-element
+  resist affixes once Phase E7 adds them).
+- 8 unit tests pin the `elementalMultiplier` contract + taxonomy shape.
+
 ## [6.56.1] - 2026-05-22
 
 ### Changed — Darker nebula palette for gameplay legibility

@@ -588,6 +588,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       ├── combat/            # Combat pipeline
 │       │   ├── collision-system.js  # All collision detection and response
 │       │   ├── combat-manager.js    # Debris, orbs, powerups, kill streaks, damage numbers
+│       │   ├── elements.js          # Element taxonomy + resistance multiplier (Element & Resistance System)
 │       │   ├── weapon-data.js       # Weapon definitions and upgrade trees
 │       │   └── weapon-effects-renderer.js # Weapon/skill visual effects
 │       ├── wave/              # Wave system

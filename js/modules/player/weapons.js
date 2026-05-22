@@ -1039,6 +1039,12 @@ export function applyGlobalBulletUpgrades(bullet) {
     // chokepoint to set it. Charge-shot stamps its own weaponId separately.
     bullet.weaponId = this.activePrimary;
 
+    // E1 (Element & Resistance) — stamp the firing primary's element so the
+    // damage path (E2) can apply enemy resistance. One chokepoint for every
+    // primary bullet; falls back to the KINETIC baseline.
+    const _wcfg = PRIMARY_WEAPONS[this.activePrimary];
+    bullet.element = (_wcfg && _wcfg.element) || 'KINETIC';
+
     // Phase 2 (2026-05-19) — global HOMING / PIERCING removed; each
     // weapon's firing path now reads its OWN per-weapon stack. Lookup
     // tables keyed by `bullet.weaponId`. Weapons that don't have a

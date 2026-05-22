@@ -379,6 +379,23 @@ export const ENEMY_TYPES = {
     },
 };
 
+// ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
+// Each enemy's ATTACK element + its resistance map. Resist values: >0 resist,
+// <0 weak, 1 = immune; an absent key (empty map) is neutral. E1 ships NEUTRAL
+// defaults (KINETIC attacks, empty resist) so there is ZERO gameplay change;
+// E8 fills in the real per-type retrofit. Centralized here for auditability —
+// E8 just populates these two tables.
+const ENEMY_ELEMENTS = {
+    // E8: e.g. DRIFTER: 'VOLT', STALKER: 'RADIANT', TANGERINE: 'PYRO', …
+};
+const ENEMY_RESISTS = {
+    // E8: e.g. GUARDIAN: { KINETIC: 0.4, VOLT: -0.5 }, DRIFTER: { VOLT: 0.75 }, …
+};
+for (const [key, def] of Object.entries(ENEMY_TYPES)) {
+    def.element = ENEMY_ELEMENTS[key] || 'KINETIC';
+    def.resist = ENEMY_RESISTS[key] || {};
+}
+
 // ── Convenience Lookups ────────────────────────────────────────────────────
 
 /** All enemy type keys */

@@ -928,6 +928,22 @@ export const POWER_WEAPONS = {
     },
 };
 
+// ─── ELEMENT TAGS (E1 — Element & Resistance System) ────────────────────────
+// The element of each weapon's damage. Assigned in one auditable table rather
+// than inline on each config; anything not listed defaults to KINETIC. The
+// damage path (E2/E5) reads `bullet.element` (stamped from the firing weapon)
+// or `POWER_WEAPONS[id].element`. E6 makes each weapon APPLY its element's
+// signature status; for now this is pure metadata (no behavior change).
+const WEAPON_ELEMENTS = {
+    GRAVITY_LANCE: 'VOID', SINGULARITY: 'VOID',
+    NOVA_BLAST: 'VOLT', LIGHTNING_ARC: 'VOLT',
+    LANCE_BEAM: 'RADIANT', PRISM_BEAM: 'RADIANT',
+    CRYO_BURST: 'CRYO',
+    // everything else → KINETIC (retagged as elemental weapons ship in E6)
+};
+for (const w of Object.values(PRIMARY_WEAPONS)) w.element = WEAPON_ELEMENTS[w.id] || 'KINETIC';
+for (const w of Object.values(POWER_WEAPONS))   w.element = WEAPON_ELEMENTS[w.id] || 'KINETIC';
+
 // ─── POWER WEAPON UPGRADES ──────────────────────────────────────────────────
 
 // 5.76.0 — power-weapon upgrade costs scaled ~2× to match the gold curve.
