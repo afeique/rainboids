@@ -30,7 +30,7 @@ S1 unblocks I3c. The S-track and I1 can run parallel to the E-track.
 
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
-| B.S1 | Rename `DEFENSE_SKILLS`→`SKILLS` (alias kept) + 4-slot model: `equippedSkills[4]`, `skillCooldowns[4]`, `activateSkill(slot)`, slot-aware `getEquippedSkill`/effect checks | Unit test: per-slot cooldown independence; 4 simultaneous skill effects tracked; existing single skill migrates to slot 0 | - | cc:TODO |
+| B.S1 | Rename `DEFENSE_SKILLS`→`SKILLS` (alias kept) + 4-slot model: `equippedSkills[4]`, `skillCooldowns[4]`, `activateSkill(slot)`, slot-aware `getEquippedSkill`/effect checks | Unit test: per-slot cooldown independence; 4 simultaneous skill effects tracked; existing single skill migrates to slot 0 | - | cc:完了 (6.59.0) |
 | B.S2 | Input: bind Digit1-4 one-shot pulses, retire TAB/Q skill activation; gamepad mirror; fix stale SPACE comment | Keys 1-4 fire matching slot off-cooldown; TAB no longer activates; no auto-repeat spam | B.S1 | cc:TODO |
 | B.S3 | HUD 4-slot skill bar in `hud/status.js`: per-slot icon, keybind, cooldown ring | All 4 slots + live cooldowns visible; empty slots dim | B.S1 | cc:TODO |
 | B.S4 | Loadout UI: assign any owned skill to slots 1-4 (coordinate with Phase-7 skill-tree UI) | Player can place any owned skill into any slot; loadout drives HUD + keybinds | B.S1, B.S3 | cc:TODO |

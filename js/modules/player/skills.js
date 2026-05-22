@@ -2,14 +2,16 @@
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
 import { GAME_CONFIG } from '../core/constants.js';
-import { DEFENSE_SKILLS, POWER_WEAPONS } from '../combat/weapon-data.js';
+// Phase B.S1 — canonical export is now `SKILLS` (was DEFENSE_SKILLS, kept
+// as a back-compat alias in weapon-data.js).
+import { SKILLS, POWER_WEAPONS } from '../combat/weapon-data.js';
 
 // ── Active skill updates ──────────────────────────────────────────────────
 
 export function updateActiveSkills(dt) {
     // Repair nanites: heal over time
     if (this.activeSkillEffects.has('REPAIR_NANITES')) {
-        const config = DEFENSE_SKILLS.REPAIR_NANITES;
+        const config = SKILLS.REPAIR_NANITES;
         const potencyStacks = this.getPowerupStacks('POTENCY');
         const hps = config.healPerSecond + potencyStacks;
         const healThisTick = hps * (dt / 1000);
@@ -17,14 +19,17 @@ export function updateActiveSkills(dt) {
     }
 
     // EMERGENCY_PROTOCOL — auto-fire Repair Nanites when HP drops below
-    // 20% (only when Repair is the equipped skill, off cooldown, and not
-    // already running) so the heal lands without a manual panic-tap.
-    if (this.activeSkill === 'REPAIR_NANITES'
-        && this.getPowerupStacks('EMERGENCY_PROTOCOL') > 0
-        && this.activeSkillCooldown <= 0
+    // 20% (only when Repair is equipped in some slot, that slot is off
+    // cooldown, and the heal isn't already running) so it lands without a
+    // manual panic-tap. Phase B.S1 — scans all 4 slots instead of the old
+    // single activeSkill, so it works regardless of which slot holds Repair.
+    if (this.getPowerupStacks('EMERGENCY_PROTOCOL') > 0
         && !this.activeSkillEffects.has('REPAIR_NANITES')
         && this.health < this.getEffectiveMaxHealth() * 0.2) {
-        this.activateSkill();
+        const repairSlot = this.equippedSkills.indexOf('REPAIR_NANITES');
+        if (repairSlot !== -1 && this.skillCooldowns[repairSlot] <= 0) {
+            this.activateSkill(repairSlot);
+        }
     }
 
     // Bulwark: set flag for damage reduction
@@ -379,7 +384,7 @@ export function updateActiveSkills(dt) {
 
     // Sentry drones — orbit the ship and auto-fire at the nearest enemy.
     if (this.sentryDrones.length > 0) {
-        const cfg = DEFENSE_SKILLS.SENTRY_DRONE;
+        const cfg = SKILLS.SENTRY_DRONE;
         const orbitRadius = cfg.orbitRadius;
         const orbitSpeed = 0.004;
         const rapid = this.getPowerupStacks('RAPID_DRONE');
@@ -425,30 +430,32 @@ export function updateActiveSkills(dt) {
     }
 }
 
-// ── Single equipped skill — equip / cycle / activate (5.64.11) ───────────
+// ── Defense-skill loadout — equip / cycle / activate ─────────────────────
 //
-// All defense skills are FREE and selectable from the start (parallels
-// the primary/power weapon model). The player has ONE active skill at
-// any time; SHIFT (tap) cycles to the next skill in DEFENSE_SKILLS,
-// SPACE activates the equipped skill (subject to cooldown).
+// Phase B.S1 — 4-slot model. `equippedSkills[0..3]` is the source of truth;
+// the legacy `activeSkill` accessor proxies slot 0 for back-compat. All
+// defense skills are FREE and selectable from the start (parallels the
+// primary/power weapon model). Each function takes an optional `slot`
+// (default 0) so the current single-slot input/HUD path keeps working until
+// the S2 input phase wires up the other three slots.
 
-export function getActiveSkillConfig() {
-    return DEFENSE_SKILLS[this.activeSkill] || null;
+export function getActiveSkillConfig(slot = 0) {
+    return SKILLS[this.equippedSkills[slot]] || null;
 }
 
-export function equipSkill(skillId) {
-    if (!DEFENSE_SKILLS[skillId]) return false;
-    this.activeSkill = skillId;
+export function equipSkill(skillId, slot = 0) {
+    if (!SKILLS[skillId]) return false;
+    this.equippedSkills[slot] = skillId;
     this.ownedSkills.add(skillId);
     return true;
 }
 
-export function cycleSkill() {
-    const ids = Object.keys(DEFENSE_SKILLS);
+export function cycleSkill(slot = 0) {
+    const ids = Object.keys(SKILLS);
     if (ids.length === 0) return false;
-    const i = ids.indexOf(this.activeSkill);
+    const i = ids.indexOf(this.equippedSkills[slot]);
     const next = ids[(i + 1) % ids.length];
-    this.activeSkill = next;
+    this.equippedSkills[slot] = next;
     this.ownedSkills.add(next);
     // Mirror E/R weapon-cycle behaviour: trigger HUD pulse + audio
     // ping so cycling skills feels the same as cycling weapons.
@@ -474,18 +481,18 @@ const SKILL_ACTIVATE_SOUND = {
     TRACTOR_SHIELD: 'tractorShield',
 };
 
-export function activateSkill() {
-    const skillId = this.activeSkill;
+export function activateSkill(slot = 0) {
+    const skillId = this.equippedSkills[slot];
     if (!skillId) return false;
-    if (this.activeSkillCooldown > 0) return false;
+    if (this.skillCooldowns[slot] > 0) return false;
 
-    const config = DEFENSE_SKILLS[skillId];
+    const config = SKILLS[skillId];
     if (!config) return false;
 
-    this.activeSkillCooldown = config.cooldown;
+    this.skillCooldowns[slot] = config.cooldown;
     // 6.31.0 — stash the max so the ship-tip charge ring can show the
     // skill's auto-recharge fill.
-    this.activeSkillCooldownMax = config.cooldown;
+    this.skillCooldownsMax[slot] = config.cooldown;
     // FORTIFY / EXTENDED_CARE extend the active duration per stack.
     let duration = config.duration;
     if (skillId === 'BULWARK') {
@@ -557,8 +564,13 @@ export function activateSkill() {
 // ── Skill cooldowns ───────────────────────────────────────────────────────
 
 export function updateSkillCooldowns(dt) {
-    if (this.activeSkillCooldown > 0) {
-        this.activeSkillCooldown = Math.max(0, this.activeSkillCooldown - dt);
+    // Phase B.S1 — decay all 4 slot cooldowns (slot 0 is also reachable via
+    // the legacy activeSkillCooldown accessor, but we write the array
+    // directly to cover every slot uniformly).
+    for (let i = 0; i < this.skillCooldowns.length; i++) {
+        if (this.skillCooldowns[i] > 0) {
+            this.skillCooldowns[i] = Math.max(0, this.skillCooldowns[i] - dt);
+        }
     }
 
     // Update power weapon cooldown

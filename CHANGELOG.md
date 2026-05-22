@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.59.0] - 2026-05-22
+
+### Changed — Unified 4-slot skill model (Phase B.S1)
+
+Foundation for the unified Skills loadout. Backward-compatible data refactor —
+**no player-facing change yet** (keys 1–4, HUD, and new skills land in B.S2/S3/S5).
+
+- `DEFENSE_SKILLS` renamed to `SKILLS` in `weapon-data.js`, with a
+  `DEFENSE_SKILLS = SKILLS` alias so every existing import keeps working.
+- Player now holds a 4-slot loadout: `equippedSkills[4]`, `skillCooldowns[4]`,
+  `skillCooldownsMax[4]` (the old single skill migrates to slot 0).
+  `activateSkill(slot=0)` / `getEquippedSkill(slot=0)` are slot-aware; cooldown
+  decay iterates all four slots; `activeSkillEffects` (keyed by id) already
+  supports multiple simultaneous skills.
+- Full back-compat: `activeSkill` / `activeSkillCooldown` / `activeSkillCooldownMax`
+  are now getter/setter accessors proxying slot 0, so HUD, input (TAB/Q),
+  radial menu, renderer, and save/load are unaffected.
+- 14 unit tests cover slot independence + the slot-0 accessor bridge.
+
 ## [6.58.0] - 2026-05-22
 
 ### Added — Elemental resistance in the damage path (Phase E2)

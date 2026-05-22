@@ -109,10 +109,28 @@ export class Player {
         // menu treats every weapon and skill as equippable.
         this.activePrimary = 'PULSE_CANNON';
         this.activePower = 'CHARGE_SHOT';
-        this.activeSkill = 'BULWARK';        // single equipped skill (no slots)
         this.ownedPrimaries = new Set(['PULSE_CANNON']);
         this.ownedPowers = new Set(['CHARGE_SHOT']);
         this.ownedSkills = new Set(['BULWARK']);
+
+        // Phase B.S1 — 4-slot defense-skill loadout (NEW source of truth).
+        //   equippedSkills[i]   — skill id in slot i (0..3), or null.
+        //   skillCooldowns[i]   — ms remaining on slot i's cooldown.
+        //   skillCooldownsMax[i]— the cooldown the slot was last set to
+        //                         (drives the charge-ring fill on the HUD).
+        // Multiple slots can be active at once; per-skill active state lives
+        // in `activeSkillEffects` (a Map keyed by skill id — unchanged).
+        //
+        // Back-compat: the legacy `activeSkill` / `activeSkillCooldown` /
+        // `activeSkillCooldownMax` properties are defined as getter/setter
+        // accessors below that proxy slot 0, so HUD / input / shop / save
+        // code that still reads or writes those names keeps working until the
+        // S2/S3/S4 phases migrate them. Migrate the old single-skill default
+        // (`'BULWARK'`) into slot 0.
+        this.equippedSkills = ['BULWARK', null, null, null];
+        this.skillCooldowns = [0, 0, 0, 0];
+        this.skillCooldownsMax = [0, 0, 0, 0];
+        this._defineSkillSlotAccessors();
 
         // Streak buff — set by combat-manager.onEnemyKill when the kill
         // streak crosses a tier threshold. Drives damage multiplier and the
@@ -121,9 +139,11 @@ export class Player {
         this.streakBuffEndTime = 0;
         this.streakTierLabel = null;
 
-        // Defense skill — single equipped slot (5.64.11 — was 4 slots
-        // bound to keys 1-4). SHIFT cycles, SPACE activates.
-        this.activeSkillCooldown = 0;
+        // Defense skill state. Cooldowns live in the per-slot arrays above
+        // (slot 0 reachable via the `activeSkillCooldown` back-compat
+        // accessor). `activeSkillEffects` is a Map keyed by skill id — with
+        // the 4-slot model multiple skills can be active at once, and since
+        // it already keys by id it needs no change.
         this.activeSkillEffects = new Map(); // skill id -> {timeRemaining, ...state}
 
         // Power weapon cooldown
@@ -288,8 +308,13 @@ export class Player {
         this.needleCount = 0;
         this.scatterShotCount = 0;
         this.lastPrimaryFireTime = 0;
-        this.activeSkillCooldown = 0;
-        this.activeSkillCooldownMax = 0;
+        // Phase B.S1 — reset per-slot cooldowns (keep equipped skills, like
+        // owned weapons). Writing via the arrays keeps the legacy
+        // activeSkillCooldown / activeSkillCooldownMax accessors in sync
+        // (they proxy slot 0). Guard for the case initializePlayer runs
+        // before the constructor has built the arrays.
+        if (this.skillCooldowns) this.skillCooldowns.fill(0);
+        if (this.skillCooldownsMax) this.skillCooldownsMax.fill(0);
         this.activeSkillEffects = new Map();
         this.deflectorOrbs = [];
         this.isDashing = false;
@@ -1093,6 +1118,35 @@ export class Player {
     
     // ── Weapon System Methods ──────────────────────────────────────────────
 
+    // Phase B.S1 — back-compat accessors for the legacy single-skill API.
+    // The 4-slot arrays (equippedSkills / skillCooldowns / skillCooldownsMax)
+    // are the source of truth; these three properties proxy SLOT 0 so all
+    // existing readers/writers (HUD status.js, renderer.js, radial-menu.js,
+    // save/load in game-engine.js, input-handler) keep working unchanged.
+    // Defined per-instance (not on the prototype) because they shadow what
+    // were plain data properties; `Object.defineProperty` makes them
+    // non-enumerable accessors that read/write the underlying arrays.
+    _defineSkillSlotAccessors() {
+        Object.defineProperty(this, 'activeSkill', {
+            configurable: true,
+            enumerable: true,
+            get() { return this.equippedSkills[0]; },
+            set(v) { this.equippedSkills[0] = v; },
+        });
+        Object.defineProperty(this, 'activeSkillCooldown', {
+            configurable: true,
+            enumerable: true,
+            get() { return this.skillCooldowns[0]; },
+            set(v) { this.skillCooldowns[0] = v; },
+        });
+        Object.defineProperty(this, 'activeSkillCooldownMax', {
+            configurable: true,
+            enumerable: true,
+            get() { return this.skillCooldownsMax[0]; },
+            set(v) { this.skillCooldownsMax[0] = v; },
+        });
+    }
+
     getActivePrimaryConfig() {
         return weapons.getActivePrimaryConfig.call(this);
     }
@@ -1117,16 +1171,16 @@ export class Player {
         return weapons.buyPower.call(this, weaponId);
     }
 
-    equipSkill(skillId) {
-        return skills.equipSkill.call(this, skillId);
+    equipSkill(skillId, slot = 0) {
+        return skills.equipSkill.call(this, skillId, slot);
     }
 
-    cycleSkill() {
-        return skills.cycleSkill.call(this);
+    cycleSkill(slot = 0) {
+        return skills.cycleSkill.call(this, slot);
     }
 
-    activateSkill() {
-        return skills.activateSkill.call(this);
+    activateSkill(slot = 0) {
+        return skills.activateSkill.call(this, slot);
     }
 
     // ── SHIFT-key dash (5.93.0) ─────────────────────────────────────────
@@ -1211,8 +1265,14 @@ export class Player {
         return !!this.isDashing && this.dashTimer > 0;
     }
 
-    getActiveSkillConfig() {
-        return skills.getActiveSkillConfig.call(this);
+    getActiveSkillConfig(slot = 0) {
+        return skills.getActiveSkillConfig.call(this, slot);
+    }
+
+    // Phase B.S1 — alias matching the refactor's intended name. Returns the
+    // SKILLS config for the skill in `slot` (default 0).
+    getEquippedSkill(slot = 0) {
+        return skills.getActiveSkillConfig.call(this, slot);
     }
 
     getEffectivePrimaryFireRate() {

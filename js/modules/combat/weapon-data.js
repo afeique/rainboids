@@ -1129,7 +1129,10 @@ _scaleUpgradeTable(POWER_UPGRADES);
 
 // ─── DEFENSE SKILLS (Number Keys 1-4) ───────────────────────────────────────
 
-export const DEFENSE_SKILLS = {
+// Phase B.S1 — canonical export renamed DEFENSE_SKILLS → SKILLS to match
+// the new 4-slot loadout model. `DEFENSE_SKILLS` is kept as a back-compat
+// alias (see below) so every existing import keeps resolving unchanged.
+export const SKILLS = {
     BULWARK: {
         id: 'BULWARK',
         name: 'Bulwark',
@@ -1224,6 +1227,12 @@ export const DEFENSE_SKILLS = {
         upgrades: ['EXTRA_DRONE', 'RAPID_DRONE', 'DRONE_CALIBER'],
     },
 };
+
+// Back-compat alias (Phase B.S1). `SKILLS` is the canonical name; this
+// keeps every existing `import { DEFENSE_SKILLS }` working unchanged. It
+// is the SAME object reference, not a copy — mutations to one are visible
+// on the other.
+export const DEFENSE_SKILLS = SKILLS;
 
 // ─── DEFENSE SKILL UPGRADES ─────────────────────────────────────────────────
 
