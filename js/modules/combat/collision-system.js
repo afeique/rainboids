@@ -1004,8 +1004,8 @@ export function checkLanceBeamCollisions() {
     const config = POWER_WEAPONS.LANCE_BEAM;
     const beamW = (config.beamWidth || 6) * (1 + p.getPowerupStacks('BEAM_WIDTH') * 0.3);
     const range = config.range * 400;
-    const dx = Math.cos(p.angle);
-    const dy = Math.sin(p.angle);
+    const arcHalf = (config.arcHalfAngle != null) ? config.arcHalfAngle : 0.7;
+    const aim = p.angle;
     const dmg = config.damage * (1 + p.getPowerupStacks('OVERLOAD_BEAM') * 2);
     const knockMul = (typeof p.getKnockbackMultiplier === 'function') ? p.getKnockbackMultiplier() : 1;
     const BEAM_PUSH = 0.4 * knockMul;
@@ -1013,91 +1013,88 @@ export function checkLanceBeamCollisions() {
     const BEAM_HIT_COLOR = '#88ddff';
     const BEAM_BRIGHT    = '#ffffff';
 
-    // Find the closest hit along the ray (smallest forward proj that
-    // also satisfies the perpendicular-strip test).
-    let hitDist = range;
-    let hitTarget = null;          // 'enemy' | 'asteroid' | null
-    let hitRef = null;
-    let hitRadius = 0;
+    // 6.55.0 — Arc-sweep AoE. Damage EVERY enemy + asteroid inside the cone
+    // (±arcHalf around the aim, out to `range`) every tick — the beam pierces
+    // (no single-target stop), so the whole swept area takes considerable
+    // damage. The visible blade (swept angle) is decorative; the cone is the
+    // hitbox. The blade renders to full range, so beamHitDist = range.
+    p.beamHitDist = range;
+    const range2 = range * range;
+    const angDelta = (a, b) => {
+        let d = a - b;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        return d;
+    };
+
+    let anyHit = false;
+    let lastHitX = 0, lastHitY = 0;
+
     for (const enemy of this.enemyPool.activeObjects) {
-        if (!enemy.active || enemy._deathFlash > 0) continue;
-        const ex = enemy.x - p.x;
-        const ey = enemy.y - p.y;
-        const proj = ex * dx + ey * dy;
-        if (proj <= 0 || proj >= hitDist) continue;
-        const perpDist = Math.abs(ex * dy - ey * dx);
+        if (!enemy.active || enemy._deathFlash > 0 || enemy.warping) continue;
+        const ex = enemy.x - p.x, ey = enemy.y - p.y;
+        const d2 = ex * ex + ey * ey;
+        if (d2 > range2) continue;
         const r = enemy.radius || 15;
-        if (perpDist < beamW / 2 + r) {
-            hitDist = proj;
-            hitTarget = 'enemy';
-            hitRef = enemy;
-            hitRadius = r;
+        // In-cone by bearing, OR close enough that the body straddles the
+        // player (no point-blank dead zone).
+        if (Math.abs(angDelta(Math.atan2(ey, ex), aim)) > arcHalf
+            && d2 > (r + beamW) * (r + beamW)) continue;
+        this.damageEnemy(enemy, dmg);
+        if (Math.random() < 0.15) this.applyBurn(enemy, dmg);
+        if (enemy.vel) {
+            const len = Math.sqrt(d2) || 1;
+            enemy.vel.x += (ex / len) * BEAM_PUSH;
+            enemy.vel.y += (ey / len) * BEAM_PUSH;
         }
+        anyHit = true; lastHitX = enemy.x; lastHitY = enemy.y;
     }
+
     for (const ast of this.asteroidPool.activeObjects) {
         if (!ast.active || ast._deathFlash > 0 || ast.warping) continue;
-        const ax = ast.x - p.x;
-        const ay = ast.y - p.y;
-        const proj = ax * dx + ay * dy;
-        if (proj <= 0 || proj >= hitDist) continue;
-        const perpDist = Math.abs(ax * dy - ay * dx);
+        const ax = ast.x - p.x, ay = ast.y - p.y;
+        const d2 = ax * ax + ay * ay;
+        if (d2 > range2) continue;
         const r = ast.baseRadius || ast.radius || 15;
-        if (perpDist < beamW / 2 + r) {
-            hitDist = proj;
-            hitTarget = 'asteroid';
-            hitRef = ast;
-            hitRadius = r;
+        if (Math.abs(angDelta(Math.atan2(ay, ax), aim)) > arcHalf
+            && d2 > (r + beamW) * (r + beamW)) continue;
+        ast.health = Math.max(0, (ast.health || 0) - dmg);
+        ast._hitFlashTimer = 4;
+        if (ast.vel) {
+            const len = Math.sqrt(d2) || 1;
+            ast.vel.x += (ax / len) * BEAM_PUSH * 0.6;
+            ast.vel.y += (ay / len) * BEAM_PUSH * 0.6;
         }
+        if (ast.health <= 0.001) this.destroyAsteroid(ast);
+        anyHit = true; lastHitX = ast.x; lastHitY = ast.y;
     }
 
-    p.beamHitDist = hitDist;
-
-    // Per-frame beam glitter along the visible portion of the beam.
+    // Sweep glitter + muzzle hotspot along the swept blade.
+    const sweepAng = (typeof p.beamSweepAngle === 'number') ? p.beamSweepAngle : aim;
+    const sdx = Math.cos(sweepAng), sdy = Math.sin(sweepAng);
     if (this.particlePool && Math.random() < 0.55) {
         const t = Math.random();
-        const sx = p.x + dx * hitDist * t;
-        const sy = p.y + dy * hitDist * t;
+        const sx = p.x + sdx * range * t;
+        const sy = p.y + sdy * range * t;
         const perpJitter = (Math.random() - 0.5) * (beamW * 1.6);
-        const perpX = -dy, perpY = dx;
         const c = Math.random() < 0.4 ? BEAM_BRIGHT : BEAM_HIT_COLOR;
-        this.particlePool.get(sx + perpX * perpJitter, sy + perpY * perpJitter, 'explosionEmber', c);
+        this.particlePool.get(sx + (-sdy) * perpJitter, sy + sdx * perpJitter, 'explosionEmber', c);
     }
-    // Bright muzzle hotspot at the player's gun mouth.
     if (this.particlePool && Math.random() < 0.7) {
-        const muzzleX = p.x + dx * (p.radius || 14);
-        const muzzleY = p.y + dy * (p.radius || 14);
+        const muzzleX = p.x + sdx * (p.radius || 14);
+        const muzzleY = p.y + sdy * (p.radius || 14);
         this.particlePool.get(muzzleX, muzzleY, 'explosionEmber', BEAM_BRIGHT);
     }
 
-    if (!hitTarget) return;
+    if (!anyHit) return;
 
-    if (hitTarget === 'enemy') {
-        this.damageEnemy(hitRef, dmg);
-        // Phase 3 — Lance Beam BRN proc: 15% per per-tick hit. Source
-        // damage = the beam's per-tick damage so the burn DOT scales
-        // with OVERLOAD_BEAM stacks.
-        if (Math.random() < 0.15) this.applyBurn(hitRef, dmg);
-        if (hitRef.vel) {
-            hitRef.vel.x += dx * BEAM_PUSH;
-            hitRef.vel.y += dy * BEAM_PUSH;
-        }
-    } else {
-        hitRef.health = Math.max(0, (hitRef.health || 0) - dmg);
-        hitRef._hitFlashTimer = 4;
-        if (hitRef.vel) {
-            hitRef.vel.x += dx * BEAM_PUSH * 0.6;
-            hitRef.vel.y += dy * BEAM_PUSH * 0.6;
-        }
-        if (hitRef.health <= 0.001) this.destroyAsteroid(hitRef);
-    }
-
-    // Hit-point sparks at the impact.
+    // Hit sparks at the last impact point.
     if (this.particlePool && Math.random() < 0.55) {
         for (let s = 0; s < 3; s++) {
             const a = Math.random() * Math.PI * 2;
             const sp = 2 + Math.random() * 4;
             const c = s === 0 ? BEAM_BRIGHT : BEAM_HIT_COLOR;
-            this.particlePool.get(hitRef.x, hitRef.y, 'explosionShrapnel', a, sp, c);
+            this.particlePool.get(lastHitX, lastHitY, 'explosionShrapnel', a, sp, c);
         }
     }
 
@@ -1105,10 +1102,8 @@ export function checkLanceBeamCollisions() {
     if (!p._lastBeamHitSfx || now - p._lastBeamHitSfx > 160) {
         p._lastBeamHitSfx = now;
         this.events.emit('audio:enemy-hit-by-bullet', 'LANCE_BEAM');
-        // 5.79.10 — Layer one of three random sizzle/zap variants on
-        //   top of the engaged-loop hum so contact reads as crisp
-        //   feedback. Throttled per-variant in the audio manager;
-        //   per-target throttle (160 ms above) keeps things tight.
+        // Layer one of three random sizzle/zap variants on top of the
+        // engaged-loop hum so contact reads as crisp feedback.
         const hitName = `laserBeamHit${1 + ((Math.random() * 3) | 0)}`;
         if (this.audioManager) this.audioManager.playSound(hitName);
     }

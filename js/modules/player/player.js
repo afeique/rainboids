@@ -253,6 +253,11 @@ export class Player {
         this.beamActive = false;
         this.beamTimer = 0;
         this.beamHitDist = 0;
+        // 6.55.0 — Cluster Launcher hold-to-charge state.
+        this._clusterCharging = false;
+        this.clusterChargeFrac = 0;
+        this._clusterFireWasHeld = false;
+        this._clusterChargeStart = 0;
         this.activeMines = [];
         this.novaRings = [];
         this.lightningChains = [];
@@ -403,8 +408,8 @@ export class Player {
         return weapons.fireRailDriver.call(this, bulletPool, audioManager, config);
     }
 
-    fireCluster(bulletPool, audioManager, config) {
-        return weapons.fireCluster.call(this, bulletPool, audioManager, config);
+    fireCluster(bulletPool, audioManager, config, chargeFrac = 1) {
+        return weapons.fireCluster.call(this, bulletPool, audioManager, config, chargeFrac);
     }
 
     startLanceBeam(audioManager, config) {

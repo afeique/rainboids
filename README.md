@@ -50,7 +50,7 @@ See **[CHANGELOG](CHANGELOG.md)** for recent changes and version history.
 ## Game Overview
 
 Rainboids is a supercharged asteroids game featuring:
-- **5 primary weapons** and **5 power weapons** — both free, both selectable from the start (pause-menu PRIMARY / POWER tabs); spend gold on per-weapon upgrades in the Upgrades panel. **6.28.0** — every primary now shares a uniform trait set: kinetic primaries (Pulse / Storm / Scatter / Rail) each get their own stackable Multishot, Rapid Fire, Piercing, Big Bullets, Explosive, Homing, Stun %, and Knockback %; Cluster Launcher gets Multishot / Stun % / Knockback %. Phase Dash is a core **Shift-key** movement primitive available to every player at all times.
+- **5 primary weapons** and **5 power weapons** — both free, both selectable from the start (pause-menu PRIMARY / POWER tabs); spend gold on per-weapon upgrades in the Upgrades panel. **6.28.0** — every primary now shares a uniform trait set: kinetic primaries (Pulse / Storm / Scatter / Rail) each get their own stackable Multishot, Rapid Fire, Piercing, Big Bullets, Explosive, Homing, Stun %, and Knockback %; Cluster Launcher gets Multishot / Stun % / Knockback %. **6.55.0** — the Cluster Launcher is now hold-to-charge: hold fire to lob the bomb farther (a quick tap drops it close, a full charge reaches the screen edge), which drastically lowers its fire rate. Phase Dash is a core **Shift-key** movement primitive available to every player at all times.
 - **10 unique enemy types** with distinct movement, attack patterns, and visual designs. Enemy visuals stay at base size at every wave (5.101.0) — only HP / damage / speed scale.
 - **Offensive + defensive powerups** with stacking mechanics and visual indicators — offense (Rapid Fire, Multi Shot, Homing, Big Bullets, Piercing, Explosive, Crit Chance, Crit Damage, Knockback) and defense (Health Boost, Toughness, Regen, Vampirism, Thorns, Guardian, Phase Echo) PLUS a full **health-drop family**: Triage, Lucky Drops, Field Rations, Triage Surge, Combat Medic, Salvage Plating, Triage Net, Adrenal Reserve, Field Surgeon, Blood Bank. **Buy with GOLD** in the unified shop's POWERUPS tab (6.1.0 — moved from pause menu) any time.
 - **Survivor cards every stage clear (6.1.0)** — clearing waves 3 / 6 / 9 / … / 30 opens a 3-card overlay (2 offense + 1 defense) for a free pick. Followed by a 3-card QUICK BUY overlay listing weapon upgrades tailored to the equipped primary + power. **Stage finals are boss waves, and each grants a BONUS random powerup on top of the survivor card.** Mid-stage clears (1-1 / 1-2 / 2-1 / 2-2 / etc.) give just a brisk gold bonus + WAVE CLEAR toast.
@@ -153,7 +153,7 @@ Primary weapons are free — they auto-unlock at wave milestones as you progress
 | 💥 | Scatter Gun | Wave 5 | Shotgun burst, devastating up close |
 | ⚡ | Arc Lightning | Wave 5 | Continuous lightning tether — frayed forward static when out of range, focused beam when locked on (range 360 px, 5.79.0) |
 | 🧬 | Rail Driver | Wave 8 | Slow, powerful piercing rail — fires a double-helix pair |
-| 🔦 | Lance Beam | Wave 12 | Continuous beam tether — stops at first hit |
+| 🔦 | Lance Beam | Wave 12 | Power weapon — sweeps an arc around the cursor, shredding everything in the swept cone (6.55.0) |
 
 ### Power Weapons (4)
 | Icon | Weapon | Description |

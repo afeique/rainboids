@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.55.0] - 2026-05-21
+
+### Changed — Cluster Launcher charge-for-distance
+
+- The Cluster Launcher is now a **hold-to-charge launcher**. Hold fire to
+  wind up the launch distance — a quick tap lobs the bomb a very short
+  distance, a full charge sends it clear to the screen edge. It fires on
+  release (or auto-launches at full charge). The wind-up plus a post-fire
+  cooldown drastically lower its fire rate vs the old rapid-lob. The bomb
+  still detonates early on contact; otherwise it detonates at the charged
+  range.
+
+### Changed — Lance Beam arc sweep
+
+- The Lance Beam now **sweeps an arc** around the cursor instead of firing a
+  single forward tether. It damages **every** enemy and asteroid inside the
+  swept cone (±~40°) each tick — it pierces, no single-target stop — and its
+  per-tick damage was raised ~10× (≈30 DPS/target) so it does considerable
+  damage to everything in the area it sweeps. A faint cone shows the damage
+  area; the blade swings across it.
+
+## [6.54.2] - 2026-05-21
+
+### Fixed — Enemies always explode on death
+
+- Enemies killed by damage-over-time (burn / poison) — or any other
+  non-collision damage that dropped their HP to zero — used to silently
+  vanish with no explosion, loot, or kill credit (a "silent death" hole in
+  the enemy update). Such deaths are now routed through the same canonical
+  finalize as every other kill (kill credit → full death explosion → loot
+  drop), so **every** enemy death produces an explosion.
+
 ## [6.54.1] - 2026-05-21
 
 ### Changed — Removed asteroid trig lookup table

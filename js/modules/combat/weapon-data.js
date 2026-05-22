@@ -118,10 +118,15 @@ export const PRIMARY_WEAPONS = {
     CLUSTER_LAUNCHER: {
         id: 'CLUSTER_LAUNCHER',
         name: 'Cluster Launcher',
-        description: 'Nucleus cluster flies straight at the cursor; explodes on touch into spheres',
+        description: 'Hold to charge launch distance — tap lobs it close, full charge reaches the screen edge; explodes into spheres on contact or at range',
         icon: 'bomb',
         color: '#ff5544',
         fireRate: 800,
+        // 6.55.0 — charge-for-distance launcher. minLaunchDist is the
+        // quick-tap (zero-charge) lob distance in px; full charge scales up
+        // to the screen edge (computed from the viewport in fireCluster).
+        // The wind-up + post-fire cooldown live in updateClusterCharge.
+        minLaunchDist: 70,
         damage: 50,
         bulletSpeed: 1.0,
         bulletSize: 1.4,
@@ -542,20 +547,25 @@ export const POWER_WEAPONS = {
     LANCE_BEAM: {
         id: 'LANCE_BEAM',
         name: 'Lance Beam',
-        description: 'Sustained energy beam — power weapon, fires for 3s',
+        description: 'Sweeping energy beam — carves an arc around the cursor for 3s, shredding everything in the swept area',
         icon: 'flashlight',
         color: '#44ff44',
         cooldown: 8000,
         isChargeBased: false,
-        // Beam DPS held at 3.0 from the original primary tuning. The
-        // 3s active window × 3 DPS = 9 dmg per activation; offset by
-        // the 8s cooldown for an effective ~0.8 DPS over the cooldown
-        // period — much lower than the old primary-equivalent so the
-        // power-weapon slot stays fair vs CHARGE_SHOT / NOVA / etc.
-        damage: 0.05,
+        // 6.55.0 — Arc-sweep rework. The beam now damages EVERY enemy /
+        // asteroid inside a cone (±arcHalfAngle) around the cursor each
+        // tick (pierces — no single-target stop), so DPS is per-target
+        // across the whole swept area. Bumped 0.05 → 0.5 (~30 DPS/target
+        // at 60Hz) so it does considerable damage to everything it sweeps,
+        // befitting an 8s-cooldown power weapon.
+        damage: 0.5,
         range: 0.9,
         beamDuration: 3000,
         beamWidth: 6,
+        // Arc sweep: half-angle of the damage cone (radians, ~40°) and the
+        // ms period of one full back-and-forth blade sweep (visual).
+        arcHalfAngle: 0.7,
+        sweepPeriodMs: 900,
         cost: 0,
         unlockWave: 12,
         upgrades: ['BEAM_WIDTH', 'LINGER', 'REFRACTION', 'OVERLOAD_BEAM', 'LANCE_VELOCITY'],

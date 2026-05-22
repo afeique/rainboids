@@ -570,7 +570,32 @@ export class Enemy {
 
         // Death check (tolerance for floating-point precision).
         if (this.health <= 0.001 && this.active) {
-            this.active = false;
+            // This branch catches deaths that DIDN'T go through a collision
+            // death handler — chiefly damage-over-time (burn / poison) and
+            // any other takeDamage() path that drops health to 0 without
+            // starting the death sequence. Such deaths used to silently set
+            // active=false here, so the enemy vanished with NO explosion,
+            // loot, or kill credit. Route them through the same canonical
+            // finalize as every other kill (onEnemyKill → createEnemyDebris
+            // → dropOrbs) so there is ALWAYS an explosion. A normally-killed
+            // enemy is already mid death-animation (_deathFlash > 0 returns
+            // early at the top of update), so it never reaches here — no
+            // double-fire. createEnemyDebris owns _deathFlash + recycling,
+            // so we deliberately do NOT set active=false (that would cut the
+            // explosion short).
+            const ge = this.gameEngine;
+            if (ge && typeof ge.createEnemyDebris === 'function') {
+                if (typeof ge.onEnemyKill === 'function') {
+                    try { ge.onEnemyKill(this); } catch (_) { /* keep dying */ }
+                }
+                ge.createEnemyDebris(this);
+                if (typeof ge.dropOrbsFromEntity === 'function') {
+                    try { ge.dropOrbsFromEntity(this.x, this.y, this); } catch (_) { /* keep dying */ }
+                }
+            } else {
+                // No engine reference (unit tests / off-engine) — recycle.
+                this.active = false;
+            }
             if (typeof window !== 'undefined' && window._qaBotKillBuffer) {
                 window._qaBotKillBuffer.push({
                     type: this.type,

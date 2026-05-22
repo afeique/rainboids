@@ -44,8 +44,12 @@ export function drawWeaponEffects() {
         const targetW = (config.beamWidth || 6) * (1 + this.player.getPowerupStacks('BEAM_WIDTH') * 0.3);
         const targetRange = config.range * 400;
         const hitDist = (typeof p.beamHitDist === 'number' && p.beamHitDist > 0) ? p.beamHitDist : targetRange;
-        const dx = Math.cos(p.angle);
-        const dy = Math.sin(p.angle);
+        // 6.55.0 — the blade swings across the swept arc (beamSweepAngle);
+        // the damage cone (collision-system) is centered on the live aim.
+        const sweepAng = (typeof p.beamSweepAngle === 'number') ? p.beamSweepAngle : p.angle;
+        const arcHalf = (config.arcHalfAngle != null) ? config.arcHalfAngle : 0.7;
+        const dx = Math.cos(sweepAng);
+        const dy = Math.sin(sweepAng);
 
         // Grow-in factor — captures a per-beam-session start time so
         // the beam ramps from 0 → 1 over the first GROW_MS, even when
@@ -64,6 +68,16 @@ export function drawWeaponEffects() {
         const endY = p.y + dy * range;
 
         ctx.save();
+
+        // Faint swept-cone fill so the damage area (±arcHalf around the
+        // aim) reads at a glance behind the swinging blade.
+        ctx.globalAlpha = 0.12 * (0.5 + 0.5 * growEase);
+        ctx.fillStyle = config.color;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.arc(p.x, p.y, targetRange * growEase, p.angle - arcHalf, p.angle + arcHalf);
+        ctx.closePath();
+        ctx.fill();
 
         // Lightning-style zig-zag — break the line into N segments and
         // add small perpendicular jitter to each interior vertex.

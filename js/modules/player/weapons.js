@@ -180,7 +180,17 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
             this.beamTimer = 0;
             if (audioManager.stopLoop) audioManager.stopLoop('laserBeamLoop');
         } else {
-            this.beamAngle = this.angle;
+            // 6.55.0 — sweep the blade across an arc centered on the live
+            // aim. The damage cone (collision-system) is centered on the
+            // aim too; this swept angle drives the visual blade so it reads
+            // as a beam carving back and forth through the area.
+            const cfg = this.getActivePowerConfig();
+            const arcHalf = (cfg && cfg.arcHalfAngle != null) ? cfg.arcHalfAngle : 0.7;
+            const period = (cfg && cfg.sweepPeriodMs) ? cfg.sweepPeriodMs : 900;
+            const elapsed = (this.beamMaxDuration || 3000) - this.beamTimer;
+            const phase = (elapsed / period) * Math.PI * 2;
+            this.beamSweepAngle = this.angle + Math.sin(phase) * arcHalf;
+            this.beamAngle = this.beamSweepAngle; // keep legacy field in sync
         }
     }
 
@@ -209,10 +219,23 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         }
     }
 
-    this.canShoot = cooldownReady && fireHeld;
+    // Cluster Launcher is a hold-to-charge launcher (distance scales with
+    // charge), so it's exempt from the rate-limited continuous-fire path
+    // and handled by updateClusterCharge instead.
+    const isClusterCharge = this.activePrimary === 'CLUSTER_LAUNCHER';
+    // Clear any stale cluster wind-up when the launcher isn't equipped so a
+    // weapon-swap mid-charge can't fire a phantom bomb later.
+    if (!isClusterCharge && this._clusterCharging) {
+        this._clusterCharging = false;
+        this.clusterChargeFrac = 0;
+        this._clusterFireWasHeld = false;
+    }
+    this.canShoot = !isClusterCharge && cooldownReady && fireHeld;
     const poolBefore = bulletPool.activeObjects.length;
     let bulletCreated = false;
-    if (this.canShoot) {
+    if (isClusterCharge) {
+        updateClusterCharge.call(this, input, bulletPool, audioManager, particlePool, now);
+    } else if (this.canShoot) {
         this.lastShotTime = now;
         this.lastPrimaryFireTime = now;
         try {
@@ -296,6 +319,50 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
             input.fireSecondary = false;
         }
     }
+}
+
+// ── Cluster Launcher: hold-to-charge launch distance ───────────────────────
+// Holding fire winds up the launch — the longer the hold, the farther the
+// bomb flies (up to the screen edge); a quick tap lobs it a very short
+// distance. The wind-up + a post-fire cooldown drastically lower the fire
+// rate vs a normal primary. Fires on release, OR auto-launches once fully
+// charged (so a held max-range shot doesn't stall, and the mobile autoFire
+// assist — which never "releases" — still launches).
+const CLUSTER_CHARGE_MS = 1200;   // hold time to reach full range
+const CLUSTER_COOLDOWN_MS = 700;  // post-fire lockout
+
+export function updateClusterCharge(input, bulletPool, audioManager, particlePool, now) {
+    const fireHeld = !!(input && input.fire);
+    const cooldownReady = (now - (this.lastShotTime || 0)) >= CLUSTER_COOLDOWN_MS;
+
+    // Wind up while held, once the post-fire cooldown has elapsed.
+    if (fireHeld && cooldownReady) {
+        if (!this._clusterCharging) {
+            this._clusterCharging = true;
+            this._clusterChargeStart = now;
+        }
+        this.clusterChargeFrac = Math.min(1, (now - this._clusterChargeStart) / CLUSTER_CHARGE_MS);
+    } else if (!fireHeld && !this._clusterCharging) {
+        this.clusterChargeFrac = 0;
+    }
+
+    const released = this._clusterFireWasHeld && !fireHeld;
+    const maxedWhileHeld = this._clusterCharging && (this.clusterChargeFrac || 0) >= 1;
+    if (this._clusterCharging && (released || maxedWhileHeld)) {
+        const frac = this.clusterChargeFrac || 0;
+        try {
+            fireCluster.call(this, bulletPool, audioManager, this.getActivePrimaryConfig(), frac);
+            spawnMuzzleFlare.call(this, particlePool, 'heavy', '#ffaa44');
+        } catch (e) {
+            console.error('[FIRE] fireCluster threw:', e.message, e.stack);
+        }
+        this.lastShotTime = now;
+        this.lastPrimaryFireTime = now;
+        this._clusterCharging = false;
+        this.clusterChargeFrac = 0;
+    }
+
+    this._clusterFireWasHeld = fireHeld;
 }
 
 // ── Primary weapon dispatch ────────────────────────────────────────────────
@@ -638,7 +705,7 @@ export function fireRailDriver(bulletPool, audioManager, config) {
 // per-weapon HOMING / PIERCING (no CLUSTER_HOMING / CLUSTER_PIERCING
 // upgrades exist) AND from the global EXPLOSIVE check, because the
 // bomb's detonation is itself the AoE payload.
-export function fireCluster(bulletPool, audioManager, config) {
+export function fireCluster(bulletPool, audioManager, config, chargeFrac = 1) {
     // Resolve per-weapon upgrade stacks. CLUSTER_PAYLOAD scales damage,
     // MORE_BOMBLETS adds sub-bombs, SHORT_FUSE reduces the armed timer,
     // MEGA_CLUSTER bumps the primary blast radius.
@@ -660,6 +727,21 @@ export function fireCluster(bulletPool, audioManager, config) {
     const bullet = bulletPool.get(this.x, this.y, this.angle);
     if (!bullet) return;
     bullet.weaponId = 'CLUSTER_LAUNCHER';
+
+    // Charge → launch distance. A quick tap (frac≈0) lobs the bomb a very
+    // short distance; a full charge (frac=1) sends it past the screen edge.
+    // The bomb still detonates early on contact; the target distance is the
+    // detonation point if it reaches open space without hitting anything.
+    const ge = this.gameEngine;
+    const viewW = (ge && ge.width) || 1280;
+    const viewH = (ge && ge.height) || 720;
+    const minDist = (config.minLaunchDist != null) ? config.minLaunchDist : 70;
+    // 0.55 × the viewport diagonal comfortably reaches the screen edge from a
+    // roughly camera-centered player.
+    const maxDist = Math.hypot(viewW, viewH) * 0.55;
+    const frac = Math.max(0, Math.min(1, chargeFrac));
+    const targetDist = minDist + (maxDist - minDist) * frac;
+
     bullet.setupClusterBomb({
         initialVelocity: config.initialVelocity,
         travelFriction: config.travelFriction,
@@ -674,6 +756,7 @@ export function fireCluster(bulletPool, audioManager, config) {
         subBombLifeFrames: config.subBombLifeFrames,
         subBombBlastRadius: config.subBombBlastRadius,
         subBombDamage: config.subBombDamage,
+        targetDist,
     });
 
     // Speedrun-meta stats parity with other primary weapons.

@@ -119,6 +119,11 @@ export class Bullet {
         const speed = config.initialVelocity;
         this.vel.x = Math.cos(this.angle) * speed;
         this.vel.y = Math.sin(this.angle) * speed;
+        // 6.55.0 — charge-for-distance. The bomb detonates once it has
+        // travelled `clusterTargetDist` px (set from the launch charge) if
+        // it hasn't already hit something. Infinity = legacy fly-til-contact.
+        this.clusterTargetDist = (config.targetDist != null) ? config.targetDist : Infinity;
+        this._clusterDist = 0;
         // 6.26.0 — Generous lifetime safety net. At velocity 12 / frame
         // the bomb crosses the field diagonal (~2200 px) in ~184 frames.
         // 1200 frames is ~6x that, well past any sensible cursor
@@ -301,6 +306,13 @@ export class Bullet {
             this._smokeFrame++;
             if (particlePool && (this._smokeFrame % 3 === 0)) {
                 particlePool.get(this.x, this.y, 'clusterTrail');
+            }
+            // 6.55.0 — detonate once the charged launch distance is reached
+            // (constant-velocity flight, so distance accumulates linearly).
+            this._clusterDist = (this._clusterDist || 0) + Math.hypot(this.vel.x, this.vel.y);
+            if (this._clusterDist >= this.clusterTargetDist) {
+                this._detonate(gameEngine);
+                return;
             }
             // Detonate on first enemy contact within proximityRadius.
             if (enemyPool && this.proximityRadius > 0) {
