@@ -2231,7 +2231,78 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
         enemy._bossPairNotified = true;
         notifyBossDeath(enemy);
     }
+
+    // E4 — on-hit elemental synergy reactions (SHATTER / OIL flare). `damage`
+    // is the post-multiplier dealt amount. Fires even on a killing blow so a
+    // frozen enemy still shatters into its neighbors as it dies.
+    _triggerStatusReactions.call(this, enemy, damage, opts);
+
     return { blocked: false, destroyed };
+}
+
+// ─── E4 — Elemental synergy reactions ───────────────────────────────────────
+// Set-up → pay-off combos triggered when a status-tagged enemy is hit:
+//   • SHATTER — a FROZEN enemy struck for >= threshold cracks: AoE to nearby
+//     enemies + re-freezes them. `opts.shatterDepth` hard-caps the chain so it
+//     always terminates (no runaway recursion through a frozen pack).
+//   • OIL FLARE — an OILED enemy struck by PYRO ignites: AoE burn to neighbors.
+// Both consume their trigger status and are gated tightly (one timer compare in
+// the common no-status case). Reaction damage routes back through
+// applyDamageToEnemy so resist/CORRODE/kills/loot all stay correct.
+const SHATTER_THRESHOLD = 6;   // min single-hit damage to crack a frozen enemy
+const SHATTER_RADIUS = 110;
+const SHATTER_DAMAGE = 8;
+const MAX_SHATTER_DEPTH = 2;   // hard chain cap
+const FLARE_RADIUS = 100;
+
+function _triggerStatusReactions(enemy, dealt, opts) {
+    const now = frameClock.now;
+    const element = opts.element || 'KINETIC';
+    const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+    if (!pool) return;
+
+    // SHATTER
+    if (enemy.freezeUntil > now && dealt >= SHATTER_THRESHOLD
+        && (opts.shatterDepth || 0) < MAX_SHATTER_DEPTH) {
+        enemy.freezeUntil = 0; // consumed — it shattered
+        const depth = (opts.shatterDepth || 0) + 1;
+        const r2 = SHATTER_RADIUS * SHATTER_RADIUS;
+        // Snapshot so freezes/kills mid-loop don't reshape the array under us.
+        for (const other of pool.slice()) {
+            if (other === enemy || !other.active) continue;
+            const dx = other.x - enemy.x, dy = other.y - enemy.y;
+            if (dx * dx + dy * dy > r2) continue;
+            applyDamageToEnemy.call(this, other, SHATTER_DAMAGE, {
+                element: 'CRYO', showNumber: false, shatterDepth: depth,
+            });
+            if (typeof this.applyFreeze === 'function') this.applyFreeze(other, 800);
+        }
+        if (this.particlePool) {
+            const p = this.particlePool.get(enemy.x, enemy.y, 'enemyShockwave');
+            if (p) p.color = '#bfe9ff';
+        }
+        if (typeof this.triggerHitstop === 'function'
+            && (!this.isEntityOnScreen || this.isEntityOnScreen(enemy))) {
+            this.triggerHitstop(3);
+        }
+    }
+
+    // OIL FLARE
+    if (enemy.oilUntil > now && element === 'PYRO') {
+        enemy.oilUntil = 0; // consumed — it ignited
+        const flareDmg = Math.max(2, dealt * 0.4);
+        const r2 = FLARE_RADIUS * FLARE_RADIUS;
+        for (const other of pool.slice()) {
+            if (!other.active) continue;
+            const dx = other.x - enemy.x, dy = other.y - enemy.y;
+            if (dx * dx + dy * dy > r2) continue;
+            if (typeof this.applyBurn === 'function') this.applyBurn(other, flareDmg);
+        }
+        if (this.particlePool) {
+            const p = this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored');
+            if (p) p.color = '#ff7722';
+        }
+    }
 }
 
 export function damageEnemy(enemy, damage, element) {

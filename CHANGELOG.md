@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.63.0] - 2026-05-22
+
+### Added — Elemental synergy reactions (Phase E4)
+
+On-hit set-up→pay-off combos fired from the `applyDamageToEnemy` consolidator
+(so any damage source can trigger them). **Inert until E6** applies FREEZE/OIL
+via weapons/skills.
+
+- **SHATTER** — a FROZEN enemy struck for ≥6 damage cracks: deals AoE to
+  enemies within 110px and re-freezes them, consuming the freeze. A hard
+  `shatterDepth` cap (2) guarantees the chain terminates through a frozen pack.
+- **OIL FLARE** — an OILED enemy struck by a PYRO hit ignites: applies burn to
+  enemies within 100px, consuming the oil.
+- Reaction damage routes back through `applyDamageToEnemy`, so resist/CORRODE
+  multipliers, kills, XP, and loot all stay correct.
+- (CONDUCT/CORRODE damage amps already shipped in E3.) MARK consumption
+  — homing priority / crit / bonus loot — folded into E6, where Void weapons
+  apply MARK and the homing path is revisited.
+- 6 unit tests cover shatter spread + radius + light-hit/unfrozen no-ops + the
+  depth cap, and oil-flare ignite + Pyro-only gating.
+
 ## [6.62.0] - 2026-05-22
 
 ### Added — Extended elemental status engine (Phase E3)
