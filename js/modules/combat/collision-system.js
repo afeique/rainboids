@@ -747,6 +747,10 @@ export function handleCollisions() {
                         enemy.x += Math.cos(ka) * shove;
                         enemy.y += Math.sin(ka) * shove;
                     }
+                    // E6 — the firing weapon applies its element's signature
+                    // status (Pyro burn, Cryo chill/freeze, Volt conduct + shock,
+                    // Toxic corrode + bleed, Void mark). Kinetic/Radiant no-op here.
+                    applyWeaponElementStatus.call(this, enemy, bullet.element, enemyApplied);
                 }
 
                 if (bullet.isCrit || bullet.isCritical) {
@@ -2302,6 +2306,46 @@ function _triggerStatusReactions(enemy, dealt, opts) {
             const p = this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored');
             if (p) p.color = '#ff7722';
         }
+    }
+}
+
+// ─── E6 — Weapon element identity (apply status on hit) ─────────────────────
+// When a weapon's shot lands, it applies its element's signature status. Called
+// from the bullet-hit path with the bullet's `element` + the damage actually
+// dealt. KINETIC is the neutral baseline (no status); RADIANT's anti-armor /
+// PURGE lands with shielded enemies in E8. Thresholds/chances are starting
+// points for playtest. Exported for unit tests. (Power-weapon element status —
+// beams/nova/mines threading their element through damageEnemy — is a
+// follow-up; the new elemental PRIMARIES Pyre/Caustic/Tesla will route here.)
+const ELEM_FREEZE_HIT = 8;     // a CRYO hit this hard FREEZES instead of CHILLs
+const ELEM_SHOCK_CHANCE = 0.2; // VOLT hit chance to also STUN (shock)
+export function applyWeaponElementStatus(enemy, element, dealt) {
+    if (!enemy || !enemy.active) return;
+    switch (element) {
+        case 'PYRO':
+            if (typeof this.applyBurn === 'function') this.applyBurn(enemy, dealt);
+            break;
+        case 'CRYO':
+            if (dealt >= ELEM_FREEZE_HIT) {
+                if (typeof this.applyFreeze === 'function') this.applyFreeze(enemy);
+            } else if (typeof this.applyChill === 'function') {
+                this.applyChill(enemy);
+            }
+            break;
+        case 'VOLT':
+            if (typeof this.applyConduct === 'function') this.applyConduct(enemy);
+            if (Math.random() < ELEM_SHOCK_CHANCE && typeof this.applyStun === 'function') {
+                this.applyStun(enemy, 600);
+            }
+            break;
+        case 'TOXIC':
+            if (typeof this.applyCorrode === 'function') this.applyCorrode(enemy);
+            if (typeof this.applyBleed === 'function') this.applyBleed(enemy, dealt);
+            break;
+        case 'VOID':
+            if (typeof this.applyMark === 'function') this.applyMark(enemy);
+            break;
+        // KINETIC / RADIANT — no on-hit status here.
     }
 }
 

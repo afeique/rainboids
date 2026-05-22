@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.66.0] - 2026-05-22
+
+### Added — Weapon element identity: status-on-hit (Phase E6)
+
+- New `applyWeaponElementStatus(enemy, element, dealt)` dispatcher — when a
+  primary's shot lands, it applies its element's signature status: **Pyro** →
+  burn, **Cryo** → chill (or FREEZE on a hit ≥8), **Volt** → conduct (+20%
+  chance to shock/stun), **Toxic** → corrode + bleed, **Void** → mark.
+  Kinetic/Radiant proc no on-hit status. Called from the bullet-hit path with
+  the bullet's `element` + the damage actually dealt.
+- Observable today on the Void primary (Gravity Lance now MARKs); becomes
+  broadly live as the elemental primaries (Pyre/Caustic/Tesla) ship and the
+  enemy roster turns elemental (E8). 7 unit tests cover the per-element dispatch
+  + freeze threshold + shock chance + Kinetic/Radiant no-ops.
+- Deferred follow-ups: power-weapon element threading (beams/nova/mines via
+  `damageEnemy`), MARK *consumption* (homing priority / crit / loot — pairs with
+  the Designator ability + homing revisit), and element labels in shop/HUD.
+
 ## [6.65.0] - 2026-05-22
 
 ### Added — Item elemental-resistance affixes (Phase E7)
