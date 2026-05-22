@@ -404,7 +404,7 @@ export class UIManager {
                         { kind: 'sprite', file: 'ARROWDOWN.png', alt: 'Down' },
                     ] },
                     { action: 'Activate Skill', keys: [
-                        { kind: 'sprite', file: 'Q.png', alt: 'Q' },
+                        { kind: 'sprite', file: 'TAB.png', alt: 'Tab' },
                     ] },
                 ],
             },
@@ -413,14 +413,16 @@ export class UIManager {
                 accent: 'pink',
                 iconPath: 'M13 2 L4 14 H10 L9 22 L20 9 H13 Z',
                 rows: [
-                    { action: 'Cycle Primary', keys: [
-                        { kind: 'sprite', file: 'R.png', alt: 'R' },
-                    ] },
-                    { action: 'Cycle Power', keys: [
+                    // Hold to open the weapon/skill radial; the cursor picks
+                    // a slice and a click equips it (event-setup.js).
+                    { action: 'Primary Radial', keys: [
                         { kind: 'sprite', file: 'F.png', alt: 'F' },
                     ] },
-                    { action: 'Cycle Skill', keys: [
+                    { action: 'Power Radial', keys: [
                         { kind: 'sprite', file: 'E.png', alt: 'E' },
+                    ] },
+                    { action: 'Defense Radial', keys: [
+                        { kind: 'sprite', file: 'R.png', alt: 'R' },
                     ] },
                 ],
             },
@@ -1552,7 +1554,19 @@ export class UIManager {
         // 6.1.1 — autoPower wiring removed; merged into autoFire.
         // 6.2.3 — Laser Sight toggle.
         wireAssist(this.elements.assistLaserSight, 'laserSight');
-        
+
+        // Control-scheme picker (GAMEPAD tab). Each button carries its
+        // scheme in data-scheme; clicking persists it through the engine,
+        // which re-highlights the buttons via updateControlSchemeSelector.
+        const wireScheme = (el) => {
+            if (!el) return;
+            el.addEventListener('click', () => {
+                if (this.gameEngine) this.gameEngine.setControlScheme(el.dataset.scheme);
+            });
+        };
+        wireScheme(document.getElementById('control-scheme-gamepad'));
+        wireScheme(document.getElementById('control-scheme-alt'));
+
         // Music controls
         this.elements.musicPlayPause.addEventListener('click', () => {
             this.musicPlayer.togglePlayPause();
@@ -1714,6 +1728,53 @@ export class UIManager {
         this.switchTab('music');
     }
     
+    // Show / hide the ASSISTS pause-menu tab button. Desktop keeps it
+    // always visible; mobile reveals it only while a gamepad is connected
+    // (driven by game-engine._refreshAssistsTabVisibility). If the tab is
+    // hidden while it's the active tab, fall back to CONTROLS so the menu
+    // doesn't show an empty body.
+    setAssistsTabVisible(visible) {
+        const btn = document.querySelector('.pause-tab[data-tab="assists"]');
+        if (!btn) return;
+        btn.style.display = visible ? '' : 'none';
+        if (!visible && btn.classList.contains('active')) {
+            this.switchTab('controls');
+        }
+    }
+
+    // Show / hide the GAMEPAD pause-menu tab button. Revealed whenever a
+    // gamepad is connected (any platform), hidden on disconnect — driven by
+    // game-engine._refreshGamepadTabVisibility(). Falls back to CONTROLS if
+    // it's hidden while active so the menu never shows an empty body.
+    setGamepadTabVisible(visible) {
+        const btn = document.querySelector('.pause-tab[data-tab="gamepad"]');
+        if (!btn) return;
+        btn.style.display = visible ? '' : 'none';
+        if (!visible && btn.classList.contains('active')) {
+            this.switchTab('controls');
+        }
+    }
+
+    // Show / hide the GAMEPAD section in the HOW TO PLAY tutorial overlay.
+    setGamepadTutorialVisible(visible) {
+        const sec = document.getElementById('tutorial-gamepad-section');
+        if (sec) sec.style.display = visible ? '' : 'none';
+    }
+
+    // Highlight the active control-scheme button in the GAMEPAD tab picker.
+    // `active` is the resolved scheme; `alt` is the device's non-gamepad
+    // option ('keyboard' | 'touch') so the alt button matches whatever the
+    // engine would switch to.
+    updateControlSchemeSelector(active, alt) {
+        const gpBtn = document.getElementById('control-scheme-gamepad');
+        const altBtn = document.getElementById('control-scheme-alt');
+        if (gpBtn) gpBtn.classList.toggle('active', active === 'gamepad');
+        if (altBtn) {
+            if (alt) altBtn.dataset.scheme = alt;
+            altBtn.classList.toggle('active', active !== 'gamepad');
+        }
+    }
+
     switchTab(tabName) {
         this.elements.pauseTabs.forEach(tab => {
             tab.classList.toggle('active', tab.dataset.tab === tabName);
@@ -1732,6 +1793,9 @@ export class UIManager {
         if (tabName === 'power') this.updatePowerTab();
         if (tabName === 'stats') this.updateStatsTab();
         if (tabName === 'assists') this.syncAssistsTab();
+        if (tabName === 'gamepad' && this.gameEngine) {
+            this.updateControlSchemeSelector(this.gameEngine.controlScheme, this.gameEngine.altControlScheme);
+        }
 
         // 6.1.0 — Powerups tab moved to the shop overlay; no
         // pause-menu powerups-tab to re-render.

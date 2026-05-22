@@ -519,11 +519,17 @@ export class Player {
         const ge = window.gameEngine;
         // 6.1.1 — autoPower assist retired. autoFire now controls BOTH
         // primary and power weapon firing — one toggle, both barrels.
-        // Mobile FORCES autoFire=true (no toggle) so the player only
-        // has to dodge; auto-aim picks targets, auto-fire hammers them,
-        // and tapping the canvas triggers a DASH (see mobile-touch.js).
+        // The TOUCH control scheme FORCES autoAim+autoFire (no toggle) so
+        // the player only has to dodge; auto-aim picks targets, auto-fire
+        // hammers them, and tapping the canvas triggers a DASH (see
+        // mobile-touch.js). The GAMEPAD and KEYBOARD schemes instead let
+        // the player choose their own assists (default off) via the ASSISTS
+        // tab, so twin-stick / mouse aiming stays manual. controlScheme
+        // resolves to 'touch' only on mobile without (or opting out of) a
+        // connected gamepad.
         let assists;
-        if (isMobile()) {
+        const scheme = (ge && ge.controlScheme) ? ge.controlScheme : (isMobile() ? 'touch' : 'keyboard');
+        if (scheme === 'touch') {
             assists = { autoAim: true, autoFire: true, aimAssist: false };
         } else {
             assists = (ge && ge.assists) ? ge.assists : null;
@@ -540,9 +546,27 @@ export class Player {
             }
         }
 
+        // Gamepad right-stick aim (twin-stick). The stick's direction IS
+        // the facing; when held, aim points exactly where the stick points.
+        // Highest manual priority (below auto-aim). On mobile, where there's
+        // no mouse, the facing is HELD when the stick is released so the
+        // ship doesn't snap back to a stale world point.
+        const aimStick = input.aimStick;
+        const gpAiming = !!(input.gamepadActive && aimStick && aimStick.magnitude > 0.02);
+        if (!autoAimed && gpAiming) {
+            this._aimAngle = Math.atan2(aimStick.y, aimStick.x);
+            const range = 1000;
+            input.aimX = this.x + Math.cos(this._aimAngle) * range;
+            input.aimY = this.y + Math.sin(this._aimAngle) * range;
+        } else if (!autoAimed && input.gamepadActive && isMobile()) {
+            if (typeof this._aimAngle !== 'number') this._aimAngle = this.angle;
+            const range = 1000;
+            input.aimX = this.x + Math.cos(this._aimAngle) * range;
+            input.aimY = this.y + Math.sin(this._aimAngle) * range;
+        }
         // Arrow-key rotation — hold ←/→ to spin the aim. Constant rate
         // independent of mouse position. Skipped when auto-aim is active.
-        if (!autoAimed && (input.rotateLeft || input.rotateRight)) {
+        else if (!autoAimed && (input.rotateLeft || input.rotateRight)) {
             const rotSpeed = 0.06; // ~3.5°/tick @ 60Hz → 210°/s
             if (typeof this._aimAngle !== 'number') this._aimAngle = this.angle;
             if (input.rotateLeft) this._aimAngle -= rotSpeed;
@@ -682,15 +706,20 @@ export class Player {
         // (line ~535) before the auto-fire check, so we don't re-set it
         // here. Mobile stick overrides velocity + position in the next
         // block.
+        const _mobile = isMobile();
+        // Analog velocity model gate. Mobile always uses it (touch stick);
+        // desktop uses it only while a gamepad's left stick is actually
+        // deflected, so keyboard thrust still works the rest of the time.
+        const gpMoveActive = !!(input.gamepadActive && input.stickInput && input.stickInput.magnitude > 0);
+        const useStickVel = _mobile || gpMoveActive;
         if (this.active) {
-            const _mobile = isMobile();
             const speedMult = this.getMovementSpeedMultiplier();
 
             // Velocity integration — WASD direction → moveAngle → per-tick
-            // velocity delta scaled by thrustPower * speedMult. Mobile
-            // movement comes from the analog stick instead, so we zero
-            // out the keyboard contribution there.
-            const isMoving = !_mobile && (input.up || input.down || input.left || input.right);
+            // velocity delta scaled by thrustPower * speedMult. Stick-driven
+            // movement (mobile touch / gamepad) comes from the analog block
+            // below instead, so we zero out the keyboard contribution there.
+            const isMoving = !useStickVel && (input.up || input.down || input.left || input.right);
             if (isMoving && !this.thrustersDisabled) {
                 let moveX = 0;
                 let moveY = 0;
@@ -756,10 +785,12 @@ export class Player {
         // Override happens AFTER the physics step so friction snap-to-zero
         // still runs. Position is reset to prevX + new vel so the player's
         // actual movement comes from the stick alone.
-        if (isMobile()) {
+        if (useStickVel) {
             const stickIn = (input && input.stickInput) || { x: 0, y: 0, magnitude: 0 };
             const speedMult = this.getMovementSpeedMultiplier();
-            const MAX_V_MOBILE = GAME_CONFIG.MAX_V * 1.5 * speedMult;
+            // Mobile gets a 1.5× cap boost to compensate for touch-stick
+            // imprecision; gamepad-on-desktop matches the keyboard cap (1×).
+            const MAX_V_MOBILE = GAME_CONFIG.MAX_V * (_mobile ? 1.5 : 1.0) * speedMult;
             const targetVx = stickIn.x * MAX_V_MOBILE;
             const targetVy = stickIn.y * MAX_V_MOBILE;
             // Smooth lerp — 0.22 / frame ≈ 70% in 90 ms (responsive

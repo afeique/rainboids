@@ -522,8 +522,10 @@ export function drawLaserPointerAim() {
     if (!this.player || !this.player.active) return;
     if (this.game.state !== GAME_STATES.PLAYING && this.game.state !== GAME_STATES.WAVE_TRANSITION) return;
     if (this.radialMenu && this.radialMenu.isOpen && this.radialMenu.isOpen()) return;
-    // 5.95.1 — Suppress on mobile (replaced by touch-position reticle).
-    if (isMobile()) return;
+    // 5.95.1 — Suppress on mobile (replaced by touch-position reticle),
+    // EXCEPT under the gamepad control scheme: twin-stick aiming benefits
+    // from the laser/cone, and the touch reticle isn't in play.
+    if (isMobile() && this.controlScheme !== 'gamepad') return;
     // 6.2.3 — Desktop-only Laser Sight ASSIST toggle. Gates both the
     // single-line laser AND the cone-of-fire wedge. Default ON (mirrors
     // the pre-6.2.3 always-on behavior). Mobile already returned above.

@@ -55,6 +55,7 @@ import * as events from './ui/event-setup.js';
 import { showHint, updateHintDimming } from './ui/hint-system.js';
 import { RadialMenu } from './ui/radial-menu.js';
 import { MobileTouchHandler } from './ui/mobile-touch.js';
+import { GamepadHandler } from './ui/gamepad-handler.js';
 import { isMobile, isPortrait } from './platform/platform-detect.js';
 import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './core/storage.js';
 import { StatsOverlay } from './ui/stats-overlay.js';
@@ -392,6 +393,12 @@ export class GameEngine {
             this._updateMobileBodyClasses();
             this.mobileTouch.install();
         }
+        // Dual-analog (twin-stick) gamepad support — works on BOTH desktop
+        // and mobile. Left stick moves, right stick aims, triggers fire.
+        // On mobile a connected pad takes over and unlocks the ASSISTS tab
+        // (see onGamepadConnectionChange / _refreshAssistsTabVisibility).
+        this.gamepad = new GamepadHandler(this);
+        this.gamepad.install();
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         this.canvas.width = this.width;
@@ -491,12 +498,27 @@ export class GameEngine {
         // via the ASSISTS pause-menu tab. Read by player.js each tick to
         // adjust aim and auto-trigger fire / power weapon.
         this.assists = this._loadAssists();
-        
+
+        // Control scheme — 'keyboard' | 'gamepad' | 'touch'. Persisted only
+        // when the player explicitly picks one (GAMEPAD tab selector); null
+        // means "use the sensible default for the current device + pad
+        // state" (see the controlScheme getter). Lets a player keep mouse +
+        // keyboard / touch even with a pad plugged in.
+        this._controlSchemePref = this._loadControlScheme();
+
         // Hide DOM title screen so we only see the wavy canvas version
         // this.uiManager.hideTitleScreen();
         
         this.initializePools();
         this.setupEventListeners();
+        // Set the initial ASSISTS / GAMEPAD tab visibility now that the UI
+        // exists. On mobile this hides the ASSISTS tab until a gamepad
+        // connects; the GAMEPAD tab starts hidden on every platform. A
+        // gamepad already plugged in at boot fires onGamepadConnectionChange
+        // via gamepad.install() and reveals both as appropriate.
+        this._refreshAssistsTabVisibility();
+        this._refreshGamepadTabVisibility();
+        this._refreshControlSchemeUi();
         // Wire HTML shop overlay (#shop-overlay) — replaces the old canvas
         // shop. Tabs, items, sell buttons, close button all go through DOM.
         shopDom.initShopDom(this);
@@ -2723,6 +2745,10 @@ export class GameEngine {
             }
             
             const input = this.inputHandler.getInput();
+            // Poll the gamepad into the shared input object before the
+            // player reads it — left stick → movement, right stick → aim,
+            // triggers → fire/power, A → dash, B/X → skill.
+            if (this.gamepad) this.gamepad.poll(input);
             // Add the update method to the input object so player can call it
             input.updateAimForPlayerMovement = this._boundAimForPlayerMovement;
 
@@ -3397,6 +3423,11 @@ export class GameEngine {
         frameClock.advance();
         const frameStart = performance.now();
 
+        // Gamepad frame poll (any state): pause/resume edge + weapon-radial
+        // lifecycle. Runs every frame because the radial menu freezes the
+        // gameplay update loop, so the gameplay poll below can't drive it.
+        if (this.gamepad) this.gamepad.pollFrame();
+
         // ── Hitstop: selective freeze — entities stop, VFX/player keep going ──
         if (this._hitstopFrames > 0) {
             this._hitstopFrames--;
@@ -3413,6 +3444,7 @@ export class GameEngine {
             if (this.player && this.player.active &&
                 (this.game.state === GAME_STATES.PLAYING || this.game.state === GAME_STATES.WAVE_TRANSITION)) {
                 const input = this.inputHandler.getInput();
+                if (this.gamepad) this.gamepad.poll(input);
                 input.updateAimForPlayerMovement = this._boundAimForPlayerMovement;
                 // Update player movement only (firing is suppressed by not running collisions)
                 this.player.update(input, this.particlePool, this.bulletPool, this.audioManager,
@@ -4038,33 +4070,105 @@ export class GameEngine {
     _loadAssists() {
         // 6.1.1 — `autoPower` retired. `autoFire` now drives BOTH
         // primary AND power weapon firing — one toggle, both barrels.
-        // Mobile bakes Aim Assist / Auto Aim / Auto Fire all ON (tap
-        // anywhere on the canvas DASHES, auto-fire handles all shooting).
-        // Desktop defaults: all off; user opts in via ASSISTS tab.
-        // 6.2.3 — `laserSight` added. Default ON on desktop (preserves
-        // the always-on pre-6.2.3 behavior of the muzzle laser + cone
-        // visualization); mobile gets it false (mobile already uses the
-        // touch-position reticle and never drew the laser anyway).
+        // Defaults are opt-in (all off) on every platform; the player
+        // chooses via the ASSISTS tab. The mobile TOUCH model (no gamepad)
+        // still force-bakes Aim Assist / Auto Aim / Auto Fire ON, but that
+        // forcing now lives per-frame in player.js — `this.assists` always
+        // reflects the player's actual stored preference so the ASSISTS
+        // tab (shown on desktop, and on mobile once a gamepad is plugged
+        // in) stays truthful.
+        // 6.2.3 — `laserSight` added. Default ON on desktop; mobile gets
+        // it false (the touch model never drew the laser — a mobile player
+        // with a gamepad can opt back into it).
         const mobile = isMobile();
-        const defaults = mobile
-            ? { aimAssist: true, autoAim: true, autoFire: true, laserSight: false }
-            : { aimAssist: false, autoAim: false, autoFire: false, laserSight: true };
+        const defaults = {
+            aimAssist: false,
+            autoAim: false,
+            autoFire: false,
+            laserSight: !mobile,
+        };
         try {
             const raw = localStorage.getItem('rainboidsAssists');
             const stored = raw ? JSON.parse(raw) : null;
             const merged = stored ? Object.assign({}, defaults, stored) : defaults;
             // Strip the retired `autoPower` field if present in stored.
             delete merged.autoPower;
-            if (mobile) {
-                // Re-force baked-in toggles ON. Stored value might have
-                // flipped them off from a previous desktop session.
-                merged.aimAssist = true;
-                merged.autoAim   = true;
-                merged.autoFire  = true;
-            }
             return merged;
         } catch (e) {
             return defaults;
+        }
+    }
+
+    // Called by GamepadHandler whenever a pad connects / disconnects.
+    // Reveals/hides the GAMEPAD tab + tutorial section and the ASSISTS tab
+    // (mobile), and re-syncs the control-scheme selector (its resolved value
+    // can flip when a pad appears/vanishes — see the controlScheme getter).
+    onGamepadConnectionChange(_connected) {
+        this._refreshAssistsTabVisibility();
+        this._refreshGamepadTabVisibility();
+        this._refreshControlSchemeUi();
+    }
+
+    // ── Control scheme ──────────────────────────────────────────────────
+    // Resolved scheme the rest of the game reads. Honors the player's
+    // explicit pick; otherwise defaults to gamepad when a pad is connected,
+    // else touch on mobile / keyboard on desktop. A 'gamepad' pick falls
+    // back gracefully if the pad is unplugged.
+    get controlScheme() {
+        const mobile = isMobile();
+        const gpConnected = !!(this.gamepad && this.gamepad.isConnected());
+        const pref = this._controlSchemePref;
+        if (pref === 'gamepad') return gpConnected ? 'gamepad' : (mobile ? 'touch' : 'keyboard');
+        if (pref === 'touch') return mobile ? 'touch' : 'keyboard';
+        if (pref === 'keyboard') return 'keyboard';
+        if (gpConnected) return 'gamepad';
+        return mobile ? 'touch' : 'keyboard';
+    }
+
+    // The alternate (non-gamepad) scheme for the current device — what the
+    // GAMEPAD-tab selector offers opposite "Gamepad".
+    get altControlScheme() { return isMobile() ? 'touch' : 'keyboard'; }
+
+    _loadControlScheme() {
+        try {
+            const v = localStorage.getItem('rainboids:controlScheme');
+            if (v === 'keyboard' || v === 'gamepad' || v === 'touch') return v;
+        } catch (_) { /* localStorage may be unavailable */ }
+        return null;
+    }
+
+    setControlScheme(scheme) {
+        if (scheme !== 'keyboard' && scheme !== 'gamepad' && scheme !== 'touch') return;
+        this._controlSchemePref = scheme;
+        try { localStorage.setItem('rainboids:controlScheme', scheme); } catch (_) { /* ignore */ }
+        this._refreshControlSchemeUi();
+    }
+
+    _refreshControlSchemeUi() {
+        if (this.uiManager && typeof this.uiManager.updateControlSchemeSelector === 'function') {
+            this.uiManager.updateControlSchemeSelector(this.controlScheme, this.altControlScheme);
+        }
+    }
+
+    // ASSISTS tab is always shown on desktop. On mobile it appears only
+    // while a gamepad is connected (twin-stick aiming → the player may
+    // want to opt into Aim Assist / Auto Aim / Auto Fire / Laser Sight).
+    _refreshAssistsTabVisibility() {
+        const visible = !isMobile() || !!(this.gamepad && this.gamepad.isConnected());
+        if (this.uiManager && typeof this.uiManager.setAssistsTabVisible === 'function') {
+            this.uiManager.setAssistsTabVisible(visible);
+        }
+    }
+
+    // GAMEPAD tab + tutorial section show on any platform whenever a pad is
+    // connected, and hide when it disconnects.
+    _refreshGamepadTabVisibility() {
+        const visible = !!(this.gamepad && this.gamepad.isConnected());
+        if (this.uiManager && typeof this.uiManager.setGamepadTabVisible === 'function') {
+            this.uiManager.setGamepadTabVisible(visible);
+        }
+        if (this.uiManager && typeof this.uiManager.setGamepadTutorialVisible === 'function') {
+            this.uiManager.setGamepadTutorialVisible(visible);
         }
     }
 

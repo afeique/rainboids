@@ -11,6 +11,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.54.1] - 2026-05-21
+
+### Changed — Removed asteroid trig lookup table
+
+- Dropped the 1024-entry sin/cos LUT (+ `lutIndex` helper) used for the
+  asteroid dodecahedron rotation in favor of direct `Math.cos/Math.sin`.
+  The LUT only replaced the 6 trig calls used to build each rock's
+  rotation matrix once per frame — ~96 calls/frame at MAX_ASTEROIDS (16),
+  a rounding error against the frame budget — so it was dead-weight
+  complexity. Rotation is now exact (no 0.35° quantization) and the code
+  is simpler.
+
+## [6.54.0] - 2026-05-21
+
+### Added — Gamepad radials, control-scheme picker, defense radial
+
+- **Refined DualShock 4 / Xbox mapping**: R2 fires primary, L2 fires /
+  charges power, **hold R1** opens the primary-weapon radial, **hold L1**
+  the power-weapon radial, **hold △/Y** the defense-skill radial — push a
+  stick to highlight a slice, release the button to equip. ✕/A dashes,
+  ◯/B activates the equipped defense skill, Options/Start pauses.
+- **Control-scheme picker**: a new selector in the GAMEPAD pause-menu tab
+  lets the player choose **Gamepad** vs **Mouse + Keyboard** (desktop) or
+  **Gamepad** vs **Touch** (mobile), so a player can keep their preferred
+  scheme even with a pad plugged in. The choice persists. The gamepad only
+  drives gameplay under the 'gamepad' scheme; otherwise a connected pad is
+  ignored for input (the GAMEPAD tab stays visible so they can switch).
+- **Keyboard defense-skill radial restored**: **hold R** opens the
+  defense-skill radial again (re-enabled now that defensive skills are
+  back); TAB still activates the equipped skill. F = primary radial,
+  E = power radial.
+- **Tutorial gamepad section**: the HOW TO PLAY overlay gains a GAMEPAD
+  section listing the full mapping, shown only when a pad is detected.
+
+### Changed
+
+- The mobile auto-aim / auto-fire force-on now keys off the resolved
+  control scheme (`'touch'`) rather than "mobile without a gamepad", so a
+  mobile player who picks Touch keeps the baked-in assists even with a pad
+  attached, while picking Gamepad unlocks manual twin-stick aiming.
+- CONTROLS pause-tab fixed to show the real bindings (F/E/R radials,
+  TAB activates skill).
+
+## [6.53.1] - 2026-05-21
+
+### Changed — Asteroids are candy to unwrap
+
+- **Drastically lowered asteroid HP with a hard per-tier cap.** Big
+  asteroids now cap at **4 HP** (was up to 5 base × ~7.6 level scaling),
+  smaller ones at **2 HP**. The gentle level ramp remains but is clamped,
+  so asteroids never become tanky — early waves in particular pop like
+  bubble wrap instead of soaking a full burst.
+
+## [6.53.0] - 2026-05-21
+
+### Added — GAMEPAD pause-menu tab
+
+- A new **GAMEPAD** tab appears in the pause menu whenever a gamepad is
+  connected (any platform) and hides on disconnect. It's a static
+  control reference listing the twin-stick mappings (left stick move,
+  right stick aim, D-pad, RT/RB primary, LT/LB power, A dash, B/X skill,
+  Start pause). Built on every platform but only reachable while a pad is
+  detected; reuses the assists-row styling so it needs no new CSS.
+
+## [6.52.0] - 2026-05-21
+
+### Added — Dual-analog (twin-stick) gamepad support
+
+Full gamepad control on **both desktop and mobile** via a new
+`GamepadHandler` (`js/modules/ui/gamepad-handler.js`):
+
+- **Left stick → movement** (analog, proportional to deflection — reuses
+  the mobile stick-velocity model; on desktop it engages only while the
+  stick is pushed so keyboard thrust still works the rest of the time),
+  **right stick → aim** (twin-stick: the stick's direction is the ship's
+  facing). D-pad works as a digital movement fallback.
+- **Buttons**: RT/RB fire primary, LT/LB fire/charge power, **A** dashes,
+  **B/X** activate the equipped defense skill, **Start** toggles pause.
+- **Last-active-device model**: a connected-but-idle pad never fights the
+  mouse / keyboard / touch stick — it only drives input while engaged
+  (recent stick/button activity, and more recent than the last mouse
+  move), then hands control back.
+- **Gamepad on mobile**: a connected pad takes over from touch — the
+  stale touch reticle is suppressed, and the desktop-style laser
+  sight / cone-of-fire becomes available.
+- **Mobile ASSISTS tab is now gamepad-gated**: touch-only mobile keeps
+  its baked-in assists (auto-aim / auto-fire / tap-to-dash) and no tab,
+  but plugging in a gamepad reveals the **ASSISTS** pause-menu tab so the
+  player can opt into Aim Assist / Auto Aim / Auto Fire / Laser Sight on
+  top of twin-stick aiming. The tab shows/hides live on connect/disconnect.
+
+### Changed
+
+- `_loadAssists` no longer force-bakes mobile assists into the stored
+  preference object — the touch-model forcing now lives per-frame in
+  `player.js`, so `this.assists` always reflects the player's real,
+  persisted choices (needed for a truthful gamepad-on-mobile ASSISTS tab).
+
 ## [6.51.0] - 2026-05-21
 
 ### Removed / Changed — Phase 5 dead-code sweep + polish

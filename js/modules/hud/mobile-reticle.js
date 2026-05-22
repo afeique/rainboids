@@ -69,6 +69,13 @@ export function drawMobileReticle() {
     // Radial menu owns the screen during a selection — don't clutter.
     if (this.radialMenu && this.radialMenu.isOpen && this.radialMenu.isOpen()) return;
 
+    // Under the gamepad control scheme, aiming moves to the right stick —
+    // the touch reticle (anchored to the last tap) would be a stale,
+    // misleading crosshair, so suppress it. The desktop-style laser sight
+    // / cone takes over (opt-in via the ASSISTS tab). When the player has a
+    // pad connected but chose the touch scheme, the reticle stays.
+    if (this.controlScheme === 'gamepad') return;
+
     // Source: prefer the explicit last-touch cache (set by every tap).
     // Fall back to the live input screenAimX/Y. Fall back further to the
     // screen centre so the reticle is visible even on first frame before

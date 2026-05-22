@@ -81,7 +81,9 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
 
     test('shop tree contains primary, power, defense, and passive nodes', async ({ page }) => {
         await page.evaluate(() => window.gameEngine.openShop());
-        await page.waitForTimeout(100);
+        // Wait for the tree to render rather than a fixed sleep (the render
+        // can lag a frame or two under load).
+        await page.waitForSelector('#shop-tree .shop-node', { timeout: 5_000 });
         const ids = await page.evaluate(() =>
             [...document.querySelectorAll('#shop-tree .shop-node')]
                 .map(n => n.dataset.id)
@@ -90,11 +92,12 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         expect(ids).toContain('PULSE_CANNON');
         expect(ids).toContain('CHARGE_SHOT');
         expect(ids).toContain('BULWARK');
-        // Upgrade nodes — at least one well-known upgrade per category.
-        expect(ids).toContain('DEAD_EYE');       // PULSE_CANNON upgrade
+        // Upgrade / passive nodes — one real ID per cluster (6.28.0 uniform
+        // trait set for primaries; 6.30.0 reward-only passive grid).
+        expect(ids).toContain('PULSE_MULTI');    // PULSE_CANNON upgrade
         expect(ids).toContain('CHARGE_POWER');   // CHARGE_SHOT upgrade
         expect(ids).toContain('FORTIFY');        // BULWARK skill upgrade
-        expect(ids).toContain('RAPID_FIRE');     // passive
+        expect(ids).toContain('CRIT_CHANCE');    // passive
     });
 
     // 5.79.57 — shop is per-weapon now. Each PRIMARY/POWER weapon ID is

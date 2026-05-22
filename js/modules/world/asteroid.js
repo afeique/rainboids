@@ -10,23 +10,6 @@ const DEBRIS_COUNT = 5;
 const ASTEROID_MAX_SPEED = 2.0;
 const ASTEROID_BOUNCE_DAMP = 0.9;
 
-// ── Shared sin/cos lookup table ──────────────────────────────────────────
-// 1024 entries ≈ 0.35° precision — imperceptible for tumbling rocks,
-// eliminates 6 trig calls per asteroid per frame.
-const TRIG_N = 1024;
-const TRIG_SCALE = TRIG_N / (Math.PI * 2);
-const SIN_LUT = new Float64Array(TRIG_N);
-const COS_LUT = new Float64Array(TRIG_N);
-for (let i = 0; i < TRIG_N; i++) {
-    const a = (i / TRIG_N) * Math.PI * 2;
-    SIN_LUT[i] = Math.sin(a);
-    COS_LUT[i] = Math.cos(a);
-}
-function lutIndex(rad) {
-    return ((rad * TRIG_SCALE) % TRIG_N + TRIG_N) & (TRIG_N - 1);
-}
-
-
 export class Asteroid {
     constructor(x, y, radius, level = 1) {
         this.fov = 300;
@@ -97,29 +80,33 @@ export class Asteroid {
         // Calculate health based on size tiers and level:
         // Use baseRadius for consistent health calculation
         let baseHealth;
+        let healthCap;
         let health;
         const sizeRef = this.baseRadius || this.radius;
-        
-        // Health scales with size — even lower for the bullet-hell pass.
-        // Big asteroids drop in 1-2s, mediums die to a single decent
-        // burst, smalls pop in one shot. Wave compositions are now
-        // dense so the chew-rate has to keep up.
+
+        // Asteroids are candy to unwrap, not chores. Big rocks need only
+        // 3-4 hits, smaller ones 1-2 — a HARD per-tier cap so they never
+        // become tanky no matter how high the level climbs. The early game
+        // in particular should feel like popping bubble wrap.
         if (sizeRef >= 40) {
-            baseHealth = Math.floor(3 + (sizeRef - 40) / 20 * 2);  // 3-5
+            baseHealth = Math.floor(3 + (sizeRef - 40) / 20);  // 3-4
+            healthCap = 4;
         } else if (sizeRef >= 20) {
-            baseHealth = Math.floor(1 + (sizeRef - 20) / 20 * 2);  // 1-3
+            baseHealth = Math.round(1 + (sizeRef - 20) / 20);  // 1-2
+            healthCap = 2;
         } else {
-            baseHealth = 1;                                         // small = one-shot
+            baseHealth = 1;                                     // small = one-shot
+            healthCap = 2;
         }
 
-        // 5.79.0 — Asteroid level scaling steepened alongside enemies
-        //   since player damage no longer scales with player level.
-        //   HP:           +0.25/lvl → +0.35/lvl  (L20 = 7.65×)
-        //   Collision dmg: +0.20/lvl → +0.30/lvl (L20 = 6.70×)
+        // A gentle level ramp still nudges HP up, but the per-tier cap keeps
+        // even L20+ asteroids in the 3-4 / 1-2 candy range.
         const levelMultiplier = 1 + (this.level - 1) * 0.35;
         health = Math.round(baseHealth * levelMultiplier);
 
-        this.maxHealth = Math.max(1, health); // Ensure minimum 1 health
+        // Clamp to [1, tier cap] so big asteroids top out at 4 and smaller
+        // ones at 2 — the "only need 3-4 / 1-2 hp at most" contract.
+        this.maxHealth = Math.max(1, Math.min(healthCap, health));
         this.health = this.maxHealth;
     }
 
@@ -285,11 +272,13 @@ export class Asteroid {
     }
     
     project() {
-        // LUT-based trig — 6 table lookups instead of 6 Math.sin/cos calls
-        const ix = lutIndex(this.rot3D.x), iy = lutIndex(this.rot3D.y), iz = lutIndex(this.rot3D.z);
-        const cosX = COS_LUT[ix], sinX = SIN_LUT[ix];
-        const cosY = COS_LUT[iy], sinY = SIN_LUT[iy];
-        const cosZ = COS_LUT[iz], sinZ = SIN_LUT[iz];
+        // 6 trig calls per asteroid per frame to build the rotation matrix.
+        // At MAX_ASTEROIDS (16) that's ~96 Math.sin/cos calls/frame — a
+        // rounding error against the 16.7ms budget, so direct trig is fine
+        // (and simpler than a shared lookup table).
+        const cosX = Math.cos(this.rot3D.x), sinX = Math.sin(this.rot3D.x);
+        const cosY = Math.cos(this.rot3D.y), sinY = Math.sin(this.rot3D.y);
+        const cosZ = Math.cos(this.rot3D.z), sinZ = Math.sin(this.rot3D.z);
 
         const verts = this.vertices3D;
         const fov = this.fov;

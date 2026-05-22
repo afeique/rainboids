@@ -98,14 +98,10 @@ test.describe('QA-04: HUD and UI', () => {
         await expect(tab).toBeVisible();
     });
 
-    test('pause menu has POWERUPS tab', async ({ page }) => {
-        await startGame(page);
-        await page.keyboard.press('Escape');
-        await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
-
-        const tab = page.locator('.pause-tab', { hasText: 'POWERUPS' });
-        await expect(tab).toBeVisible();
-    });
+    // NOTE: the POWERUPS pause-menu tab was removed in 6.1.0 — powerups are
+    // now bought in the shop overlay (covered by QA-07). The former
+    // "pause menu has POWERUPS tab" / "clicking POWERUPS tab" tests were
+    // removed as obsolete.
 
     test('pause menu has MUSIC tab', async ({ page }) => {
         await startGame(page);
@@ -141,16 +137,6 @@ test.describe('QA-04: HUD and UI', () => {
     // Pause menu tab switching
     // ------------------------------------------------------------------
 
-    test('clicking POWERUPS tab shows powerups content', async ({ page }) => {
-        await startGame(page);
-        await page.keyboard.press('Escape');
-        await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
-
-        await page.click('.pause-tab[data-tab="powerups"]');
-        const content = page.locator('#powerups-tab');
-        await expect(content).toHaveClass(/active/);
-    });
-
     test('clicking MUSIC tab shows music player', async ({ page }) => {
         await startGame(page);
         await page.keyboard.press('Escape');
@@ -167,7 +153,26 @@ test.describe('QA-04: HUD and UI', () => {
 
     test('clicking HUD pause button pauses the game', async ({ page }) => {
         await startGame(page);
-        await page.click('#hud-pause-btn');
+        // The HUD PAUSE button is canvas-drawn (5.79.2 — the DOM
+        // #hud-pause-btn is vestigial / display:none). It's hit-tested from
+        // `_hudButtonRects.pause`; clicking the canvas there calls
+        // togglePause() (see event-setup.js). Convert the rect's canvas-pixel
+        // coords to client coords and click it.
+        await page.waitForFunction(
+            () => window.gameEngine?._hudButtonRects?.pause,
+            { timeout: 5_000 }
+        );
+        const pos = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const r = ge._hudButtonRects.pause;
+            const c = ge.canvas;
+            const cb = c.getBoundingClientRect();
+            return {
+                x: cb.left + (r.x + r.w / 2) * (cb.width / c.width),
+                y: cb.top + (r.y + r.h / 2) * (cb.height / c.height),
+            };
+        });
+        await page.mouse.click(pos.x, pos.y);
 
         await page.waitForFunction(
             () => window.gameEngine?.game?.state === 'PAUSED',

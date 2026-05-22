@@ -84,6 +84,7 @@ Rainboids is a supercharged asteroids game featuring:
 - **Activate defense ability/skill**: Tab (6.x) — fires the equipped defense skill when charged
 - **Pick primary weapon (radial menu)**: Hold F — aim with mouse, click to equip, release to cancel
 - **Pick power weapon (radial menu)**: Hold E — same flow
+- **Pick defense skill (radial menu)**: Hold R (6.54.0) — same flow
 - **Assists** (pause menu → ASSISTS tab — persisted): Aim Assist (cursor snap to nearest target), Auto Aim (lock onto nearest threat), Auto Fire (auto-trigger primary + power)
 - **Switch primary weapon**: Pause menu → PRIMARY tab (all 5 free, click to equip)
 - **Switch power weapon**: Pause menu → POWER tab (all 5 free, click to equip)
@@ -92,6 +93,23 @@ Rainboids is a supercharged asteroids game featuring:
 - **Inventory**: `I` (6.47.0) — review equipped gear + re-equip a recent drop
 - **Stats**: backtick `` ` `` opens the stats screen; the **STATS** pause-menu tab (6.48.0) shows the same passive stat-point allocation card ([−]/[+] to spend & redistribute SP)
 - **Pause**: Escape
+
+### Gamepad (dual-analog twin-stick, DualShock 4 / Xbox — 6.52.0+)
+
+Plug in any standard gamepad — it works on **both desktop and mobile**.
+
+- **Move**: Left stick (analog — speed scales with deflection). D-pad works as a digital fallback.
+- **Aim**: Right stick (twin-stick — the stick's direction is the ship's facing; on mobile the facing holds when you release the stick).
+- **Fire primary**: R2 (right trigger)
+- **Fire / charge power weapon**: L2 (left trigger)
+- **Primary weapon radial**: hold R1 — push a stick to highlight, release to equip
+- **Power weapon radial**: hold L1 — same flow
+- **Defense skill radial**: hold △ / Y — same flow
+- **Activate defense skill**: ◯ / B
+- **Dash**: ✕ / A
+- **Pause / resume**: Options / Start
+- **Control-scheme picker (6.54.0)**: a connected pad doesn't force itself on you. The **GAMEPAD** pause-menu tab has a picker to choose **Gamepad** vs **Mouse + Keyboard** (desktop) or **Gamepad** vs **Touch** (mobile); your choice persists. Under Gamepad on mobile the touch reticle hides and the laser sight becomes available; the **ASSISTS** tab also unlocks so you can opt into Aim Assist / Auto Aim / Auto Fire / Laser Sight on top of twin-stick aiming.
+- **GAMEPAD pause-menu tab + tutorial section (6.53.0+)**: while a pad is connected, a **GAMEPAD** tab appears in the pause menu (and a GAMEPAD section in the HOW TO PLAY tutorial) listing all of the above mappings; both hide again on disconnect.
 
 ### Mobile (touch) — turret-defense RPG (5.98.0)
 
@@ -412,12 +430,15 @@ npm run generate-sfx       # Regenerate the SFXR-baked WAV library
 npm run test:unit
 npm run test:unit:watch
 npm run test:unit:verbose
+npm run test:unit:json       # Jest results as JSON on stdout
 
 # QA smoke — Playwright "qa" project (~20-30s)
 npm run test:qa
+npm run test:qa:json         # Pure JSON results on stdout (pipe to jq)
 
 # Full E2E — sequential, comprehensive
 npm run test:e2e
+npm run test:e2e:json        # Pure JSON results on stdout
 npm run test:e2e:menu        # Title / menu interactions
 npm run test:e2e:hud         # HUD elements
 npm run test:e2e:weapons     # Primary / power weapons
@@ -474,6 +495,7 @@ npm run qa:bot:report        # Generate a report from the most recent session
 The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair with `npm run report:allure` to inspect.
 
 ### Test infrastructure notes
+- **Structured JSON results**: every Playwright run writes `tests/report/results.json` (a `json` reporter is configured alongside `list`/`html`/`allure`), so automation can parse pass/fail + error detail without scraping the console. Override the path with the `PLAYWRIGHT_JSON_OUTPUT_NAME` env var; the `*:json` npm scripts emit pure JSON to stdout instead (e.g. `npm run test:qa:json | jq '.stats'`). `tests/report/` is gitignored.
 - All Playwright suites need browsers installed once: `npx playwright install` (Chromium is enough for the default projects).
 - Allure CLI is bundled as a dev dependency — no global install required.
 - The unit suite uses `--experimental-vm-modules`, so it requires a recent Node (≥18 recommended).
@@ -567,6 +589,7 @@ The bot writes session logs + Allure artifacts to `allure-results/qa-bot/`. Pair
 │       ├── ui/                # DOM UI and input
 │       │   ├── ui-manager.js  #   DOM-based UI (pause menu, shop button)
 │       │   ├── input-handler.js # Keyboard + mouse input (desktop)
+│       │   ├── gamepad-handler.js # Dual-analog twin-stick gamepad input — desktop + mobile (6.52.0)
 │       │   ├── mobile-touch.js # Tap-to-aim-and-fire + PRM/PWR HUD routing — tower-defense mode (5.94.0)
 │       │   ├── event-setup.js #   All event listeners: input, shop, cheats, resize
 │       │   ├── radial-menu.js #   Held E/R/F radial picker for primary/power/skill

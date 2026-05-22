@@ -173,16 +173,23 @@ test.describe('QA-05: Entity spawning and lifecycle', () => {
         expect(p.life).toBeGreaterThan(0);
     });
 
-    test('particle pool enforces MAX_PARTICLES limit', async ({ page }) => {
-        // MAX_PARTICLES = 2500 (5.64.2 — bumped after WebGL migration).
-        await page.evaluate(() => {
+    test('particle pool grows past MAX_PARTICLES (no hard cap — 6.16.1)', async ({ page }) => {
+        // 6.16.1 removed soft-cap eviction; the pool grows on demand so
+        // explosion sub-particles are never dropped from the render queue.
+        // MAX_PARTICLES (2500) is just the initial capacity now.
+        // Measure the delta inside ONE synchronous evaluate so the running
+        // game loop can't tick (and spawn/expire its own particles) between
+        // the before/after snapshots.
+        const spawned = await page.evaluate(() => {
             const ge = window.gameEngine;
+            const before = ge.particlePool.activeObjects.length;
             for (let i = 0; i < 2800; i++) {
                 ge.particlePool.get(200, 200, 'explosion');
             }
+            return ge.particlePool.activeObjects.length - before;
         });
-        const count = (await getPoolCounts(page)).particles;
-        expect(count).toBeLessThanOrEqual(2510);
+        // Every spawned particle stays active — none evicted (no hard cap).
+        expect(spawned).toBe(2800);
     });
 
     // ------------------------------------------------------------------

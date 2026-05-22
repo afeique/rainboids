@@ -85,8 +85,23 @@ function _buildTutorialOverlay() {
         'Primary weapon — hold LEFT CLICK to fire continuously.',
         'Power weapon — RIGHT CLICK / SPACE (costs energy — see below).',
         'Defense ability — TAB when charged.   Dash — SHIFT.',
+        'Weapon radials — hold F (primary), E (power), R (defense skill).',
         'Pause — ESC.   Stats — backtick (`).',
     ]));
+    // GAMEPAD section — built hidden; the engine reveals it whenever a pad
+    // is connected (see game-engine._refreshGamepadTabVisibility →
+    // ui-manager.setGamepadTutorialVisible). DualShock 4 / Xbox layout.
+    const gamepadSection = section('GAMEPAD (DUALSHOCK 4 / XBOX)', [
+        'Move — left stick.   Aim — right stick (twin-stick).',
+        'Fire primary — R2.   Fire / charge power — L2.',
+        'Primary radial — hold R1.   Power radial — hold L1.',
+        'Defense skill radial — hold Triangle/Y.   Activate skill — Circle/B.',
+        'Dash — Cross/A.   Pause — Options / Start.',
+        'Choose Gamepad vs Mouse + Keyboard / Touch in pause → GAMEPAD tab.',
+    ]);
+    gamepadSection.id = 'tutorial-gamepad-section';
+    gamepadSection.style.display = 'none';
+    body.appendChild(gamepadSection);
     body.appendChild(section('PRIMARY WEAPONS', [
         'Five primaries: Pulse Cannon, Storm Needles, Scatter Shot,',
         'Rail Driver, Cluster Launcher. Swap them in the pause menu.',
@@ -226,18 +241,24 @@ function _buildPauseMenu() {
     menu.appendChild(actions);
 
     // ── Tab strip ──
-    // 6.1.1 — ASSISTS tab hidden on mobile (all mobile assists are
-    // baked into the input model: auto-aim/auto-fire forced on, tap
-    // dashes). Desktop keeps the tab for the one remaining toggle set
-    // (Aim Assist / Auto Aim / Auto Fire).
+    // The ASSISTS tab is always built. It's shown on desktop, and on
+    // mobile it's hidden until a gamepad is connected (touch-only mobile
+    // bakes assists into the input model, so it has no toggles). The
+    // engine toggles the button's visibility via
+    // UIManager.setAssistsTabVisible() on gamepad connect/disconnect and
+    // at boot — see game-engine._refreshAssistsTabVisibility().
+    // The GAMEPAD tab is built on every platform but hidden by default; the
+    // engine reveals it whenever a gamepad is connected (any platform) and
+    // re-hides it on disconnect — see game-engine._refreshGamepadTabVisibility().
     const mobile = isMobile();
     const tabs = el('div', { className: 'pause-tabs' });
     const tabDefs = [
         { key: 'controls', label: 'CONTROLS', active: true },
+        { key: 'gamepad',  label: 'GAMEPAD' },
         { key: 'stats',    label: 'STATS' },
         { key: 'primary',  label: 'PRIMARY' },
         { key: 'power',    label: 'POWER' },
-        ...(mobile ? [] : [{ key: 'assists', label: 'ASSISTS' }]),
+        { key: 'assists',  label: 'ASSISTS' },
         { key: 'timer',    label: 'TIMER' },
         { key: 'music',    label: 'MUSIC' },
         { key: 'sfx',      label: 'SFX' },
@@ -245,20 +266,29 @@ function _buildPauseMenu() {
     for (const t of tabDefs) {
         const b = el('button', { className: 'pause-tab' + (t.active ? ' active' : ''), text: t.label });
         b.dataset.tab = t.key;
+        // Hide the ASSISTS button by default on mobile; the engine reveals
+        // it when a gamepad connects (and re-hides on disconnect).
+        if (t.key === 'assists' && mobile) b.style.display = 'none';
+        // The GAMEPAD button is always hidden until a pad is detected.
+        if (t.key === 'gamepad') b.style.display = 'none';
         tabs.appendChild(b);
     }
     menu.appendChild(tabs);
 
     // ── Tab content stubs ──
     menu.appendChild(el('div', { id: 'controls-tab', className: 'pause-tab-content active' }));
+    // GAMEPAD tab — static control reference, shown only while a pad is
+    // connected (button visibility gates access).
+    menu.appendChild(_buildGamepadTab());
     // STATS tab — populated by ui-manager.updateStatsTab() with the
     // shared SP-allocation card (passive stat icons + [−]/[+] controls).
     menu.appendChild(el('div', { id: 'stats-tab',    className: 'pause-tab-content' }));
     menu.appendChild(el('div', { id: 'primary-tab',  className: 'pause-tab-content' }));
     menu.appendChild(el('div', { id: 'power-tab',    className: 'pause-tab-content' }));
-    // Assists tab content only appended on desktop; mobile has no
-    // user-facing assist toggles (all baked into the input model).
-    if (!mobile) menu.appendChild(_buildAssistsTab());
+    // Assists tab content is always built (the toggles are needed for the
+    // mobile-with-gamepad case); the tab button's visibility is what gates
+    // access on mobile.
+    menu.appendChild(_buildAssistsTab());
     menu.appendChild(_buildTimerTab());
     menu.appendChild(_buildMusicTab());
     menu.appendChild(_buildSfxTab());
@@ -275,14 +305,83 @@ function _pauseActionBtn(id, icon, label) {
     });
 }
 
+function _buildGamepadTab() {
+    // Static DualShock 4 / Xbox control reference + control-scheme picker.
+    // Built on every platform but only reachable while a gamepad is
+    // connected — the tab button's visibility is toggled by the engine on
+    // connect/disconnect. Reuses the assists-row styling (control name as
+    // the title, action as the description) so it needs no bespoke CSS.
+    const rows = [
+        { control: 'Left Stick',         action: 'Move ship (analog — speed scales with deflection)' },
+        { control: 'Right Stick',        action: 'Aim (twin-stick — points the ship where you push)' },
+        { control: 'D-Pad',              action: 'Move ship (digital fallback)' },
+        { control: 'R2 (right trigger)', action: 'Fire primary weapon' },
+        { control: 'L2 (left trigger)',  action: 'Fire / charge power weapon' },
+        { control: 'R1 - hold',          action: 'Primary weapon radial (stick picks, release equips)' },
+        { control: 'L1 - hold',          action: 'Power weapon radial (stick picks, release equips)' },
+        { control: 'Triangle / Y - hold', action: 'Defense skill radial (stick picks, release equips)' },
+        { control: 'Cross / A',          action: 'Dash' },
+        { control: 'Circle / B',         action: 'Activate defense skill' },
+        { control: 'Options / Start',    action: 'Pause / resume' },
+    ];
+
+    const list = el('div', { className: 'assists-list' });
+    for (const r of rows) {
+        list.appendChild(el('div', {
+            className: 'assist-row',
+            children: [
+                el('div', {
+                    className: 'assist-row-text',
+                    children: [
+                        el('div', { className: 'assist-row-title', text: r.control }),
+                        el('div', { className: 'assist-row-desc',  text: r.action }),
+                    ],
+                }),
+            ],
+        }));
+    }
+
+    // Control-scheme picker — lets the player keep mouse + keyboard / touch
+    // even with a pad plugged in. The alternate option is platform-specific
+    // (TOUCH on mobile, MOUSE + KB on desktop); its scheme value lives in a
+    // data attribute so the wiring in ui-manager stays platform-agnostic.
+    const mobile = isMobile();
+    const altLabel = mobile ? 'TOUCH' : 'MOUSE + KB';
+    const altScheme = mobile ? 'touch' : 'keyboard';
+    const gpBtn = el('button', { id: 'control-scheme-gamepad', className: 'pause-tab', text: 'GAMEPAD' });
+    gpBtn.dataset.scheme = 'gamepad';
+    const altBtn = el('button', { id: 'control-scheme-alt', className: 'pause-tab', text: altLabel });
+    altBtn.dataset.scheme = altScheme;
+    const schemeRow = el('div', {
+        className: 'pause-tabs',
+        style: { marginBottom: '14px', justifyContent: 'center' },
+        children: [gpBtn, altBtn],
+    });
+
+    return el('div', {
+        id: 'gamepad-tab',
+        className: 'pause-tab-content',
+        children: [
+            el('h2', { text: 'GAMEPAD' }),
+            el('div', {
+                style: { marginBottom: '10px', color: '#aaa', fontSize: '12px', textAlign: 'center' },
+                text: 'Play with:',
+            }),
+            schemeRow,
+            list,
+        ],
+    });
+}
+
 function _buildAssistsTab() {
     // 6.1.1 — Auto Power assist retired. Auto Fire now drives BOTH
     // primary and power weapon firing — one toggle, both barrels.
-    // Mobile bakes Auto Aim + Auto Fire into the input model (tap to
-    // dash, auto-fire handles all shooting); no user-facing toggles
-    // remain on mobile so the assists tab is empty there.
-    const mobile = isMobile();
-    const desktopRows = [
+    // The same toggle set serves desktop AND mobile-with-gamepad (a
+    // gamepad turns mobile into a twin-stick experience where the player
+    // chooses their own assists). Touch-only mobile never sees this tab
+    // (its assists are baked into tap-to-shoot), so a single row set is
+    // correct everywhere the tab is actually reachable.
+    const rows = [
         { id: 'assist-aim-assist', title: 'Aim Assist',
           desc: 'Reticle snaps onto nearby targets.' },
         { id: 'assist-auto-aim', title: 'Auto Aim',
@@ -290,13 +389,10 @@ function _buildAssistsTab() {
         { id: 'assist-auto-fire', title: 'Auto Fire',
           desc: 'Fire primary AND power weapon automatically.' },
         // 6.2.3 — Laser Sight toggle. Renders the muzzle laser / cone-
-        // of-fire wedge so the player can read aim + spread at a
-        // glance. Desktop-only (mobile uses the touch reticle).
+        // of-fire wedge so the player can read aim + spread at a glance.
         { id: 'assist-laser-sight', title: 'Laser Sight',
           desc: 'Show the muzzle laser pointer and spread cone.' },
     ];
-    const mobileRows = [];
-    const rows = mobile ? mobileRows : desktopRows;
 
     const list = el('div', { className: 'assists-list' });
     for (const r of rows) {
@@ -316,9 +412,7 @@ function _buildAssistsTab() {
         });
         list.appendChild(label);
     }
-    const helperText = mobile
-        ? 'Aim Assist, Auto Aim, and Auto Fire are built into tap-to-shoot on mobile and always on.'
-        : 'Optional aim and fire helpers. Settings persist between runs.';
+    const helperText = 'Optional aim and fire helpers. Settings persist between runs.';
     return el('div', {
         id: 'assists-tab',
         className: 'pause-tab-content',

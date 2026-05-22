@@ -20,11 +20,28 @@ test.describe('QA-02: Game start and state transitions', () => {
         expect(state).toBe('PLAYING');
     });
 
-    test('game starts when canvas is clicked (event-driven path)', async ({ page }) => {
-        // Click the canvas — should trigger the startGame handler in main.js
-        await page.click('#gameCanvas');
+    test('game starts when the NEW GAME button is clicked (event-driven path)', async ({ page }) => {
+        // The title buttons are canvas-drawn; main.js hit-tests
+        // `_titleButtonRects` on click and only launches on a button hit
+        // (clicking empty canvas does nothing). Click the NEW GAME rect,
+        // converting its canvas-pixel coords to client coords the same way
+        // main.js's hitId() inverts them.
+        await page.waitForFunction(
+            () => window.gameEngine?._titleButtonRects?.newGame,
+            { timeout: 10_000 }
+        );
+        const pos = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const r = ge._titleButtonRects.newGame;
+            const c = ge.canvas;
+            const cb = c.getBoundingClientRect();
+            return {
+                x: cb.left + (r.x + r.w / 2) * (cb.width / c.width),
+                y: cb.top + (r.y + r.h / 2) * (cb.height / c.height),
+            };
+        });
+        await page.mouse.click(pos.x, pos.y);
 
-        // Give it time to process
         await page.waitForFunction(
             () => window.gameEngine?.game?.state === 'PLAYING',
             { timeout: 10_000 }

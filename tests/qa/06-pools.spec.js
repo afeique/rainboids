@@ -115,17 +115,22 @@ test.describe('QA-06: Pool manager correctness', () => {
     // Particle pool cap
     // ------------------------------------------------------------------
 
-    test('particle pool never exceeds MAX_PARTICLES active objects', async ({ page }) => {
-        // MAX_PARTICLES = 2500 (5.64.2 — bumped from 600 after WebGL migration).
-        // Spawn well over the cap so eviction must kick in.
-        await page.evaluate(() => {
+    test('particle pool grows past MAX_PARTICLES (no hard cap — 6.16.1)', async ({ page }) => {
+        // 6.16.1 removed the soft-cap eviction (see pool-manager.js): the
+        // particle pool now grows without bound so a wave-clear's worth of
+        // explosion sub-particles can't push earlier ones out of the render
+        // queue. MAX_PARTICLES (2500) is now just the INITIAL capacity.
+        // Spawning well over it must therefore keep every particle active.
+        const count = await page.evaluate(() => {
             const ge = window.gameEngine;
+            const before = ge.particlePool.activeObjects.length;
             for (let i = 0; i < 2800; i++) {
                 ge.particlePool.get(300, 300, 'explosion');
             }
+            return ge.particlePool.activeObjects.length - before;
         });
-        const count = await page.evaluate(() => window.gameEngine.particlePool.activeObjects.length);
-        expect(count).toBeLessThanOrEqual(2510);
+        // All 2800 stay active — nothing evicted.
+        expect(count).toBe(2800);
     });
 
     // ------------------------------------------------------------------

@@ -22,6 +22,12 @@ export default defineConfig({
     reporter: [
         ['list'],
         ['html', { outputFolder: 'tests/report', open: 'never' }],
+        // Structured machine-readable results, written on every run to a
+        // stable, gitignored path (tests/report/). Lets tooling/automation
+        // parse pass-fail + error detail without scraping the console.
+        // Override the path with PLAYWRIGHT_JSON_OUTPUT_NAME; the `*:json`
+        // npm scripts instead emit pure JSON to stdout.
+        ['json', { outputFile: 'tests/report/results.json' }],
         ['allure-playwright', { resultsDir: 'allure-results/e2e' }],
     ],
 

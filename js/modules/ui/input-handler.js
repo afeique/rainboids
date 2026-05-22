@@ -31,6 +31,15 @@ export class InputHandler {
             aimY: window.innerHeight / 2,
             screenAimX: window.innerWidth / 2,
             screenAimY: window.innerHeight / 2,
+            // Analog twin-stick channels. `stickInput` is the normalized
+            // movement vector (left stick / mobile touch stick); `aimStick`
+            // is the right-stick aim vector. `gamepadActive` is true only
+            // while a gamepad is the engaged input device (see
+            // GamepadHandler) — it gates the analog movement + aim model in
+            // player.js so an idle pad never overrides mouse/keyboard/touch.
+            stickInput: { x: 0, y: 0, magnitude: 0 },
+            aimStick: { x: 0, y: 0, magnitude: 0 },
+            gamepadActive: false,
         };
 
         this.gameEngine = null; // Set by GameEngine after construction.
