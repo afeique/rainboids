@@ -1932,6 +1932,74 @@ export function applySlow(enemy, durationMs = 2000, factor = 0.7) {
     enemy.slowFactor = Math.min(cur, factor);
 }
 
+// ─── E3 — Extended elemental status applicators ─────────────────────────────
+// Same guard contract as applyBurn/applyStun/applySlow (no-op on dead /
+// inactive / warping / death-flashing enemies). All refresh-style. The
+// damage MULTIPLIERS for CORRODE / CONDUCT live in `applyDamageToEnemy`
+// (collision-system); the movement/firing gates for CHILL / FREEZE live in
+// `Enemy.update`; the BLEED tick lives in `Enemy._processStatusEffects`.
+// OIL / MARK are pure tags consumed by the E4 reactions. These helpers just
+// own the timers/stacks. Each is wired onto the engine in game-engine.js.
+
+function _statusGuard(enemy) {
+    return enemy && enemy.active && !enemy.warping && !(enemy._deathFlash > 0);
+}
+
+// CORRODE — +15% incoming damage per stack from ALL sources. Cap 3, refresh.
+export function applyCorrode(enemy, durationMs = 4000, maxStacks = 3) {
+    if (!_statusGuard(enemy)) return;
+    enemy.corrodeStacks = Math.min(maxStacks, (enemy.corrodeStacks || 0) + 1);
+    enemy.corrodeUntil = frameClock.now + durationMs;
+}
+
+// CHILL — lighter movement slow (×0.6, applied in Enemy.update). Refresh.
+export function applyChill(enemy, durationMs = 2000) {
+    if (!_statusGuard(enemy)) return;
+    enemy.chillUntil = Math.max(enemy.chillUntil || 0, frameClock.now + durationMs);
+}
+
+// FREEZE — full halt + no firing (OR'd into the stun gate) + brittle. Refresh.
+export function applyFreeze(enemy, durationMs = 1500) {
+    if (!_statusGuard(enemy)) return;
+    enemy.freezeUntil = Math.max(enemy.freezeUntil || 0, frameClock.now + durationMs);
+}
+
+// CONDUCT — +50% VOLT damage taken (applied in applyDamageToEnemy). Refresh.
+export function applyConduct(enemy, durationMs = 3000) {
+    if (!_statusGuard(enemy)) return;
+    enemy.conductUntil = Math.max(enemy.conductUntil || 0, frameClock.now + durationMs);
+}
+
+// OIL — primes the enemy; the next Pyro hit flares (E4). Refresh.
+export function applyOil(enemy, durationMs = 5000) {
+    if (!_statusGuard(enemy)) return;
+    enemy.oilUntil = Math.max(enemy.oilUntil || 0, frameClock.now + durationMs);
+}
+
+// MARK — homing-priority + crit + bonus loot (consumed in E4). Refresh.
+export function applyMark(enemy, durationMs = 6000) {
+    if (!_statusGuard(enemy)) return;
+    enemy.markUntil = Math.max(enemy.markUntil || 0, frameClock.now + durationMs);
+}
+
+// BLEED — DoT, 300 ms ticks, NO refresh (duration fixed at first apply),
+// stacks to 6. Per-tick = bleedSourceDmg × 0.08 × stacks (Enemy._processStatusEffects).
+export function applyBleed(enemy, sourceDmg, durationMs = 4000, maxStacks = 6) {
+    if (!_statusGuard(enemy)) return;
+    if (!(sourceDmg > 0)) return;
+    const now = frameClock.now;
+    const wasInactive = !(enemy.bleedStacks > 0) || enemy.bleedUntil <= now;
+    enemy.bleedStacks = Math.min(maxStacks, (enemy.bleedStacks || 0) + 1);
+    enemy.bleedSourceDmg = Math.max(enemy.bleedSourceDmg || 0, sourceDmg);
+    if (wasInactive) {
+        // First application of a fresh bleed sets the (non-refreshing) window
+        // and schedules the first tick. Re-procs while bleeding only add
+        // stacks — they do NOT extend the window.
+        enemy.bleedUntil = now + durationMs;
+        enemy.bleedTickAt = now + 300;
+    }
+}
+
 // ─── Mine Defensive Plasma Shield Zone ───────────────────────────────────────
 //
 // 6.23.0 (2026-05-19) — refactored from Phase 5. Originally each ENEMY mine

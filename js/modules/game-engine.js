@@ -2508,6 +2508,14 @@ export class GameEngine {
     applyBurn(enemy, sourceDmg, durationMs) { return combat.applyBurn(enemy, sourceDmg, durationMs); }
     applyStun(enemy, durationMs) { return combat.applyStun(enemy, durationMs); }
     applySlow(enemy, durationMs, factor) { return combat.applySlow(enemy, durationMs, factor); }
+    // E3 — extended elemental status applicators.
+    applyCorrode(enemy, durationMs, maxStacks) { return combat.applyCorrode(enemy, durationMs, maxStacks); }
+    applyChill(enemy, durationMs) { return combat.applyChill(enemy, durationMs); }
+    applyFreeze(enemy, durationMs) { return combat.applyFreeze(enemy, durationMs); }
+    applyConduct(enemy, durationMs) { return combat.applyConduct(enemy, durationMs); }
+    applyOil(enemy, durationMs) { return combat.applyOil(enemy, durationMs); }
+    applyMark(enemy, durationMs) { return combat.applyMark(enemy, durationMs); }
+    applyBleed(enemy, sourceDmg, durationMs, maxStacks) { return combat.applyBleed(enemy, sourceDmg, durationMs, maxStacks); }
 
     // Phase 6 (2026-05-19) — Cluster Launcher detonation hooks. Called
     // from `Bullet._detonate` when a cluster bomb's armed timer expires

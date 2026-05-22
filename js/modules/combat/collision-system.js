@@ -2195,6 +2195,17 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     const _resistMult = elementalMultiplier(enemy.resist, opts.element || 'KINETIC');
     if (_resistMult !== 1) damage *= _resistMult;
 
+    // E3 — CORRODE amplifies ALL incoming damage (+15% per stack); CONDUCT
+    // amplifies VOLT damage (+50%). Both read the enemy's status timers; the
+    // applicators live in combat-manager. Inert until a weapon/skill applies
+    // them (E6 / synergies in E4).
+    if (enemy.corrodeStacks > 0 && enemy.corrodeUntil > frameClock.now) {
+        damage *= 1 + 0.15 * enemy.corrodeStacks;
+    }
+    if (enemy.conductUntil > frameClock.now && (opts.element || 'KINETIC') === 'VOLT') {
+        damage *= 1.5;
+    }
+
     enemy.health -= damage;
     enemy.health = Math.max(0, Math.min(enemy.health, enemy.maxHealth));
 

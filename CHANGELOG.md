@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.62.0] - 2026-05-22
+
+### Added — Extended elemental status engine (Phase E3)
+
+Adds six new enemy statuses on top of BRN/STUN/SLOW. **Inert in gameplay
+until E4/E6 apply them** (no weapon/skill procs them yet) — this phase ships
+the mechanics, applicators, and damage hooks.
+
+- **CORRODE** — +15% incoming damage from ALL sources per stack (cap 3, 4s,
+  refresh); read in `applyDamageToEnemy`, stacks cleared on expiry.
+- **CHILL** — movement ×0.6 while active (folds into the `slowMul` path).
+- **FREEZE** — full halt + no firing (OR'd into the `stunned` gate) + brittle
+  flag for the upcoming E4 SHATTER reaction.
+- **CONDUCT** — +50% VOLT damage taken (read in `applyDamageToEnemy`).
+- **OIL** / **MARK** — tag timers stored for the E4 reactions (Pyro flare /
+  homing + crit + loot); inert at this layer.
+- **BLEED** — DoT on a 300 ms cadence, stacks to 6, **no refresh** (window
+  fixed at first apply); ticks through `takeDamage` like BRN.
+- New `applyCorrode/Chill/Freeze/Conduct/Oil/Mark/Bleed` helpers in
+  combat-manager, wired onto the engine. 8 unit tests cover stack/cap/refresh
+  semantics + the CORRODE/CONDUCT damage multipliers.
+
 ## [6.61.0] - 2026-05-22
 
 ### Changed — 4-slot skill loadout now playable: input + HUD (Phases B.S2 + B.S3)

@@ -240,6 +240,30 @@ export class Enemy {
         this.slowUntil = 0;
         this.slowFactor = 1;
 
+        // ── E3 — extended elemental statuses ──
+        //   CORRODE: +15%/stack incoming damage from ALL sources (read in
+        //            applyDamageToEnemy). Up to 3 stacks, refresh-style.
+        //   CHILL:   movement ×0.6 while active (a lighter slow; folds into
+        //            slowMul in update()).
+        //   FREEZE:  full halt + no firing (OR'd into the `stunned` gate) and
+        //            brittle — the SHATTER reaction (E4) reads `freezeUntil`.
+        //   CONDUCT: +50% VOLT damage taken (read in applyDamageToEnemy).
+        //   OIL / MARK: stored for the E4 reactions (Pyro flare / homing +
+        //            crit + loot). Inert at this layer until E4 consumes them.
+        //   BLEED:   DoT like BRN but faster ticks (300 ms) and NO refresh —
+        //            stacks accumulate to 6; duration is set on first apply.
+        this.corrodeStacks = 0;
+        this.corrodeUntil = 0;
+        this.chillUntil = 0;
+        this.freezeUntil = 0;
+        this.conductUntil = 0;
+        this.oilUntil = 0;
+        this.markUntil = 0;
+        this.bleedStacks = 0;
+        this.bleedUntil = 0;
+        this.bleedTickAt = 0;
+        this.bleedSourceDmg = 0;
+
         // Circulating shield indicator with music sync
         this.shield = {
             rotation: 0,
@@ -431,7 +455,11 @@ export class Enemy {
         // below starts from a stopped state. We re-zero AFTER movement too
         // (some patterns set velocity directly without reading the current
         // value) so the enemy stays fully frozen for the stun duration.
-        const stunned = this.stunUntil > frameClock.now;
+        // E3 — FREEZE halts movement + firing exactly like STUN (it OR's
+        // into `stunned`, which gates the velocity zeroes below + the
+        // `_decideShooting` call). FREEZE additionally marks the enemy
+        // brittle for the E4 SHATTER reaction.
+        const stunned = this.stunUntil > frameClock.now || this.freezeUntil > frameClock.now;
         if (stunned) {
             this.vel.x = 0;
             this.vel.y = 0;
@@ -536,7 +564,10 @@ export class Enemy {
 
         // Position update (scaled for tick rate). SLOW scales movement
         // while active (Nova AFTERSHOCK) — firing is unaffected.
-        const slowMul = (this.slowUntil > frameClock.now) ? (this.slowFactor || 0.7) : 1;
+        let slowMul = (this.slowUntil > frameClock.now) ? (this.slowFactor || 0.7) : 1;
+        // E3 — CHILL is a lighter movement slow (×0.6); take the strongest
+        // (lowest) factor in effect so chill + slow don't stack to a crawl.
+        if (this.chillUntil > frameClock.now) slowMul = Math.min(slowMul, 0.6);
         this.x += this.vel.x * GAME_CONFIG.TICK_SCALE * slowMul;
         this.y += this.vel.y * GAME_CONFIG.TICK_SCALE * slowMul;
 
@@ -1475,6 +1506,36 @@ export class Enemy {
             this.brnUntil = 0;
             this.brnTickAt = 0;
             this.brnSourceDmg = 0;
+        }
+
+        // E3 — BLEED tick. Mirrors BRN but faster (300 ms cadence) and the
+        // per-tick payload scales with stack count (up to 6). Routes through
+        // takeDamage like BRN so kills award XP/loot/FX. No refresh: duration
+        // is fixed at first apply (see applyBleed), so a bleed always runs its
+        // full window regardless of re-procs — re-procs only add stacks.
+        if (this.bleedStacks > 0 && this.bleedUntil > 0) {
+            while (now >= this.bleedTickAt && this.bleedTickAt <= this.bleedUntil) {
+                const tickDmg = this.bleedSourceDmg * 0.08 * this.bleedStacks;
+                if (tickDmg > 0) {
+                    this.takeDamage(tickDmg, { showNumber: true, isBurn: true });
+                    if (!this.active) return; // bleed-killed; bail.
+                }
+                this.bleedTickAt += 300;
+            }
+        }
+        if (this.bleedStacks > 0 && this.bleedUntil > 0 && now > this.bleedUntil) {
+            this.bleedStacks = 0;
+            this.bleedUntil = 0;
+            this.bleedTickAt = 0;
+            this.bleedSourceDmg = 0;
+        }
+
+        // E3 — CORRODE expiry. The damage amp (applyDamageToEnemy) reads
+        // `corrodeStacks` gated on `corrodeUntil`, but the stack count must
+        // reset once the window lapses so a later re-apply starts clean.
+        if (this.corrodeStacks > 0 && now > this.corrodeUntil) {
+            this.corrodeStacks = 0;
+            this.corrodeUntil = 0;
         }
     }
 
