@@ -155,7 +155,7 @@ export const WAVE_DATA = {
     // ── Stage 7: Iron Crown (combined arms, dense) ──
     19: { asteroids: 4, subWaves: [
         [{ type: 'HUNTER', count: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'LUMEN_DRONE', count: 1 }, { type: 'DRIFTER', count: 1 }],
         [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'TANGERINE', count: 2 }],
     ] },
     20: { asteroids: 4, subWaves: [

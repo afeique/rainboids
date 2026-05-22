@@ -575,6 +575,28 @@ export const ENEMY_TYPES = {
         visual: { shape: 'plague_sac', glowColor: '#c8ff8f', trailLength: 12 },
         ai: { evasion: 0.4, preferredRange: 360, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
+
+    // ── E8d — Support (uses the S7 ally-aura system) ──
+    // Lumen Drone — Radiant support that projects a SHIELD bubble over nearby
+    // allies (they take 40% less damage while it lives). Kill the drone first
+    // to crack the escort open. Keeps its distance; reuses the shield-turret
+    // silhouette. Resists Radiant, weak to Void.
+    LUMEN_DRONE: {
+        name: 'Lumen Drone',
+        color: '#ffd966',
+        health: 9,
+        speed: 1.6,
+        size: 34,
+        shootPattern: 'hunter_single',
+        shootRate: 0.18,
+        movePattern: 'keep_distance',
+        points: 220,
+        aura: { radius: 180, kind: 'shield', amount: 0.4, intervalMs: 300 },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.1, rotationSpeed: { min: -0.01, max: 0.01 }, preferredDistance: 340 },
+        firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1800, max: 5500 } },
+        visual: { shape: 'shield_turret', glowColor: '#fff0b0', trailLength: 14 },
+        ai: { evasion: 0.5, preferredRange: 340, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -598,6 +620,7 @@ const ENEMY_ELEMENTS = {
     TESLA_WRAITH: 'VOLT', // E8c — volt skirmisher
     PLAGUEBEARER: 'TOXIC', // E8c — toxic area-denier
     SPORE_CARRIER: 'TOXIC', // E8c — toxic drone spawner
+    LUMEN_DRONE: 'RADIANT', // E8d — radiant ally-shield support
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -622,6 +645,7 @@ const ENEMY_RESISTS = {
     TESLA_WRAITH: { VOLT: 0.85, TOXIC: -0.50 },                // E8c — near volt-immune; corrode it
     PLAGUEBEARER: { TOXIC: 0.60, RADIANT: -0.40 },             // E8c — toxic-tough; purge it w/ Radiant
     SPORE_CARRIER: { TOXIC: 0.50, RADIANT: -0.40 },            // E8c — toxic-tough spawner; Radiant clears it
+    LUMEN_DRONE: { RADIANT: 0.50, VOID: -0.40 },               // E8d — radiant-tough support; Void snuffs it
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

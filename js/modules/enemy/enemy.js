@@ -10,6 +10,7 @@ import * as shapes from './shapes.js';
 import * as ai from './ai.js';
 import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
 import { decayResistMap } from '../combat/elements.js';
+import { runAura } from './support-aura.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
 // `isMobile` toggles the lateral weave decoration in update().
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
@@ -121,6 +122,13 @@ export class Enemy {
         // the S3 spawn system on a cadence (see the update loop).
         this.spawner = this.config.spawner || null;
         this._nextSpawnAt = 0;
+        // A.E9-S7 — ally support aura (LUMEN_DRONE / CONDUIT_NODE): buffs nearby
+        // allies on a cadence. `_allyShield*` are the stamps a buffed ALLY reads
+        // (reset here so a pooled enemy doesn't carry a stale shield).
+        this.aura = this.config.aura || null;
+        this._nextAuraAt = 0;
+        this._allyShieldUntil = 0;
+        this._allyShieldAmount = 0;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
@@ -517,6 +525,16 @@ export class Enemy {
                 gameEngine.requestEnemySpawn(this.spawner.type, this.x + (Math.random() - 0.5) * 40,
                     this.y + (Math.random() - 0.5) * 40, { cap: this.spawner.cap });
                 this._nextSpawnAt = s.nextAt;
+            }
+        }
+
+        // A.E9-S7 — support aura: on a cadence, shield/heal nearby allies. The
+        // stamp lingers briefly, so killing this support drops the buff.
+        if (this.aura && !stunned && gameEngine && gameEngine.enemyPool) {
+            const au = movement.trailDrop(this.aura, this._nextAuraAt, frameClock.now);
+            if (au.drop) {
+                runAura(this, gameEngine.enemyPool.activeObjects, frameClock.now);
+                this._nextAuraAt = au.nextAt;
             }
         }
 

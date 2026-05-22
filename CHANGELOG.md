@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.83.0] - 2026-05-22
+
+### Added — Ally support auras + Lumen Drone (Phase A.E9-S7 + E8d)
+
+- **A.E9-S7 enabling system:** a support enemy can project an **aura** over
+  nearby allies — a SHIELD (incoming-damage reduction the ally reads in
+  `applyDamageToEnemy`) or a HEAL (HP regen), on a cadence. The buff is a timed
+  stamp that lingers briefly, so **killing the support drops it**. Pure
+  `runAura` / `allyShieldMult` helpers in `enemy/support-aura.js` (6 tests).
+- **Lumen Drone** (Radiant) — its first consumer: projects a **shield bubble**
+  (allies in range take 40% less damage), so crack the escort by killing the
+  drone first. Keeps its distance; reuses the shield-turret silhouette (own
+  `drawEnemyShape` case). Resists Radiant, weak to Void. Placed in a stage-7
+  wave. Roster now **20**.
+- Full suite green (505). AI survival e2e: 2/2 pass.
+
 ## [6.82.0] - 2026-05-22
 
 ### Added — Spore Carrier: drone spawner (Phase E8c; second live S3 consumer)

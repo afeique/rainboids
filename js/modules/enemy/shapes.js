@@ -409,6 +409,10 @@ export function drawEnemyShape(ctx) {
             // E8c spawner — reuses the sac silhouette (it births drones).
             drawPlagueSac.call(this, drawCtx);
             break;
+        case 'LUMEN_DRONE':
+            // E8d support — reuses the shield-turret silhouette (it shields allies).
+            this.drawShieldTurret(drawCtx);
+            break;
         default:
             this.drawTriangle(drawCtx);
     }

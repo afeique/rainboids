@@ -7,6 +7,7 @@ import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { elementalMultiplier, adaptResist } from './elements.js';
+import { allyShieldMult } from '../enemy/support-aura.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
 //   Duplicated here (rather than imported) because wave-manager.js bundles
@@ -2210,6 +2211,11 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (enemy.conductUntil > frameClock.now && (opts.element || 'KINETIC') === 'VOLT') {
         damage *= 1.5;
     }
+
+    // A.E9-S7 — ally SHIELD from a support enemy (Lumen Drone) reduces incoming
+    // damage while the stamp is live. Kill the support to drop it.
+    const _allyMult = allyShieldMult(enemy, frameClock.now);
+    if (_allyMult !== 1) damage *= _allyMult;
 
     // E8a — flat ARMOR floor (GUARDIAN archetype): subtract a fixed amount per
     // hit, down to a 25% floor so chip damage (many small hits) is wasted while
