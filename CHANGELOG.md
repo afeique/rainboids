@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.56.1] - 2026-05-22
+
+### Changed — Darker nebula palette for gameplay legibility
+
+- Nebula cloud colors now pass through a `_dimNebulaColor` clamp so they can
+  never render as bright yellows, near-whites, or other high-luminance washes
+  that competed with in-game elements for the eye. The clamp deepens each hue
+  (strips the shared "white" floor), penalizes yellow specifically, and
+  hard-caps the brightest channel at 0.5. JWST-inspired palette hues are
+  preserved as dark, moody jewel tones; nebulae now read as a quiet deep-space
+  backdrop. Applies to both the region palettes (core/mid/edge) and the drift
+  haze tints in `_populateWebGLNebula`.
+
 ## [6.56.0] - 2026-05-21
 
 ### Added — Six new primary weapons

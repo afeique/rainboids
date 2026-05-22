@@ -2195,7 +2195,18 @@ export class GameEngine {
             { core: [1.00, 0.90, 0.50], mid: [0.65, 0.85, 0.60], edge: [0.30, 0.70, 0.95] },
             // Eagle Nebula greenish — emerald + warm dust
             { core: [0.85, 1.00, 0.65], mid: [0.45, 0.85, 0.40], edge: [1.00, 0.55, 0.30] },
-        ];
+        // 6.56.1 — Every raw JWST hue above is darkened through
+        // _dimNebulaColor so the on-screen nebula can NEVER be a bright
+        // yellow / white / high-luminance wash. Additive blending means a
+        // bright low-alpha core still adds glow that fights gameplay elements
+        // for the eye; the clamp deepens each hue (kills the white floor),
+        // penalizes yellow, and caps peak brightness. Hues survive as dark,
+        // moody jewel tones.
+        ].map(p => ({
+            core: this._dimNebulaColor(p.core),
+            mid:  this._dimNebulaColor(p.mid),
+            edge: this._dimNebulaColor(p.edge),
+        }));
 
         // 5.74.30 — sizes scaled back UP (~1.7×) while keeping the dim
         // alphas from 5.74.29. Bigger silhouette = more presence as a
@@ -2277,7 +2288,7 @@ export class GameEngine {
         const DRIFT_TINTS = [
             [0.20, 0.40, 0.85], [0.40, 0.30, 0.80], [0.30, 0.55, 0.85],
             [0.50, 0.40, 0.75], [0.25, 0.55, 0.75],
-        ];
+        ].map(t => this._dimNebulaColor(t));
         const DRIFT_COUNT = 3;
         for (let i = 0; i < DRIFT_COUNT; i++) {
             const x = Math.random() * this.gameField.width;
@@ -2296,6 +2307,31 @@ export class GameEngine {
                 (Math.random() - 0.5) * 0.003,
             );
         }
+    }
+
+    // 6.56.1 — Nebulae must read as a DARK, deep-space backdrop that never
+    // competes with gameplay elements for attention. This clamps any palette
+    // color so it can never be a bright yellow / white / high-luminance wash.
+    // Hue is preserved; only luminance + whiteness are reined in.
+    //   1. Remove the shared "white" floor (the min channel) → deepens and
+    //      saturates the hue, so near-white (1,1,1) collapses toward black
+    //      instead of washing the screen out.
+    //   2. Extra penalty for yellow (high R+G with low B) — the worst offender
+    //      for legibility against the warm combat FX.
+    //   3. Hard-cap the brightest channel so nothing ever glows past MAX_CH.
+    _dimNebulaColor([r, g, b]) {
+        const MAX_CH = 0.5;       // ceiling on the brightest channel
+        const DESAT_KILL = 0.6;   // fraction of the white floor to strip out
+        const YELLOW_KILL = 0.35; // extra dim applied to yellow warmth
+        const floor = Math.min(r, g, b);
+        let nr = r - floor * DESAT_KILL;
+        let ng = g - floor * DESAT_KILL;
+        let nb = b - floor * DESAT_KILL;
+        const warmth = Math.min(nr, ng) - nb; // > 0 ⇒ yellow-ish
+        if (warmth > 0) { nr -= warmth * YELLOW_KILL; ng -= warmth * YELLOW_KILL; }
+        const peak = Math.max(nr, ng, nb);
+        if (peak > MAX_CH) { const k = MAX_CH / peak; nr *= k; ng *= k; nb *= k; }
+        return [Math.max(0, nr), Math.max(0, ng), Math.max(0, nb)];
     }
 
     /**
