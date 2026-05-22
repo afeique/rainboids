@@ -553,6 +553,28 @@ export const ENEMY_TYPES = {
         visual: { shape: 'plague_sac', glowColor: '#aaffbb', trailLength: 12 },
         ai: { evasion: 0.2, preferredRange: 200, dodgeBullets: false, microMovements: true, fishMotion: true },
     },
+
+    // ── E8c — Spawner (uses the S3 spawn system) ──
+    // Spore Carrier — Toxic enemy that periodically births WASP drones (via the
+    // S3 requestEnemySpawn, capped low so it can't flood). Keeps its distance +
+    // lets the swarm do the work; kill the carrier to stop the bleeding. Reuses
+    // keep_distance + the sac silhouette.
+    SPORE_CARRIER: {
+        name: 'Spore Carrier',
+        color: '#9fd86f',
+        health: 13,
+        speed: 1.1,
+        size: 46,
+        shootPattern: 'hunter_single',
+        shootRate: 0.25,
+        movePattern: 'keep_distance',
+        points: 240,
+        spawner: { type: 'WASP', intervalMs: 4000, cap: 16 },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.1, rotationSpeed: { min: -0.01, max: 0.01 }, preferredDistance: 360 },
+        firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1600, max: 5000 } },
+        visual: { shape: 'plague_sac', glowColor: '#c8ff8f', trailLength: 12 },
+        ai: { evasion: 0.4, preferredRange: 360, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -575,6 +597,7 @@ const ENEMY_ELEMENTS = {
     ASHEN_DETONATOR: 'PYRO', // E8b — fire bomber
     TESLA_WRAITH: 'VOLT', // E8c — volt skirmisher
     PLAGUEBEARER: 'TOXIC', // E8c — toxic area-denier
+    SPORE_CARRIER: 'TOXIC', // E8c — toxic drone spawner
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -598,6 +621,7 @@ const ENEMY_RESISTS = {
     ASHEN_DETONATOR: { PYRO: 0.50, CRYO: -0.40 },              // E8b — fire bomber; freeze it
     TESLA_WRAITH: { VOLT: 0.85, TOXIC: -0.50 },                // E8c — near volt-immune; corrode it
     PLAGUEBEARER: { TOXIC: 0.60, RADIANT: -0.40 },             // E8c — toxic-tough; purge it w/ Radiant
+    SPORE_CARRIER: { TOXIC: 0.50, RADIANT: -0.40 },            // E8c — toxic-tough spawner; Radiant clears it
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

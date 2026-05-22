@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.82.0] - 2026-05-22
+
+### Added — Spore Carrier: drone spawner (Phase E8c; second live S3 consumer)
+
+- **Spore Carrier** — a Toxic enemy that keeps its distance and **periodically
+  births WASP drones** (via the S3 `requestEnemySpawn`, on a ~4s cadence,
+  capped at 16 so it can't flood). Kill the carrier to stop the bleeding.
+  Reuses an existing renderable type (WASP) for the drones + the sac
+  silhouette (own `drawEnemyShape` case). Resists Toxic, weak to Radiant.
+  Placed in a stage-6 wave. Roster now **19**.
+- Reuses the generic `trailDrop` interval-cadence gate. Cadence + config unit
+  tests (2). Second live consumer of the S3 spawn system. Full suite green
+  (499). AI survival e2e: 2/2 pass.
+
 ## [6.81.0] - 2026-05-22
 
 ### Added — Hydra: split-on-death bruiser (Phase E8e; first live S3 consumer)

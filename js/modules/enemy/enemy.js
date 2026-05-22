@@ -117,6 +117,10 @@ export class Enemy {
         // lings can't re-split past `splitOnDeath.maxGen`.
         this.splitOnDeath = this.config.splitOnDeath || null;
         this.splitGen = 0;
+        // E8c — drone spawner (SPORE_CARRIER): periodically births enemies via
+        // the S3 spawn system on a cadence (see the update loop).
+        this.spawner = this.config.spawner || null;
+        this._nextSpawnAt = 0;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
@@ -501,6 +505,18 @@ export class Enemy {
             if (r.drop) {
                 gameEngine.spawnHazard(this.x, this.y, this.trailHazard);
                 this._nextTrailAt = r.nextAt;
+            }
+        }
+
+        // E8c — SPORE_CARRIER drone spawner: periodically births a capped swarm
+        // via the S3 spawn system (reuses movement.trailDrop as a generic
+        // interval-cadence gate); skipped while frozen/stunned.
+        if (this.spawner && !stunned && gameEngine && typeof gameEngine.requestEnemySpawn === 'function') {
+            const s = movement.trailDrop(this.spawner, this._nextSpawnAt, frameClock.now);
+            if (s.drop) {
+                gameEngine.requestEnemySpawn(this.spawner.type, this.x + (Math.random() - 0.5) * 40,
+                    this.y + (Math.random() - 0.5) * 40, { cap: this.spawner.cap });
+                this._nextSpawnAt = s.nextAt;
             }
         }
 

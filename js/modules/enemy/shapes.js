@@ -405,6 +405,10 @@ export function drawEnemyShape(ctx) {
             // E8e bruiser — reuses the blob silhouette (it splits into blobs).
             drawPlagueSac.call(this, drawCtx);
             break;
+        case 'SPORE_CARRIER':
+            // E8c spawner — reuses the sac silhouette (it births drones).
+            drawPlagueSac.call(this, drawCtx);
+            break;
         default:
             this.drawTriangle(drawCtx);
     }

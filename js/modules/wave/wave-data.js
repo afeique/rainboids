@@ -135,7 +135,7 @@ export const WAVE_DATA = {
     // ── Stage 6: Iron Quartet (adds PROWLER — full roster) ──
     16: { asteroids: 4, subWaves: [
         [{ type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'SPORE_CARRIER', count: 1 }],
         [{ type: 'WARDEN', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'WEAVER', count: 2 }],
     ] },
     17: { asteroids: 4, subWaves: [
