@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.70.0] - 2026-05-22
+
+### Added — WASP swarm cohesion (Phase E8a, behavior 3)
+
+- New pure `swarmCohesion(self, pool, radius, pull)` helper — a small velocity
+  bias toward the average position of nearby same-type enemies. Wired into the
+  WASP zigzag movement so packs **cluster** instead of scattering, which lets a
+  single Cryo hit **FREEZE-SHATTER chain through the swarm** (Wasps are
+  Cryo-weak). Bounded radius (cheap), reusable for future swarm types. 5 unit
+  tests.
+- Completes the existing-10 archetype behaviors (after GUARDIAN armor +
+  SENTINEL frontal shield). Warden folds into the new-types batch; TANGERINE
+  oil + TITAN demote remain parked.
+
 ## [6.69.0] - 2026-05-22
 
 ### Added — SENTINEL frontal shield archetype (Phase E8a, behavior 2)

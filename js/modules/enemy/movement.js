@@ -2201,6 +2201,27 @@ export function weaverSpinupMovement(gameEngine) {
 }
 
 // ── Wasp Zigzag Movement ────────────────────────────────────────────────
+// E8a — swarm cohesion: a small velocity bias toward the average position of
+// nearby SAME-TYPE enemies, so a swarm clusters instead of scattering. Makes
+// Wasp packs bunch up, which lets a single Cryo hit FREEZE-SHATTER chain
+// through them (Wasps are Cryo-weak). Pure + bounded-radius (cheap); reusable
+// for any future swarm type. Returns the {x, y} nudge to add to velocity.
+export function swarmCohesion(self, pool, radius, pull) {
+    if (!pool) return { x: 0, y: 0 };
+    const r2 = radius * radius;
+    let cx = 0, cy = 0, n = 0;
+    for (const other of pool) {
+        if (other === self || !other.active || other.type !== self.type) continue;
+        const ox = other.x - self.x, oy = other.y - self.y;
+        if (ox * ox + oy * oy > r2) continue;
+        cx += other.x; cy += other.y; n++;
+    }
+    if (n === 0) return { x: 0, y: 0 };
+    const ax = cx / n - self.x, ay = cy / n - self.y;
+    const al = Math.hypot(ax, ay) || 1;
+    return { x: (ax / al) * pull, y: (ay / al) * pull };
+}
+
 export function waspZigzagMovement() {
     if (!this.targetPlayer) return;
     const now = frameClock.now;
@@ -2259,6 +2280,11 @@ export function waspZigzagMovement() {
             }
             break;
     }
+
+    // E8a — swarm cohesion nudge so wasps cluster (freeze-shatter bait).
+    const coh = swarmCohesion(this, this.gameEngine?.enemyPool?.activeObjects, 220, 0.5);
+    this.vel.x += coh.x;
+    this.vel.y += coh.y;
 }
 
 // ── Boulder (Titan) Movement ─────────────────────────────────────────────
