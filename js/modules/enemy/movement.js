@@ -7,6 +7,18 @@
 
 import { random, GameDimensions } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
+
+// A.E10-U3 — trail-drop cadence (Plaguebearer acid trail, via the S2
+// HazardField). Pure: given the per-type `trailHazard` config, the last
+// scheduled drop time, and `now`, decide whether to drop a hazard this frame
+// and return the next scheduled time. No mutation — the caller stores `nextAt`.
+export function trailDrop(trailHazard, nextAt, now) {
+    if (!trailHazard) return { drop: false, nextAt };
+    if (now >= (nextAt || 0)) {
+        return { drop: true, nextAt: now + (trailHazard.intervalMs || 600) };
+    }
+    return { drop: false, nextAt };
+}
 // 5.95.1 — Mobile fire suppression for the Weaver inline spiral-laser
 // shot inside weaverSpinupMovement. Defense-in-depth alongside the sim
 // `decideEnemyShooting` gate.

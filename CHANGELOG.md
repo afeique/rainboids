@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.79.0] - 2026-05-22
+
+### Added — Plaguebearer acid trails (Phase A.E10-U3; S2 goes live)
+
+- **Plaguebearer** now leaves a **Toxic acid trail** as it moves — dropping
+  persistent hazard zones (the S2 `HazardField`) on a ~600ms cadence that
+  corrode + damage the player who follows it. This is the first live consumer
+  of the hazard system. Gated on a per-type `trailHazard` config (only
+  Plaguebearer trails), skipped while frozen/stunned.
+- Pure `trailDrop` cadence helper in `movement.js` (5 unit tests); the enemy
+  update calls `gameEngine.spawnHazard`. Full suite green (485). AI survival
+  e2e: 2/2 pass.
+
 ## [6.78.0] - 2026-05-22
 
 ### Added — Persistent hazard zones (Phase A.E9-S2 enabling system)

@@ -500,6 +500,8 @@ export const ENEMY_TYPES = {
         shootRate: 0.4,
         movePattern: 'chase',
         points: 200,
+        // A.E10-U3 — leaves a Toxic acid trail (S2 HazardField) as it moves.
+        trailHazard: { element: 'TOXIC', radius: 70, dps: 6, lifeMs: 3500, intervalMs: 600 },
         movement: { pattern: 'chase', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'lay_mine', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 7000 }, mineLifetime: 18000 },
         visual: { shape: 'plague_sac', glowColor: '#aaff66', trailLength: 15 },

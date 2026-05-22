@@ -107,6 +107,10 @@ export class Enemy {
         // applyDamageToEnemy + decayed on a timer in _processStatusEffects.
         this.adaptive = this.config.adaptive || false;
         this._adaptiveDecayAt = 0;
+        // A.E10-U3 — acid/element trail (PLAGUEBEARER): drops a S2 hazard zone
+        // on a cadence as it moves (see movement.trailDrop + the update loop).
+        this.trailHazard = this.config.trailHazard || null;
+        this._nextTrailAt = 0;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
@@ -482,6 +486,16 @@ export class Enemy {
         if (stunned) {
             this.vel.x = 0;
             this.vel.y = 0;
+        }
+
+        // A.E10-U3 — PLAGUEBEARER acid trail: drop a Toxic hazard zone (S2
+        // HazardField) on a cadence as it moves; skipped while frozen/stunned.
+        if (this.trailHazard && !stunned && gameEngine && typeof gameEngine.spawnHazard === 'function') {
+            const r = movement.trailDrop(this.trailHazard, this._nextTrailAt, frameClock.now);
+            if (r.drop) {
+                gameEngine.spawnHazard(this.x, this.y, this.trailHazard);
+                this._nextTrailAt = r.nextAt;
+            }
         }
 
         // Boss rage + per-tier mechanics (HP-threshold telegraph, invuln,
