@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.81.0] - 2026-05-22
+
+### Added — Hydra: split-on-death bruiser (Phase E8e; first live S3 consumer)
+
+- **Hydra** — a tanky Kinetic bruiser that **splits on death** into 2
+  half-size / half-HP lings (via the S3 `requestEnemySpawn`, in `onEnemyKill`).
+  A `splitGen` counter caps re-splitting (`maxGen: 1`, so lings don't split
+  again), and the concurrent cap keeps it bounded. Don't let it pop in your
+  face. Reuses chase + the blob silhouette (with its own `drawEnemyShape` case
+  so it isn't a default triangle). Placed in a stage-6 wave. Roster now **18**.
+- Pure `shouldSplit` / `splitChildSpec` helpers (6 unit tests). First live
+  consumer of the S3 spawn system. Full suite green (497). AI survival e2e:
+  2/2 pass.
+
 ## [6.80.0] - 2026-05-22
 
 ### Added — Mid-fight enemy spawning (Phase A.E9-S3 enabling system)

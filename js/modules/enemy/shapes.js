@@ -401,6 +401,10 @@ export function drawEnemyShape(ctx) {
         case 'WARDEN':
             drawPrismFacet.call(this, drawCtx);
             break;
+        case 'HYDRA':
+            // E8e bruiser — reuses the blob silhouette (it splits into blobs).
+            drawPlagueSac.call(this, drawCtx);
+            break;
         default:
             this.drawTriangle(drawCtx);
     }

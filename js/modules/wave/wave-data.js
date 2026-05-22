@@ -141,7 +141,7 @@ export const WAVE_DATA = {
     17: { asteroids: 4, subWaves: [
         [{ type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
         [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'HYDRA', count: 1 }, { type: 'GUARDIAN', count: 1 }, { type: 'WASP', count: 3 }],
     ] },
     // 6-3 BOSS — Iron Quartet: 3× TITAN T3 + PROWLER escort.
     18: {

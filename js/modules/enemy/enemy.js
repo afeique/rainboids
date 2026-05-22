@@ -111,6 +111,12 @@ export class Enemy {
         // on a cadence as it moves (see movement.trailDrop + the update loop).
         this.trailHazard = this.config.trailHazard || null;
         this._nextTrailAt = 0;
+        // E8e — split-on-death (HYDRA): spawns lings via the S3 spawn system in
+        // onEnemyKill. Always reset `splitGen` to 0 here (clears any pooled
+        // leftover); requestEnemySpawn's onSpawn bumps it on the children so the
+        // lings can't re-split past `splitOnDeath.maxGen`.
+        this.splitOnDeath = this.config.splitOnDeath || null;
+        this.splitGen = 0;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player

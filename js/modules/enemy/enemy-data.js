@@ -531,6 +531,28 @@ export const ENEMY_TYPES = {
         visual: { shape: 'prism_facet', glowColor: '#e0c8ff', trailLength: 15 },
         ai: { evasion: 0.3, preferredRange: 400, dodgeBullets: false, microMovements: true, fishMotion: true },
     },
+
+    // ── E8e — Bruiser (uses the S3 spawn system) ──
+    // Hydra — KINETIC bruiser that SPLITS ON DEATH into 2 half-size/half-HP
+    // lings (via requestEnemySpawn in onEnemyKill, gated by splitGen<maxGen so
+    // lings don't re-split). Don't let it die in your face. Reuses chase +
+    // hunter shot + the blob silhouette (drawPlagueSac).
+    HYDRA: {
+        name: 'Hydra',
+        color: '#7fdf9f',
+        health: 14,
+        speed: 1.4,
+        size: 44,
+        shootPattern: 'hunter_single',
+        shootRate: 0.4,
+        movePattern: 'chase',
+        points: 220,
+        splitOnDeath: { count: 2, maxGen: 1, healthMul: 0.5, sizeMul: 0.7 },
+        movement: { pattern: 'chase', turnSpeed: 0.1, rotationSpeed: { min: -0.01, max: 0.01 } },
+        firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1200, max: 4000 } },
+        visual: { shape: 'plague_sac', glowColor: '#aaffbb', trailLength: 12 },
+        ai: { evasion: 0.2, preferredRange: 200, dodgeBullets: false, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────

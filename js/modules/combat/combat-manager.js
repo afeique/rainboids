@@ -1115,6 +1115,20 @@ export function getPowerupConfig(type) {
 
 // ── Kill Streaks ──
 
+// E8e — split-on-death helpers (HYDRA). Pure, so they unit-test cleanly.
+/** True if `enemy` should split on death (has the config + under the gen cap). */
+export function shouldSplit(enemy) {
+    return !!(enemy && enemy.splitOnDeath && (enemy.splitGen || 0) < enemy.splitOnDeath.maxGen);
+}
+/** Child ling spec: next generation + scaled health/radius from the parent. */
+export function splitChildSpec(splitOnDeath, parentMaxHealth, parentRadius, parentGen) {
+    return {
+        gen: (parentGen || 0) + 1,
+        health: Math.max(1, Math.round((parentMaxHealth || 10) * splitOnDeath.healthMul)),
+        radius: (parentRadius || 20) * splitOnDeath.sizeMul,
+    };
+}
+
 export function onEnemyKill(enemy) {
     if (!this.killCount) this.killCount = 0;
     if (!this.killStreakTimer) this.killStreakTimer = 0;
@@ -1137,6 +1151,24 @@ export function onEnemyKill(enemy) {
         }
         if (this.particlePool) {
             this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', fl.radius, '#ff7722');
+        }
+    }
+
+    // E8e — split-on-death (HYDRA): spawn `count` smaller/weaker lings via the
+    // S3 spawn system. `splitGen` caps re-splitting (onSpawn bumps the child's
+    // gen + shrinks it). Capped by requestEnemySpawn's concurrent cap.
+    if (shouldSplit(enemy) && typeof this.requestEnemySpawn === 'function') {
+        const sd = enemy.splitOnDeath;
+        const spec = splitChildSpec(sd, enemy.maxHealth || 10, enemy.radius || 20, enemy.splitGen || 0);
+        for (let i = 0; i < sd.count; i++) {
+            const ang = (i / sd.count) * Math.PI * 2 + Math.random() * 0.5;
+            const ox = enemy.x + Math.cos(ang) * 22, oy = enemy.y + Math.sin(ang) * 22;
+            this.requestEnemySpawn(enemy.type, ox, oy, { onSpawn: (e) => {
+                e.splitGen = spec.gen;
+                e.health = spec.health;
+                e.maxHealth = spec.health;
+                if (typeof e.radius === 'number') e.radius = spec.radius;
+            }});
         }
     }
 
