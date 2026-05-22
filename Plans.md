@@ -9,6 +9,7 @@ Source design docs (in `docs/`):
 - `Item Tiers, Resistances & Traits — Implementation Plan – 2026-05-22.md` (Plan C)
 - `Enemy & Boss Revamp — Design Plan – 2026-05-22.md` (Plan D — enemy batches + 10 unique bosses)
 - `Run-Meta Overhaul — Loadout, Leveling, Inventory & Cores — Implementation Plan – 2026-05-22.md` (Plans E–I — roguelite meta-progression)
+- `Enemy Uniqueness & Enabling Systems — Plan – 2026-05-22.md` (Phase A.E9 enabling systems + A.E10 uniqueness — unlocks the remaining enemy types + deepens shipped ones)
 
 **Cross-plan order:** E1 is the foundation. E3 unblocks S5's element-skills + I3b.
 S1 unblocks I3c. The S-track and I1 can run parallel to the E-track. Phase D (enemy
@@ -41,6 +42,34 @@ salvage-value open questions.
 | A.E8c | New enemy Batch 3 (Volt/Toxic): Tesla Wraith (teleport+chain, can't blink frozen), Conduit Node (tethered damaging arcs + grants allies CONDUCT), Plaguebearer (CORRODE acid trails + spore-lings), Spore Carrier (periodic drone spawner) | Tether-beam, teleport, acid-trail, and spawner verbs all live; killing Conduit Node drops the buff+arcs; AI survival run green | A.E8a | cc:WIP (6.73.0 — Tesla Wraith (Volt; teleport deferred) + Plaguebearer (Toxic; reuses lay_mine for real area-denial) done, e2e green. SKIPPED Conduit Node + Spore Carrier — need ally-tether/buff + enemy-spawn systems that don't exist; revisit when built) |
 | A.E8d | New enemy Batch 4 (Void/Radiant): Devourer (eats projectiles in cone, gains shield), Phantom (periodic invis, MARK reveals), Prism Mirror (reflects projectiles), Lumen Drone (regen bubble shield over allies), Beacon (homing/MARK magnet decoy) | Bullet-eat/invis/reflect/ally-shield/decoy verbs all live; beams+melee bypass Devourer eat; MARK reveals Phantom; AI survival run green | A.E8a | cc:TODO |
 | A.E8e | New enemy Batch 5 (anti-meta + bruisers): Leech (strips a player buff on hit), Null Drone (skill-suppress aura), Hydra (splits on death unless AoE/overkill), Juggernaut (telegraphed ram, rear-exposed after slam), Thornback (counter-burst on hit), Wraithworm (burrow→re-emerge lunge) + remaining artillery/controllers (Pyrewing, Hailmother, Storm Diver, Bile Mortar, Singularity Mite) | Each verb live + has counterplay; Leech/Null Drone correctly read the 4-slot skill model; Hydra split gated by AoE/overkill; AI survival run green | A.E8a, B.S1 | cc:WIP (6.74.0 — WARDEN adaptive-resist done (real mechanic, e2e green). Remaining (Leech buff-strip, Null Drone skill-suppress, Hydra split, Juggernaut, Thornback, Wraithworm, artillery) need NEW systems (player-buff removal, skill-suppress aura, enemy-spawn) — deferred; would be hollow reskins otherwise. RECOMMEND playtest/steer or build an enabling system) |
+
+## Phase A.E9: Enabling Systems (unlock deferred enemy mechanics + deepen the roster)
+
+See `docs/Enemy Uniqueness & Enabling Systems — Plan – 2026-05-22.md`. Build the
+system once; it unlocks several enemies AND deepens existing ones. Ordered by leverage.
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| A.E9-S1 | **Player-side elemental statuses**: enemy elemental hits apply BURN/CHILL/CORRODE/SHOCK/MARK to the PLAYER (fields + tick + per-element effects + HUD), applied from `takeDamage(opts.element)`; cleansable | Fire enemy burns player (DoT, reduced by Pyro resist); chill cuts thrust; HUD shows active player statuses; unit tests | A.E5 | cc:TODO |
+| A.E9-S2 | **Persistent hazard entities**: pooled `Hazard` (pos/radius/element/dps/life) DoT/status player + enemies inside; FX | Acid pool damages over time + applies element; density-capped; unit test the in-zone check | A.E3 | cc:TODO |
+| A.E9-S3 | **Mid-fight enemy spawning**: helper for an enemy to request a spawn at a position; concurrent-spawn cap | An enemy spawns adds during a wave; cap enforced; unit test the cap | A.E8a | cc:TODO |
+| A.E9-S4 | **Projectile absorption** (Devourer): enemy eats player bullets in a maw cone → temp shield; beams/melee bypass | Bullets entering the maw are consumed (no dmg) + shield ticks up; beams still hit; unit test the cone check | A.E8a | cc:TODO |
+| A.E9-S5 | **Cloak/invisibility** (Phantom): periodic invis (skip render + de-target), revealed by MARK/AoE | Cloaked enemy isn't auto-targeted; MARK/AoE reveals; unit test the targetability gate | A.E3 | cc:TODO |
+| A.E9-S6 | **Projectile reflection** (Prism Mirror): front-arc reflects player bullets back as enemy bullets; beams/melee bypass | Frontal bullets bounce back as enemy shots; flank/beam bypass; unit test the reflect decision | A.E8a | cc:TODO |
+| A.E9-S7 | **Ally support auras**: enemy shields/heals/buffs nearby allies (Lumen Drone shield, Conduit Node buff+tether, Bulwark Drone frontal shield over allies) | Allies in radius gain the buff/shield; killing the support removes it; unit test the aura application | A.E8a | cc:TODO |
+| A.E9-S8 | **Player-buff removal** (Leech): strips/suppresses a player powerup/skill-buff on contact | A buff is removed/suppressed on hit (reads powerup map + 4-slot skills); FX/toast; unit test the strip | B.S1 | cc:TODO |
+| A.E9-S9 | **Skill-suppress aura** (Null Drone): aura lengthens skill-cooldown regen / blocks activation nearby | In-aura skill cooldowns stall / activation blocked; HUD cue; unit test the gate | B.S1 | cc:TODO |
+| A.E9-S10 | **Enemy teleport/burrow** (Tesla teleport, Wraithworm): periodic blink/burrow→re-emerge w/ telegraph; can't blink while frozen | Enemy relocates on a cadence w/ telegraph; frozen blocks it; unit test the frozen-guard | A.E3 | cc:TODO |
+| A.E9-S11 | **Generalized telegraphed strike**: extract TITAN's wind-up→strike into a reusable helper (Ashen telegraph, Juggernaut ram, boss attacks) | A wind-up→strike runs via the shared helper; unit test the phase timing | - | cc:TODO |
+
+## Phase A.E10: Enemy uniqueness (de-reskin) + finish remaining types
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| A.E10-U1 | **Distinct render shapes** for the 7 shipped new types (ember/ice-crystal/icicle/cracked-bomb/arc-node/sac/prism) — new `shapes.js` draw methods + SHAPE_DRAW_MAP (parallelizable, disjoint from logic) | Each new type renders a distinct silhouette (not a tinted reuse); QA/visual check | - | cc:TODO |
+| A.E10-U2 | **Distinct behaviors** for the 7 shipped types beyond reused patterns (Cinder kamikaze dive, Glacier slam, Warden color-telegraph, etc.) | Each reads as its own enemy in playtest; AI survival green | A.E9-S1 | cc:TODO |
+| A.E10-U3 | **Wire deferred flourishes** as their systems land: Cinder ignite (S1), Glacier brittle-shatter, Frost chill (S1), Ashen telegraph (S11), Tesla teleport (S10), Plaguebearer trails (S2), TANGERINE oil (S1/S2), TITAN demote (Plan D) | Each shipped type's signature is live + has counterplay; AI survival green | A.E9-S1, A.E9-S2, A.E9-S10, A.E9-S11 | cc:TODO |
+| A.E10-T | **Finish the remaining ~13 new types** (Conduit Node, Spore Carrier, Devourer, Phantom, Prism Mirror, Lumen Drone, Beacon, Leech, Null Drone, Hydra, Juggernaut, Thornback, Wraithworm, artillery) — each built once its enabling system (A.E9-Sx) exists | Each spawns + exhibits its verb + has counterplay; A.E8c/d/e DoDs met; AI survival green | A.E9 (per type) | cc:TODO |
 
 ## Phase B: Unified Skills (4-slot)
 
