@@ -385,11 +385,32 @@ export const ENEMY_TYPES = {
 // defaults (KINETIC attacks, empty resist) so there is ZERO gameplay change;
 // E8 fills in the real per-type retrofit. Centralized here for auditability —
 // E8 just populates these two tables.
+// E8a — the §7.1 retrofit. ATTACK element per type (drives player elemental
+// resistance vs that enemy's shots/ram). HUNTER stays neutral Kinetic.
 const ENEMY_ELEMENTS = {
-    // E8: e.g. DRIFTER: 'VOLT', STALKER: 'RADIANT', TANGERINE: 'PYRO', …
+    STALKER:   'RADIANT', // charged laser
+    DRIFTER:   'VOLT',    // arc lightning
+    WEAVER:    'RADIANT', // spiral laser
+    SENTINEL:  'RADIANT', // sweep beam
+    TANGERINE: 'PYRO',    // explosive mines
+    // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
+// Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
+// that element), 1 = immune. Values are moderate starting points for playtest.
+// The matching ARCHETYPE behaviors (GUARDIAN flat-armor floor, SENTINEL frontal
+// shield, WASP swarm, Warden adaptive, TITAN rotating weak-core) land as
+// follow-ups; these maps are the data layer that turns E2/E5/E6 live.
 const ENEMY_RESISTS = {
-    // E8: e.g. GUARDIAN: { KINETIC: 0.4, VOLT: -0.5 }, DRIFTER: { VOLT: 0.75 }, …
+    GUARDIAN:  { KINETIC: 0.30, VOLT: -0.40 },                 // armored; shorts out to Volt
+    WASP:      { CRYO: -0.50 },                                // swarm; freeze-shatters
+    STALKER:   { RADIANT: 0.50, VOID: -0.40 },                 // laser sniper; folds to Void
+    DRIFTER:   { VOLT: 0.60, TOXIC: -0.40 },                   // electric; rots to Toxic
+    PROWLER:   { CRYO: 0.40, PYRO: -0.50 },                    // standoff tank; burns down
+    WEAVER:    { CRYO: -0.40 },                                // evasive; freeze to land hits
+    SENTINEL:  { RADIANT: 0.50, KINETIC: -0.30 },              // bastion; raw kinetic cracks it
+    TANGERINE: { PYRO: 0.60, CRYO: -0.40 },                    // bomber; don't fight fire w/ fire
+    TITAN:     { KINETIC: 0.30, PYRO: 0.30, CRYO: 0.30, VOLT: 0.30, TOXIC: 0.30, VOID: 0.30, RADIANT: 0.30 }, // boss: tanky all-around (rotating weak-core = later behavior)
+    // HUNTER → neutral (no entry)
 };
 for (const [key, def] of Object.entries(ENEMY_TYPES)) {
     def.element = ENEMY_ELEMENTS[key] || 'KINETIC';

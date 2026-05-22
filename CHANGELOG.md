@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.67.0] - 2026-05-22
+
+### Added — Enemy element/resistance retrofit: elements go LIVE (Phase E8a, data)
+
+The data fill that activates the whole Element & Resistance system (E1–E7) in
+real gameplay for the first time.
+
+- Every enemy type now carries a real **attack element** (Stalker/Weaver/
+  Sentinel → Radiant, Drifter → Volt, Tangerine → Pyro; rest Kinetic) and a
+  **resistance map** with intended weaknesses/resistances (e.g. Guardian armored
+  vs Kinetic / weak to Volt; Wasp freeze-shatters; Drifter resists Volt / weak
+  to Toxic; Prowler burns down; Tangerine fireproof; Titan tanky all-around).
+- The enemy instance now copies its type's `element` + a fresh `resist` map on
+  spawn (the copy lets a future Warden mutate resist per-hit without corrupting
+  the shared config). Enemy bullets/mines stamp the firing enemy's element
+  (via `_activeShotElement`, mirroring the firing-pattern tag) so the player's
+  elemental resistance (E5) now responds to elemental enemy attacks.
+- **Result:** enemy resistances (E2), player resistances (E5), and weapon
+  status-on-hit (E6) are now active. 6 unit tests pin the retrofit data.
+- Validated with the AI survival e2e (gameplay runs pass; balance holds).
+- **Pending (this is the data layer of E8a):** archetype *behaviors* —
+  Guardian flat-armor floor, Sentinel frontal shield, Wasp swarm, Warden
+  adaptive resist, Titan rotating weak-core — land as follow-ups.
+
 ## [6.66.0] - 2026-05-22
 
 ### Added — Weapon element identity: status-on-hit (Phase E6)

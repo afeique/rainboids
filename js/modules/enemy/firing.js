@@ -84,6 +84,9 @@ export function shoot(gameEngine) {
     // can tag spawned bullets with it. Cleared in the finally so subsequent
     // non-shoot bullet spawns don't inherit a stale tag.
     gameEngine._activeShotPattern = this.config.shootPattern;
+    // E8a — stamp the firing enemy's element so EnemyBullet.reset() tags each
+    // spawned shot/mine with it (drives the player's elemental resistance).
+    gameEngine._activeShotElement = this.element || 'KINETIC';
     try {
 
     switch (this.config.shootPattern) {
@@ -155,6 +158,7 @@ export function shoot(gameEngine) {
 
     } finally {
         gameEngine._activeShotPattern = null;
+        gameEngine._activeShotElement = null;
     }
 }
 

@@ -31,10 +31,11 @@ export class EnemyBullet {
         this.color = color;
         this.explosive = explosive;
         this.active = true;
-        // E5 — element of this enemy shot (drives player elemental resistance
-        // in lifecycle.takeDamage). Defaults KINETIC; the firing enemy stamps
-        // its own element here once the roster is elemental (E8).
-        this.element = 'KINETIC';
+        // E5/E8a — element of this enemy shot (drives player elemental
+        // resistance in lifecycle.takeDamage). The firing enemy stamps its
+        // element on the engine before shooting (firing.js), mirroring the
+        // firingPattern tag; falls back to KINETIC for non-shoot spawns.
+        this.element = (typeof window !== 'undefined' && window.gameEngine && window.gameEngine._activeShotElement) || 'KINETIC';
         this.life = 1.0;
         this.creationTime = frameClock.now;
 

@@ -89,6 +89,14 @@ export class Enemy {
         this.baseRadius = this.radius;
         this.color = this.config.color;
 
+        // E8a — copy the type's element + resistance map onto the instance.
+        // The resist map is a shallow COPY so per-enemy runtime mutation (e.g.
+        // a Warden adapting to the last element that hit it) can't corrupt the
+        // shared ENEMY_TYPES config. Read by applyDamageToEnemy (enemy.resist)
+        // and the player damage path (enemy.element on ram + enemy shots).
+        this.element = this.config.element || 'KINETIC';
+        this.resist = this.config.resist ? { ...this.config.resist } : {};
+
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
 
