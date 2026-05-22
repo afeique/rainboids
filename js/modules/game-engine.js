@@ -26,6 +26,7 @@ import { BackgroundStar } from './world/background-star.js';
 import { LineDebris } from './world/line-debris.js';
 import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
+import { HazardField } from './world/hazard-field.js';
 import { DEFENSE_SKILLS, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
@@ -899,6 +900,8 @@ export class GameEngine {
         this.goldShapePool = new PoolManager(GoldShape, 20);
         this.backgroundStarPool = new PoolManager(BackgroundStar, GAME_CONFIG.BACKGROUND_STAR_COUNT * 2);
         this.powerupPool = new PoolManager(Powerup, 5); // Reduced from 20
+        // A.E9-S2 — persistent hazard zones (acid pools / fire fields / frost).
+        this.hazardField = new HazardField();
 
         // OPT-8: Spatial grid for O(1) insert / O(k) collision query
         this.spatialGrid = new SpatialGrid(this.gameField.width, this.gameField.height, 8, 6);
@@ -1009,6 +1012,8 @@ export class GameEngine {
         this.asteroidShardPool.drainActive();
         this.asteroidPool.drainActive();
         this.enemyPool.drainActive();
+        // A.E9-S2 — drop persistent hazard zones on reset.
+        if (this.hazardField) this.hazardField.clear();
         // 5.115.0 — drop any active formations on reset so stale
         // _formation refs don't point to dead enemies after pool wipe.
         if (this.formationManager) this.formationManager.clear();
@@ -2517,6 +2522,10 @@ export class GameEngine {
     applyOil(enemy, durationMs) { return combat.applyOil(enemy, durationMs); }
     applyMark(enemy, durationMs) { return combat.applyMark(enemy, durationMs); }
     applyBleed(enemy, sourceDmg, durationMs, maxStacks) { return combat.applyBleed(enemy, sourceDmg, durationMs, maxStacks); }
+    // A.E9-S2 — drop a persistent hazard zone (acid/fire/frost). opts:
+    // { radius, element, dps, lifeMs }. Used by Plaguebearer trails + (later)
+    // player hazard weapons. Damages whoever stands in it (player for now).
+    spawnHazard(x, y, opts) { return this.hazardField.spawn(x, y, opts, frameClock.now); }
 
     // Phase 6 (2026-05-19) — Cluster Launcher detonation hooks. Called
     // from `Bullet._detonate` when a cluster bomb's armed timer expires
@@ -2831,6 +2840,12 @@ export class GameEngine {
             // honors the shared death pipeline (lethal-safe).
             const _playerBurn = tickPlayerStatus(this.player, frameClock.now);
             if (_playerBurn > 0) this.takeDamage(_playerBurn, { isPlayerBurn: true });
+
+            // A.E9-S2 — tick persistent hazard zones; ones the player stands in
+            // damage + status them (routed through takeDamage so resist + the
+            // element's player status + the death pipeline all apply).
+            this.hazardField.update(frameClock.now, this.player, (dmg, el) =>
+                this.takeDamage(dmg, { element: el, fxX: this.player.x, fxY: this.player.y }));
 
             // 6.23.0 (2026-05-19) — Mine shield zone tracking.
             //   Originally (Phase 5) we fired a one-shot crossing sparkle

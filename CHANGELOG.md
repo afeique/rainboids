@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.78.0] - 2026-05-22
+
+### Added — Persistent hazard zones (Phase A.E9-S2 enabling system)
+
+- New `world/hazard-field.js`: a `HazardField` of circular zones (pos / radius /
+  element / dps / lifetime) that tick damage onto the player while they stand
+  inside, routed through `takeDamage(opts.element)` so resistance + the
+  element's player status (a Toxic acid pool **corrodes**, a Pyro field
+  **burns**) + the death pipeline all apply. Density-capped (24); self-contained
+  (damage application injected as a callback) and unit-tested (6 tests).
+- Wired into the engine: created with the pools, ticked each gameplay frame,
+  cleared on reset, with a `spawnHazard(x, y, opts)` API for upcoming users
+  (Plaguebearer acid-trails A.E10-U3 + the planned Caustic Sprayer / Scorched
+  Earth / Pyre Stream weapons). No live spawner yet — infrastructure only.
+
 ## [6.77.0] - 2026-05-22
 
 ### Fixed
