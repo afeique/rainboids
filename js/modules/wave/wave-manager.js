@@ -636,6 +636,37 @@ export function spawnEnemies(count) {
     }
 }
 
+// A.E9-S3 — mid-fight enemy spawning. A concurrent cap keeps a spawner enemy
+// (Spore Carrier) or split-on-death (Hydra) from flooding the field. Pure so
+// it unit-tests cleanly.
+export const ENEMY_SPAWN_CAP = 40;
+export function canSpawn(activeCount, cap = ENEMY_SPAWN_CAP) {
+    return activeCount < cap;
+}
+
+/**
+ * A.E9-S3 — request a single enemy spawn at (x, y) during a fight (NOT a wave
+ * spawn). Returns the enemy, or null if the field is at the concurrent cap /
+ * the pool is dry. `this` is the engine. opts:
+ *   cap     : override the concurrent cap
+ *   warpTo  : {x,y} → play the warp-in animation toward there (else spawn in place)
+ *   onSpawn : callback(enemy) to tweak the fresh enemy (health/size/split-gen)
+ * Used by Spore Carrier (drone spawns) + Hydra (split-on-death) + the
+ * Hivemother boss (egg-sacs).
+ */
+export function requestEnemySpawn(type, x, y, opts = {}) {
+    const cap = opts.cap || ENEMY_SPAWN_CAP;
+    if (!canSpawn(this.enemyPool.activeObjects.length, cap)) return null;
+    const enemy = this.enemyPool.get();
+    if (!enemy) return null;
+    const level = (this.game && this.game.enemyLevel) || 1;
+    enemy.reset(x, y, type, level, this);
+    if (opts.warpTo) enemy.startWarpIn(opts.warpTo.x, opts.warpTo.y);
+    else { enemy.x = x; enemy.y = y; }
+    if (typeof opts.onSpawn === 'function') opts.onSpawn(enemy);
+    return enemy;
+}
+
 export function spawnLeveledAsteroids(count, opts = {}) {
     // Respect MAX_ASTEROIDS limit for performance
     const activeAsteroids = this.asteroidPool.activeObjects.length;

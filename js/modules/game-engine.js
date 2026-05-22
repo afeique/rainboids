@@ -2421,6 +2421,10 @@ export class GameEngine {
 
     spawnLeveledEnemies(enemyType, count, opts) { return wave.spawnLeveledEnemies.call(this, enemyType, count, opts); }
 
+    // A.E9-S3 — mid-fight enemy spawn (Spore Carrier drones, Hydra split, boss
+    // egg-sacs). Concurrent-capped; returns the enemy or null.
+    requestEnemySpawn(type, x, y, opts) { return wave.requestEnemySpawn.call(this, type, x, y, opts); }
+
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }

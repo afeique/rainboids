@@ -52,7 +52,7 @@ system once; it unlocks several enemies AND deepens existing ones. Ordered by le
 |------|------|-----|---------|--------|
 | A.E9-S1 | **Player-side elemental statuses**: enemy elemental hits apply BURN/CHILL/CORRODE/SHOCK/MARK to the PLAYER (fields + tick + per-element effects + HUD), applied from `takeDamage(opts.element)`; cleansable | Fire enemy burns player (DoT, reduced by Pyro resist); chill cuts thrust; HUD shows active player statuses; unit tests | A.E5 | cc:完了 (6.75.0 CHILL+CORRODE; 6.76.0 player BURN via takeDamage isPlayerBurn + extracted _resolvePlayerLethal death pipeline (lethal-safe). player-status.js, 11 tests, e2e green. SHOCK + status HUD indicators still deferred) |
 | A.E9-S2 | **Persistent hazard entities**: pooled `Hazard` (pos/radius/element/dps/life) DoT/status player + enemies inside; FX | Acid pool damages over time + applies element; density-capped; unit test the in-zone check | A.E3 | cc:完了 (6.78.0 — world/hazard-field.js HazardField: circular zones tick dmg+element-status onto the player via takeDamage, density-capped, 6 tests. Engine: created/ticked/cleared + spawnHazard() API. No live spawner yet — Plaguebearer trails + hazard weapons consume it next; enemy-harming hazards for player weapons = future) |
-| A.E9-S3 | **Mid-fight enemy spawning**: helper for an enemy to request a spawn at a position; concurrent-spawn cap | An enemy spawns adds during a wave; cap enforced; unit test the cap | A.E8a | cc:TODO |
+| A.E9-S3 | **Mid-fight enemy spawning**: helper for an enemy to request a spawn at a position; concurrent-spawn cap | An enemy spawns adds during a wave; cap enforced; unit test the cap | A.E8a | cc:完了 (6.80.0 — wave-manager canSpawn + requestEnemySpawn(type,x,y,opts) {cap/warpTo/onSpawn}, engine delegate, concurrent-capped (40). 6 tests. No live consumer yet — Hydra split + Spore Carrier next) |
 | A.E9-S4 | **Projectile absorption** (Devourer): enemy eats player bullets in a maw cone → temp shield; beams/melee bypass | Bullets entering the maw are consumed (no dmg) + shield ticks up; beams still hit; unit test the cone check | A.E8a | cc:TODO |
 | A.E9-S5 | **Cloak/invisibility** (Phantom): periodic invis (skip render + de-target), revealed by MARK/AoE | Cloaked enemy isn't auto-targeted; MARK/AoE reveals; unit test the targetability gate | A.E3 | cc:TODO |
 | A.E9-S6 | **Projectile reflection** (Prism Mirror): front-arc reflects player bullets back as enemy bullets; beams/melee bypass | Frontal bullets bounce back as enemy shots; flank/beam bypass; unit test the reflect decision | A.E8a | cc:TODO |
@@ -175,3 +175,55 @@ Plan C's machinery. No second ingredient taxonomy, no recipes/bench. Goes after 
 | I.C3 | Resist targeting: spend Cores to add/swap an elemental resist (A.E7/C.I2); tier caps respected — *resolves C open-Q "resist targeting"* | Chosen resist appears/changes on the item; tier-gated resist count enforced | I.C1, A.E7, C.I2 | cc:TODO |
 | I.C4 | Tier-up: spend Cores to bump an item one rarity tier (8-tier ladder C.I1), rolling the added affix/resist slot; cost scales with target tier | Tier-up raises rarity + adds the tier's extra affix/resist; cost-curve unit test | I.C1, C.I1 | cc:TODO |
 | I.C5 | Trait reroll + salvage-value reconcile: reroll an item's trait (C.I3*) for Cores; define traited-item salvage value — *resolves C open-Q "sell value of traited items"* | Trait reroll works; traited items yield Cores per defined rule; consistent w/ C.I4 keystone | I.C1, C.I3a, C.I4 | cc:TODO |
+
+## Phase R: Roguelite Restructure — Gold Economy, Cards & Abilities
+
+Authoritative in-run model. See `docs/Roguelite Restructure — Gold Economy, Cards & Abilities –
+Design Plan – 2026-05-22.md`. **Where R conflicts with the exploratory Phases E–I (the earlier
+Run-Meta model), R is authoritative**; E–I are left intact per request. Maps to E–I:
+**R1 = Phase E** (Skills→Abilities rename); **R7 = Phase F.P2-P4** (account level → SP → Stats
+menu, retained — but F.P1 is *reversed*: cards are kept/repurposed, and F.P5/P6 are *superseded*
+by R2/R3); **R8 = Phase G** (inventory meta, no auto-equip) **+ Phase I** (Cores). The new work is
+R2–R6 below. **No mastery** (weapons/abilities are flat, always-viable). Balance: difficulty must
+be tuned around meta power (SP/items/unlocks), co-tuned with Plan D.
+
+### R2: Gold economy — banked unlocks
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| R2.G1 | Two gold pools: run-gold (starts 0, accrues from kills) + persistent **account-gold** (localStorage); run end deposits run-gold → account-gold (default: bank everything earned, no death forfeit) | Run starts at 0 gold; kills add run-gold; run end adds it to account-gold; account-gold persists + survives reload; HUD shows both | - | cc:TODO |
+| R2.G2 | Pre-run **Shop screen**: spend account-gold on permanent weapon/ability **unlocks**; abilities price-gated higher than weapons; **retire `unlockWave`** | Player buys unlocks with account-gold; unlocked set persists; abilities cost more; unlockWave gating removed | R2.G1 | cc:TODO |
+| R2.G3 | Retire the gold-purchased **upgrade-tree shop** (upgrades become cards, R3); repurpose/remove the Phase-7 skill-tree shop UI | No in-run purchase of upgrade-tree stacks; old shop UI removed/repurposed; tests updated | R3.C1 | cc:TODO |
+
+### R3: Cards — relevance-filtered powerup draft
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| R3.C1 | Repurpose the card overlay → per-run powerup draft; build card pool from existing weapon upgrade types (MULTI/RAPID/PIERCING/BIG/EXPLODE/HOMING/STUN/KNOCK + per-weapon capstones) and ability upgrade pools | Draft offers powerups from a defined pool; selecting applies the powerup for the run; pool-build unit test | - | cc:TODO |
+| R3.C2 | Cadence: **5 cards/run**, one every 2 stages (of 10) | Exactly 5 draft moments per full 30-wave run at the right stages; none on the others | R3.C1 | cc:TODO |
+| R3.C3 | Relevance filter + composition: each draft = **2 weapon + 1 ability** card, all filtered to equipped weapons/abilities; never offer an inapplicable card; ability card only if an ability is equipped | Every offered card applies to a loadout item; composition is 2:1; filter unit test | R3.C1, R5.L1 | cc:TODO |
+| R3.C4 | Coexist with the SP Stats menu at wave clear: sequence card draft (card stages) then Stats menu (if leveled); no menu stacking / double-open | Both can occur at a stage clear, in order; resume works | R3.C2, F.P4 | cc:TODO |
+
+### R4: In-run gold sinks (optional spend)
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| R4.S1 | **6th/7th card** purchase at the card moment: steeply escalating gold cost, hard cap 7; spend reduces run-gold (→ less banked) | Extra cards buyable at escalating cost; cap 7; spent gold not banked; cost-curve unit test | R3.C3, R2.G1 | cc:TODO |
+| R4.S2 | **Paid reroll/banish** of a card offer (modest cost, once per offer) | Reroll/banish consumes run-gold, once per offer; new offer respects filter + 2:1 composition | R3.C3 | cc:TODO |
+| R4.S3 | **Emergency consumables**: Repair Kit (heal, escalating per stage) + Revive Token (very steep, 1/run) | Both buyable with run-gold; revive capped 1/run; costs scale; spent gold not banked | R2.G1 | cc:TODO |
+
+### R5: Loadout & unlocks
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| R5.L1 | Chosen loadout model: 4 primary + 4 power + 4 ability picked at run start from the **unlocked** pool, locked for the run; replace `_rollRandomLoadout` + single `activePrimary`/`activePower`; reuse shipped B.S1 4-slot model for abilities | Player carries chosen 4+4+4; locked once run starts; fire paths read active selection per category | R2.G2 | cc:TODO |
+| R5.L2 | Loadout selection screen (pre-run) from unlocked pool only; **base ability kit** (Phase Dash + Field Medic + Bulwark) available from run one | Player fills 3×4 from unlocked items; base kit present at start; can't pick locked; confirm locks run | R5.L1 | cc:TODO |
+| R5.L3 | In-run switching among the 4 of each: abilities Digit 1-4 (shipped B.S2); primaries/powers cycle; gamepad mirror; HUD shows loadout + active | Switch active primary/power mid-run; abilities fire per-slot; HUD reflects; gamepad parity | R5.L1 | cc:TODO |
+
+### R6: Abilities — unique-verbs rule + roster
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| R6.A1 | Adopt the **"non-redundant verb"** design rule + audit existing abilities: cut/rework **Tractor Shield**; consolidate the two heals into **Field Medic** (burst heal + status cleanse) | No ability duplicates a card/stat/gear effect; Tractor cut/reworked; single heal ability; tests updated | E.N2 | cc:TODO |
+| R6.A2 | Build the base kit: **Phase Dash**, **Field Medic** (burst + cleanse), **Bulwark** (on-demand invuln window) — all unique verbs, available run one | All three work as unique verbs; present from start | R6.A1 | cc:TODO |
+| R6.A3 | First purchasable ability batch (unique verbs only): Blink, Bullet Time, Stasis Field, Gravity Snare, EMP Pulse, Sentry Drone, Decoy Beacon, Deflector Orbs, Second Wind, Elemental Infusion, Cryo Field, Storm Cell/Pyre Aura, Catalyst, Designator | Each is a non-redundant verb with a live consumer; buyable via R2.G2; element abilities use Plan A status helpers | R6.A1 | cc:TODO |

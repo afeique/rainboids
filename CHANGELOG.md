@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.80.0] - 2026-05-22
+
+### Added — Mid-fight enemy spawning (Phase A.E9-S3 enabling system)
+
+- `wave-manager.js` gains `requestEnemySpawn(type, x, y, opts)` (engine
+  delegate) — spawns one enemy at a position *during* a fight (not a wave
+  spawn), gated by a **concurrent cap** (40 active, pure `canSpawn` helper) so
+  a spawner/splitter can't flood the field. `opts`: `cap` override, `warpTo`
+  (warp-in animation) or spawn-in-place, and an `onSpawn(enemy)` hook to tweak
+  the fresh enemy (health / size / split generation).
+- Infrastructure for the upcoming **Spore Carrier** (drone spawns), **Hydra**
+  (split-on-death), and the **Hivemother** boss (egg-sacs). 6 unit tests; no
+  live consumer yet. Full suite green (491).
+
 ## [6.79.0] - 2026-05-22
 
 ### Added — Plaguebearer acid trails (Phase A.E10-U3; S2 goes live)
