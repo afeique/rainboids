@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.58.0] - 2026-05-22
+
+### Added — Elemental resistance in the damage path (Phase E2)
+
+- `applyDamageToEnemy` now scales incoming damage by the target's resistance
+  to the hit's element: `damage × elementalMultiplier(enemy.resist, element)`
+  (resist >0 reduces, =1 immune, <0 weakness). Bullets thread their stamped
+  `element` into the hit; `damageEnemy` gained an optional `element` param for
+  AoE/power-weapon sources.
+- Damage numbers carry `isResisted` / `isWeak` flags for a future renderer cue.
+- **Still inert in gameplay**: every enemy's resist map is the neutral default
+  until Phase E8 populates real values, so all multipliers are ×1 today.
+- 7 unit tests cover neutral / resist / immune / weakness / wrong-element /
+  default-element / lethal-return through `applyDamageToEnemy`.
+
 ## [6.57.0] - 2026-05-22
 
 ### Added — Element & Resistance System foundation (Phase E1)

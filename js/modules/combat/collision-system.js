@@ -6,6 +6,7 @@ import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from './weapon-data.js
 import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
+import { elementalMultiplier } from './elements.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
 //   Duplicated here (rather than imported) because wave-manager.js bundles
@@ -716,6 +717,7 @@ export function handleCollisions() {
                 const destroyed = enemy.takeDamage(damage, {
                     isCrit: !!(bullet.isCrit || bullet.isCritical),
                     isEmpowered: !!bullet.isEmpowered,
+                    element: bullet.element, // E2 — bullet carries its weapon's element
                 });
                 // 5.107.0 — Vampirism lifesteal on the damage actually
                 // applied to the enemy (clamps overkill so we don't
@@ -2184,6 +2186,15 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
         damage *= 1.2;
     }
 
+    // E2 (Element & Resistance) — scale by the target's resistance to the
+    // incoming element. `opts.element` is the bullet/source element (KINETIC
+    // fallback). Neutral (no resist entry) → ×1; resist >0 reduces; resist <0
+    // is a weakness (>1); resist =1 is immune (×0). Enemy resist maps are
+    // neutral defaults until E8, so this is inert in gameplay today but live
+    // for any populated map (and exercised by the unit tests).
+    const _resistMult = elementalMultiplier(enemy.resist, opts.element || 'KINETIC');
+    if (_resistMult !== 1) damage *= _resistMult;
+
     enemy.health -= damage;
     enemy.health = Math.max(0, Math.min(enemy.health, enemy.maxHealth));
 
@@ -2195,7 +2206,11 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
             // Phase 3 — `isBurn` lets the renderer differentiate BRN
             // tick damage (red, lower alpha) from regular hits. Pure
             // pass-through; no new branching in this function.
-            { isCrit: !!opts.isCrit, isEmpowered: !!opts.isEmpowered, isBurn: !!opts.isBurn, target: enemy }
+            // E2 — `isResisted` / `isWeak` let the damage-number renderer tint
+            // resisted hits dim and weakness hits bright (visual cue lands with
+            // E8 when enemy resists are populated; flags are inert until then).
+            { isCrit: !!opts.isCrit, isEmpowered: !!opts.isEmpowered, isBurn: !!opts.isBurn,
+              isResisted: _resistMult < 1, isWeak: _resistMult > 1, target: enemy }
         );
     }
     if (this.game?.stats) this.game.stats.totalDamageDealt += damage;
@@ -2208,9 +2223,14 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     return { blocked: false, destroyed };
 }
 
-export function damageEnemy(enemy, damage) {
+export function damageEnemy(enemy, damage, element) {
+    // E2 — optional `element` lets AoE/power-weapon sources (beams, nova,
+    // mines, missiles) carry their element into the resistance multiplier.
+    // Defaults to KINETIC in applyDamageToEnemy when omitted; power-weapon
+    // callers begin passing their element in E6.
     const result = applyDamageToEnemy.call(this, enemy, damage, {
         numberY: enemy ? enemy.y - 15 : undefined,
+        element,
     });
     if (result.blocked) return;
     // Surface this enemy in the top-center info panel — covers AOE hits
