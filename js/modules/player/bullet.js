@@ -83,6 +83,40 @@ export class Bullet {
         this.subBombCount = 0;
         this.subBombLifeFrames = 0;
         this._smokeFrame = 0;
+
+        // ── New-primary behavior flags (brainstorm drop) ──
+        // Ricochet (Caroms): bounce off walls + carom between enemies.
+        this.bounces = 0;
+        this.bounceSeekRadius = 0;
+        this.chargedCaroms = false;
+        // Boomerang Discs: fly out, then return to the owner.
+        this.boomerang = false;
+        this.boomerangOutFrames = 0;
+        this.boomerangReturnAccel = 0;
+        this.boomerangReturning = false;
+        this.boomerangOwner = null;
+        this.razorEdge = false;
+        // Flak Cannon: airburst into a shrapnel ring at a set distance.
+        this.flak = false;
+        this.burstDistance = 0;
+        this._flakDist = 0;
+        this.shrapnelCount = 0;
+        this.shrapnelDamage = 0;
+        this.shrapnelSpeed = 0;
+        this.shrapnelLifeFrames = 0;
+        this.burstBlastRadius = 0;
+        this.burstBlastDamage = 0;
+        // Gravity Lance: per-frame pull on nearby enemies; optional implosion.
+        this.gravityWell = false;
+        this.pullRadius = 0;
+        this.pullStrength = 0;
+        this.implosion = false;
+        // Mitosis Rounds (Splitter): spawn shards on kill.
+        this.splitOnKill = false;
+        this.splitCount = 0;
+        this.splitDamageFactor = 0;
+        this.splitSpeed = 0;
+        this.splitGenerations = 0;
     }
 
     // Phase 6 (2026-05-19) — initialize cluster-bomb state on a freshly-
@@ -221,6 +255,15 @@ export class Bullet {
         const effectiveMaxLife = Math.round(this.maxLife * this.rangeMultiplier);
         if (this.life >= effectiveMaxLife) {
             this.active = false;
+            // Gravity Lance IMPLOSION — a final AoE pop where the well dies.
+            if (this.gravityWell && this.implosion && gameEngine
+                && typeof gameEngine.detonateSubBomblet === 'function') {
+                gameEngine.detonateSubBomblet(
+                    this.x, this.y,
+                    Math.max(6, (this.damage || 1) * 8),
+                    (this.pullRadius || 140) * 0.7,
+                );
+            }
             this.createDisappearPuff(gameEngine);
             if (this.onOffScreen) this.onOffScreen();
             return;
@@ -235,6 +278,79 @@ export class Bullet {
         // Homing — predictive lead-time target, 0.15 rad max turn per frame.
         if (this.homing) {
             this.applyHoming(enemyPool, asteroidPool, gameEngine);
+        }
+
+        // Boomerang Discs — out leg decelerates, then the disc accelerates
+        // back to its owner. On the turn we clear hitTargets so the disc can
+        // cut the SAME enemies again on the return leg (the double-hit).
+        if (this.boomerang) {
+            if (!this.boomerangReturning) {
+                this.vel.x *= 0.93;
+                this.vel.y *= 0.93;
+                if (this.life >= this.boomerangOutFrames) {
+                    this.boomerangReturning = true;
+                    this.hitTargets.clear();
+                    this.piercedEnemies = 0;
+                    if (this.razorEdge) this.damage *= 1.6;
+                }
+            } else {
+                const ox = this.boomerangOwner ? this.boomerangOwner.x : this.x;
+                const oy = this.boomerangOwner ? this.boomerangOwner.y : this.y;
+                const a = Math.atan2(oy - this.y, ox - this.x);
+                const accel = this.boomerangReturnAccel || 0.55;
+                this.vel.x += Math.cos(a) * accel;
+                this.vel.y += Math.sin(a) * accel;
+                const sp = Math.hypot(this.vel.x, this.vel.y);
+                const maxSp = 14;
+                if (sp > maxSp) { this.vel.x = this.vel.x / sp * maxSp; this.vel.y = this.vel.y / sp * maxSp; }
+                // Caught by the owner — despawn quietly.
+                if ((ox - this.x) * (ox - this.x) + (oy - this.y) * (oy - this.y) < 28 * 28) {
+                    this.active = false;
+                    return;
+                }
+            }
+        }
+
+        // Gravity Lance — drag nearby enemies toward the orb each frame.
+        // Position nudge (not velocity) so enemy AI can't immediately undo it.
+        if (this.gravityWell && enemyPool && enemyPool.activeObjects) {
+            const pr = this.pullRadius || 140;
+            const pr2 = pr * pr;
+            const strength = this.pullStrength || 0.35;
+            const list = enemyPool.activeObjects;
+            for (let i = 0; i < list.length; i++) {
+                const e = list[i];
+                if (!e || !e.active || e.warping || e.isBoss) continue;
+                const dx = this.x - e.x;
+                const dy = this.y - e.y;
+                const d2 = dx * dx + dy * dy;
+                if (d2 > pr2 || d2 < 4) continue;
+                const dist = Math.sqrt(d2);
+                const pull = (1 - dist / pr) * strength * 8;
+                e.x += (dx / dist) * pull;
+                e.y += (dy / dist) * pull;
+            }
+        }
+
+        // Flak Cannon — track distance flown; airburst into a shrapnel ring
+        // once the fuse distance is reached.
+        if (this.flak) {
+            this._flakDist += Math.hypot(this.vel.x, this.vel.y);
+            if (this._flakDist >= this.burstDistance) {
+                if (gameEngine && typeof gameEngine.spawnFlakBurst === 'function') {
+                    gameEngine.spawnFlakBurst(this.x, this.y, {
+                        shrapnelCount: this.shrapnelCount,
+                        shrapnelDamage: this.shrapnelDamage,
+                        shrapnelSpeed: this.shrapnelSpeed,
+                        shrapnelLifeFrames: this.shrapnelLifeFrames,
+                        burstBlastRadius: this.burstBlastRadius,
+                        burstBlastDamage: this.burstBlastDamage,
+                        color: this.color,
+                    });
+                }
+                this.active = false;
+                return;
+            }
         }
 
         // Position update.
@@ -257,13 +373,29 @@ export class Bullet {
             this.y += uy * delta;
         }
 
-        // Off-field despawn (no FX — bullet is too far to see anyway).
+        // Off-field handling.
         const boundaryWidth  = gameField ? gameField.width  : this.width;
         const boundaryHeight = gameField ? gameField.height : this.height;
-        if (this.x < -50 || this.x > boundaryWidth + 50 ||
-            this.y < -50 || this.y > boundaryHeight + 50) {
-            this.active = false;
-            if (this.onOffScreen) this.onOffScreen();
+        if (this.bounces > 0) {
+            // Ricochet — reflect off the arena edges instead of despawning.
+            // Wall bounces share the same counter as enemy caroms.
+            let bounced = false;
+            if (this.x < 0) { this.x = 0; this.vel.x = Math.abs(this.vel.x); bounced = true; }
+            else if (this.x > boundaryWidth) { this.x = boundaryWidth; this.vel.x = -Math.abs(this.vel.x); bounced = true; }
+            if (this.y < 0) { this.y = 0; this.vel.y = Math.abs(this.vel.y); bounced = true; }
+            else if (this.y > boundaryHeight) { this.y = boundaryHeight; this.vel.y = -Math.abs(this.vel.y); bounced = true; }
+            if (bounced) {
+                this.bounces--;
+                if (this.chargedCaroms) this.damage *= 1.25;
+            }
+        } else if (!this.boomerang) {
+            // Boomerang discs never despawn off-field — they return on their
+            // own. Everything else culls once well past the edge.
+            if (this.x < -50 || this.x > boundaryWidth + 50 ||
+                this.y < -50 || this.y > boundaryHeight + 50) {
+                this.active = false;
+                if (this.onOffScreen) this.onOffScreen();
+            }
         }
     }
     

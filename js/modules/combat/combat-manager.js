@@ -2095,6 +2095,88 @@ export function spawnSubBomblet(x, y, angle, speed, opts = {}) {
     return bullet;
 }
 
+// Flak Cannon airburst — a small central AoE plus a radial ring of short-
+// lived shrapnel bullets. Called from Bullet.update when a flak shell reaches
+// its fuse distance. Shrapnel are ordinary player bullets (no shooter tag)
+// so they collide with enemies/asteroids through the normal pipeline.
+export function spawnFlakBurst(x, y, opts = {}) {
+    const count = opts.shrapnelCount || 8;
+    const dmg = opts.shrapnelDamage || 0.6;
+    const speed = opts.shrapnelSpeed || 5;
+    const life = opts.shrapnelLifeFrames || 14;
+    const blastR = opts.burstBlastRadius || 0;
+    const blastDmg = opts.burstBlastDamage || 0;
+    const color = opts.color || '#ffbb55';
+
+    if (blastR > 0 && blastDmg > 0) _applyClusterBlast.call(this, x, y, blastDmg, blastR);
+
+    if (this.bulletPool) {
+        for (let i = 0; i < count; i++) {
+            const a = (i / count) * Math.PI * 2 + random(-0.15, 0.15);
+            const b = this.bulletPool.get(x, y, a);
+            if (!b) continue;
+            b.x = x; b.y = y;
+            b.weaponId = 'FLAK_CANNON';
+            b.damage = dmg;
+            b.piercing = 0;
+            b.homing = false;
+            b.explosive = false;
+            b.color = color;
+            b.baseRadius = 3; b.radius = 3;
+            b.rangeMultiplier = 1;
+            b.maxLife = life;
+            b.vel.x = Math.cos(a) * speed;
+            b.vel.y = Math.sin(a) * speed;
+        }
+    }
+
+    if (this.particlePool) {
+        const pp = this.particlePool;
+        pp.get(x, y, 'explosionFlash', (blastR || 40) * 0.8, '#ffffff');
+        pp.get(x, y, 'explosionRingColored', (blastR || 40), color);
+        for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            pp.get(x, y, 'explosionShrapnel', a, 3 + Math.random() * 3, color);
+        }
+    }
+    if (typeof this.triggerScreenShake === 'function') this.triggerScreenShake(4, 3, blastR || 50);
+}
+
+// Mitosis Rounds — spawn a fan of shard bullets at a kill site. If `generations`
+// remain (MEIOSIS), the shards themselves are flagged to split once more.
+export function spawnSplitShards(x, y, opts = {}) {
+    if (!this.bulletPool) return;
+    const count = opts.count || 2;
+    const dmg = opts.damage || 1;
+    const speed = opts.speed || 6;
+    const gens = opts.generations || 0;
+    const baseAngle = opts.angle || 0;
+    const color = opts.color || '#66ff99';
+    for (let i = 0; i < count; i++) {
+        const a = baseAngle + (i - (count - 1) / 2) * 0.6 + random(-0.12, 0.12);
+        const b = this.bulletPool.get(x, y, a);
+        if (!b) continue;
+        b.x = x; b.y = y;
+        b.weaponId = 'SPLITTER';
+        b.damage = dmg;
+        b.piercing = 0;
+        b.homing = false;
+        b.explosive = false;
+        b.color = color;
+        b.baseRadius = 3; b.radius = 3;
+        b.rangeMultiplier = 0.8;
+        b.vel.x = Math.cos(a) * speed;
+        b.vel.y = Math.sin(a) * speed;
+        if (gens > 0) {
+            b.splitOnKill = true;
+            b.splitCount = count;
+            b.splitDamageFactor = opts.splitDamageFactor || 0.5;
+            b.splitSpeed = opts.splitSpeed || 0.85;
+            b.splitGenerations = gens;
+        }
+    }
+}
+
 export function detonateSubBomblet(x, y, baseDamage, baseRadius) {
     // Smaller blast, lighter VFX. Same damage application path.
     _applyClusterBlast.call(this, x, y, baseDamage, baseRadius);

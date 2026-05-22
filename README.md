@@ -143,28 +143,42 @@ Plug in any standard gamepad — it works on **both desktop and mobile**.
 
 ## Weapons & Skills
 
-### Primary Weapons (6)
-Primary weapons are free — they auto-unlock at wave milestones as you progress:
+### Primary Weapons (11)
+Primary weapons are free — they auto-unlock at wave milestones as you progress (and any weapon can be selected immediately from the weapon radial menu):
 
 | Icon | Weapon | Unlocks | Description |
 |------|--------|---------|-------------|
 | 🔫 | Pulse Cannon | Start | Reliable stream of energy shots |
-| 🌧️ | Storm Needles | Wave 3 | Rapid tiny shots — saturation fire |
-| 💥 | Scatter Gun | Wave 5 | Shotgun burst, devastating up close |
-| ⚡ | Arc Lightning | Wave 5 | Continuous lightning tether — frayed forward static when out of range, focused beam when locked on (range 360 px, 5.79.0) |
+| 🌧️ | Storm Needles | Wave 3 | Rapid tiny shots — saturation fire with a randomized cone |
+| 💥 | Scatter Shot | Wave 5 | Shotgun burst, devastating up close |
+| 🐣 | Mitosis Rounds | Wave 6 | Rounds split into shards on each kill — cascading clears (6.56.0) |
+| 🔀 | Caroms | Wave 7 | Ricochet off walls and bank between enemies (6.56.0) |
 | 🧬 | Rail Driver | Wave 8 | Slow, powerful piercing rail — fires a double-helix pair |
-| 🔦 | Lance Beam | Wave 12 | Power weapon — sweeps an arc around the cursor, shredding everything in the swept cone (6.55.0) |
+| 🔁 | Boomerang Discs | Wave 9 | Discs fly out and return — cut coming and going (6.56.0) |
+| 💣 | Cluster Launcher | Wave 10 | Hold-to-charge cluster bomb; airbursts into bomblets (6.55.0) |
+| 🚨 | Flak Cannon | Wave 11 | Shells airburst into a shrapnel ring at range (6.56.0) |
+| 🌪️ | Spin Cannon | Wave 12 | Minigun — fire rate spools up the longer you hold (6.56.0) |
+| 🌀 | Gravity Lance | Wave 13 | Slow orb that drags enemies into its wake — a setup tool (6.56.0) |
 
-### Power Weapons (4)
+### Power Weapons (11)
+Right-click / power trigger. Some are cooldown-based, Charge Shot is charge-based:
+
 | Icon | Weapon | Description |
 |------|--------|-------------|
-| 🔋 | Charge Shot | Hold to charge, release for powerful blast |
-| 💣 | Mine Layer | Drop proximity mines |
-| 💫 | Nova Blast | Expanding damage ring |
+| 🔋 | Charge Shot | Hold to charge, release for a powerful blast |
+| 💣 | Seeker Mines | Magnetic seekers that hunt and detonate |
+| 💫 | Nova Blast | Expanding shockwave that pushes everything out |
 | 🚀 | Missile Salvo | Homing missiles seek targets |
+| 🔦 | Lance Beam | Sweeps an arc around the cursor, shredding the swept cone (6.55.0) |
+| ⚡ | Arc Lightning | Continuous lightning tether |
+| 🌀 | Singularity | Black hole that pulls enemies in, then collapses for AoE (6.56.0) |
+| 💎 | Prism Beam | A fan of refracting rainbow beams (6.56.0) |
+| 🛰️ | Orbital Strike | Paints a target; a column drops after a short telegraph (6.56.0) |
+| 🌊 | Cryo Burst | Frost shockwave that freezes enemies solid (6.56.0) |
+| ⏩ | Overdrive | Supercharges your primary's fire rate & damage for a few seconds (6.56.0) |
 
-### Defense Skills (5)
-*5.93.0 — Phase Dash was promoted out of the defense-skill pool and is now a core movement primitive on the **Shift** key (see Controls above). Five defense skills remain.*
+### Defense Skills (6)
+*5.93.0 — Phase Dash was promoted out of the defense-skill pool and is now a core movement primitive on the **Shift** key (see Controls above).*
 
 | Icon | Skill | Description |
 |------|-------|-------------|
@@ -173,6 +187,7 @@ Primary weapons are free — they auto-unlock at wave milestones as you progress
 | 🔮 | Deflector Orbs | Orbiting orbs block bullets for 5s |
 | 📡 | EMP Pulse | Stun nearby enemies for 2s |
 | 🧲 | Tractor Shield | Forward shield absorbs bullets for coins |
+| 🛰️ | Sentry Drone | Auto-firing drones orbit you for 8s (6.56.0) |
 
 ---
 

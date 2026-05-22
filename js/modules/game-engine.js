@@ -2486,6 +2486,12 @@ export class GameEngine {
     spawnSubBomblet(x, y, angle, speed, opts) {
         return combat.spawnSubBomblet.call(this, x, y, angle, speed, opts);
     }
+    spawnFlakBurst(x, y, opts) {
+        return combat.spawnFlakBurst.call(this, x, y, opts);
+    }
+    spawnSplitShards(x, y, opts) {
+        return combat.spawnSplitShards.call(this, x, y, opts);
+    }
 
     // Phase 4 (2026-05-19) — Nova Chain Reaction secondary spawn.
     //   Pushes a smaller nova ring onto the player's `novaRings` queue
@@ -2645,6 +2651,8 @@ export class GameEngine {
     checkMissileCollisions() { return col.checkMissileCollisions.call(this); }
     checkDeflectorOrbCollisions() { return col.checkDeflectorOrbCollisions.call(this); }
     checkTractorShieldCollisions() { return col.checkTractorShieldCollisions.call(this); }
+    checkCryoCollisions() { return col.checkCryoCollisions.call(this); }
+    checkPrismBeamCollisions() { return col.checkPrismBeamCollisions.call(this); }
     damageEnemy(enemy, damage) { return col.damageEnemy.call(this, enemy, damage); }
     applyDamageToEnemy(enemy, damage, opts) { return col.applyDamageToEnemy.call(this, enemy, damage, opts); }
     destroyAsteroid(ast) { return col.destroyAsteroid.call(this, ast); }

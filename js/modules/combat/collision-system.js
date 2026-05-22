@@ -91,8 +91,8 @@ export function handleCollisions() {
             const ast = nearby[j];
             if (!ast.active || ast._deathFlash > 0 || ast.warping || ast.constructor.name !== 'Asteroid') continue;
 
-            // Skip if this piercing bullet has already hit this asteroid
-            if (bullet.piercing > 0 && bullet.hasHitEnemy(ast)) {
+            // Skip if this piercing/ricochet bullet has already hit this asteroid
+            if ((bullet.piercing > 0 || bullet.bounces > 0) && bullet.hasHitEnemy(ast)) {
                 continue;
             }
 
@@ -294,7 +294,49 @@ export function handleCollisions() {
                             }
                         }
                     }
+
+                    // Mitosis Rounds — split on asteroid kills too.
+                    if (bullet.splitOnKill && bullet.splitCount > 0 && bullet.splitGenerations > 0
+                        && typeof this.spawnSplitShards === 'function') {
+                        this.spawnSplitShards(ast.x, ast.y, {
+                            count: bullet.splitCount,
+                            damage: (bullet.damage || 1) * (bullet.splitDamageFactor || 0.5),
+                            speed: 6 * (bullet.splitSpeed || 0.85),
+                            generations: bullet.splitGenerations - 1,
+                            angle: Math.atan2(bullet.vel.y, bullet.vel.x),
+                            color: bullet.color,
+                            splitDamageFactor: bullet.splitDamageFactor,
+                            splitSpeed: bullet.splitSpeed,
+                        });
+                    }
                 }
+
+                // Caroms — ricochet off the rock toward a nearby enemy.
+                if (bullet.bounces > 0 && bullet.active) {
+                    bullet.hitTargets.add(ast);
+                    bullet.bounces--;
+                    if (bullet.chargedCaroms) bullet.damage *= 1.25;
+                    const sp = Math.hypot(bullet.vel.x, bullet.vel.y) || 1;
+                    const seekR = bullet.bounceSeekRadius || 260;
+                    let target = null, bestD = Infinity;
+                    const epool = (this.enemyPool && this.enemyPool.activeObjects) || [];
+                    for (let k = epool.length - 1; k >= 0; k--) {
+                        const cand = epool[k];
+                        if (!cand || !cand.active || cand._deathFlash > 0 || cand.warping) continue;
+                        const d = Math.hypot(cand.x - bullet.x, cand.y - bullet.y);
+                        if (d < bestD && d <= seekR) { bestD = d; target = cand; }
+                    }
+                    if (target) {
+                        const a = Math.atan2(target.y - bullet.y, target.x - bullet.x);
+                        bullet.vel.x = Math.cos(a) * sp;
+                        bullet.vel.y = Math.sin(a) * sp;
+                    } else {
+                        bullet.vel.x = -bullet.vel.x;
+                        bullet.vel.y = -bullet.vel.y;
+                    }
+                    break;
+                }
+
                 // Handle bullet hit with powerup effects
                 if (bullet.explosive) {
                     bullet.explode(this);
@@ -631,8 +673,8 @@ export function handleCollisions() {
             const enemy = nearbyEn[j];
             if (!enemy.active || enemy._deathFlash > 0 || enemy.warping || enemy.constructor.name !== 'Enemy') continue;
 
-            // Skip if this piercing bullet has already hit this enemy
-            if (bullet.piercing > 0 && bullet.hasHitEnemy(enemy)) {
+            // Skip if this piercing/ricochet bullet has already hit this enemy
+            if ((bullet.piercing > 0 || bullet.bounces > 0) && bullet.hasHitEnemy(enemy)) {
                 continue;
             }
 
@@ -662,6 +704,12 @@ export function handleCollisions() {
                         ? this.player.getPowerupStacks('EXECUTIONER')
                         : 0;
                     if (execStacks > 0) damage *= (1 + execStacks * 0.2);
+                }
+                // SHATTER (Cryo Burst upgrade) — frozen enemies take +30%.
+                if (this.player && typeof this.player.getPowerupStacks === 'function'
+                    && this.player.getPowerupStacks('SHATTER') > 0
+                    && enemy.cryoFrozenUntil && enemy.cryoFrozenUntil > frameClock.now) {
+                    damage *= 1.3;
                 }
                 if (this.game.stats) this.game.stats.shotsHit++;
                 const enemyHpBefore = enemy.health;
@@ -790,6 +838,21 @@ export function handleCollisions() {
                     // Drop health and money orbs
                     this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
 
+                    // Mitosis Rounds — spawn shards on kill (cascading clear).
+                    if (bullet.splitOnKill && bullet.splitCount > 0 && bullet.splitGenerations > 0
+                        && typeof this.spawnSplitShards === 'function') {
+                        this.spawnSplitShards(enemy.x, enemy.y, {
+                            count: bullet.splitCount,
+                            damage: (bullet.damage || 1) * (bullet.splitDamageFactor || 0.5),
+                            speed: 6 * (bullet.splitSpeed || 0.85),
+                            generations: bullet.splitGenerations - 1,
+                            angle: Math.atan2(bullet.vel.y, bullet.vel.x),
+                            color: bullet.color,
+                            splitDamageFactor: bullet.splitDamageFactor,
+                            splitSpeed: bullet.splitSpeed,
+                        });
+                    }
+
                     // 5.70.0 — powerups no longer drop from enemy kills.
                     // They're earned via shop picks (one per wave + one per
                     // level-up). The wave-clear bonus and per-kill XP both
@@ -797,6 +860,36 @@ export function handleCollisions() {
                     // stack picks faster.
 
                     // Don't release here — cleanupInactive() handles it after death flash completes
+                }
+
+                // Caroms — ricochet toward a new enemy instead of expiring.
+                // Carom hits share the bounce counter with wall bounces.
+                if (bullet.bounces > 0 && bullet.active) {
+                    bullet.hitTargets.add(enemy);
+                    bullet.bounces--;
+                    if (bullet.chargedCaroms) bullet.damage *= 1.25;
+                    const sp = Math.hypot(bullet.vel.x, bullet.vel.y) || 1;
+                    const seekR = bullet.bounceSeekRadius || 260;
+                    let target = null, bestD = Infinity;
+                    const pool = (this.enemyPool && this.enemyPool.activeObjects) || [];
+                    for (let k = pool.length - 1; k >= 0; k--) {
+                        const cand = pool[k];
+                        if (!cand || !cand.active || cand === enemy) continue;
+                        if (cand._deathFlash > 0 || cand.warping) continue;
+                        if (bullet.hitTargets.has(cand)) continue;
+                        const d = Math.hypot(cand.x - bullet.x, cand.y - bullet.y);
+                        if (d < bestD && d <= seekR) { bestD = d; target = cand; }
+                    }
+                    if (target) {
+                        const a = Math.atan2(target.y - bullet.y, target.x - bullet.x);
+                        bullet.vel.x = Math.cos(a) * sp;
+                        bullet.vel.y = Math.sin(a) * sp;
+                    } else {
+                        // No nearby target — bank back into the field.
+                        bullet.vel.x = -bullet.vel.x;
+                        bullet.vel.y = -bullet.vel.y;
+                    }
+                    break;
                 }
 
                 // Handle bullet hit with powerup effects
@@ -978,6 +1071,8 @@ export function handleWeaponEffectCollisions() {
     this.checkMissileCollisions();
     this.checkDeflectorOrbCollisions();
     this.checkTractorShieldCollisions();
+    this.checkCryoCollisions();
+    this.checkPrismBeamCollisions();
 }
 
 // ─── Lance Beam ─────────────────────────────────────────────────
@@ -1894,6 +1989,102 @@ export function checkTractorShieldCollisions() {
         });
     }
     // ─── Bulwark damage reduction is handled in handlePlayerEnemyBulletCollision ──
+}
+
+// ─── Cryo Burst ─────────────────────────────────────────────────
+// Expanding frost ring: each enemy is hit once when the wavefront reaches
+// it, taking light damage + a hard FREEZE (full stop via applyStun). Stamps
+// cryoFrozenUntil so the SHATTER upgrade can amp bullet damage on frozen
+// targets (see the bullet→enemy block).
+export function checkCryoCollisions() {
+    const p = this.player;
+    if (!p.cryoRings || p.cryoRings.length === 0) return;
+    const RING_WIDTH = 40;
+    const enemies = (this.enemyPool && this.enemyPool.activeObjects) || [];
+    for (const ring of p.cryoRings) {
+        if (!ring.active) continue;
+        if (!ring.hitEnemies) ring.hitEnemies = new Set();
+        const r = ring.currentRadius;
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const e = enemies[i];
+            if (!e || !e.active || e.warping || e._deathFlash > 0) continue;
+            if (ring.hitEnemies.has(e)) continue;
+            const dist = Math.hypot(e.x - ring.x, e.y - ring.y);
+            if (dist <= r + (e.radius || 12) && dist >= r - RING_WIDTH) {
+                ring.hitEnemies.add(e);
+                if (typeof e.takeDamage === 'function') e.takeDamage(ring.damage, { isExplosion: true });
+                if (e.active && typeof this.applyStun === 'function') this.applyStun(e, ring.freezeDuration);
+                e.cryoFrozenUntil = frameClock.now + ring.freezeDuration;
+                if (this.particlePool) {
+                    this.particlePool.get(e.x, e.y, 'explosionEmber', '#aaeeff');
+                    this.particlePool.get(e.x, e.y, 'starSparkle');
+                }
+            }
+        }
+    }
+}
+
+// ─── Prism Beam ─────────────────────────────────────────────────
+// A fan of rays from the ship; each ray damages enemies/asteroids whose
+// perpendicular distance to the ray is within the beam width (out to range),
+// every tick the fan is active. PRISM_SEEK bends a ray onto the nearest
+// enemy in a cone (resolved angle stashed on beam._renderAngle for the
+// renderer).
+export function checkPrismBeamCollisions() {
+    const p = this.player;
+    if (!p.prismActive || !p.prismBeams || p.prismBeams.length === 0) return;
+    const enemies = (this.enemyPool && this.enemyPool.activeObjects) || [];
+    const asteroids = (this.asteroidPool && this.asteroidPool.activeObjects) || [];
+    const range = (GAME_CONFIG.FIELD_WIDTH || 1920) * (p.prismRange || 0.95);
+    const halfW = (p.prismWidth || 5) + 6;
+    const dmg = p.prismDamage || 0.06;
+    for (const beam of p.prismBeams) {
+        let ang = p.prismAngle + beam.angleOffset;
+        if (beam.seek) {
+            let best = null, bestd = Infinity;
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                if (!e || !e.active) continue;
+                let da = Math.atan2(e.y - p.y, e.x - p.x) - ang;
+                while (da > Math.PI) da -= Math.PI * 2;
+                while (da < -Math.PI) da += Math.PI * 2;
+                if (Math.abs(da) > 0.5) continue;
+                const d = Math.hypot(e.x - p.x, e.y - p.y);
+                if (d < bestd) { bestd = d; best = e; }
+            }
+            if (best) ang = Math.atan2(best.y - p.y, best.x - p.x);
+        }
+        beam._renderAngle = ang;
+        const dirx = Math.cos(ang), diry = Math.sin(ang);
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const e = enemies[i];
+            if (!e || !e.active || e.warping || e._deathFlash > 0) continue;
+            const rx = e.x - p.x, ry = e.y - p.y;
+            const proj = rx * dirx + ry * diry;
+            if (proj < 0 || proj > range) continue;
+            const perp = Math.abs(rx * (-diry) + ry * dirx);
+            if (perp > halfW + (e.radius || 10)) continue;
+            const destroyed = e.takeDamage(dmg, { isBeam: true });
+            if (this.particlePool && Math.random() < 0.25) this.particlePool.get(e.x, e.y, 'starSparkle');
+            if (destroyed) {
+                e._deathFlash = 8; e._deathFlashMax = 8;
+                if (typeof this.createEnemyDebris === 'function') this.createEnemyDebris(e);
+                if (typeof this.dropOrbsFromEntity === 'function') this.dropOrbsFromEntity(e.x, e.y, e);
+                if (typeof this.onEnemyKill === 'function') this.onEnemyKill(e);
+            }
+        }
+        for (let i = asteroids.length - 1; i >= 0; i--) {
+            const a = asteroids[i];
+            if (!a || !a.active || a.warping || a._deathFlash > 0) continue;
+            const rx = a.x - p.x, ry = a.y - p.y;
+            const proj = rx * dirx + ry * diry;
+            if (proj < 0 || proj > range) continue;
+            const perp = Math.abs(rx * (-diry) + ry * dirx);
+            if (perp > halfW + (a.radius || 12)) continue;
+            a.health = Math.max(0, a.health - dmg);
+            if (a.health <= 0.001 && typeof this.destroyAsteroid === 'function') this.destroyAsteroid(a);
+        }
+    }
 }
 
 // Full asteroid destruction sequence — death flash, audio, debris,

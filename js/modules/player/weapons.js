@@ -50,6 +50,8 @@ const _PER_WEAPON_HOMING_ID = {
     SCATTER_GUN: 'SCATTER_HOMING',
     RAIL_DRIVER: 'RAIL_HOMING',
     CHARGE_SHOT: 'CHARGE_HOMING',
+    SPLITTER: 'SPLITTER_HOMING',
+    SPIN_CANNON: 'SPIN_HOMING',
 };
 const _PER_WEAPON_PIERCING_ID = {
     PULSE_CANNON: 'PULSE_PIERCING',
@@ -58,6 +60,8 @@ const _PER_WEAPON_PIERCING_ID = {
     RAIL_DRIVER: 'RAIL_PIERCING',
     CHARGE_SHOT: 'CHARGE_PIERCING',
     MISSILE_SALVO: 'MISSILE_PIERCING',
+    BOOMERANG: 'BOOMERANG_PIERCING',
+    SPIN_CANNON: 'SPIN_PIERCING',
 };
 const _PER_WEAPON_MULTI_ID = {
     PULSE_CANNON: 'PULSE_MULTI',
@@ -65,24 +69,41 @@ const _PER_WEAPON_MULTI_ID = {
     SCATTER_GUN: 'SCATTER_MULTI',
     RAIL_DRIVER: 'RAIL_MULTI',
     CLUSTER_LAUNCHER: 'CLUSTER_MULTI',
+    SPLITTER: 'SPLITTER_MULTI',
+    RICOCHET: 'RICOCHET_MULTI',
+    BOOMERANG: 'BOOMERANG_MULTI',
+    GRAVITY_LANCE: 'GRAVITY_MULTI',
 };
 const _PER_WEAPON_RAPID_ID = {
     PULSE_CANNON: 'PULSE_RAPID',
     STORM_NEEDLES: 'NEEDLE_RAPID',
     SCATTER_GUN: 'SCATTER_RAPID',
     RAIL_DRIVER: 'RAIL_RAPID',
+    SPLITTER: 'SPLITTER_RAPID',
+    RICOCHET: 'RICOCHET_RAPID',
+    BOOMERANG: 'BOOMERANG_RAPID',
+    SPIN_CANNON: 'SPIN_RAPID',
+    FLAK_CANNON: 'FLAK_RAPID',
 };
 const _PER_WEAPON_BIG_ID = {
     PULSE_CANNON: 'PULSE_BIG',
     STORM_NEEDLES: 'NEEDLE_BIG',
     SCATTER_GUN: 'SCATTER_BIG',
     RAIL_DRIVER: 'RAIL_BIG',
+    SPLITTER: 'SPLITTER_BIG',
+    RICOCHET: 'RICOCHET_BIG',
+    BOOMERANG: 'BOOMERANG_BIG',
+    SPIN_CANNON: 'SPIN_BIG',
+    FLAK_CANNON: 'FLAK_BIG',
+    GRAVITY_LANCE: 'GRAVITY_BIG',
 };
 const _PER_WEAPON_EXPLODE_ID = {
     PULSE_CANNON: 'PULSE_EXPLODE',
     STORM_NEEDLES: 'NEEDLE_EXPLODE',
     SCATTER_GUN: 'SCATTER_EXPLODE',
     RAIL_DRIVER: 'RAIL_EXPLODE',
+    RICOCHET: 'RICOCHET_EXPLODE',
+    GRAVITY_LANCE: 'GRAVITY_EXPLODE',
 };
 const _PER_WEAPON_STUN_ID = {
     PULSE_CANNON: 'PULSE_STUN',
@@ -90,6 +111,12 @@ const _PER_WEAPON_STUN_ID = {
     SCATTER_GUN: 'SCATTER_STUN',
     RAIL_DRIVER: 'RAIL_STUN',
     CLUSTER_LAUNCHER: 'CLUSTER_STUN',
+    SPLITTER: 'SPLITTER_STUN',
+    RICOCHET: 'RICOCHET_STUN',
+    BOOMERANG: 'BOOMERANG_STUN',
+    SPIN_CANNON: 'SPIN_STUN',
+    FLAK_CANNON: 'FLAK_STUN',
+    GRAVITY_LANCE: 'GRAVITY_STUN',
 };
 const _PER_WEAPON_KNOCK_ID = {
     PULSE_CANNON: 'PULSE_KNOCK',
@@ -97,6 +124,11 @@ const _PER_WEAPON_KNOCK_ID = {
     SCATTER_GUN: 'SCATTER_KNOCK',
     RAIL_DRIVER: 'RAIL_KNOCK',
     CLUSTER_LAUNCHER: 'CLUSTER_KNOCK',
+    SPLITTER: 'SPLITTER_KNOCK',
+    RICOCHET: 'RICOCHET_KNOCK',
+    BOOMERANG: 'BOOMERANG_KNOCK',
+    SPIN_CANNON: 'SPIN_KNOCK',
+    FLAK_CANNON: 'FLAK_KNOCK',
 };
 
 // Per-stack mechanic constants for the new shared traits.
@@ -402,6 +434,30 @@ export function firePrimary(bulletPool, audioManager, particlePool) {
         case 'CLUSTER_LAUNCHER':
             this.fireCluster(bulletPool, audioManager, config);
             spawnMuzzleFlare.call(this, particlePool, 'heavy', '#ffaa44');
+            break;
+        case 'SPLITTER':
+            this.fireSplitter(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'medium', '#88ccff');
+            break;
+        case 'RICOCHET':
+            this.fireRicochet(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'medium', '#88ccff');
+            break;
+        case 'BOOMERANG':
+            this.fireBoomerang(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'medium', '#ffaa44');
+            break;
+        case 'SPIN_CANNON':
+            this.fireSpinCannon(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'light', '#ffaa44');
+            break;
+        case 'FLAK_CANNON':
+            this.fireFlak(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'heavy', '#ffaa44');
+            break;
+        case 'GRAVITY_LANCE':
+            this.fireGravityLance(bulletPool, audioManager, config);
+            spawnMuzzleFlare.call(this, particlePool, 'medium', '#ffdd88');
             break;
         default:
             this.firePulseCannon(bulletPool, audioManager, config);
@@ -769,6 +825,165 @@ export function fireCluster(bulletPool, audioManager, config, chargeFrac = 1) {
     audioManager.playShoot();
 }
 
+// ── New primaries (brainstorm drop) ────────────────────────────────────────
+
+// Shared fan helper: returns the per-bullet angle offset for index i of n,
+// fanned across `spread` radians (0 when n === 1).
+function _fanOffset(i, n, spread) {
+    if (n <= 1) return 0;
+    return (i - (n - 1) / 2) * (spread / (n - 1));
+}
+
+export function fireSplitter(bulletPool, audioManager, config) {
+    const damage = this.getEffectivePrimaryDamage();
+    const multi = _perWeaponStacks(this, _PER_WEAPON_MULTI_ID, 'SPLITTER');
+    const count = config.bulletCount + multi;
+    const spread = count > 1 ? Math.min(0.35, 0.09 * (count - 1)) : 0;
+    const splitCount = config.splitCount + this.getPowerupStacks('SPLIT_CELLS');
+    const generations = config.splitGenerations + (this.getPowerupStacks('MEIOSIS') > 0 ? 1 : 0);
+    for (let i = 0; i < count; i++) {
+        const bullet = bulletPool.get(this.x, this.y, this.angle + _fanOffset(i, count, spread));
+        if (!bullet) continue;
+        bullet.damage = damage;
+        bullet.radius *= config.bulletSize;
+        bullet.baseRadius = bullet.radius;
+        bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
+        bullet.maxLife = Math.round(bullet.maxLife * config.range);
+        bullet.color = config.color;
+        bullet.splitOnKill = true;
+        bullet.splitCount = splitCount;
+        bullet.splitDamageFactor = config.splitDamageFactor;
+        bullet.splitSpeed = config.splitSpeed;
+        bullet.splitGenerations = generations;
+        this.applyGlobalBulletUpgrades(bullet);
+    }
+    audioManager.playShoot();
+}
+
+export function fireRicochet(bulletPool, audioManager, config) {
+    const damage = this.getEffectivePrimaryDamage();
+    const multi = _perWeaponStacks(this, _PER_WEAPON_MULTI_ID, 'RICOCHET');
+    const count = config.bulletCount + multi;
+    const spread = count > 1 ? Math.min(0.3, 0.08 * (count - 1)) : 0;
+    const bounces = config.bounces + this.getPowerupStacks('EXTRA_BOUNCE');
+    const charged = this.getPowerupStacks('CHARGED_CAROMS') > 0;
+    for (let i = 0; i < count; i++) {
+        const bullet = bulletPool.get(this.x, this.y, this.angle + _fanOffset(i, count, spread));
+        if (!bullet) continue;
+        bullet.damage = damage;
+        bullet.radius *= config.bulletSize;
+        bullet.baseRadius = bullet.radius;
+        bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
+        bullet.maxLife = Math.round(bullet.maxLife * config.range);
+        bullet.color = config.color;
+        bullet.bounces = bounces;
+        bullet.bounceSeekRadius = config.bounceSeekRadius;
+        bullet.chargedCaroms = charged;
+        this.applyGlobalBulletUpgrades(bullet);
+    }
+    audioManager.playShoot();
+}
+
+export function fireBoomerang(bulletPool, audioManager, config) {
+    const damage = this.getEffectivePrimaryDamage();
+    const multi = _perWeaponStacks(this, _PER_WEAPON_MULTI_ID, 'BOOMERANG');
+    const count = config.bulletCount + multi;
+    const spread = count > 1 ? Math.min(0.5, 0.16 * (count - 1)) : 0;
+    const longThrow = this.getPowerupStacks('LONG_THROW');
+    const throwMul = 1 + longThrow * 0.4;
+    const razor = this.getPowerupStacks('RAZOR_EDGE') > 0;
+    for (let i = 0; i < count; i++) {
+        const bullet = bulletPool.get(this.x, this.y, this.angle + _fanOffset(i, count, spread));
+        if (!bullet) continue;
+        bullet.damage = damage;
+        bullet.radius *= config.bulletSize;
+        bullet.baseRadius = bullet.radius;
+        bullet.rangeMultiplier = this.getRangeMultiplier() * config.range * throwMul;
+        bullet.maxLife = Math.round(bullet.maxLife * config.range * throwMul);
+        bullet.color = config.color;
+        bullet.piercing = config.piercing;
+        bullet.boomerang = true;
+        bullet.boomerangOutFrames = Math.round(config.boomerangOutFrames * throwMul);
+        bullet.boomerangReturnAccel = config.boomerangReturnAccel;
+        bullet.boomerangOwner = this;
+        bullet.razorEdge = razor;
+        this.applyGlobalBulletUpgrades(bullet);
+    }
+    audioManager.playShoot();
+}
+
+export function fireSpinCannon(bulletPool, audioManager, config) {
+    const damage = this.getEffectivePrimaryDamage();
+    // Cone widens with spin so a fully-spooled hose visibly sprays.
+    const spinFrac = Math.min(1, (this._fireHoldTime || 0) / (config.spinUpTime || 1400));
+    const spread = config.spreadAngle + spinFrac * (config.spinSpreadBonus || 0);
+    const jitter = (Math.random() - 0.5) * spread;
+    const bullet = bulletPool.get(this.x, this.y, this.angle + jitter);
+    if (bullet) {
+        bullet.damage = damage;
+        bullet.radius *= config.bulletSize;
+        bullet.baseRadius = bullet.radius;
+        bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
+        bullet.maxLife = Math.round(bullet.maxLife * config.range);
+        bullet.color = config.color;
+        this.applyGlobalBulletUpgrades(bullet);
+    }
+    audioManager.playShoot();
+}
+
+export function fireFlak(bulletPool, audioManager, config) {
+    const damage = this.getEffectivePrimaryDamage();
+    const longFuse = this.getPowerupStacks('LONG_FUSE');
+    const flechette = this.getPowerupStacks('FLECHETTE');
+    const proximity = this.getPowerupStacks('PROXIMITY_FUSE');
+    const bullet = bulletPool.get(this.x, this.y, this.angle);
+    if (bullet) {
+        bullet.damage = damage;
+        bullet.radius *= config.bulletSize;
+        bullet.baseRadius = bullet.radius;
+        bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
+        bullet.maxLife = Math.round(bullet.maxLife * config.range);
+        bullet.color = config.color;
+        bullet.flak = true;
+        bullet.burstDistance = config.burstDistance * (1 + longFuse * 0.4);
+        bullet.shrapnelCount = config.shrapnelCount + flechette * 3;
+        bullet.shrapnelDamage = config.shrapnelDamage;
+        bullet.shrapnelSpeed = config.shrapnelSpeed;
+        bullet.shrapnelLifeFrames = config.shrapnelLifeFrames;
+        bullet.burstBlastRadius = config.burstBlastRadius + proximity * 30;
+        bullet.burstBlastDamage = config.burstBlastDamage + proximity * 0.6;
+        this.applyGlobalBulletUpgrades(bullet);
+    }
+    audioManager.playShoot();
+}
+
+export function fireGravityLance(bulletPool, audioManager, config) {
+    const damage = this.getEffectivePrimaryDamage();
+    const multi = _perWeaponStacks(this, _PER_WEAPON_MULTI_ID, 'GRAVITY_LANCE');
+    const count = config.bulletCount + multi;
+    const spread = count > 1 ? Math.min(0.3, 0.1 * (count - 1)) : 0;
+    const wake = this.getPowerupStacks('EVENT_WAKE');
+    const singularPull = this.getPowerupStacks('SINGULAR_PULL');
+    const implosion = this.getPowerupStacks('IMPLOSION') > 0;
+    for (let i = 0; i < count; i++) {
+        const bullet = bulletPool.get(this.x, this.y, this.angle + _fanOffset(i, count, spread));
+        if (!bullet) continue;
+        bullet.damage = damage;
+        bullet.radius *= config.bulletSize;
+        bullet.baseRadius = bullet.radius;
+        bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
+        bullet.maxLife = Math.round(bullet.maxLife * config.range);
+        bullet.color = config.color;
+        bullet.piercing = config.piercing;
+        bullet.gravityWell = true;
+        bullet.pullRadius = config.pullRadius + wake * 50;
+        bullet.pullStrength = config.pullStrength * (1 + singularPull * 0.5);
+        bullet.implosion = implosion;
+        this.applyGlobalBulletUpgrades(bullet);
+    }
+    audioManager.playShoot();
+}
+
 export function startLanceBeam(audioManager, config) {
     const lingerStacks = this.getPowerupStacks('LINGER');
     const duration = config.beamDuration + lingerStacks * 100;
@@ -993,6 +1208,23 @@ export function firePower(bulletPool, audioManager, particlePool) {
             this.powerCooldown = config.cooldown;
             this.powerCooldownMax = this.powerCooldown;
             return;
+        case 'SINGULARITY':
+            this.fireSingularity(config);
+            break;
+        case 'CRYO_BURST':
+            this.fireCryoBurst(config);
+            break;
+        case 'ORBITAL_STRIKE':
+            this.fireOrbitalStrike(config);
+            break;
+        case 'OVERDRIVE':
+            this.activateOverdrive(config);
+            break;
+        case 'PRISM_BEAM':
+            this.firePrismBeam(audioManager, config);
+            this.powerCooldown = config.cooldown;
+            this.powerCooldownMax = this.powerCooldown;
+            return;
     }
 
     // Each weapon's fire fn sets its own cooldown with discount applied
@@ -1002,6 +1234,133 @@ export function firePower(bulletPool, audioManager, particlePool) {
 
     // Heavy muzzle flare for power weapons
     spawnMuzzleFlare.call(this, particlePool, 'heavy', '#ffcc44');
+}
+
+// ── New power weapons (brainstorm drop) ────────────────────────────────────
+
+// Resolve the aim/cursor world position (deployed powers land here).
+function _aimWorld(player) {
+    const inp = player.gameEngine && player.gameEngine.inputHandler && player.gameEngine.inputHandler.input;
+    if (inp && typeof inp.aimX === 'number') return { x: inp.aimX, y: inp.aimY };
+    return { x: player.x + Math.cos(player.angle) * 320, y: player.y + Math.sin(player.angle) * 320 };
+}
+
+export function fireSingularity(config) {
+    const radiusStacks = this.getPowerupStacks('SINGULARITY_RADIUS');
+    const graspStacks = this.getPowerupStacks('VOID_GRASP');
+    const durStacks = this.getPowerupStacks('SINGULARITY_DURATION');
+    const eventHorizon = this.getPowerupStacks('EVENT_HORIZON') > 0;
+    const t = _aimWorld(this);
+    this.singularities.push({
+        x: t.x, y: t.y,
+        pullRadius: config.pullRadius + radiusStacks * 40,
+        pullStrength: config.pullStrength * (1 + graspStacks * 0.3),
+        elapsed: 0,
+        duration: config.pullDuration + durStacks * 500,
+        collapseRadius: config.collapseRadius * (eventHorizon ? 1.5 : 1),
+        collapseDamage: config.collapseDamage * (eventHorizon ? 2 : 1),
+        collapsed: false,
+        active: true,
+    });
+    if (this.gameEngine && this.gameEngine.particlePool) {
+        const pp = this.gameEngine.particlePool;
+        pp.get(t.x, t.y, 'explosionFlash', 30, '#aa66ff');
+        for (let i = 0; i < 10; i++) pp.get(t.x, t.y, 'starSparkle');
+    }
+    this.powerCooldown = config.cooldown;
+    this.powerCooldownMax = this.powerCooldown;
+}
+
+export function fireCryoBurst(config) {
+    const radiusStacks = this.getPowerupStacks('CRYO_RADIUS');
+    const freezeStacks = this.getPowerupStacks('DEEP_FREEZE');
+    const coldSnap = this.getPowerupStacks('COLD_SNAP');
+    this.cryoRings.push({
+        x: this.x, y: this.y,
+        currentRadius: 0,
+        maxRadius: config.ringRadius + radiusStacks * 40,
+        damage: config.ringDamage,
+        freezeDuration: config.freezeDuration + freezeStacks * 1000,
+        duration: config.ringDuration,
+        elapsed: 0,
+        hitEnemies: new Set(),
+        active: true,
+    });
+    if (this.gameEngine && this.gameEngine.particlePool) {
+        const pp = this.gameEngine.particlePool;
+        pp.get(this.x, this.y, 'explosionFlash', 40, '#bbeeff');
+        pp.get(this.x, this.y, 'explosionRingColored', 60, '#66ccff');
+    }
+    this.powerCooldown = Math.max(2000, config.cooldown - coldSnap * 1500);
+    this.powerCooldownMax = this.powerCooldown;
+}
+
+export function fireOrbitalStrike(config) {
+    const radiusStacks = this.getPowerupStacks('ORBITAL_RADIUS');
+    const powerStacks = this.getPowerupStacks('ORBITAL_POWER');
+    const rapidPaint = this.getPowerupStacks('RAPID_PAINT');
+    const barrage = this.getPowerupStacks('ORBITAL_BARRAGE');
+    const t = _aimWorld(this);
+    const telegraph = Math.max(250, config.telegraphTime - rapidPaint * 200);
+    const strikeRadius = config.strikeRadius + radiusStacks * 30;
+    const strikeDamage = config.strikeDamage * (1 + powerStacks * 0.25);
+    const count = config.strikeCount + barrage;
+    for (let i = 0; i < count; i++) {
+        const off = i * strikeRadius * 1.2;
+        this.orbitalStrikes.push({
+            x: t.x + Math.cos(this.angle) * off,
+            y: t.y + Math.sin(this.angle) * off,
+            telegraph: telegraph + i * 120,  // stagger so columns "walk" out
+            elapsed: 0,
+            radius: strikeRadius,
+            damage: strikeDamage,
+            detonated: false,
+            active: true,
+        });
+    }
+    this.powerCooldown = config.cooldown;
+    this.powerCooldownMax = this.powerCooldown;
+}
+
+export function firePrismBeam(audioManager, config) {
+    const beamsStacks = this.getPowerupStacks('PRISM_BEAMS');
+    const widthStacks = this.getPowerupStacks('PRISM_WIDTH');
+    const durStacks = this.getPowerupStacks('PRISM_DURATION');
+    const seek = this.getPowerupStacks('PRISM_SEEK') > 0;
+    const count = config.beamCount + beamsStacks;
+    const spread = config.beamSpread;
+    const colors = ['#ff4444', '#ff9944', '#ffee44', '#44ff66', '#44ccff', '#aa66ff', '#ff66cc'];
+    this.prismBeams = [];
+    for (let i = 0; i < count; i++) {
+        const off = count > 1 ? (i - (count - 1) / 2) * (spread / (count - 1)) : 0;
+        this.prismBeams.push({ angleOffset: off, color: colors[i % colors.length], seek });
+    }
+    this.prismActive = true;
+    this.prismTimer = config.beamDuration + durStacks * 300;
+    this.prismAngle = this.angle;
+    this.prismWidth = config.beamWidth * (1 + widthStacks * 0.3);
+    this.prismDamage = config.damage;
+    this.prismRange = config.range;
+    if (audioManager.startLoop) {
+        audioManager.startLoop('laserBeamLoop', 0.5, { loopStart: 0.45 });
+    } else {
+        audioManager.playShoot();
+    }
+}
+
+export function activateOverdrive(config) {
+    const durStacks = this.getPowerupStacks('OVERDRIVE_DURATION');
+    const nitro = this.getPowerupStacks('NITRO');
+    this.overdriveTimer = config.duration + durStacks * 1000;
+    if (this.gameEngine && this.gameEngine.particlePool) {
+        const pp = this.gameEngine.particlePool;
+        for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            pp.get(this.x, this.y, 'explosionShrapnel', a, 4 + Math.random() * 3, '#ff5522');
+        }
+    }
+    this.powerCooldown = Math.max(4000, config.cooldown - nitro * 2000);
+    this.powerCooldownMax = this.powerCooldown;
 }
 
 export function layMine(config) {
@@ -1675,11 +2034,31 @@ export function getEffectivePrimaryFireRate() {
     const config = this.getActivePrimaryConfig();
     let rate = config.fireRate;
 
+    // SPIN_CANNON spin-up — the fire interval ramps from slowFireRate (cold)
+    // down to fastFireRate (full spin) over spinUpTime ms of HELD fire.
+    // _fireHoldTime is incremented while fire is held and reset on release
+    // (see updateChargingSystem), so tapping stays slow and holding spools up.
+    // FLYWHEEL shortens spin-up; OVERSPIN lowers the hot interval.
+    if (this.activePrimary === 'SPIN_CANNON') {
+        const flywheel = this.getPowerupStacks('FLYWHEEL');
+        const overspin = this.getPowerupStacks('OVERSPIN');
+        const spinUpTime = Math.max(300, (config.spinUpTime || 1400) * Math.pow(0.7, flywheel));
+        const hot = Math.max(25, (config.fastFireRate || 60) - overspin * 12);
+        const cold = config.slowFireRate || 220;
+        const frac = Math.min(1, (this._fireHoldTime || 0) / spinUpTime);
+        rate = cold - (cold - hot) * frac;
+    }
+
     // 6.28.0 — Per-weapon Rapid Fire. Each stack shortens the fire
     // interval by RAPID_FIRE_PER_STACK (compounding). Only the 4 kinetic
     // primaries have a rapid-fire upgrade; others see 0 stacks.
     const rapidStacks = _perWeaponStacks(this, _PER_WEAPON_RAPID_ID, this.activePrimary);
     rate *= Math.pow(1 - RAPID_FIRE_PER_STACK, rapidStacks);
+
+    // OVERDRIVE power weapon — supercharges the primary while active.
+    if (this.overdriveTimer > 0) {
+        rate *= (POWER_WEAPONS.OVERDRIVE.fireRateMult || 0.55);
+    }
 
     return Math.round(rate);
 }
@@ -1706,6 +2085,12 @@ export function getEffectivePrimaryDamage() {
     const wave = (ge && ge.game) ? (ge.game.currentWave | 0) : 1;
     damage *= getMobileEarlyDamageMultiplier(wave);
 
+    // OVERDRIVE power weapon — primary damage buff while active (+REDLINE).
+    if (this.overdriveTimer > 0) {
+        const redline = this.getPowerupStacks('REDLINE');
+        damage *= (POWER_WEAPONS.OVERDRIVE.damageMult || 1.5) * (1 + redline * 0.25);
+    }
+
     return damage;
 }
 
@@ -1723,6 +2108,11 @@ export const POWER_ENERGY_COST = {
     NOVA_BLAST:    45,
     MISSILE_SALVO: 55,
     LANCE_BEAM:    60,
+    CRYO_BURST:    40,
+    OVERDRIVE:     45,
+    PRISM_BEAM:    50,
+    SINGULARITY:   60,
+    ORBITAL_STRIKE: 65,
 };
 
 export function getPowerEnergyCost() {

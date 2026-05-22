@@ -153,6 +153,17 @@ export class Player {
         // Missile state
         this.activeMissiles = [];
 
+        // ── New power-weapon + skill state (brainstorm drop) ──
+        this.singularities = [];      // SINGULARITY gravity wells
+        this.orbitalStrikes = [];     // ORBITAL_STRIKE telegraph markers
+        this.cryoRings = [];          // CRYO_BURST frost rings
+        this.prismBeams = [];         // PRISM_BEAM ray fan {angle, color}
+        this.prismActive = false;
+        this.prismTimer = 0;
+        this.prismAngle = 0;
+        this.overdriveTimer = 0;      // OVERDRIVE primary buff (ms remaining)
+        this.sentryDrones = [];       // SENTRY_DRONE defense skill
+
         // Rail driver state
         this.lastPrimaryFireTime = 0; // for Railgun Capacitor upgrade
 
@@ -265,6 +276,15 @@ export class Player {
         this.lightningArcTimer = 0;
         this.lightningArcTarget = null;
         this.activeMissiles = [];
+        this.singularities = [];
+        this.orbitalStrikes = [];
+        this.cryoRings = [];
+        this.prismBeams = [];
+        this.prismActive = false;
+        this.prismTimer = 0;
+        this.prismAngle = 0;
+        this.overdriveTimer = 0;
+        this.sentryDrones = [];
         this.needleCount = 0;
         this.scatterShotCount = 0;
         this.lastPrimaryFireTime = 0;
@@ -412,6 +432,30 @@ export class Player {
         return weapons.fireCluster.call(this, bulletPool, audioManager, config, chargeFrac);
     }
 
+    fireSplitter(bulletPool, audioManager, config) {
+        return weapons.fireSplitter.call(this, bulletPool, audioManager, config);
+    }
+
+    fireRicochet(bulletPool, audioManager, config) {
+        return weapons.fireRicochet.call(this, bulletPool, audioManager, config);
+    }
+
+    fireBoomerang(bulletPool, audioManager, config) {
+        return weapons.fireBoomerang.call(this, bulletPool, audioManager, config);
+    }
+
+    fireSpinCannon(bulletPool, audioManager, config) {
+        return weapons.fireSpinCannon.call(this, bulletPool, audioManager, config);
+    }
+
+    fireFlak(bulletPool, audioManager, config) {
+        return weapons.fireFlak.call(this, bulletPool, audioManager, config);
+    }
+
+    fireGravityLance(bulletPool, audioManager, config) {
+        return weapons.fireGravityLance.call(this, bulletPool, audioManager, config);
+    }
+
     startLanceBeam(audioManager, config) {
         return weapons.startLanceBeam.call(this, audioManager, config);
     }
@@ -441,6 +485,26 @@ export class Player {
 
     fireMissiles(bulletPool, config) {
         return weapons.fireMissiles.call(this, bulletPool, config);
+    }
+
+    fireSingularity(config) {
+        return weapons.fireSingularity.call(this, config);
+    }
+
+    fireCryoBurst(config) {
+        return weapons.fireCryoBurst.call(this, config);
+    }
+
+    fireOrbitalStrike(config) {
+        return weapons.fireOrbitalStrike.call(this, config);
+    }
+
+    firePrismBeam(audioManager, config) {
+        return weapons.firePrismBeam.call(this, audioManager, config);
+    }
+
+    activateOverdrive(config) {
+        return weapons.activateOverdrive.call(this, config);
     }
 
     pauseChargeShot() {

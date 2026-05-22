@@ -62,6 +62,79 @@ export function updateActiveSkills(dt) {
     }
     if (this.novaRings.length === 0) this.novaActive = false;
 
+    // ── New power-weapon entity updates (brainstorm drop) ──
+    const _ppEnemies = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
+
+    // Singularities — drag enemies inward each frame, then collapse for AoE.
+    for (let i = this.singularities.length - 1; i >= 0; i--) {
+        const s = this.singularities[i];
+        s.elapsed += dt;
+        const pr = s.pullRadius, pr2 = pr * pr;
+        for (let k = 0; k < _ppEnemies.length; k++) {
+            const e = _ppEnemies[k];
+            if (!e || !e.active || e.warping || e.isBoss) continue;
+            const dx = s.x - e.x, dy = s.y - e.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > pr2 || d2 < 4) continue;
+            const dist = Math.sqrt(d2);
+            const pull = (1 - dist / pr) * s.pullStrength * 10;
+            e.x += (dx / dist) * pull;
+            e.y += (dy / dist) * pull;
+        }
+        if (s.elapsed >= s.duration) {
+            if (this.gameEngine && typeof this.gameEngine.detonateSubBomblet === 'function') {
+                this.gameEngine.detonateSubBomblet(s.x, s.y, s.collapseDamage, s.collapseRadius);
+            }
+            if (this.gameEngine && this.gameEngine.particlePool) {
+                const pp = this.gameEngine.particlePool;
+                pp.get(s.x, s.y, 'explosionFlash', s.collapseRadius, '#aa66ff');
+                pp.get(s.x, s.y, 'explosionRingColored', s.collapseRadius, '#cc88ff');
+            }
+            this.singularities.splice(i, 1);
+        }
+    }
+
+    // Cryo rings — expand like a nova ring; checkCryoCollisions applies freeze.
+    for (let i = this.cryoRings.length - 1; i >= 0; i--) {
+        const r = this.cryoRings[i];
+        r.elapsed += dt;
+        r.currentRadius = Math.min(1, r.elapsed / r.duration) * r.maxRadius;
+        if (r.elapsed >= r.duration + 200) this.cryoRings.splice(i, 1);
+    }
+
+    // Orbital strikes — telegraph countdown, then drop the column.
+    for (let i = this.orbitalStrikes.length - 1; i >= 0; i--) {
+        const o = this.orbitalStrikes[i];
+        o.elapsed += dt;
+        if (!o.detonated && o.elapsed >= o.telegraph) {
+            o.detonated = true;
+            if (this.gameEngine && typeof this.gameEngine.detonateSubBomblet === 'function') {
+                this.gameEngine.detonateSubBomblet(o.x, o.y, o.damage, o.radius);
+            }
+            if (this.gameEngine && this.gameEngine.particlePool) {
+                const pp = this.gameEngine.particlePool;
+                pp.get(o.x, o.y, 'explosionFlash', o.radius * 1.2, '#ffffff');
+                pp.get(o.x, o.y, 'explosionRingColored', o.radius * 1.3, '#ffee44');
+            }
+            if (this.gameEngine && typeof this.gameEngine.triggerScreenShake === 'function') {
+                this.gameEngine.triggerScreenShake(12, 7, o.radius);
+            }
+            this.orbitalStrikes.splice(i, 1);
+        }
+    }
+
+    // Prism beam timer — fan tracks the current aim while active.
+    if (this.prismActive) {
+        this.prismTimer -= dt;
+        this.prismAngle = this.angle;
+        if (this.prismTimer <= 0) {
+            this.prismActive = false;
+            this.prismBeams = [];
+            const am = this.gameEngine && this.gameEngine.audioManager;
+            if (am && am.stopLoop) am.stopLoop('laserBeamLoop');
+        }
+    }
+
     // Update lightning chains visual timer. Also re-anchor the chain
     // origin (targets[0]) to the player's CURRENT position so the
     // first arc visibly tracks the ship as it moves during the 500ms
@@ -304,6 +377,35 @@ export function updateActiveSkills(dt) {
         }
     }
 
+    // Sentry drones — orbit the ship and auto-fire at the nearest enemy.
+    if (this.sentryDrones.length > 0) {
+        const cfg = DEFENSE_SKILLS.SENTRY_DRONE;
+        const orbitRadius = cfg.orbitRadius;
+        const orbitSpeed = 0.004;
+        const rapid = this.getPowerupStacks('RAPID_DRONE');
+        const fireInterval = cfg.fireInterval * Math.pow(0.75, rapid);
+        const caliber = this.getPowerupStacks('DRONE_CALIBER');
+        const dmg = cfg.droneDamage * (1 + caliber * 0.4);
+        const enemies = (this.gameEngine && this.gameEngine.enemyPool && this.gameEngine.enemyPool.activeObjects) || [];
+        for (const d of this.sentryDrones) {
+            d.angle += orbitSpeed * (1000 / GAME_CONFIG.LOGIC_HZ);
+            d.x = this.x + Math.cos(d.angle) * orbitRadius;
+            d.y = this.y + Math.sin(d.angle) * orbitRadius;
+            let target = null, bestD = Infinity;
+            for (const e of enemies) {
+                if (!e || !e.active || e.warping) continue;
+                const dd = Math.hypot(e.x - d.x, e.y - d.y);
+                if (dd < bestD) { bestD = dd; target = e; }
+            }
+            if (target) d.aimAngle = Math.atan2(target.y - d.y, target.x - d.x);
+            d.fireTimer -= dt;
+            if (target && d.fireTimer <= 0) {
+                d.fireTimer = fireInterval;
+                spawnSentryDroneBullet.call(this, d, dmg, cfg.droneRange);
+            }
+        }
+    }
+
     // Update deflector orbs positions — orbit the player at a fixed
     // radius. checkDeflectorOrbCollisions() reads orb.x/orb.y.
     if (this.deflectorOrbs.length > 0) {
@@ -425,6 +527,19 @@ export function activateSkill() {
                 if (dist <= radius) ge.applyStun(enemy, config.duration);
             }
         }
+    } else if (skillId === 'SENTRY_DRONE') {
+        const count = config.droneCount + this.getPowerupStacks('EXTRA_DRONE');
+        this.sentryDrones = [];
+        for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            this.sentryDrones.push({
+                angle,
+                x: this.x + Math.cos(angle) * config.orbitRadius,
+                y: this.y + Math.sin(angle) * config.orbitRadius,
+                aimAngle: angle,
+                fireTimer: 0,
+            });
+        }
     }
 
     // Play the per-skill activation sound (5.68.9). Falls back to the
@@ -451,6 +566,11 @@ export function updateSkillCooldowns(dt) {
         this.powerCooldown = Math.max(0, this.powerCooldown - dt);
     }
 
+    // OVERDRIVE primary-buff timer (set by activateOverdrive).
+    if (this.overdriveTimer > 0) {
+        this.overdriveTimer = Math.max(0, this.overdriveTimer - dt);
+    }
+
     // 5.93.0 — dash cooldown (SHIFT-key core movement primitive).
     // Decays each frame independently of the defense-skill cooldown so
     // dashing doesn't interfere with the activeSkill cycle.
@@ -467,6 +587,7 @@ export function updateSkillCooldowns(dt) {
             if (skillId === 'REPAIR_NANITES') this.regenActive = false;
             if (skillId === 'DEFLECTOR_ORBS') this.deflectorOrbs = [];
             if (skillId === 'TRACTOR_SHIELD') this.tractorShieldActive = false;
+            if (skillId === 'SENTRY_DRONE') this.sentryDrones = [];
         }
     }
 }
@@ -599,6 +720,42 @@ export function spawnMineTurretBullet(mine, damage) {
             p.color = '#ffcc66';
             p.radius = 0.9 + Math.random() * 1.1;
             p.life = 10 + Math.random() * 6;
+            p.friction = 0.92;
+        }
+    }
+}
+
+// Sentry Drone fire — straight shot at the drone's current aim. Allied
+// bullet via the player bullet pool, tagged with `shooter` so the collision
+// system skips the player. Mirrors spawnMineTurretBullet.
+export function spawnSentryDroneBullet(drone, damage, rangeMul) {
+    const ge = this.gameEngine;
+    if (!ge || !ge.bulletPool) return;
+    const ang = drone.aimAngle || 0;
+    const bullet = ge.bulletPool.get(drone.x, drone.y, ang);
+    if (!bullet) return;
+    bullet.damage = damage;
+    bullet.homing = false;
+    bullet.piercing = 0;
+    bullet.explosive = false;
+    bullet.rangeMultiplier = rangeMul || 0.7;
+    bullet.shooter = drone;
+    bullet.fromSentry = true;
+    bullet.color = '#ffcc88';
+    bullet.baseRadius = 3;
+    bullet.radius = 3;
+    if (ge.particlePool) {
+        const pp = ge.particlePool;
+        for (let i = 0; i < 2; i++) {
+            const p = pp.get(drone.x, drone.y, 'starSparkle');
+            if (!p) continue;
+            const a = ang + (Math.random() - 0.5) * 0.5;
+            const sp = 0.8 + Math.random() * 1.0;
+            p.vel.x = Math.cos(a) * sp;
+            p.vel.y = Math.sin(a) * sp;
+            p.color = '#ffcc88';
+            p.radius = 0.8 + Math.random();
+            p.life = 8 + Math.random() * 5;
             p.friction = 0.92;
         }
     }

@@ -11,6 +11,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.56.0] - 2026-05-21
+
+### Added — Six new primary weapons
+
+A content drop introducing mechanical "verbs" the original five lacked. All
+are free, gated by unlock wave, selectable from the weapon radial menu, and
+carry their own upgrade trees (generic per-weapon traits plus signatures).
+
+- **Mitosis Rounds** (`SPLITTER`, wave 6) — rounds split into shards on each
+  kill for cascading clears. Upgrades: Hyperplasia (+shards), Meiosis (shards
+  re-split) plus the standard multi/rapid/big/homing/stun/knock set.
+- **Caroms** (`RICOCHET`, wave 7) — shots ricochet off arena walls and bank
+  between nearby enemies. Upgrades: Extra Bounce, Charged Caroms (each bounce
+  +25% damage).
+- **Boomerang Discs** (`BOOMERANG`, wave 9) — discs fly out, then return to
+  the ship, cutting enemies coming and going. Upgrades: Long Throw, Razor Edge
+  (return leg +60% damage).
+- **Spin Cannon** (`SPIN_CANNON`, wave 12) — a minigun whose fire rate spools
+  up the longer fire is held and resets on release; the cone widens at full
+  spin. Upgrades: Flywheel (faster spool), Overspin (higher max rate).
+- **Flak Cannon** (`FLAK_CANNON`, wave 11) — shells airburst into a shrapnel
+  ring at a set fuse distance. Upgrades: Flechette (+shrapnel), Proximity Fuse
+  (+burst blast), Long Fuse (+range).
+- **Gravity Lance** (`GRAVITY_LANCE`, wave 13) — a slow orb that drags nearby
+  enemies into its wake; a setup tool for AoE. Upgrades: Event Wake (+radius),
+  Singular Pull (+strength), Implosion (AoE pop on expire).
+
+### Added — Five new power weapons
+
+- **Singularity** (`SINGULARITY`) — deploys a black hole at the cursor that
+  pulls enemies inward, then collapses for a heavy AoE pop. Upgrades: Wider
+  Maw, Void Grasp, Stable Well, Event Horizon.
+- **Prism Beam** (`PRISM_BEAM`) — fires a fan of refracting rainbow beams that
+  damage everything along each ray. Upgrades: More Facets, Beam Width,
+  Lingering Light, Refraction (beams seek).
+- **Orbital Strike** (`ORBITAL_STRIKE`) — paints the cursor, then drops a
+  column of damage after a short telegraph. Upgrades: Wider Impact, Heavier
+  Payload, Rapid Paint, Barrage (walking strikes).
+- **Cryo Burst** (`CRYO_BURST`) — a frost shockwave that freezes enemies
+  solid. Upgrades: Cold Front, Deep Freeze, Shatter (frozen enemies take +30%
+  damage), Cold Snap.
+- **Overdrive** (`OVERDRIVE`) — a no-projectile "go loud" button that
+  supercharges your primary's fire rate and damage for a few seconds.
+  Upgrades: Endurance, Redline, Nitro, Afterburn (primary gains pierce).
+
+### Added — Sentry Drone defense skill
+
+- **Sentry Drone** (`SENTRY_DRONE`) — deploys autonomous drones that orbit the
+  ship and auto-fire at the nearest enemy for the skill duration. Upgrades:
+  Extra Drone, Rapid Servos, Heavy Caliber. (Implemented as a defense skill
+  since Seeker Mines already cover the deployed-turret niche.)
+
 ## [6.55.0] - 2026-05-21
 
 ### Changed — Cluster Launcher charge-for-distance

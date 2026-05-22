@@ -163,6 +163,175 @@ export const PRIMARY_WEAPONS = {
         subBombDamage: 25,
         upgrades: ['CLUSTER_MULTI', 'CLUSTER_STUN', 'CLUSTER_KNOCK'],
     },
+    // ─── NEW PRIMARIES (brainstorm drop) ────────────────────────────────────
+    // These introduce mechanical "verbs" the original five lacked: bounce,
+    // return, fire-rate ramp, airburst, split-on-kill, gravity pull. Each
+    // reads custom fields off this config in its fire fn (weapons.js) and
+    // its projectile behavior (bullet.js). All are FREE, gated by unlockWave.
+
+    // SPLITTER — bullets split into smaller shards when they KILL an enemy
+    // (cascading clears through dense waves). Shards spawn fanned from the
+    // kill site at reduced damage/size. See collision-system kill block.
+    SPLITTER: {
+        id: 'SPLITTER',
+        name: 'Mitosis Rounds',
+        description: 'Rounds split into shards on each kill — cascading clears',
+        icon: 'multi-shot',
+        color: '#66ff99',
+        fireRate: 380,
+        damage: 1.0,
+        bulletSpeed: 1.0,
+        bulletSize: 0.95,
+        bulletCount: 1,
+        spreadAngle: 0,
+        piercing: 0,
+        range: 1.0,
+        cost: 0,
+        unlockWave: 6,
+        // Split tuning (read in collision-system on kill):
+        splitOnKill: true,
+        splitCount: 2,            // shards spawned per kill (+SPLIT_CELLS)
+        splitDamageFactor: 0.5,   // shard damage = parent damage × this
+        splitSpeed: 0.85,         // shard speed relative to a fresh bullet
+        splitGenerations: 1,      // shards don't re-split unless MEIOSIS owned
+        upgrades: ['SPLITTER_MULTI', 'SPLITTER_RAPID', 'SPLITTER_BIG', 'SPLITTER_HOMING', 'SPLITTER_STUN', 'SPLITTER_KNOCK', 'SPLIT_CELLS', 'MEIOSIS'],
+    },
+
+    // RICOCHET — bullets bounce off the arena edges and carom between nearby
+    // enemies. Bounded playfield makes bank-shots viable. See bullet.update
+    // (boundary reflect) + collision-system (enemy carom).
+    RICOCHET: {
+        id: 'RICOCHET',
+        name: 'Caroms',
+        description: 'Shots ricochet off walls and bank between enemies',
+        icon: 'shuffle',
+        color: '#00e6cc',
+        fireRate: 340,
+        damage: 1.0,
+        bulletSpeed: 1.1,
+        bulletSize: 0.9,
+        bulletCount: 1,
+        spreadAngle: 0,
+        piercing: 0,
+        range: 1.25,              // longer life so it survives several bounces
+        cost: 0,
+        unlockWave: 7,
+        // Bounce tuning (read in bullet.update + collision-system):
+        bounces: 3,               // total ricochets (walls + enemy caroms)
+        bounceSeekRadius: 260,    // on enemy carom, redirect toward an enemy in this radius
+        upgrades: ['RICOCHET_MULTI', 'RICOCHET_RAPID', 'RICOCHET_BIG', 'RICOCHET_EXPLODE', 'RICOCHET_STUN', 'RICOCHET_KNOCK', 'EXTRA_BOUNCE', 'CHARGED_CAROMS'],
+    },
+
+    // BOOMERANG — slow disc flies out, decelerates, then returns to the ship,
+    // damaging on the way out AND back. Rewards holding position. See
+    // bullet.update boomerang arc.
+    BOOMERANG: {
+        id: 'BOOMERANG',
+        name: 'Boomerang Discs',
+        description: 'Discs fly out and return — they cut coming and going',
+        icon: 'loop',
+        color: '#ffd633',
+        fireRate: 600,
+        damage: 1.4,
+        bulletSpeed: 1.0,
+        bulletSize: 1.1,
+        bulletCount: 1,
+        spreadAngle: 0,
+        piercing: 3,              // discs slice through several enemies
+        range: 1.0,
+        cost: 0,
+        unlockWave: 9,
+        // Boomerang tuning (read in bullet.update):
+        boomerang: true,
+        boomerangOutFrames: 28,   // frames flying outward before the turn
+        boomerangReturnAccel: 0.55, // homing-to-player accel on the return leg
+        upgrades: ['BOOMERANG_MULTI', 'BOOMERANG_RAPID', 'BOOMERANG_BIG', 'BOOMERANG_PIERCING', 'BOOMERANG_STUN', 'BOOMERANG_KNOCK', 'LONG_THROW', 'RAZOR_EDGE'],
+    },
+
+    // SPIN_CANNON — minigun. Fire rate RAMPS the longer fire is held and
+    // resets on release. New weapon (kept separate from Storm Needles per
+    // the design discussion — merge later if desired). Spin-up is computed
+    // in getEffectivePrimaryFireRate from this._fireHoldTime.
+    SPIN_CANNON: {
+        id: 'SPIN_CANNON',
+        name: 'Spin Cannon',
+        description: 'Fire rate spools up the longer you hold — a commitment hose',
+        icon: 'tornado',
+        color: '#ff7722',
+        fireRate: 220,            // nominal; actual interval is dynamic (see below)
+        damage: 0.5,
+        bulletSpeed: 1.2,
+        bulletSize: 0.55,
+        bulletCount: 1,
+        spreadAngle: 0.14,        // cone widens slightly at full spin (see fire fn)
+        piercing: 0,
+        range: 1.0,
+        cost: 0,
+        unlockWave: 12,
+        // Spin-up tuning (read in getEffectivePrimaryFireRate):
+        spinUpTime: 1400,         // ms of held fire to reach max spin
+        slowFireRate: 220,        // interval (ms) at zero spin
+        fastFireRate: 60,         // interval (ms) at full spin
+        spinSpreadBonus: 0.12,    // extra cone added at full spin
+        upgrades: ['SPIN_RAPID', 'SPIN_BIG', 'SPIN_PIERCING', 'SPIN_HOMING', 'SPIN_STUN', 'SPIN_KNOCK', 'FLYWHEEL', 'OVERSPIN'],
+    },
+
+    // FLAK_CANNON — rounds detonate into a shrapnel ring at a set distance
+    // (proximity airburst), not on contact. Anti-swarm wall. See bullet.update
+    // airburst → combat-manager.spawnShrapnelRing.
+    FLAK_CANNON: {
+        id: 'FLAK_CANNON',
+        name: 'Flak Cannon',
+        description: 'Shells airburst into a shrapnel ring at range',
+        icon: 'siren',
+        color: '#ffbb55',
+        fireRate: 650,
+        damage: 0.8,              // small direct hit; the burst is the payload
+        bulletSpeed: 0.95,
+        bulletSize: 0.95,
+        bulletCount: 1,
+        spreadAngle: 0,
+        piercing: 0,
+        range: 1.0,
+        cost: 0,
+        unlockWave: 11,
+        // Airburst tuning (read in bullet.update + combat-manager):
+        flak: true,
+        burstDistance: 300,       // px traveled before airburst (+LONG_FUSE)
+        shrapnelCount: 9,         // shards in the ring (+FLECHETTE)
+        shrapnelDamage: 0.55,
+        shrapnelSpeed: 5,
+        shrapnelLifeFrames: 14,
+        burstBlastRadius: 60,     // small AoE at the burst point
+        burstBlastDamage: 1.2,
+        upgrades: ['FLAK_RAPID', 'FLAK_BIG', 'FLAK_STUN', 'FLAK_KNOCK', 'FLECHETTE', 'PROXIMITY_FUSE', 'LONG_FUSE'],
+    },
+
+    // GRAVITY_LANCE — slow heavy orb that tugs nearby enemies toward its path
+    // before expiring. Low direct damage; a combo enabler that clusters mobs
+    // for AoE. See bullet.update gravity pull.
+    GRAVITY_LANCE: {
+        id: 'GRAVITY_LANCE',
+        name: 'Gravity Lance',
+        description: 'A slow orb that drags enemies into its wake — a setup tool',
+        icon: 'vortex',
+        color: '#b066ff',
+        fireRate: 720,
+        damage: 0.6,
+        bulletSpeed: 0.6,         // slow-moving well
+        bulletSize: 1.5,
+        bulletCount: 1,
+        spreadAngle: 0,
+        piercing: 6,              // drifts through the pack
+        range: 1.15,
+        cost: 0,
+        unlockWave: 13,
+        // Gravity tuning (read in bullet.update each frame):
+        gravityWell: true,
+        pullRadius: 150,          // enemies within this radius are tugged in
+        pullStrength: 0.35,       // velocity nudge per frame at the rim
+        upgrades: ['GRAVITY_MULTI', 'GRAVITY_BIG', 'GRAVITY_EXPLODE', 'GRAVITY_STUN', 'EVENT_WAKE', 'IMPLOSION', 'SINGULAR_PULL'],
+    },
     // 5.79.23 — LANCE_BEAM and LIGHTNING_ARC moved to POWER_WEAPONS
     //   below. They're now cooldown-based power weapons: press the
     //   power-weapon trigger to activate the beam for `beamDuration`,
@@ -462,6 +631,64 @@ export const PRIMARY_UPGRADES = {
     CLUSTER_MULTI: { id: 'CLUSTER_MULTI', name: 'Extra Bomb',       description: '+1 bomb per shot',            cost: 2000, maxStacks: 2, weapon: 'CLUSTER_LAUNCHER', icon: 'multi-shot' },
     CLUSTER_STUN:  { id: 'CLUSTER_STUN',  name: 'Concussive Blast', description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'CLUSTER_LAUNCHER', icon: 'spiral' },
     CLUSTER_KNOCK: { id: 'CLUSTER_KNOCK', name: 'Shockwave Blast',  description: '+15% chance to knock back',   cost: 1300, maxStacks: 3, weapon: 'CLUSTER_LAUNCHER', icon: 'wind' },
+
+    // ── Mitosis Rounds (SPLITTER) ──
+    SPLITTER_MULTI:  { id: 'SPLITTER_MULTI',  name: 'Twin Cells',     description: '+1 round per shot',           cost: 1800, maxStacks: 3, weapon: 'SPLITTER', icon: 'multi-shot' },
+    SPLITTER_RAPID:  { id: 'SPLITTER_RAPID',  name: 'Fast Division',  description: '+12% fire rate',              cost: 1200, maxStacks: 4, weapon: 'SPLITTER', icon: 'bolt' },
+    SPLITTER_BIG:    { id: 'SPLITTER_BIG',    name: 'Fat Cells',      description: '+2.2px round radius',         cost: 1200, maxStacks: 3, weapon: 'SPLITTER', icon: 'circle-fill' },
+    SPLITTER_HOMING: { id: 'SPLITTER_HOMING', name: 'Seeking Cells',  description: 'Rounds seek nearest enemy',   cost: 1600, maxStacks: 3, weapon: 'SPLITTER', icon: 'target' },
+    SPLITTER_STUN:   { id: 'SPLITTER_STUN',   name: 'Shock Cells',    description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'SPLITTER', icon: 'spiral' },
+    SPLITTER_KNOCK:  { id: 'SPLITTER_KNOCK',  name: 'Burst Cells',    description: '+15% chance to knock back',   cost: 1300, maxStacks: 3, weapon: 'SPLITTER', icon: 'wind' },
+    SPLIT_CELLS:     { id: 'SPLIT_CELLS',     name: 'Hyperplasia',    description: '+1 shard spawned per kill',   cost: 2200, maxStacks: 3, weapon: 'SPLITTER', icon: 'multi-shot' },
+    MEIOSIS:         { id: 'MEIOSIS',         name: 'Meiosis',        description: 'Shards split once more on kill', cost: 2700, maxStacks: 1, weapon: 'SPLITTER', icon: 'shuffle' },
+
+    // ── Caroms (RICOCHET) ──
+    RICOCHET_MULTI:   { id: 'RICOCHET_MULTI',   name: 'Double Bank',   description: '+1 round per shot',           cost: 1800, maxStacks: 3, weapon: 'RICOCHET', icon: 'multi-shot' },
+    RICOCHET_RAPID:   { id: 'RICOCHET_RAPID',   name: 'Quick Bank',    description: '+12% fire rate',              cost: 1200, maxStacks: 4, weapon: 'RICOCHET', icon: 'bolt' },
+    RICOCHET_BIG:     { id: 'RICOCHET_BIG',     name: 'Heavy Carom',   description: '+2.2px round radius',         cost: 1200, maxStacks: 3, weapon: 'RICOCHET', icon: 'circle-fill' },
+    RICOCHET_EXPLODE: { id: 'RICOCHET_EXPLODE', name: 'Frag Carom',    description: 'AoE blast on impact',         cost: 1800, maxStacks: 3, weapon: 'RICOCHET', icon: 'bomb' },
+    RICOCHET_STUN:    { id: 'RICOCHET_STUN',    name: 'Stun Carom',    description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'RICOCHET', icon: 'spiral' },
+    RICOCHET_KNOCK:   { id: 'RICOCHET_KNOCK',   name: 'Knock Carom',   description: '+15% chance to knock back',   cost: 1300, maxStacks: 3, weapon: 'RICOCHET', icon: 'wind' },
+    EXTRA_BOUNCE:     { id: 'EXTRA_BOUNCE',     name: 'Extra Bounce',  description: '+1 ricochet per round',       cost: 2200, maxStacks: 3, weapon: 'RICOCHET', icon: 'shuffle' },
+    CHARGED_CAROMS:   { id: 'CHARGED_CAROMS',   name: 'Charged Caroms', description: 'Each bounce adds +25% damage', cost: 2700, maxStacks: 1, weapon: 'RICOCHET', icon: 'bolt' },
+
+    // ── Boomerang Discs (BOOMERANG) ──
+    BOOMERANG_MULTI:    { id: 'BOOMERANG_MULTI',    name: 'Twin Discs',    description: '+1 disc per shot',           cost: 1800, maxStacks: 3, weapon: 'BOOMERANG', icon: 'multi-shot' },
+    BOOMERANG_RAPID:    { id: 'BOOMERANG_RAPID',    name: 'Quick Toss',    description: '+12% fire rate',             cost: 1200, maxStacks: 4, weapon: 'BOOMERANG', icon: 'bolt' },
+    BOOMERANG_BIG:      { id: 'BOOMERANG_BIG',      name: 'Wide Discs',    description: '+2.2px disc radius',         cost: 1200, maxStacks: 3, weapon: 'BOOMERANG', icon: 'circle-fill' },
+    BOOMERANG_PIERCING: { id: 'BOOMERANG_PIERCING', name: 'Saw Discs',     description: '+1 pierce',                  cost: 1500, maxStacks: 3, weapon: 'BOOMERANG', icon: 'bow-arrow' },
+    BOOMERANG_STUN:     { id: 'BOOMERANG_STUN',     name: 'Stun Discs',    description: '+12% chance to stun on hit', cost: 1500, maxStacks: 3, weapon: 'BOOMERANG', icon: 'spiral' },
+    BOOMERANG_KNOCK:    { id: 'BOOMERANG_KNOCK',    name: 'Heavy Discs',   description: '+15% chance to knock back',  cost: 1300, maxStacks: 3, weapon: 'BOOMERANG', icon: 'wind' },
+    LONG_THROW:         { id: 'LONG_THROW',         name: 'Long Throw',    description: '+40% throw distance',        cost: 2200, maxStacks: 2, weapon: 'BOOMERANG', icon: 'loop' },
+    RAZOR_EDGE:         { id: 'RAZOR_EDGE',         name: 'Razor Edge',    description: 'Return leg deals +60% damage', cost: 2700, maxStacks: 1, weapon: 'BOOMERANG', icon: 'dagger' },
+
+    // ── Spin Cannon (SPIN_CANNON) — minigun ──
+    SPIN_RAPID:    { id: 'SPIN_RAPID',    name: 'Greased Bearings', description: '+12% fire rate',              cost: 1200, maxStacks: 4, weapon: 'SPIN_CANNON', icon: 'bolt' },
+    SPIN_BIG:      { id: 'SPIN_BIG',      name: 'Heavy Slugs',      description: '+2.2px round radius',         cost: 1200, maxStacks: 3, weapon: 'SPIN_CANNON', icon: 'circle-fill' },
+    SPIN_PIERCING: { id: 'SPIN_PIERCING', name: 'AP Rounds',        description: '+1 pierce',                   cost: 1500, maxStacks: 3, weapon: 'SPIN_CANNON', icon: 'bow-arrow' },
+    SPIN_HOMING:   { id: 'SPIN_HOMING',   name: 'Tracer Rounds',    description: 'Rounds seek nearest enemy',   cost: 1600, maxStacks: 3, weapon: 'SPIN_CANNON', icon: 'target' },
+    SPIN_STUN:     { id: 'SPIN_STUN',     name: 'Rattle Rounds',    description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'SPIN_CANNON', icon: 'spiral' },
+    SPIN_KNOCK:    { id: 'SPIN_KNOCK',    name: 'Hammer Rounds',    description: '+15% chance to knock back',   cost: 1300, maxStacks: 3, weapon: 'SPIN_CANNON', icon: 'wind' },
+    FLYWHEEL:      { id: 'FLYWHEEL',      name: 'Flywheel',         description: '-30% spin-up time per stack', cost: 2200, maxStacks: 2, weapon: 'SPIN_CANNON', icon: 'tornado' },
+    OVERSPIN:      { id: 'OVERSPIN',      name: 'Overspin',         description: 'Higher max fire rate',        cost: 2700, maxStacks: 2, weapon: 'SPIN_CANNON', icon: 'fast-forward' },
+
+    // ── Flak Cannon (FLAK_CANNON) ──
+    FLAK_RAPID:     { id: 'FLAK_RAPID',     name: 'Auto-Loader',   description: '+12% fire rate',              cost: 1200, maxStacks: 4, weapon: 'FLAK_CANNON', icon: 'bolt' },
+    FLAK_BIG:       { id: 'FLAK_BIG',       name: 'Bigger Shells', description: '+2.2px shell radius',         cost: 1200, maxStacks: 3, weapon: 'FLAK_CANNON', icon: 'circle-fill' },
+    FLAK_STUN:      { id: 'FLAK_STUN',      name: 'Rattle Burst',  description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'FLAK_CANNON', icon: 'spiral' },
+    FLAK_KNOCK:     { id: 'FLAK_KNOCK',     name: 'Concussive Burst', description: '+15% chance to knock back', cost: 1300, maxStacks: 3, weapon: 'FLAK_CANNON', icon: 'wind' },
+    FLECHETTE:      { id: 'FLECHETTE',      name: 'Flechette Load', description: '+3 shrapnel per burst',      cost: 2200, maxStacks: 3, weapon: 'FLAK_CANNON', icon: 'rain' },
+    PROXIMITY_FUSE: { id: 'PROXIMITY_FUSE', name: 'Proximity Fuse', description: '+30px burst blast & damage', cost: 2300, maxStacks: 2, weapon: 'FLAK_CANNON', icon: 'explosion' },
+    LONG_FUSE:      { id: 'LONG_FUSE',      name: 'Long Fuse',      description: '+40% airburst distance',     cost: 1900, maxStacks: 2, weapon: 'FLAK_CANNON', icon: 'stopwatch' },
+
+    // ── Gravity Lance (GRAVITY_LANCE) ──
+    GRAVITY_MULTI:   { id: 'GRAVITY_MULTI',   name: 'Twin Wells',    description: '+1 orb per shot',             cost: 1800, maxStacks: 2, weapon: 'GRAVITY_LANCE', icon: 'multi-shot' },
+    GRAVITY_BIG:     { id: 'GRAVITY_BIG',     name: 'Dense Core',    description: '+2.2px orb radius',           cost: 1200, maxStacks: 3, weapon: 'GRAVITY_LANCE', icon: 'circle-fill' },
+    GRAVITY_EXPLODE: { id: 'GRAVITY_EXPLODE', name: 'Volatile Core', description: 'AoE blast on impact',         cost: 1800, maxStacks: 3, weapon: 'GRAVITY_LANCE', icon: 'bomb' },
+    GRAVITY_STUN:    { id: 'GRAVITY_STUN',    name: 'Tidal Shock',   description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'GRAVITY_LANCE', icon: 'spiral' },
+    EVENT_WAKE:      { id: 'EVENT_WAKE',      name: 'Event Wake',    description: '+50px pull radius per stack', cost: 2200, maxStacks: 3, weapon: 'GRAVITY_LANCE', icon: 'vortex' },
+    IMPLOSION:       { id: 'IMPLOSION',       name: 'Implosion',     description: 'Orb implodes for AoE on expire', cost: 2700, maxStacks: 1, weapon: 'GRAVITY_LANCE', icon: 'explosion' },
+    SINGULAR_PULL:   { id: 'SINGULAR_PULL',   name: 'Singular Pull', description: '+50% pull strength per stack', cost: 2300, maxStacks: 2, weapon: 'GRAVITY_LANCE', icon: 'magnet' },
 };
 
 // ─── POWER WEAPONS (Right Click) ────────────────────────────────────────────
@@ -588,6 +815,117 @@ export const POWER_WEAPONS = {
         unlockWave: 5,
         upgrades: ['AMPLIFIER', 'ARC_OVERCHARGE'],
     },
+    // ─── NEW POWER WEAPONS (brainstorm drop) ────────────────────────────────
+    // Verbs the original powers lacked: pull→collapse, refraction, telegraph
+    // payoff, freeze, and a no-projectile primary buff. Each stores its entity
+    // state on the player (see player.js init) and is updated in skills.js
+    // updateActiveSkills, collided in collision-system, drawn in
+    // weapon-effects-renderer. OVERDRIVE is stateless (just a timed buff).
+
+    // SINGULARITY — deploy a gravity well at the cursor that pulls enemies and
+    // their projectiles inward for pullDuration, then collapses for a big AoE
+    // pop. Modeled on the Nova ring storage pattern + the gravity-pull loop.
+    SINGULARITY: {
+        id: 'SINGULARITY',
+        name: 'Singularity',
+        description: 'Deploys a black hole that sucks enemies in, then collapses',
+        icon: 'vortex',
+        color: '#7744dd',
+        cooldown: 12000,
+        isChargeBased: false,
+        pullRadius: 280,          // +SINGULARITY_RADIUS
+        pullStrength: 0.5,        // +VOID_GRASP
+        pullDuration: 1600,       // ms of pull before collapse (+SINGULARITY_DURATION)
+        collapseRadius: 190,
+        collapseDamage: 9,
+        cost: 2500,
+        unlockWave: 6,
+        upgrades: ['SINGULARITY_RADIUS', 'VOID_GRASP', 'SINGULARITY_DURATION', 'EVENT_HORIZON'],
+    },
+
+    // PRISM_BEAM — fire a fan of refracting rainbow beams for a short window.
+    // Cooldown-triggered (not charge-based) to keep the plumbing simple; the
+    // novelty is the multi-ray rainbow fan. Modeled on the Lance beam timer +
+    // a per-ray angle list. See checkPrismBeamCollisions + render.
+    PRISM_BEAM: {
+        id: 'PRISM_BEAM',
+        name: 'Prism Beam',
+        description: 'A burst of refracting rainbow beams in a fan',
+        icon: 'gem',
+        color: '#66ffff',
+        cooldown: 9000,
+        isChargeBased: false,
+        beamDuration: 1100,       // ms the fan persists (+PRISM_DURATION)
+        beamCount: 5,             // rays in the fan (+PRISM_BEAMS)
+        beamWidth: 5,             // +PRISM_WIDTH
+        beamSpread: 0.85,         // total fan angle (radians)
+        damage: 0.06,             // per-tick per-ray
+        range: 0.95,
+        cost: 0,
+        unlockWave: 9,
+        upgrades: ['PRISM_BEAMS', 'PRISM_WIDTH', 'PRISM_DURATION', 'PRISM_SEEK'],
+    },
+
+    // ORBITAL_STRIKE — paint the cursor; after a telegraph delay a massive
+    // column drops from off-screen for heavy AoE. Telegraph→payoff tension.
+    // Stored as a timed marker entity; detonates when its telegraph expires.
+    ORBITAL_STRIKE: {
+        id: 'ORBITAL_STRIKE',
+        name: 'Orbital Strike',
+        description: 'Paints a target; a column drops after a short delay',
+        icon: 'satellite',
+        color: '#ffee44',
+        cooldown: 11000,
+        isChargeBased: false,
+        telegraphTime: 850,       // ms warning before the column lands (-RAPID_PAINT)
+        strikeRadius: 150,        // +ORBITAL_RADIUS
+        strikeDamage: 15,         // +ORBITAL_POWER
+        strikeCount: 1,           // columns dropped (+ORBITAL_BARRAGE walks them out)
+        cost: 3000,
+        unlockWave: 10,
+        upgrades: ['ORBITAL_RADIUS', 'ORBITAL_POWER', 'RAPID_PAINT', 'ORBITAL_BARRAGE'],
+    },
+
+    // CRYO_BURST — radial blast that FREEZES/slows enemies in place instead of
+    // damaging hard. Crowd control payoff; complements Nova's push. Modeled on
+    // the Nova ring, but applies a heavy slow via the existing slow engine.
+    CRYO_BURST: {
+        id: 'CRYO_BURST',
+        name: 'Cryo Burst',
+        description: 'A frost shockwave that freezes enemies solid',
+        icon: 'wave',
+        color: '#66ccff',
+        cooldown: 9000,
+        isChargeBased: false,
+        ringRadius: 300,          // +CRYO_RADIUS
+        ringDuration: 500,        // ms for the frost ring to expand
+        ringDamage: 1.5,
+        freezeDuration: 2500,     // ms enemies stay frozen (+DEEP_FREEZE)
+        freezeStrength: 0.85,     // velocity scale while frozen (0 = full stop)
+        cost: 2000,
+        unlockWave: 4,
+        upgrades: ['CRYO_RADIUS', 'DEEP_FREEZE', 'SHATTER', 'COLD_SNAP'],
+    },
+
+    // OVERDRIVE — no projectile. A "go loud" button: massively buffs the
+    // PRIMARY weapon (fire rate + damage, optional pierce) for a few seconds.
+    // Stateless beyond a player timer; getEffectivePrimary* read the buff.
+    OVERDRIVE: {
+        id: 'OVERDRIVE',
+        name: 'Overdrive',
+        description: 'Supercharges your primary weapon for a few seconds',
+        icon: 'fast-forward',
+        color: '#ff5522',
+        cooldown: 14000,
+        isChargeBased: false,
+        duration: 4500,           // ms the buff lasts (+OVERDRIVE_DURATION)
+        fireRateMult: 0.55,       // primary interval ×this while active (lower = faster)
+        damageMult: 1.5,          // +REDLINE
+        grantsPierce: 0,          // +AFTERBURN adds pierce during
+        cost: 2500,
+        unlockWave: 7,
+        upgrades: ['OVERDRIVE_DURATION', 'REDLINE', 'NITRO', 'AFTERBURN'],
+    },
 };
 
 // ─── POWER WEAPON UPGRADES ──────────────────────────────────────────────────
@@ -682,6 +1020,36 @@ export const POWER_UPGRADES = {
         cost: 7500, maxStacks: 1, weapon: 'LIGHTNING_ARC', icon: 'medal',
         tier: 2, requires: { id: 'AMPLIFIER', stacks: 3 },
     },
+
+    // ── Singularity (SINGULARITY) ──
+    SINGULARITY_RADIUS:   { id: 'SINGULARITY_RADIUS',   name: 'Wider Maw',    description: '+40px pull radius',         cost: 1700, maxStacks: 3, weapon: 'SINGULARITY', icon: 'vortex' },
+    VOID_GRASP:           { id: 'VOID_GRASP',           name: 'Void Grasp',   description: '+30% pull strength',        cost: 1900, maxStacks: 2, weapon: 'SINGULARITY', icon: 'magnet' },
+    SINGULARITY_DURATION: { id: 'SINGULARITY_DURATION', name: 'Stable Well',  description: '+0.5s pull duration',       cost: 2300, maxStacks: 2, weapon: 'SINGULARITY', icon: 'stopwatch' },
+    EVENT_HORIZON:        { id: 'EVENT_HORIZON',        name: 'Event Horizon', description: 'Collapse hits 2× harder & wider', cost: 4300, maxStacks: 1, weapon: 'SINGULARITY', icon: 'explosion' },
+
+    // ── Prism Beam (PRISM_BEAM) ──
+    PRISM_BEAMS:    { id: 'PRISM_BEAMS',    name: 'More Facets',  description: '+1 beam in the fan',        cost: 2200, maxStacks: 3, weapon: 'PRISM_BEAM', icon: 'multi-shot' },
+    PRISM_WIDTH:    { id: 'PRISM_WIDTH',    name: 'Beam Width',   description: '+30% beam width',           cost: 1100, maxStacks: 3, weapon: 'PRISM_BEAM', icon: 'ruler' },
+    PRISM_DURATION: { id: 'PRISM_DURATION', name: 'Lingering Light', description: '+0.3s beam duration',    cost: 1500, maxStacks: 3, weapon: 'PRISM_BEAM', icon: 'stopwatch' },
+    PRISM_SEEK:     { id: 'PRISM_SEEK',     name: 'Refraction',   description: 'Beams bend toward enemies', cost: 2700, maxStacks: 1, weapon: 'PRISM_BEAM', icon: 'target' },
+
+    // ── Orbital Strike (ORBITAL_STRIKE) ──
+    ORBITAL_RADIUS:  { id: 'ORBITAL_RADIUS',  name: 'Wider Impact', description: '+30px strike radius',      cost: 1700, maxStacks: 3, weapon: 'ORBITAL_STRIKE', icon: 'satellite' },
+    ORBITAL_POWER:   { id: 'ORBITAL_POWER',   name: 'Heavier Payload', description: '+25% strike damage',    cost: 1900, maxStacks: 3, weapon: 'ORBITAL_STRIKE', icon: 'bomb' },
+    RAPID_PAINT:     { id: 'RAPID_PAINT',     name: 'Rapid Paint',  description: '-0.2s telegraph time',     cost: 2300, maxStacks: 2, weapon: 'ORBITAL_STRIKE', icon: 'fast-forward' },
+    ORBITAL_BARRAGE: { id: 'ORBITAL_BARRAGE', name: 'Barrage',      description: '+1 walking strike column', cost: 4300, maxStacks: 2, weapon: 'ORBITAL_STRIKE', icon: 'explosion' },
+
+    // ── Cryo Burst (CRYO_BURST) ──
+    CRYO_RADIUS: { id: 'CRYO_RADIUS', name: 'Cold Front',  description: '+40px frost radius',       cost: 1700, maxStacks: 3, weapon: 'CRYO_BURST', icon: 'wave' },
+    DEEP_FREEZE: { id: 'DEEP_FREEZE', name: 'Deep Freeze', description: '+1s freeze duration',      cost: 2300, maxStacks: 2, weapon: 'CRYO_BURST', icon: 'snail' },
+    SHATTER:     { id: 'SHATTER',     name: 'Shatter',     description: 'Frozen enemies take +30% damage', cost: 2600, maxStacks: 1, weapon: 'CRYO_BURST', icon: 'gem' },
+    COLD_SNAP:   { id: 'COLD_SNAP',   name: 'Cold Snap',   description: '-1.5s cooldown',           cost: 3200, maxStacks: 2, weapon: 'CRYO_BURST', icon: 'stopwatch' },
+
+    // ── Overdrive (OVERDRIVE) ──
+    OVERDRIVE_DURATION: { id: 'OVERDRIVE_DURATION', name: 'Endurance',  description: '+1s buff duration',        cost: 2200, maxStacks: 3, weapon: 'OVERDRIVE', icon: 'stopwatch' },
+    REDLINE:            { id: 'REDLINE',            name: 'Redline',    description: '+25% primary damage while active', cost: 2300, maxStacks: 2, weapon: 'OVERDRIVE', icon: 'fire' },
+    NITRO:              { id: 'NITRO',              name: 'Nitro',      description: '-2s cooldown',             cost: 3200, maxStacks: 2, weapon: 'OVERDRIVE', icon: 'fast-forward' },
+    AFTERBURN:          { id: 'AFTERBURN',          name: 'Afterburn',  description: 'Primary gains +1 pierce while active', cost: 2700, maxStacks: 1, weapon: 'OVERDRIVE', icon: 'bow-arrow' },
 };
 
 // ─── UPGRADE ECONOMY: SCALE + PER-STACK RAMP ────────────────────────────────
@@ -819,6 +1187,26 @@ export const DEFENSE_SKILLS = {
         unlockWave: 6,
         upgrades: ['WIDE_ANGLE', 'PROFIT', 'REDIRECTION'],
     },
+    // SENTRY_DRONE — autonomous drones orbit the ship and auto-fire at the
+    // nearest enemy for `duration`. Modeled on DEFLECTOR_ORBS (orbit) + the
+    // mine turret-fire helper (allied bullets via bullet.shooter tag).
+    SENTRY_DRONE: {
+        id: 'SENTRY_DRONE',
+        name: 'Sentry Drone',
+        description: 'Deploys auto-firing drones that orbit you for 8s',
+        icon: 'satellite',
+        color: '#ffaa66',
+        cooldown: 18000,
+        duration: 8000,
+        droneCount: 1,            // +EXTRA_DRONE
+        orbitRadius: 58,
+        fireInterval: 600,        // ms between drone shots (-RAPID_DRONE)
+        droneDamage: 1.2,         // +DRONE_CALIBER
+        droneRange: 0.7,          // bullet rangeMultiplier
+        cost: 3,
+        unlockWave: 5,
+        upgrades: ['EXTRA_DRONE', 'RAPID_DRONE', 'DRONE_CALIBER'],
+    },
 };
 
 // ─── DEFENSE SKILL UPGRADES ─────────────────────────────────────────────────
@@ -853,6 +1241,11 @@ export const SKILL_UPGRADES = {
     WIDE_ANGLE:       { id: 'WIDE_ANGLE',       name: 'Wide Angle',       description: '+30° shield arc per stack',            cost: 2, maxStacks: 2, skill: 'TRACTOR_SHIELD', icon: 'ruler' },
     PROFIT:           { id: 'PROFIT',           name: 'Profit',           description: '+5 coins per absorbed bullet',         cost: 2, maxStacks: 2, skill: 'TRACTOR_SHIELD', icon: 'money-bag' },
     REDIRECTION:      { id: 'REDIRECTION',      name: 'Redirection',      description: '30% of absorbed bullets fire back',   cost: 3, maxStacks: 1, skill: 'TRACTOR_SHIELD', icon: 'undo' },
+
+    // Sentry Drone
+    EXTRA_DRONE:      { id: 'EXTRA_DRONE',      name: 'Extra Drone',      description: '+1 drone per stack',                  cost: 3, maxStacks: 2, skill: 'SENTRY_DRONE', icon: 'satellite' },
+    RAPID_DRONE:      { id: 'RAPID_DRONE',      name: 'Rapid Servos',     description: '-25% drone fire interval per stack',  cost: 2, maxStacks: 2, skill: 'SENTRY_DRONE', icon: 'bolt' },
+    DRONE_CALIBER:    { id: 'DRONE_CALIBER',    name: 'Heavy Caliber',    description: '+40% drone damage per stack',         cost: 2, maxStacks: 2, skill: 'SENTRY_DRONE', icon: 'circle-fill' },
 };
 
 // ─── PASSIVE UPGRADES (Phase 1 — 2026-05-19) ────────────────────────────────

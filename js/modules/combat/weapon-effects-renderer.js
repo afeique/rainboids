@@ -366,6 +366,117 @@ export function drawWeaponEffects() {
         }
     }
 
+    // ─── Singularity (black hole) ───────────────────────────────────
+    if (p.singularities && p.singularities.length) {
+        for (const s of p.singularities) {
+            const t = Math.min(1, s.elapsed / s.duration);
+            ctx.save();
+            ctx.globalAlpha = 0.15;
+            ctx.strokeStyle = '#7744dd';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.pullRadius * (0.92 + 0.08 * Math.sin(s.elapsed * 0.02)), 0, Math.PI * 2);
+            ctx.stroke();
+            const coreR = 14 + 6 * Math.sin(s.elapsed * 0.03);
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = '#1a0033';
+            ctx.beginPath(); ctx.arc(s.x, s.y, coreR, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 0.85;
+            ctx.strokeStyle = '#aa66ff';
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(s.x, s.y, coreR + 4 + (1 - t) * 6, 0, Math.PI * 2); ctx.stroke();
+            ctx.globalAlpha = 0.5;
+            ctx.strokeStyle = '#cc88ff';
+            for (let k = 0; k < 3; k++) {
+                const a0 = s.elapsed * 0.05 + k * 2.1;
+                ctx.beginPath(); ctx.arc(s.x, s.y, coreR + 10 + k * 7, a0, a0 + 1.6); ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+
+    // ─── Cryo frost ring ───────────────────────────────────
+    if (p.cryoRings && p.cryoRings.length) {
+        for (const r of p.cryoRings) {
+            const prog = Math.min(1, r.elapsed / r.duration);
+            ctx.save();
+            ctx.globalAlpha = (1 - prog) * 0.4;
+            ctx.strokeStyle = '#66ccff';
+            ctx.lineWidth = 8 * (1 - prog) + 4;
+            ctx.beginPath(); ctx.arc(r.x, r.y, r.currentRadius, 0, Math.PI * 2); ctx.stroke();
+            ctx.globalAlpha = (1 - prog) * 0.9;
+            ctx.strokeStyle = '#ddf6ff';
+            ctx.lineWidth = 5 * (1 - prog) + 2;
+            ctx.beginPath(); ctx.arc(r.x, r.y, r.currentRadius, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    // ─── Orbital Strike telegraph ───────────────────────────────────
+    if (p.orbitalStrikes && p.orbitalStrikes.length) {
+        for (const o of p.orbitalStrikes) {
+            if (o.detonated) continue;
+            const t = Math.min(1, o.elapsed / o.telegraph);
+            const pulse = 0.5 + 0.5 * Math.sin(o.elapsed * (0.01 + t * 0.05));
+            ctx.save();
+            ctx.strokeStyle = '#ffee44';
+            ctx.globalAlpha = 0.3 + 0.5 * t;
+            ctx.lineWidth = 2 + 2 * t;
+            ctx.beginPath(); ctx.arc(o.x, o.y, o.radius * (1.6 - 0.6 * t), 0, Math.PI * 2); ctx.stroke();
+            ctx.globalAlpha = 0.3 + 0.5 * pulse;
+            ctx.beginPath(); ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(o.x - o.radius, o.y); ctx.lineTo(o.x + o.radius, o.y);
+            ctx.moveTo(o.x, o.y - o.radius); ctx.lineTo(o.x, o.y + o.radius);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    // ─── Prism Beam fan ───────────────────────────────────
+    if (p.prismActive && p.prismBeams && p.prismBeams.length) {
+        const range = (this.gameField ? this.gameField.width : 1920) * (p.prismRange || 0.95);
+        const w = p.prismWidth || 5;
+        const fade = Math.max(0, Math.min(1, p.prismTimer / 250));
+        ctx.save();
+        ctx.lineCap = 'round';
+        for (const beam of p.prismBeams) {
+            const ang = (typeof beam._renderAngle === 'number') ? beam._renderAngle : (p.prismAngle + beam.angleOffset);
+            const ex = p.x + Math.cos(ang) * range;
+            const ey = p.y + Math.sin(ang) * range;
+            ctx.globalAlpha = 0.22 * fade;
+            ctx.strokeStyle = beam.color;
+            ctx.lineWidth = w * 2.2;
+            ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
+            ctx.globalAlpha = 0.9 * fade;
+            ctx.lineWidth = w;
+            ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
+            ctx.globalAlpha = fade;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = Math.max(1, w * 0.4);
+            ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // ─── Sentry Drones ───────────────────────────────────
+    if (p.sentryDrones && p.sentryDrones.length) {
+        for (const d of p.sentryDrones) {
+            ctx.save();
+            ctx.globalAlpha = 0.95;
+            ctx.fillStyle = '#ffaa66';
+            ctx.strokeStyle = '#ffe0bb';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(d.x, d.y, 6, 0, Math.PI * 2); ctx.fill();
+            const a = d.aimAngle || 0;
+            ctx.beginPath();
+            ctx.moveTo(d.x, d.y);
+            ctx.lineTo(d.x + Math.cos(a) * 11, d.y + Math.sin(a) * 11);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
     // ─── Arc Lightning — unified strand renderer (5.79.5 rewrite) ─────
     //
     // Single render path drives both visual modes (frayed vs focused)
