@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.73.0] - 2026-05-22
+
+### Added — Tesla Wraith + Plaguebearer (Phase E8c, Volt/Toxic batch)
+
+- **Tesla Wraith** — Volt skirmisher (reuses HUNTER arc + DRIFTER arc-lightning
+  + laser-turret shape, tinted electric). Near volt-immune, Toxic-weak. Teleport
+  flourish deferred (reads as a fast erratic shooter).
+- **Plaguebearer** — Toxic area-denier (reuses TANGERINE chase + `lay_mine`, so
+  it drops **Toxic mines** — real area-denial via the existing mine system).
+  Resists Toxic, weak to Radiant. Acid-trail-CORRODE-on-player flourish deferred
+  (needs player-side status).
+- Introduced together in a stage-4 wave via a like-for-like swap. Roster now
+  **16 types**. Unit tests assert well-formedness + reuse-only patterns/shapes.
+  AI survival e2e passes.
+- Conduit Node + Spore Carrier from this batch were **skipped** — their
+  signatures (ally-tethers + ally-buff, mid-fight enemy spawning) need systems
+  that don't exist yet, so shipping them now would be hollow reskins.
+
 ## [6.72.0] - 2026-05-22
 
 ### Added — Frost Lance + Ashen Detonator; completes the E8b Pyro/Cryo batch

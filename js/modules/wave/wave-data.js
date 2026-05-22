@@ -101,7 +101,7 @@ export const WAVE_DATA = {
     11: { asteroids: 4, subWaves: [
         [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }],
         [{ type: 'TANGERINE', count: 2 }, { type: 'CINDER', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'TANGERINE', count: 1 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'TESLA_WRAITH', count: 2 }, { type: 'PLAGUEBEARER', count: 1 }],
     ] },
     // 4-3 BOSS — Twin Iron: 2× TITAN T2.
     12: {

@@ -463,6 +463,48 @@ export const ENEMY_TYPES = {
         visual: { shape: 'spiked_circle', glowColor: '#ffaa66', trailLength: 15 },
         ai: { evasion: 0.4, preferredRange: 220, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
+
+    // ── E8c — New elemental types (Volt/Toxic batch) ──
+
+    // Tesla Wraith — Volt skirmisher. Reuses HUNTER arc (fast/erratic) +
+    // DRIFTER arc_lightning + laser-turret shape (tinted electric). Near
+    // volt-immune, Toxic-weak — corrode it, don't shock it. (Teleport-blink
+    // flourish deferred — reads as a fast erratic shooter for now.)
+    TESLA_WRAITH: {
+        name: 'Tesla Wraith',
+        color: '#a855ff',
+        health: 6,
+        speed: 3.2,
+        size: 34,
+        shootPattern: 'arc_lightning',
+        shootRate: 0.2,
+        movePattern: 'hunter_arc',
+        points: 150,
+        movement: { pattern: 'hunter_arc', turnSpeed: 0.12, rotationSpeed: { min: -0.02, max: 0.02 } },
+        firing: { pattern: 'arc_lightning', burstCount: 1, burstDelay: 0, cooldown: { min: 1500, max: 5500 } },
+        visual: { shape: 'laser_turret', glowColor: '#c890ff', trailLength: 15 },
+        ai: { evasion: 0.65, preferredRange: 260, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
+
+    // Plaguebearer — Toxic area-denier. Reuses TANGERINE chase + lay_mine, so
+    // it drops Toxic mines (real area-denial via the existing mine system) +
+    // spiked shape (tinted toxic). Resists Toxic, weak to Radiant — purge it.
+    // (CORRODE-on-the-player acid trails deferred — needs player-side status.)
+    PLAGUEBEARER: {
+        name: 'Plaguebearer',
+        color: '#88dd44',
+        health: 11,
+        speed: 2.0,
+        size: 44,
+        shootPattern: 'lay_mine',
+        shootRate: 0.4,
+        movePattern: 'chase',
+        points: 200,
+        movement: { pattern: 'chase', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
+        firing: { pattern: 'lay_mine', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 7000 }, mineLifetime: 18000 },
+        visual: { shape: 'spiked_circle', glowColor: '#aaff66', trailLength: 15 },
+        ai: { evasion: 0.2, preferredRange: 150, dodgeBullets: false, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -483,6 +525,8 @@ const ENEMY_ELEMENTS = {
     GLACIER:   'CRYO',    // E8b — ice tank
     FROST_LANCE: 'CRYO',  // E8b — ice sniper
     ASHEN_DETONATOR: 'PYRO', // E8b — fire bomber
+    TESLA_WRAITH: 'VOLT', // E8c — volt skirmisher
+    PLAGUEBEARER: 'TOXIC', // E8c — toxic area-denier
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -504,6 +548,8 @@ const ENEMY_RESISTS = {
     GLACIER:   { CRYO: 0.90, PYRO: -0.50 },                    // E8b — near-cryo-immune tank; burn it
     FROST_LANCE: { CRYO: 0.40, TOXIC: -0.40 },                 // E8b — ice sniper; rots to Toxic
     ASHEN_DETONATOR: { PYRO: 0.50, CRYO: -0.40 },              // E8b — fire bomber; freeze it
+    TESLA_WRAITH: { VOLT: 0.85, TOXIC: -0.50 },                // E8c — near volt-immune; corrode it
+    PLAGUEBEARER: { TOXIC: 0.60, RADIANT: -0.40 },             // E8c — toxic-tough; purge it w/ Radiant
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit
