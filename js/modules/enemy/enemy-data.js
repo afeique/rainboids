@@ -412,9 +412,17 @@ const ENEMY_RESISTS = {
     TITAN:     { KINETIC: 0.30, PYRO: 0.30, CRYO: 0.30, VOLT: 0.30, TOXIC: 0.30, VOID: 0.30, RADIANT: 0.30 }, // boss: tanky all-around (rotating weak-core = later behavior)
     // HUNTER → neutral (no entry)
 };
+// E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit
+// (down to a 25% floor in applyDamageToEnemy so chip can't be fully nullified).
+// Makes many-small-hit weapons fall off and big single hits / CORRODE-amplified
+// hits punch through. GUARDIAN is the armored archetype. Read as `enemy.armor`.
+const ENEMY_ARMOR = {
+    GUARDIAN: 1.0,
+};
 for (const [key, def] of Object.entries(ENEMY_TYPES)) {
     def.element = ENEMY_ELEMENTS[key] || 'KINETIC';
     def.resist = ENEMY_RESISTS[key] || {};
+    def.armor = ENEMY_ARMOR[key] || 0;
 }
 
 // ── Convenience Lookups ────────────────────────────────────────────────────

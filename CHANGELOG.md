@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.68.0] - 2026-05-22
+
+### Added — GUARDIAN armor archetype (Phase E8a, behavior 1)
+
+- The **GUARDIAN** now has a flat **armor floor** (1.0): each hit subtracts a
+  fixed amount, down to a 25% floor, so many-small-hit weapons (Storm Needles,
+  Spin Cannon) are heavily wasted on it while big single hits (Rail, Charge)
+  punch through. Armor is applied *after* the resist/CORRODE/CONDUCT
+  multipliers, so a **CORRODE-amplified hit overcomes armor** ("melts to
+  Corrode"). The enemy instance copies its type's armor on spawn. 4 unit tests.
+- First of the E8a archetype behaviors (Warden adaptive resist, SENTINEL
+  frontal shield, WASP swarm still pending).
+
 ## [6.67.0] - 2026-05-22
 
 ### Added — Enemy element/resistance retrofit: elements go LIVE (Phase E8a, data)

@@ -2210,6 +2210,15 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
         damage *= 1.5;
     }
 
+    // E8a — flat ARMOR floor (GUARDIAN archetype): subtract a fixed amount per
+    // hit, down to a 25% floor so chip damage (many small hits) is wasted while
+    // big single hits punch through. Applied AFTER the resist / CORRODE /
+    // CONDUCT multipliers, so a CORRODE-amplified hit overcomes armor — "melts
+    // to Corrode." Inert on enemies with no armor (most).
+    if (enemy.armor > 0 && damage > 0) {
+        damage = Math.max(damage * 0.25, damage - enemy.armor);
+    }
+
     enemy.health -= damage;
     enemy.health = Math.max(0, Math.min(enemy.health, enemy.maxHealth));
 

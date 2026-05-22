@@ -96,6 +96,8 @@ export class Enemy {
         // and the player damage path (enemy.element on ram + enemy shots).
         this.element = this.config.element || 'KINETIC';
         this.resist = this.config.resist ? { ...this.config.resist } : {};
+        // E8a — flat armor floor (GUARDIAN); subtracted per hit in applyDamageToEnemy.
+        this.armor = this.config.armor || 0;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
