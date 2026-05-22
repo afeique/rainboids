@@ -47,3 +47,35 @@ export function elementalMultiplier(resistMap, element) {
 export function isElement(id) {
     return Object.prototype.hasOwnProperty.call(ELEMENTS, id);
 }
+
+// ─── E8e — Adaptive resistance (Warden) ─────────────────────────────────────
+// Pure helpers for an enemy that "learns" the element you keep hitting it with.
+// Only used on enemies flagged `adaptive`, whose instance resist map starts
+// empty (so these mutate only adaptation, never a fixed base profile).
+
+/**
+ * Bump the target's resistance to `element` toward `cap` by `step` (mutates
+ * `resistMap` in place). Called after a hit lands, so the CURRENT hit uses the
+ * old resist and the adaptation shows on the NEXT same-element hit — "you hit
+ * it with fire, now it resists fire."
+ */
+export function adaptResist(resistMap, element, step = 0.12, cap = 0.75) {
+    if (!resistMap || !element) return;
+    resistMap[element] = Math.min(cap, (resistMap[element] || 0) + step);
+}
+
+/**
+ * Decay every entry of an adaptive resist map toward 0 by `factor` (mutates in
+ * place); entries at/under `floor` are removed. Run on a slow timer so that
+ * switching elements lets the old resistance fade — the counter-play to the
+ * adapt loop. Only call on adaptive enemies (fixed resist profiles must NOT
+ * decay).
+ */
+export function decayResistMap(resistMap, factor = 0.8, floor = 0.02) {
+    if (!resistMap) return;
+    for (const k of Object.keys(resistMap)) {
+        const v = resistMap[k] * factor;
+        if (v <= floor) delete resistMap[k];
+        else resistMap[k] = v;
+    }
+}

@@ -136,7 +136,7 @@ export const WAVE_DATA = {
     16: { asteroids: 4, subWaves: [
         [{ type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
         [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'WARDEN', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'WEAVER', count: 2 }],
     ] },
     17: { asteroids: 4, subWaves: [
         [{ type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],

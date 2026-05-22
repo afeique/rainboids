@@ -505,6 +505,30 @@ export const ENEMY_TYPES = {
         visual: { shape: 'spiked_circle', glowColor: '#aaff66', trailLength: 15 },
         ai: { evasion: 0.2, preferredRange: 150, dodgeBullets: false, microMovements: true, fishMotion: true },
     },
+
+    // ── E8e — Anti-meta type ──
+    // Warden — ADAPTIVE RESIST: it learns whatever element you keep hitting it
+    // with (bumps that resist toward a cap on each hit, decaying when you stop),
+    // so a one-element build walls itself and you must SWITCH elements (the foil
+    // for the whole resistance system + the Prismatic-Soul item trait). `resist`
+    // starts empty and is driven entirely by adaptation (a per-spawn copy, safe
+    // to mutate). Reuses PROWLER standoff + missile + turret shape (tinted).
+    WARDEN: {
+        name: 'Warden',
+        color: '#cfa8ff',
+        health: 16,
+        speed: 0.85,
+        size: 46,
+        shootPattern: 'missile',
+        shootRate: 0.4,
+        movePattern: 'keep_distance',
+        points: 280,
+        adaptive: true,
+        movement: { pattern: 'keep_distance', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 }, preferredDistance: 400 },
+        firing: { pattern: 'missile', burstCount: 1, burstDelay: 0, cooldown: { min: 900, max: 3500 } },
+        visual: { shape: 'missile_turret', glowColor: '#e0c8ff', trailLength: 15 },
+        ai: { evasion: 0.3, preferredRange: 400, dodgeBullets: false, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────

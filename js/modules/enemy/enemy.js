@@ -9,6 +9,7 @@ import * as firing from './firing.js';
 import * as shapes from './shapes.js';
 import * as ai from './ai.js';
 import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
+import { decayResistMap } from '../combat/elements.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
 // `isMobile` toggles the lateral weave decoration in update().
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
@@ -102,6 +103,10 @@ export class Enemy {
         this.frontalShield = this.config.frontalShield || null;
         // E8b — on-death flare (ASHEN_DETONATOR); bursts for AoE in onEnemyKill.
         this.deathFlare = this.config.deathFlare || null;
+        // E8e — adaptive resist (WARDEN): resist map is mutated per-hit in
+        // applyDamageToEnemy + decayed on a timer in _processStatusEffects.
+        this.adaptive = this.config.adaptive || false;
+        this._adaptiveDecayAt = 0;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
@@ -1550,6 +1555,17 @@ export class Enemy {
         if (this.corrodeStacks > 0 && now > this.corrodeUntil) {
             this.corrodeStacks = 0;
             this.corrodeUntil = 0;
+        }
+
+        // E8e — WARDEN adaptive-resist decay. Every ~1s, fade the resistances
+        // it has built up so switching elements (and stopping the spammed one)
+        // lets the old wall come down. The per-hit bump lives in
+        // applyDamageToEnemy; only adaptive enemies decay (fixed profiles don't).
+        if (this.adaptive && this.resist) {
+            if (now >= this._adaptiveDecayAt) {
+                decayResistMap(this.resist, 0.8, 0.02);
+                this._adaptiveDecayAt = now + 1000;
+            }
         }
     }
 

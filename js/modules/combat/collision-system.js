@@ -6,7 +6,7 @@ import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from './weapon-data.js
 import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
-import { elementalMultiplier } from './elements.js';
+import { elementalMultiplier, adaptResist } from './elements.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
 //   Duplicated here (rather than imported) because wave-manager.js bundles
@@ -2238,6 +2238,14 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
 
     enemy.health -= damage;
     enemy.health = Math.max(0, Math.min(enemy.health, enemy.maxHealth));
+
+    // E8e — WARDEN adaptive resist: AFTER the hit lands (so this hit used the
+    // old resist), bump the enemy's resistance to the hit's element. Spamming
+    // one element walls it; switching resets the pressure. Decay lives in
+    // Enemy._processStatusEffects. Only adaptive enemies have the flag.
+    if (enemy.adaptive && enemy.resist) {
+        adaptResist(enemy.resist, opts.element || 'KINETIC');
+    }
 
     if (opts.showNumber !== false && typeof this.createDamageNumber === 'function') {
         this.createDamageNumber(

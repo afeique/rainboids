@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.74.0] - 2026-05-22
+
+### Added — Warden: adaptive-resist anti-meta enemy (Phase E8e)
+
+- **Warden** — learns the element you keep hitting it with: each hit **bumps
+  its resistance to that element** toward a 0.75 cap (after the hit lands, so
+  the current hit uses the old value), and the buildup **decays** when you stop
+  (~×0.8/s). A one-element build walls itself on it, so you must **switch
+  elements** — the deliberate foil for the whole resistance system (and the
+  future Prismatic-Soul item trait). Its resist map starts empty and is driven
+  entirely by adaptation (a per-spawn copy, safe to mutate).
+- Implemented as pure, testable `adaptResist` / `decayResistMap` helpers in
+  `elements.js`, wired into `applyDamageToEnemy` (bump) + `_processStatusEffects`
+  (decay). Reuses PROWLER standoff + missile + turret shape (tinted). Placed in
+  a stage-6 wave (count-stable swap). Roster now **17 types**. 8 unit tests.
+  AI survival e2e passes.
+
 ## [6.73.0] - 2026-05-22
 
 ### Added — Tesla Wraith + Plaguebearer (Phase E8c, Volt/Toxic batch)
