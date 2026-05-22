@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.60.0] - 2026-05-22
+
+### Added — 8-tier item rarity ladder (Phase C.I1)
+
+- Item rarities expand from 3 tiers to **8**: Common → Rare → Exceptional →
+  Legendary → Epic → Godlike → Divine → Transcendental. Each tier is rarer than
+  the last (Transcendental ~0.1% base) with a distinct glow color + strength;
+  Transcendental carries a `prismatic` flag for an animated rainbow shimmer.
+- Affix count scales by tier (1 / 2 / 3 / 3 / 4 / 4 / 5 / 5) via a per-tier
+  `affixCount` field instead of the old `epic?3:rare?2:1` rule.
+- `rollRarity(bossBias)` rewritten as a weighted pick across all 8 tiers, with
+  `bossBias` shifting probability mass up the ladder. The legacy two-arg call
+  form (boss drops in combat-manager) is detected and folded into the bias, so
+  existing callers keep biasing drops upward unchanged.
+- Loot-feed and inventory displays read the item's rarity color/label directly,
+  so the 5 new tiers render automatically (no display changes needed).
+- 11 unit tests cover the ladder structure, affix-count-by-tier, rollRarity
+  validity + boss-bias lift, and createItem affix counts.
+
 ## [6.59.0] - 2026-05-22
 
 ### Changed — Unified 4-slot skill model (Phase B.S1)

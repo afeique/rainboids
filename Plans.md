@@ -40,7 +40,7 @@ S1 unblocks I3c. The S-track and I1 can run parallel to the E-track.
 
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
-| C.I1 | Rarity ladder 3→8: expand `RARITY_TIERS` (Common/Rare/Exceptional/Legendary/Epic/Godlike/Divine/Transcendental) with colors+glow; affix/resist counts by tier; prismatic Transcendental | Drops roll across 8 tiers at intended weights; affix-count-by-tier + rollRarity-distribution unit tests green; 8 colors distinct | - | cc:TODO |
+| C.I1 | Rarity ladder 3→8: expand `RARITY_TIERS` (Common/Rare/Exceptional/Legendary/Epic/Godlike/Divine/Transcendental) with colors+glow; affix/resist counts by tier; prismatic Transcendental | Drops roll across 8 tiers at intended weights; affix-count-by-tier + rollRarity-distribution unit tests green; 8 colors distinct | - | cc:完了 (6.60.0) |
 | C.I2 | Resist roll display + tier-gated resist counts (per §8.1 table) | Resist rolls appear on Exceptional+ items and scale with tier | A.E7, C.I1 | cc:TODO |
 | C.I3a | Self-contained traits: Glass Cannon, Bullet Bloom, Echo, Orb Magnet, Hoarder's Greed, Momentum, Executioner's Edge, Second Heart, Reactive Plating (NEW `item-traits.js`; `getActiveTraits`) | Transcendental visibly stacks 5 traits; each trait has a live consumer (no placebo) | C.I1 | cc:TODO |
 | C.I3b | Element traits: Hex Touch, Frostbite, Conductor, Elemental Overflow, Prismatic Soul | Each element trait applies its status via the A.E3 helpers | A.E3, A.E4, C.I1 | cc:TODO |

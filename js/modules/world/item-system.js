@@ -83,11 +83,12 @@ export function createItem(slot, level, rarityKey = null) {
     const tier = RARITY_TIERS[rarity] || RARITY_TIERS.common;
     const L = Math.max(1, level | 0);
 
-    // 6.32.0 — Roll AFFIXES that mirror the passive stat set. Affix
-    // count by rarity: common 1, rare 2, epic 3. Each affix value is
-    // wave-scaled × an independent rarity-mult roll, so two epics of
-    // the same slot still differ.
-    const affixCount = rarity === 'epic' ? 3 : (rarity === 'rare' ? 2 : 1);
+    // 6.32.0 — Roll AFFIXES that mirror the passive stat set. Phase C.I1:
+    // affix count now comes straight off the tier (common 1 → rare 2 →
+    // exceptional/legendary 3 → epic/godlike 4 → divine/transcendental 5).
+    // Each affix value is wave-scaled × an independent rarity-mult roll,
+    // so two items of the same tier+slot still differ.
+    const affixCount = tier.affixCount || 1;
     const pool = ITEM_AFFIX_POOL.slice();
     // Fisher-Yates shuffle, take the first `affixCount` distinct affixes.
     for (let i = pool.length - 1; i > 0; i--) {
