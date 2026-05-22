@@ -377,6 +377,52 @@ export const ENEMY_TYPES = {
             fishMotion: false,
         },
     },
+
+    // ── E8b — New elemental types (Pyro/Cryo batch) ──
+    // Built by reusing existing movement/firing/shape patterns (tinted) to stay
+    // low-risk without visual playtest. Element/resist set in the retrofit
+    // tables below. Signature flourishes (Cinder contact-ignite, Glacier
+    // brittle-shatter) are deferred — they need player-side burn + a custom
+    // shatter mechanic. For now each is a differentiated element/resist/speed
+    // profile that demands the right damage type.
+
+    // Cinder — Pyro fire-swarmer. Reuses WASP zigzag + machinegun + ship shape
+    // (tinted fiery). Fast, fragile, swarms (swarmCohesion). Mostly fireproof,
+    // Cryo-weak: freeze/shatter the swarm rather than burning it.
+    CINDER: {
+        name: 'Cinder',
+        color: '#ff6622',
+        health: 4,
+        speed: 3.3,
+        size: 30,
+        shootPattern: 'wasp_machinegun',
+        shootRate: 0.7,
+        movePattern: 'wasp_zigzag',
+        points: 110,
+        movement: { pattern: 'wasp_zigzag', turnSpeed: 0.12, rotationSpeed: { min: -0.02, max: 0.02 } },
+        firing: { pattern: 'wasp_machinegun', burstCount: 1, burstDelay: 0, cooldown: { min: 500, max: 2200 } },
+        visual: { shape: 'wasp_ship', glowColor: '#ffaa44', trailLength: 15 },
+        ai: { evasion: 0.6, preferredRange: 180, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
+
+    // Glacier — slow Cryo tank. Reuses GUARDIAN square movement + spread fire +
+    // emerald_guardian shape (tinted ice). High HP, near Cryo-immune, Pyro-weak:
+    // burn it down; chip/cryo are wasted.
+    GLACIER: {
+        name: 'Glacier',
+        color: '#88ddff',
+        health: 18,
+        speed: 1.0,
+        size: 50,
+        shootPattern: 'guardian_spread',
+        shootRate: 0.3,
+        movePattern: 'square',
+        points: 250,
+        movement: { pattern: 'square', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
+        firing: { pattern: 'guardian_spread', burstCount: 3, burstDelay: 105, cooldown: { min: 2500, max: 8000 } },
+        visual: { shape: 'emerald_guardian', glowColor: '#bbf0ff', trailLength: 15 },
+        ai: { evasion: 0.2, preferredRange: 320, dodgeBullets: false, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -393,6 +439,8 @@ const ENEMY_ELEMENTS = {
     WEAVER:    'RADIANT', // spiral laser
     SENTINEL:  'RADIANT', // sweep beam
     TANGERINE: 'PYRO',    // explosive mines
+    CINDER:    'PYRO',    // E8b — fire swarmer
+    GLACIER:   'CRYO',    // E8b — ice tank
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -410,6 +458,8 @@ const ENEMY_RESISTS = {
     SENTINEL:  { RADIANT: 0.50, KINETIC: -0.30 },              // bastion; raw kinetic cracks it
     TANGERINE: { PYRO: 0.60, CRYO: -0.40 },                    // bomber; don't fight fire w/ fire
     TITAN:     { KINETIC: 0.30, PYRO: 0.30, CRYO: 0.30, VOLT: 0.30, TOXIC: 0.30, VOID: 0.30, RADIANT: 0.30 }, // boss: tanky all-around (rotating weak-core = later behavior)
+    CINDER:    { PYRO: 0.85, CRYO: -0.50 },                    // E8b — near-fireproof swarmer; freeze it
+    GLACIER:   { CRYO: 0.90, PYRO: -0.50 },                    // E8b — near-cryo-immune tank; burn it
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

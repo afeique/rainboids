@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.71.0] - 2026-05-22
+
+### Added — Two new elemental enemy types (Phase E8b, Pyro/Cryo)
+
+First of the new-type batches. Both reuse existing movement/firing/render
+patterns (tinted) to stay low-risk; their element/resist profiles give each a
+clear tactical counter.
+
+- **Cinder** — Pyro fire-swarmer (reuses WASP zigzag + machinegun + ship shape;
+  swarms via `swarmCohesion`). Fast, fragile, near-fireproof, Cryo-weak — freeze
+  and shatter the swarm rather than burning it. Introduced in stage-4 waves.
+- **Glacier** — slow Cryo tank (reuses GUARDIAN square + spread + guardian
+  shape). High HP, near-cryo-immune, Pyro-weak — burn it down; chip/cryo are
+  wasted. Introduced in stage-5 waves.
+- Wired into waves 10/11 (Cinder) and 13/14 (Glacier) via like-for-like swaps
+  (stable enemy counts → minimal balance disruption). 4 unit tests assert the
+  types are well-formed and only reuse known-good shapes/patterns. AI survival
+  e2e passes (no load/early-wave regression).
+- Signature flourishes deferred: Cinder contact-ignite (needs player-side burn)
+  and Glacier brittle-shatter (custom mechanic).
+
 ## [6.70.0] - 2026-05-22
 
 ### Added — WASP swarm cohesion (Phase E8a, behavior 3)
