@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.72.0] - 2026-05-22
+
+### Added — Frost Lance + Ashen Detonator; completes the E8b Pyro/Cryo batch
+
+- **Frost Lance** — Cryo sniper (reuses STALKER arc + charged-laser + sword
+  shape, tinted ice). Resists Cryo, weak to Toxic. Wired into a stage-5 wave.
+- **Ashen Detonator** — Pyro bomber that **bursts into a flare on death**: a
+  generic `deathFlare` (radius + damage) routed through the central
+  `onEnemyKill` hook damages the player if within range — via the standard
+  damage path, so player Pyro-resistance + i-frames apply. Counterplay: kill it
+  at range. Reuses HUNTER arc + burst + spiked shape (tinted ember). Resists
+  Pyro, weak to Cryo. Wired into a stage-4 wave.
+- Both reuse known-good patterns/shapes; like-for-like wave swaps keep balance.
+  Unit tests assert well-formedness + the death-flare config. AI survival e2e
+  passes (no regression). The enemy roster is now **14 types**.
+- Telegraph for Ashen's flare deferred.
+
 ## [6.71.0] - 2026-05-22
 
 ### Added — Two new elemental enemy types (Phase E8b, Pyro/Cryo)

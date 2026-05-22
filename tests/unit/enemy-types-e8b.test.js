@@ -20,7 +20,7 @@ import { describe, expect, test } from '@jest/globals';
 import { ENEMY_TYPES, SHAPE_DRAW_MAP } from '../../js/modules/enemy/enemy-data.js';
 import { isElement, ELEMENT_IDS } from '../../js/modules/combat/elements.js';
 
-const NEW_TYPES = ['CINDER', 'GLACIER'];
+const NEW_TYPES = ['CINDER', 'GLACIER', 'FROST_LANCE', 'ASHEN_DETONATOR'];
 
 // Set of (movePattern, shootPattern, shape) used by the PRE-EXISTING roster, so
 // we can assert the new types only reuse already-handled patterns/shapes.
@@ -69,5 +69,17 @@ describe('E8b new enemy types', () => {
                 expect(ELEMENT_IDS).toContain(el);
             }
         }
+    });
+
+    test('Frost Lance is Cryo sniper; Ashen Detonator is Pyro with a death flare', () => {
+        expect(ENEMY_TYPES.FROST_LANCE.element).toBe('CRYO');
+        expect(ENEMY_TYPES.FROST_LANCE.resist.CRYO).toBeGreaterThan(0);
+        expect(ENEMY_TYPES.ASHEN_DETONATOR.element).toBe('PYRO');
+        expect(ENEMY_TYPES.ASHEN_DETONATOR.resist.CRYO).toBeLessThan(0); // freeze it
+        // Ashen's signature: a death-flare config (radius + damage).
+        const fl = ENEMY_TYPES.ASHEN_DETONATOR.deathFlare;
+        expect(fl).toBeTruthy();
+        expect(fl.radius).toBeGreaterThan(0);
+        expect(fl.damage).toBeGreaterThan(0);
     });
 });

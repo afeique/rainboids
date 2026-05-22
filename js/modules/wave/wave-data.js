@@ -96,7 +96,7 @@ export const WAVE_DATA = {
     10: { asteroids: 4, subWaves: [
         [{ type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
         [{ type: 'TANGERINE', count: 2 }, { type: 'CINDER', count: 2 }],
-        [{ type: 'DRIFTER', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'DRIFTER', count: 2 }, { type: 'ASHEN_DETONATOR', count: 2 }, { type: 'HUNTER', count: 1 }],
     ] },
     11: { asteroids: 4, subWaves: [
         [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }],
@@ -121,7 +121,7 @@ export const WAVE_DATA = {
     14: { asteroids: 4, subWaves: [
         [{ type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
         [{ type: 'SENTINEL', count: 2 }, { type: 'GLACIER', count: 2 }, { type: 'WEAVER', count: 1 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'FROST_LANCE', count: 2 }, { type: 'WEAVER', count: 2 }],
     ] },
     // 5-3 BOSS — Triple Threat: 3× TITAN T3.
     15: {

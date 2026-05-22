@@ -423,6 +423,46 @@ export const ENEMY_TYPES = {
         visual: { shape: 'emerald_guardian', glowColor: '#bbf0ff', trailLength: 15 },
         ai: { evasion: 0.2, preferredRange: 320, dodgeBullets: false, microMovements: true, fishMotion: true },
     },
+
+    // Frost Lance — Cryo sniper. Reuses STALKER arc movement + charged_laser +
+    // sword shape (tinted ice). Cryo attacks; resists Cryo, weak to Toxic.
+    // (CHILL-on-graze flourish deferred — needs player-side chill.)
+    FROST_LANCE: {
+        name: 'Frost Lance',
+        color: '#66ccff',
+        health: 7,
+        speed: 3.0,
+        size: 38,
+        shootPattern: 'charged_laser',
+        shootRate: 0.3,
+        movePattern: 'arc',
+        points: 150,
+        movement: { pattern: 'arc', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
+        firing: { pattern: 'charged_laser', burstCount: 1, burstDelay: 0, cooldown: { min: 1500, max: 6000 } },
+        visual: { shape: 'stalker_sword', glowColor: '#bbf0ff', trailLength: 15 },
+        ai: { evasion: 0.6, preferredRange: 220, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
+
+    // Ashen Detonator — Pyro bomber that bursts into a flare ON DEATH (damages
+    // the player if within `deathFlare.radius`, respecting Pyro resistance), so
+    // kill it at range. Reuses HUNTER arc movement + burst + spiked shape
+    // (tinted ember). Pyro; resists Pyro, weak to Cryo. (Telegraph deferred.)
+    ASHEN_DETONATOR: {
+        name: 'Ashen Detonator',
+        color: '#ff8844',
+        health: 8,
+        speed: 2.2,
+        size: 36,
+        shootPattern: 'hunter_single',
+        shootRate: 0.5,
+        movePattern: 'hunter_arc',
+        points: 160,
+        deathFlare: { radius: 130, damage: 12 },
+        movement: { pattern: 'hunter_arc', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
+        firing: { pattern: 'hunter_single', burstCount: 2, burstDelay: 90, cooldown: { min: 900, max: 3500 } },
+        visual: { shape: 'spiked_circle', glowColor: '#ffaa66', trailLength: 15 },
+        ai: { evasion: 0.4, preferredRange: 220, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -441,6 +481,8 @@ const ENEMY_ELEMENTS = {
     TANGERINE: 'PYRO',    // explosive mines
     CINDER:    'PYRO',    // E8b — fire swarmer
     GLACIER:   'CRYO',    // E8b — ice tank
+    FROST_LANCE: 'CRYO',  // E8b — ice sniper
+    ASHEN_DETONATOR: 'PYRO', // E8b — fire bomber
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -460,6 +502,8 @@ const ENEMY_RESISTS = {
     TITAN:     { KINETIC: 0.30, PYRO: 0.30, CRYO: 0.30, VOLT: 0.30, TOXIC: 0.30, VOID: 0.30, RADIANT: 0.30 }, // boss: tanky all-around (rotating weak-core = later behavior)
     CINDER:    { PYRO: 0.85, CRYO: -0.50 },                    // E8b — near-fireproof swarmer; freeze it
     GLACIER:   { CRYO: 0.90, PYRO: -0.50 },                    // E8b — near-cryo-immune tank; burn it
+    FROST_LANCE: { CRYO: 0.40, TOXIC: -0.40 },                 // E8b — ice sniper; rots to Toxic
+    ASHEN_DETONATOR: { PYRO: 0.50, CRYO: -0.40 },              // E8b — fire bomber; freeze it
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

@@ -1124,6 +1124,22 @@ export function onEnemyKill(enemy) {
     this.killStreakCount++;
     this.killStreakTimer = Date.now();
 
+    // E8b — death flare (ASHEN_DETONATOR and any `deathFlare` enemy): bursts
+    // into a Pyro AoE on death, damaging the player if within radius (routed
+    // through the standard damage path, so the player's Pyro resistance + the
+    // i-frame/dodge checks all apply) + a ring FX. Fires from every kill path
+    // since this is the central kill hook. Counterplay: kill it at range.
+    if (enemy && enemy.deathFlare && this.player && typeof this.takeDamage === 'function') {
+        const fl = enemy.deathFlare;
+        const ddx = this.player.x - enemy.x, ddy = this.player.y - enemy.y;
+        if (ddx * ddx + ddy * ddy <= fl.radius * fl.radius) {
+            this.takeDamage(fl.damage, { source: enemy, fxX: enemy.x, fxY: enemy.y, element: 'PYRO' });
+        }
+        if (this.particlePool) {
+            this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', fl.radius, '#ff7722');
+        }
+    }
+
     // 6.35.0 — XP toward the persistent meta level. Bosses are worth a
     // big chunk; regular kills a flat trickle. Tuned slow so a full run
     // is ~3-4 levels early on and reaching 100 is a long cross-run grind.
