@@ -7,7 +7,7 @@ concerns to review, and the remaining (deferred/blocked) work.
 
 ---
 
-## ✅ Shipped this sprint — 11 versions, all validated + committed to `master`
+## ✅ Shipped this sprint — 14 versions (6.84.0 → 6.95.0), all validated + committed to `master`
 
 | Ver | Phase | Summary |
 |-----|-------|---------|
@@ -20,35 +20,40 @@ concerns to review, and the remaining (deferred/blocked) work.
 | 6.90.0 | **R5** | **LOADOUT** screen (chosen 4+4+4 from unlocked pool, narrows the run). |
 | 6.91.0 | **R3.1–3** | Per-run **card draft** (2 weapon + 1 ability, relevance-filtered, 5/run). |
 | 6.92.0 | **R4.2/3 + R2.4(part)** | In-run gold sinks: paid **reroll** + **Repair Kit** at the card moment; post-card upgrade quick-buy retired. |
-| 6.93.0 | **R7** | Validated the (already-functional) level→SP→Stats system; **fixed** the Stats-menu auto-open to fire on every stage clear when leveled. |
+| 6.93.0 | **R7.1–3** | Validated the (already-functional) level→SP→Stats system; **fixed** the Stats-menu auto-open to fire on every stage clear when leveled. |
+| 6.94.0 | **R4.1/3** | **6th/7th card** (bonus pick) + **Revive Token** (1/run cheat-death) — **R4 complete**. |
+| 6.95.0 | **R7.4** | Boss bonus grants gold (not a passive); stat passives are **SP-only** — **R7 complete**. |
 
 **The full roguelite loop is playable end-to-end:** TITLE → ARMORY (unlocks /
 gear equip / Cores craft) → LOADOUT (pick 4+4+4) → run (5 relevance-filtered
-card drafts, paid reroll/repair sinks, level-ups open the Stats menu) → run end
-banks gold + commits loot to the stash.
+card drafts; paid reroll / Repair Kit / 6th-7th card / Revive Token sinks;
+level-ups open the Stats menu) → run end banks gold + commits loot to the stash.
+
+**Phase R status:** R1 ✓ · R2.1–3 ✓ (R2.4 partial) · R3 ✓ · R4 ✓ · R5 ✓ ·
+R6.1–2 ✓ (R6.3 deferred) · R7 ✓ · R8.1–6/8 ✓ (R8.7/9 blocked on Phase C).
 
 **Test totals:** 593 unit (was 505) + new QA suites 08-armory (21), 09-loadout
-(7), 10-cards (7), 11-leveling (5). Every commit kept the game launchable.
+(7), 10-cards (9), 11-leveling (5). Every commit kept the game launchable.
 
 ---
 
 ## ⚠️ Concerns to review
 
-1. **R2.4 is partial.** The post-card upgrade quick-buy (`shop-suggest`) is
-   retired, but the **mid-wave UPGRADES shop** (HUD 🛒 + pause-menu UPGRADES)
-   still sells gold upgrade-tree stacks — redundant with cards now. Full removal
-   was deferred because it would churn the 07-weapons shop-tree QA tests and is a
-   large change. **R7.4** (passives SP-only) is tied to this: the redundant gold
-   PASSIVE tab should go with it.
-2. **Deferred features (large/flow-intrusive), all documented in CHANGELOG:**
-   - **R6.3** — the ~14 new purchasable abilities (Blink, Bullet Time, Stasis
-     Field, Gravity Snare, Decoy Beacon, Second Wind, Elemental Infusion, Cryo
-     Field, Storm Cell/Pyre Aura, Catalyst, Designator). Each is a distinct
-     gameplay verb needing its own implementation + live consumer — the single
-     biggest remaining chunk.
-   - **R4.1** (6th/7th extra card) + **Revive Token** — cost curves are
-     implemented + tested in `world/run-shop.js`; not wired (extra-card needs
-     draw-tracking + a no-close-after-paid-pick overlay; revive needs death-path).
+1. **R2.4 is partial — the one remaining Phase R cleanup.** The post-card
+   upgrade quick-buy (`shop-suggest`) is retired, but the **mid-wave UPGRADES
+   shop** (HUD 🛒 + pause-menu UPGRADES) still sells gold upgrade-tree stacks —
+   redundant with cards now. **I deliberately did NOT remove it** because it's a
+   *product judgment* (a working, player-facing system) + would churn the
+   07-weapons shop-tree QA tests (which call `openShop()` and assert the tree
+   renders). Options for you: (a) full removal + skip/rewrite those 4 tests, or
+   (b) keep the shop as an optional extra run-gold sink. R7.4's passive removal is
+   already done independently (boss bonus → gold; passives SP-only).
+2. **Biggest deferred feature:** **R6.3** — the ~14 new purchasable abilities
+   (Blink, Bullet Time, Stasis Field, Gravity Snare, Decoy Beacon, Second Wind,
+   Elemental Infusion, Cryo Field, Storm Cell/Pyre Aura, Catalyst, Designator).
+   Each is a distinct gameplay verb needing its own implementation + live
+   consumer — a large, design-heavy build I left for your direction (verb choice,
+   balance, FX). The unlock-store + 4-slot model already support adding them.
 3. **Blocked on Phase C (unimplemented):** **R8.7** (resist targeting → needs
    C.I2 tier-gated resist counts), **R8.9** (trait reroll → needs C.I3 traits).
 4. **R-BAL (balance) not started** — the whole point of "no mastery" is that
@@ -58,7 +63,7 @@ banks gold + commits loot to the stash.
 5. **Tractor Shield physics left dormant** — cut from the roster but the
    collision/render beam code remains (guarded by an always-false
    `has('TRACTOR_SHIELD')`). Safe, but a cleanup sweep is owed.
-6. **`core/version.js` stale** (`6.45.1`) vs `/VERSION` (6.93.0) — the in-game
+6. **`core/version.js` stale** (`6.45.1`) vs `/VERSION` (6.95.0) — the in-game
    title build tag. Pre-existing; left untouched.
 7. **QA flakiness under machine load** — earlier in the sprint the machine hit
    load avg ~60 and QA timed out spuriously; the unit suite is the reliable gate.
@@ -72,15 +77,20 @@ banks gold + commits loot to the stash.
 
 ## 🔭 Recommended next steps (need your prioritization)
 
+Phase R's bounded, low-risk scope is **done**. What remains all needs a product
+call or is blocked:
+
 - **Highest value, biggest effort:** R6.3 (new abilities batch) — gives the
-  ability lane real depth. Each ability is its own mini-feature.
-- **Cleanup that completes the economy:** R2.4-full (remove the mid-wave gold
-  UPGRADES shop) + R7.4 (drop the gold PASSIVE tab) + re-author the 07-weapons
-  shop tests + the 4 skipped e2e economy tests.
-- **Quick wins:** wire R4.1 (extra card) + Revive Token (costs already done).
+  ability lane real depth. Each is its own mini-feature (verb + FX + balance).
+- **Economy cleanup (product call):** R2.4-full — remove the mid-wave gold
+  UPGRADES shop, OR keep it as an optional run-gold sink. Removal means
+  skip/rewrite ~4 07-weapons shop tests + the 4 skipped e2e economy tests.
 - **Validation:** an R-BAL balance pass + AI-survival run on a meta-progressed
-  account once the above land.
+  account — needs playtesting, not just code.
 - **Blocked:** R8.7/R8.9 await Phase C (C.I2 resist counts, C.I3 traits).
+- **Separate tracks (per Plans.md, under the "may be replaced" note):** Phase A
+  remaining enemies + enabling systems, Phase B skills UI, Phase C item traits,
+  Phase D 10 bosses — each a large body of work.
 
 ---
 
