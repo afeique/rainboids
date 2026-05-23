@@ -42,22 +42,30 @@ test.describe('QA-02: Game start and state transitions', () => {
         });
         await page.mouse.click(pos.x, pos.y);
 
+        // Phase R2/W0 — NEW GAME opens the pre-run BUILD screen (the bubble
+        // tree in BUILD mode), not the run directly. START RUN there begins
+        // the run.
         await page.waitForFunction(
-            () => window.gameEngine?.game?.state === 'PLAYING',
+            () => window.gameEngine?.game?.state === 'ARMORY',
             { timeout: 10_000 }
         );
-        const state = await getGameState(page);
-        expect(state).toBe('PLAYING');
+        const r = await page.evaluate(() => ({
+            state: window.gameEngine.game.state,
+            display: (document.getElementById('shop-overlay') || {}).style?.display,
+        }));
+        expect(r.state).toBe('ARMORY');
+        expect(r.display).toBe('flex');
     });
 
-    test('game starts when a key is pressed (event-driven path)', async ({ page }) => {
+    test('a title keypress opens the pre-run BUILD screen (event-driven path)', async ({ page }) => {
         await page.keyboard.press('Space');
+        // A title keypress launches NEW GAME → the BUILD screen (Phase R2/W0).
         await page.waitForFunction(
-            () => window.gameEngine?.game?.state === 'PLAYING',
+            () => window.gameEngine?.game?.state === 'ARMORY',
             { timeout: 10_000 }
         );
         const state = await getGameState(page);
-        expect(state).toBe('PLAYING');
+        expect(state).toBe('ARMORY');
     });
 
     test('background stars are active after game starts', async ({ page }) => {

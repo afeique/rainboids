@@ -28,7 +28,7 @@ import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
-import { getUnlockedSet, bankRunGold, resolveAccountGold } from './shop/armory.js';
+import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout } from './shop/armory.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
@@ -3963,10 +3963,6 @@ export class GameEngine {
     // ARMORY → run); the screen's START RUN button calls startNewRun().
     // Loads the persistent account-gold so the wallet shows before a run.
     openArmory() {
-        if (!this._armoryOverlay) {
-            this._armoryOverlay = new ArmoryOverlay();
-            this._armoryOverlay.setGameEngine(this);
-        }
         // Seed game.accountGold + cores from meta so the screen + the
         // upcoming run agree (init()→applyPersistentProfile re-reads them).
         try {
@@ -3975,10 +3971,77 @@ export class GameEngine {
             this.game.cores = (meta && typeof meta.cores === 'number') ? Math.max(0, meta.cores | 0) : 0;
         } catch {}
         this.game.state = GAME_STATES.ARMORY;
-        this._armoryOverlay.open();
+
+        // 2026-05-23 — The start-of-run screen now uses the bubble UPGRADE
+        // TREE (the same #shop-overlay tree) in pre-run BUILD mode, where
+        // the player selects weapons + abilities (and browses their
+        // attunements). The legacy flat-list ArmoryOverlay is preserved
+        // below (commented) in case we want to revert or repurpose it.
+        //
+        //   if (!this._armoryOverlay) {
+        //       this._armoryOverlay = new ArmoryOverlay();
+        //       this._armoryOverlay.setGameEngine(this);
+        //   }
+        //   this._armoryOverlay.open();
+        //
+        // We still instantiate ArmoryOverlay (without opening it) as the
+        // gear-logic host for the GEAR tab + tests.
+        if (!this._armoryOverlay) {
+            this._armoryOverlay = new ArmoryOverlay();
+            this._armoryOverlay.setGameEngine(this);
+        }
+        const meta = loadMeta() || {};
+        shopDom.setPreRunSelection(normalizeLoadout(meta.loadout || {}, meta));
+        this._preRunTreeOpen = true;
+        shopDom.showShopDom(true);
     }
 
-    isArmoryOpen() { return !!(this._armoryOverlay && this._armoryOverlay.isOpen()); }
+    // True while the pre-run BUILD tree (or the legacy flat list) is up.
+    isArmoryOpen() {
+        return !!this._preRunTreeOpen || !!(this._armoryOverlay && this._armoryOverlay.isOpen());
+    }
+
+    // START RUN from the BUILD tree — mirrors LoadoutOverlay.begin(): persist
+    // the chosen loadout, finalize the title exit, and start the run.
+    beginPreRunFromTree(sel) {
+        const meta = loadMeta() || {};
+        const loadout = normalizeLoadout(sel || {}, meta);
+        try { saveMeta({ loadout }); } catch {}
+        this._preRunTreeOpen = false;
+        shopDom.hideShopDom();
+        if (typeof this._finalizeTitleExit === 'function') {
+            try { this._finalizeTitleExit(); } catch {}
+        }
+        if (typeof this.startNewRun === 'function') this.startNewRun(loadout);
+    }
+
+    // BACK / close from the BUILD tree — return to the title screen.
+    cancelPreRunToTitle() {
+        this._preRunTreeOpen = false;
+        shopDom.hideShopDom();
+        this.game.state = GAME_STATES.TITLE_SCREEN;
+    }
+
+    // Render the gear (equipment + stash) panels into the BUILD tree's GEAR
+    // tab. Reuses ArmoryOverlay purely as the gear-logic host (equip/salvage/
+    // reroll/tier-up) — it is no longer opened as a full-screen overlay.
+    renderPreRunGear(container) {
+        if (!this._armoryOverlay) {
+            this._armoryOverlay = new ArmoryOverlay();
+            this._armoryOverlay.setGameEngine(this);
+        }
+        this._armoryOverlay.renderGearInto(container);
+    }
+
+    // Buy a weapon/ability unlock with account-gold from the BUILD tree
+    // (clicking a LOCKED parent bubble). Returns true on success.
+    unlockPreRunItem(category, id) {
+        if (!this._armoryOverlay) {
+            this._armoryOverlay = new ArmoryOverlay();
+            this._armoryOverlay.setGameEngine(this);
+        }
+        return !!this._armoryOverlay.buy(category, id);
+    }
 
     // Phase R5 — pre-run LOADOUT screen (ARMORY → LOADOUT → run). Pick the
     // chosen ≤4 per category; its BEGIN button calls startNewRun(loadout).

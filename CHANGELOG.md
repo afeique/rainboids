@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.103.0] - 2026-05-23
+
+### Changed — Pre-run BUILD screen: the bubble tree replaces the flat list
+
+The start-of-run screen is now the Diablo-style **bubble upgrade tree** in a
+new **BUILD mode**, replacing the flat-list ARMORY. The player reviews and
+assembles their whole kit in one tabbed window before a run.
+
+- **Tabbed BUILD window** — GEAR · PRIMARY · POWER · DEFENSE · PASSIVE. Weapons
+  and abilities are bubble nodes; clicking a parent node EQUIPs/unequips it
+  (≤4 per category, ✓ badge, locked nodes dimmed). Clicking a LOCKED node buys
+  the unlock with account-gold (then auto-equips it).
+- **GEAR tab** — review and manage gear (equip/unequip, salvage, reroll,
+  tier-up) in-place, factored out of the old ARMORY overlay into a reusable
+  `renderGearInto()`.
+- **Account-gold** shown in the header; a BUILD footer (BACK · `PRIMARY n/4 ·
+  POWER n/4 · ABILITY n/4` status · START RUN). START RUN begins the run with
+  the chosen loadout; BACK returns to the title.
+- The flat-list `ArmoryOverlay` open path is commented out (kept for revert);
+  the class is retained as the gear/unlock-logic host. The separate flat
+  LOADOUT screen is bypassed (the tree now does selection).
+- The in-run shop and card draft are unchanged; the GEAR tab is BUILD-only
+  (hidden in the in-run shop).
+
+### Changed — QA
+- Rewrote `08-armory`, `09-loadout`, `12-abilities` and updated `02-start`,
+  `07-weapons` to drive the new BUILD-tree flow (`openArmory` → tree,
+  `beginPreRunFromTree`, `cancelPreRunToTitle`, `unlockPreRunItem`,
+  five tree clusters with GEAR hidden in-run).
+
 ## [6.102.0] - 2026-05-23
 
 ### Changed — Mitosis Rounds (SPLITTER) overhaul: a real cascade weapon

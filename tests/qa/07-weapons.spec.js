@@ -70,13 +70,21 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     // displayed at once. The legacy `.shop-tab` strip is retained as a
     // hidden DOM stub for back-compat, but the visible navigation lives
     // in `#shop-tree`. Assert on the new cluster structure.
-    test('shop renders four ability-tree clusters', async ({ page }) => {
+    test('shop renders five clusters (GEAR is pre-run BUILD-only)', async ({ page }) => {
+        // The tree carries five clusters — gear/primary/power/defense/passive.
+        // GEAR is only used in the pre-run BUILD screen; in the in-run shop its
+        // tab is hidden (so the shop functionally shows four).
         await page.evaluate(() => window.gameEngine.openShop());
         await page.waitForTimeout(100);
-        const clusters = await page.evaluate(() =>
-            document.querySelectorAll('#shop-tree .shop-tree-cluster').length
-        );
-        expect(clusters).toBe(4);
+        const r = await page.evaluate(() => ({
+            clusters: document.querySelectorAll('#shop-tree .shop-tree-cluster').length,
+            gearTabHidden: (() => {
+                const t = document.querySelector('.shop-tree-tab[data-tab="gear"]');
+                return t ? t.style.display === 'none' : true;
+            })(),
+        }));
+        expect(r.clusters).toBe(5);
+        expect(r.gearTabHidden).toBe(true);
     });
 
     test('shop tree contains primary, power, defense, and passive nodes', async ({ page }) => {

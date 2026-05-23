@@ -92,6 +92,7 @@ export class ArmoryOverlay {
 
     open() {
         this._build();
+        this._gearContainer = null; // legacy full-overlay mode (not gear-tab)
         this._isOpen = true;
         this.elements.overlay.style.display = 'flex';
         this.render();
@@ -240,7 +241,30 @@ export class ArmoryOverlay {
         return gained;
     }
 
+    // 2026-05-23 — Render ONLY the gear panels (equipment + stash) into an
+    // arbitrary container, for the pre-run BUILD tree's GEAR tab. Binds
+    // `_gearContainer` so the gear mutation methods' `this.render()` refresh
+    // in place here instead of the (unbuilt) flat overlay body.
+    renderGearInto(container) {
+        if (!container) return;
+        this._gearContainer = container;
+        this.render();
+    }
+
     render() {
+        // GEAR-tab mode: render only the gear panels into the bound container.
+        if (this._gearContainer) {
+            const c = this._gearContainer;
+            const meta = loadMeta() || {};
+            c.replaceChildren();
+            const head = document.createElement('div');
+            head.className = 'armory-section-title';
+            head.textContent = `CORES: ${this._cores()} ✦`;
+            c.appendChild(head);
+            this._renderEquipment(c, meta);
+            this._renderStash(c, meta);
+            return;
+        }
         const { gold, cores, body } = this.elements;
         if (!body) return;
         const accountGold = this._accountGold();

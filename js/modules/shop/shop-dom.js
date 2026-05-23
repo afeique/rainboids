@@ -31,6 +31,10 @@ import {
     getAbilityUpgrades,
     getPassiveUpgrades,
 } from '../combat/weapon-data.js';
+// 2026-05-23 — pre-run BUILD mode reuses the loadout-selection helpers so the
+// tree can act as the start-of-run weapon/ability picker (see _preRun below).
+import { toggleSelection, getUnlockedSet, unlockCost, LOADOUT_SLOTS } from './armory.js';
+import { loadMeta } from '../core/storage.js';
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -63,6 +67,25 @@ let _activeTab = 'primary';
 // doesn't purchase two stacks for one intent.
 let _lastBuyAt = 0;
 
+// 2026-05-23 — Pre-run BUILD mode: the same bubble tree doubles as the
+// start-of-run weapon/ability SELECTION screen (game-engine.openArmory).
+// In this mode parent nodes are equip toggles, the in-run buy path is
+// bypassed, and the BUILD footer (BACK / status / START RUN) is shown.
+// _preRunSel mirrors the LOADOUT contract ({primaries,powers,abilities})
+// consumed by startNewRun; _unlockedSets caches per-category unlocks.
+let _preRun = false;
+let _preRunSel = { primaries: [], powers: [], abilities: [] };
+let _unlockedSets = null;
+
+/** Seed the pre-run loadout selection (called by game-engine before show). */
+export function setPreRunSelection(sel) {
+    _preRunSel = {
+        primaries: (sel && Array.isArray(sel.primaries)) ? sel.primaries.slice() : [],
+        powers:    (sel && Array.isArray(sel.powers))    ? sel.powers.slice()    : [],
+        abilities: (sel && Array.isArray(sel.abilities)) ? sel.abilities.slice() : [],
+    };
+}
+
 function $(id) { return document.getElementById(id); }
 
 // ── Lifecycle ──────────────────────────────────────────────────────
@@ -79,14 +102,40 @@ export function initShopDom(gameEngine) {
         clusterPower:   $('shop-tree-power'),
         clusterDefense: $('shop-tree-defense'),
         clusterPassive: $('shop-tree-passives'),
+        clusterGear:    $('shop-tree-gear'),
         tooltip:        $('shop-tree-tooltip'),
         closeBtn:       $('shop-close-button'),
     };
 
-    // Close button.
+    // Close button. In pre-run BUILD mode this returns to the title;
+    // in-run it routes back through the normal shop-close flow.
     if (_elements.closeBtn) {
         _elements.closeBtn.addEventListener('click', () => {
+            if (_preRun) {
+                if (_engine && typeof _engine.cancelPreRunToTitle === 'function') _engine.cancelPreRunToTitle();
+                return;
+            }
             _engine.closeShopAndReturn();
+        });
+    }
+
+    // Pre-run BUILD footer — START RUN begins the run with the selected
+    // loadout; BACK returns to the title. Buttons exist only after
+    // static-dom built the overlay (they're hidden in the in-run shop).
+    const startBtn = $('shop-prerun-start');
+    if (startBtn) {
+        startBtn.addEventListener('click', () => {
+            if (_engine && typeof _engine.beginPreRunFromTree === 'function') {
+                _engine.beginPreRunFromTree(_preRunSel);
+            }
+        });
+    }
+    const backBtn = $('shop-prerun-back');
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            if (_engine && typeof _engine.cancelPreRunToTitle === 'function') {
+                _engine.cancelPreRunToTitle();
+            }
         });
     }
 
@@ -118,6 +167,31 @@ export function initShopDom(gameEngine) {
             if (!node) return;
             const id = node.dataset.id;
             if (!id) return;
+
+            // Pre-run BUILD mode: parent nodes are EQUIP toggles; upgrade
+            // (attunement) nodes are browse-only for now — purchasing
+            // attunements with account-gold is a later step. No in-run
+            // buying happens here.
+            if (_preRun) {
+                if (node.classList.contains('shop-node--parent')) {
+                    const cat = node.dataset.category;
+                    if (cat && _preRunSel[cat]) {
+                        if (node.dataset.prerunSelectable === '1') {
+                            // Unlocked → toggle equip (≤4 per category).
+                            _preRunSel[cat] = toggleSelection(_preRunSel[cat], id, LOADOUT_SLOTS);
+                        } else if (_engine && typeof _engine.unlockPreRunItem === 'function') {
+                            // Locked → buy the unlock with account-gold, then
+                            // auto-equip it if there's a free loadout slot.
+                            if (_engine.unlockPreRunItem(cat, id)) {
+                                _preRunSel[cat] = toggleSelection(_preRunSel[cat], id, LOADOUT_SLOTS);
+                            }
+                        }
+                        renderShopDom();
+                    }
+                }
+                return;
+            }
+
             // Parent nodes (weapon/ability themselves) are not buyable;
             // only upgrade nodes carry a non-empty `data-buyable`.
             if (node.dataset.buyable !== '1') return;
@@ -141,6 +215,7 @@ export function initShopDom(gameEngine) {
         // the same ramped costOverrides), so selling a trait to buy another
         // nets zero gold — free respec.
         _elements.tree.addEventListener('contextmenu', (e) => {
+            if (_preRun) return; // no selling on the pre-run BUILD screen
             const node = e.target.closest('.shop-node');
             if (!node || node.dataset.sellable !== '1') return;
             e.preventDefault();
@@ -177,23 +252,59 @@ export function initShopDom(gameEngine) {
     }
 }
 
-export function showShopDom() {
+export function showShopDom(preRun = false) {
     if (!_elements) return;
+    _preRun = !!preRun;
     if (_elements.overlay) _elements.overlay.style.display = 'flex';
+    _applyPreRunChrome();
     renderShopDom();
 }
 
 export function hideShopDom() {
     if (!_elements) return;
     if (_elements.overlay) _elements.overlay.style.display = 'none';
+    _preRun = false;
+    _applyPreRunChrome();
     _hideTooltip();
 }
 
 export function updateShopCurrencyDom() {
     if (!_elements || !_engine) return;
     if (_elements.coinsAmt) {
-        _elements.coinsAmt.textContent = `${Math.floor(_engine.game.money)}`;
+        // Pre-run BUILD shows the persistent account-gold wallet; the in-run
+        // shop shows run-gold (game.money).
+        const amt = _preRun
+            ? ((_engine.game && _engine.game.accountGold) || 0)
+            : (_engine.game ? _engine.game.money : 0);
+        _elements.coinsAmt.textContent = `${Math.floor(amt)}`;
     }
+}
+
+// Toggle BUILD-mode chrome: show/hide the pre-run footer, swap the title,
+// and hide the in-run close 'x' (BACK button replaces it in BUILD mode).
+function _applyPreRunChrome() {
+    const footer = $('shop-prerun-footer');
+    if (footer) footer.style.display = _preRun ? 'flex' : 'none';
+    if (_elements.closeBtn) _elements.closeBtn.style.display = _preRun ? 'none' : '';
+    const title = _elements.menu ? _elements.menu.querySelector('.shop-tree-title') : null;
+    if (title) title.textContent = _preRun ? 'BUILD YOUR LOADOUT' : 'UPGRADES';
+    // The GEAR tab is BUILD-only — hide it for the in-run shop, and bounce
+    // the active tab off GEAR if we're leaving BUILD mode.
+    const gearTabBtn = _elements.tabs
+        ? _elements.tabs.querySelector('.shop-tree-tab[data-tab="gear"]') : null;
+    if (gearTabBtn) gearTabBtn.style.display = _preRun ? '' : 'none';
+    if (!_preRun && _activeTab === 'gear') { _activeTab = 'primary'; _syncActiveTab(); }
+    if (_preRun) _updatePreRunStatus();
+}
+
+// Refresh the "PRIMARY n/4 · POWER n/4 · ABILITY n/4" status line.
+function _updatePreRunStatus() {
+    const status = $('shop-prerun-status');
+    if (!status) return;
+    const p = (_preRunSel.primaries || []).length;
+    const w = (_preRunSel.powers || []).length;
+    const a = (_preRunSel.abilities || []).length;
+    status.textContent = `PRIMARY ${p}/${LOADOUT_SLOTS}   ·   POWER ${w}/${LOADOUT_SLOTS}   ·   ABILITY ${a}/${LOADOUT_SLOTS}`;
 }
 
 // 6.27.0 — Reflect `_activeTab` into the DOM: set the tree's
@@ -215,16 +326,41 @@ export function renderShopDom() {
     updateShopCurrencyDom();
     _syncActiveTab();
 
-    const player = _engine.player;
-    if (!player) return;
+    // Pre-run BUILD can run before a Player exists (TITLE → BUILD). Fall
+    // back to a stub so upgrade nodes render at 0 stacks rather than crash.
+    const player = _engine.player || { getPowerupStacks: () => 0 };
+
+    // Pre-run: cache the per-category unlocked sets so parent nodes can show
+    // locked vs selectable. In-run this stays null (no selection chrome).
+    if (_preRun) {
+        const meta = loadMeta() || {};
+        _unlockedSets = {
+            primaries: getUnlockedSet('primaries', meta),
+            powers:    getUnlockedSet('powers', meta),
+            abilities: getUnlockedSet('abilities', meta),
+        };
+    } else {
+        _unlockedSets = null;
+    }
 
     // 6.30.0 — Weapon/ability clusters are buyable; the PASSIVE cluster is
     // READ-ONLY (passives come from wave-clear cards, not the shop) — it
     // just visualizes what the player has collected.
-    _renderWeaponCluster(_elements.clusterPrimary, _collectPrimaryGroups(), player);
-    _renderWeaponCluster(_elements.clusterPower,   _collectPowerGroups(),   player);
-    _renderWeaponCluster(_elements.clusterDefense, _collectDefenseGroups(), player);
+    _renderWeaponCluster(_elements.clusterPrimary, _collectPrimaryGroups(), player, 'primaries');
+    _renderWeaponCluster(_elements.clusterPower,   _collectPowerGroups(),   player, 'powers');
+    _renderWeaponCluster(_elements.clusterDefense, _collectDefenseGroups(), player, 'abilities');
     _renderPassiveCluster(_elements.clusterPassive, player);
+
+    // GEAR tab (BUILD-only): the engine renders the equipment + stash panels.
+    if (_elements.clusterGear) {
+        if (_preRun && _engine && typeof _engine.renderPreRunGear === 'function') {
+            _engine.renderPreRunGear(_elements.clusterGear);
+        } else {
+            _elements.clusterGear.replaceChildren();
+        }
+    }
+
+    if (_preRun) _updatePreRunStatus();
 }
 
 // ── Cluster builders ───────────────────────────────────────────────
@@ -306,7 +442,7 @@ function _collectDefenseGroups() {
 
 // Weapon-style cluster: parent + orbiting upgrades. One subgroup per
 // weapon, separated by a thin divider.
-function _renderWeaponCluster(container, groups, player) {
+function _renderWeaponCluster(container, groups, player, category) {
     if (!container) return;
     container.replaceChildren();
 
@@ -319,8 +455,8 @@ function _renderWeaponCluster(container, groups, player) {
         const ring = document.createElement('div');
         ring.className = 'shop-tree-ring';
 
-        // Parent node (centered, not buyable).
-        ring.appendChild(_buildParentNode(group.parent));
+        // Parent node (centered). In-run: not buyable. Pre-run: equip toggle.
+        ring.appendChild(_buildParentNode(group.parent, category));
 
         // Orbit upgrade nodes around the parent.
         const N = group.upgrades.length;
@@ -401,7 +537,7 @@ function _buildPassiveDisplayNode(upg, player) {
 
 // ── Node builders ──────────────────────────────────────────────────
 
-function _buildParentNode(parent) {
+function _buildParentNode(parent, category) {
     const node = document.createElement('div');
     node.className = 'shop-node shop-node--parent';
     node.dataset.id = parent.id;
@@ -411,10 +547,38 @@ function _buildParentNode(parent) {
     node.dataset.tooltipName = parent.name;
     node.dataset.tooltipDesc = parent.description || '';
 
+    // Pre-run BUILD: the parent node is the EQUIP toggle. Reuse the existing
+    // node state classes for visuals — owned (blue) = equipped, affordable
+    // (gold) = available to equip, unaffordable (grey) = locked (unlock it
+    // in the Armory / future attunement store).
+    let equipped = false;
+    if (_preRun && category) {
+        const unlocked = _unlockedSets && _unlockedSets[category];
+        const isUnlocked = unlocked ? unlocked.has(parent.id) : true;
+        equipped = (_preRunSel[category] || []).includes(parent.id);
+        node.dataset.category = category;
+        node.dataset.prerunSelectable = isUnlocked ? '1' : '0';
+        const state = equipped ? 'owned' : (isUnlocked ? 'affordable' : 'unaffordable');
+        node.dataset.state = state;
+        node.classList.add(`shop-node--${state}`);
+        if (!isUnlocked) node.classList.add('shop-node--locked');
+        node.dataset.tooltipState = equipped
+            ? 'EQUIPPED'
+            : (isUnlocked ? 'Click to equip' : `LOCKED · ${unlockCost(category)} ⬢`);
+    }
+
     const icon = document.createElement('div');
     icon.className = 'shop-node-icon';
     icon.innerHTML = renderIconHTML(parent.icon, { size: 30, fallback: '?' });
     node.appendChild(icon);
+
+    // Pre-run: a ✓ badge marks equipped weapons/abilities.
+    if (equipped) {
+        const badge = document.createElement('span');
+        badge.className = 'shop-node-badge';
+        badge.textContent = '✓';
+        node.appendChild(badge);
+    }
 
     // 6.28.0 — Weapon name removed (many didn't fit under the node).
     // Name + description show in the hover tooltip (dataset above).

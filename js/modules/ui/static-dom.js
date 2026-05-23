@@ -775,6 +775,8 @@ function _buildShopOverlay() {
     // display so the player can see which passives they've collected.
     const tabs = el('div', { id: 'shop-tree-tabs', className: 'shop-tree-tabs' });
     const tabDefs = [
+        // GEAR is shown only in pre-run BUILD mode (shop-dom toggles it).
+        { tab: 'gear',    label: 'GEAR' },
         { tab: 'primary', label: 'PRIMARY' },
         { tab: 'power',   label: 'POWER' },
         { tab: 'defense', label: 'DEFENSE' },
@@ -796,6 +798,7 @@ function _buildShopOverlay() {
     const tree = el('div', { id: 'shop-tree', className: 'shop-tree' });
     tree.dataset.activeTab = 'primary';
     const clusters = [
+        { id: 'shop-tree-gear',     tab: 'gear' },
         { id: 'shop-tree-primary',  tab: 'primary' },
         { id: 'shop-tree-power',    tab: 'power' },
         { id: 'shop-tree-defense',  tab: 'defense' },
@@ -809,6 +812,24 @@ function _buildShopOverlay() {
         tree.appendChild(cluster);
     }
     menu.appendChild(tree);
+
+    // ── Pre-run BUILD footer (start-of-run mode only) ─────────────
+    // 2026-05-23 — When the tree is opened as the start-of-run BUILD
+    // screen (game-engine.openArmory → shopDom.showShopDom(true)), this
+    // footer surfaces BACK / loadout status / START RUN. It stays hidden
+    // for the in-run shop. shop-dom toggles its visibility + wires the
+    // buttons in initShopDom / _applyPreRunChrome.
+    const preFooter = el('div', { id: 'shop-prerun-footer', className: 'shop-prerun-footer' });
+    Object.assign(preFooter.style, {
+        display: 'none', alignItems: 'center', justifyContent: 'space-between',
+        gap: '16px', padding: '10px 24px', width: '100%', boxSizing: 'border-box',
+    });
+    preFooter.append(
+        el('button', { id: 'shop-prerun-back', className: 'armory-btn armory-btn--back', text: '← BACK' }),
+        el('div', { id: 'shop-prerun-status', className: 'shop-prerun-status', text: '' }),
+        el('button', { id: 'shop-prerun-start', className: 'armory-btn armory-btn--start', text: 'START RUN →' }),
+    );
+    menu.appendChild(preFooter);
 
     // ── Floating tooltip ─────────────────────────────────────────
     // Hidden until a node is hovered; shop-dom positions it next to

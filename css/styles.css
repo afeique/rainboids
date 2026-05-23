@@ -3962,6 +3962,7 @@ body.mobile-portrait .shop-help-icon {
 .shop-tree[data-active-tab="primary"] .shop-tree-cluster[data-tab="primary"],
 .shop-tree[data-active-tab="power"]   .shop-tree-cluster[data-tab="power"],
 .shop-tree[data-active-tab="defense"] .shop-tree-cluster[data-tab="defense"],
+.shop-tree[data-active-tab="gear"]    .shop-tree-cluster[data-tab="gear"],
 .shop-tree[data-active-tab="passive"] .shop-tree-cluster[data-tab="passive"] {
     display: flex;
     flex-direction: column;
@@ -3981,6 +3982,26 @@ body.mobile-portrait .shop-help-icon {
     padding: 28px 16px;
     overflow-y: auto;
 }
+
+/* GEAR tab (pre-run BUILD only) — a single-column gear panel, not a ring grid. */
+#shop-tree-gear {
+    display: block;
+    grid-template-columns: none;
+    max-width: 820px;
+    margin: 0 auto;
+    text-align: left;
+}
+/* BUILD footer status line + equipped/locked node affordances. */
+.shop-prerun-status {
+    color: #bfe9ff;
+    font-size: 0.85em;
+    letter-spacing: 0.04em;
+}
+.shop-node--parent.shop-node--owned .shop-node-badge {
+    background: #11bb88;
+    color: #002211;
+}
+.shop-node--locked { opacity: 0.45; filter: grayscale(0.6); }
 
 /* ── Weapon/ability subgroup (parent + orbiting upgrades) ──────────── */
 .shop-tree-subgroup {

@@ -45,17 +45,17 @@ test.describe('QA-12: R6.3 new abilities', () => {
         expect(marked === true || marked === 'no-enemy').toBe(true);
     });
 
-    test('new abilities are offered in the Armory unlock store', async ({ page }) => {
-        const offered = await page.evaluate(() => {
+    test('new abilities appear as nodes in the BUILD tree DEFENSE cluster', async ({ page }) => {
+        const ids = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.game.accountGold = 99999;
-            ge.openArmory();
-            ge._armoryOverlay.render();
-            return [...document.querySelectorAll('#armory-overlay .armory-row-name')].map((n) => n.textContent);
+            ge.openArmory(); // opens the bubble tree in BUILD mode
+            return [...document.querySelectorAll('#shop-tree-defense .shop-node--parent')]
+                .map((n) => n.dataset.id);
         });
-        expect(offered.some((n) => /Blink/i.test(n))).toBe(true);
-        expect(offered.some((n) => /Gravity Snare/i.test(n))).toBe(true);
-        expect(offered.some((n) => /Designator/i.test(n))).toBe(true);
+        expect(ids).toContain('BLINK');
+        expect(ids).toContain('GRAVITY_SNARE');
+        expect(ids).toContain('DESIGNATOR');
     });
 
     test('Second Wind cheats death once', async ({ page }) => {

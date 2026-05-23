@@ -247,3 +247,65 @@ task's Depends. **Versioning:** these are code changes — bump VERSION + CHANGE
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
 | R.BAL1 | Tune difficulty around permanent meta power (SP stats + gear + unlocks) since weapons are flat (no mastery); co-tune enemy/boss scaling with Plan A.E8*/Plan D | Early runs non-trivial, late runs winnable; AI survival run green on a meta-progressed account | R5, R6, R7, R8 | cc:TODO |
+
+---
+
+## Phase W — Weapon Attunements, Mechanic Mods & Efficacy Cards  *(2026-05-23 · ACTIVE)*
+
+Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 2026-05-23.md`.
+**Supersedes** the weapon-card parts of R2.4 / R3 / R4 (card composition becomes 1 primary + 1 power + 2 ability; per-weapon upgrades split into upfront **Attunements** + **Mechanic Mods** vs in-run **Efficacy Cards**).
+
+**Vocabulary (locked):** **Attunements** = per-weapon element upgrades (stackable; *damage divides evenly per active element* — focus vs coverage). **Mechanic Mods** = element-agnostic behavior upgrades (pierce/explode/home/stun/knock + weapon capstones). **Efficacy Cards** = in-run draftable amplifiers (no elements, no new mechanics). **Cores** = untouched gear-salvage currency. Base weapons are element-agnostic (KINETIC); everything build-defining is chosen UPFRONT; all unlocks permanent (account-gold, dialed up).
+
+### W0 — Unified pre-run BUILD screen (tabbed bubble UI)
+- [x] Route `openArmory()` → bubble tree in pre-run BUILD mode (flat `ArmoryOverlay` open commented out, code kept)
+- [x] Parent weapon/ability bubbles = EQUIP toggles (≤4/cat, ✓ badge, locked dimming); BUILD footer (BACK · status · START RUN); account-gold header
+- [x] **GEAR tab** in the tree: review + manage gear (equip/unequip, salvage, reroll, tier-up) by factoring `ArmoryOverlay` gear panels into `renderGearInto(container)`
+- [x] GEAR tab visible only in BUILD mode; hidden in the in-run shop
+- [x] Locked parent bubble click → unlock with account-gold (`unlockPreRunItem`) + auto-equip (closes the unlock-access gap; partial W5)
+- [x] CSS polish: selected/locked node states, GEAR layout, footer, tabs
+- [x] Update QA `08-armory`, `09-loadout`, `12-abilities` (+ `02-start`, `07-weapons`) to the new BUILD-tree flow — full unit (625) + QA suites green
+- [x] VERSION (6.103.0) + CHANGELOG + README (pre-run flow now `NEW GAME → BUILD tree → run`) · commit
+
+**W0 DONE (6.103.0).** Pre-run is a tabbed bubble BUILD screen (gear + weapon/ability selection + unlock). Next: W1 (Attunement data model).
+
+### W1 — Attunement data model
+- [ ] `ATTUNEMENTS` table (`{id,name,element,weapon,description,behavior,cost}`) + per-weapon lists (design §5/§7)
+- [ ] Multi-element bullet stamping: `bullet.elements[]` (KINETIC when empty)
+- [ ] Damage-split: `dmg/N` per active element through `elementalMultiplier`, applying each signature status
+- [ ] Override priority (`weapons.js`): ELEMENTAL_INFUSION / Overdrive > equipped attunements > KINETIC
+- [ ] Unit tests: split math, stamping, override priority · commit
+
+### W2 — Attunement behaviors (per element batch)
+- [ ] PYRO (burn trails/pools, oil ignition) + tests · commit
+- [ ] CRYO (chill→freeze, shatter setups) + tests · commit
+- [ ] VOLT (conduct, chain/fork) + tests · commit
+- [ ] TOXIC (corrode/bleed, gas clouds) + tests · commit
+- [ ] VOID (mark, pull/gather) + tests · commit
+- [ ] RADIANT (purge/anti-armor) + tests · commit
+
+### W3 — Mechanic Mods (reclassify + per-weapon)
+- [ ] `MECHANIC_MODS` taxonomy: pierce/explode/home/stun/knock + capstones (Meiosis, Charged Caroms, Razor Edge, Implosion, Proximity Fuse, Daisy Chain, Seeker Missiles, Cluster Warhead, Double Pulse, Chain Reaction, Aftershock, Refraction, Overload, Event Horizon, Prism Seek, Orbital Barrage, Afterburn)
+- [ ] Per-weapon mod lists; remove these from the card pool (upfront only) + tests · commit
+
+### W4 — Efficacy Cards + recomposition
+- [ ] `EFFICACY_CARDS` pool: reclassify existing amplifiers + add new conditional/handling cards (design §6 A–F)
+- [ ] Per-weapon `cardPool` filter (curation matrix §5 — Lance Beam has no Rapid/Multishot/Homing, etc.)
+- [ ] `card-draft.js` → **1 primary + 1 power + 2 ability** with backfill; unit tests · commit
+
+### W5 — BUILD tree: attunement/mod nodes + LOADOUT toggles
+- [ ] Orbit nodes render attunements + mods (account-gold permanent unlock), buyable in BUILD
+- [ ] LOADOUT: per-equipped-weapon toggles for active owned attunements/mods + tests · commit
+
+### W6 — Ability behavior/element upgrades
+- [ ] Ability equivalent of attunements (upfront element-flavored behavior; e.g. EMP "Ion Burst" → CONDUCT) + tests · commit
+
+### W7 — Economy + balance + polish
+- [ ] Dial up unlock costs (weapons ~8–12k, attunements ~5–9k, mods ~4–7k account-gold)
+- [ ] KINETIC viability; resist/weakness telegraph (enemy tint/icon); per-attunement VFX + tooltips
+- [ ] Final README/CHANGELOG sweep · commit
+
+### Open questions (resolve as phases reach them)
+- OQ-A: per-weapon active-slot budget (cap on active attunements/mods)? — proposed soft cap
+- OQ-B: damage-split math — even `dmg/N` (chosen) vs gentler curve
+- Prism Spectrum Split = all-element opt-in attunement w/ the damage-split drawback (no separate exception)

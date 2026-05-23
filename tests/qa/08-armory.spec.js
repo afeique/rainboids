@@ -1,14 +1,16 @@
 /**
- * QA-08: Armory pre-run flow + gold economy (Phase R2)
+ * QA-08: pre-run BUILD flow + gold economy (Phase R2 / Phase W0)
  *
- * Verifies the NEW GAME → ARMORY → run flow, account-gold unlock
- * purchasing, run-gold starting at 0, and run-end banking.
+ * The pre-run screen is now the bubble UPGRADE TREE in BUILD mode (the flat
+ * ARMORY list is retired). Verifies NEW GAME → BUILD → run, account-gold
+ * unlock purchasing (logic still on ArmoryOverlay, the gear/unlock host),
+ * run-gold starting at 0, and run-end banking.
  */
 
 import { test, expect } from '@playwright/test';
 import { loadGame, startGame, getGameState } from '../helpers/game-helpers.js';
 
-test.describe('QA-08: Armory + gold economy', () => {
+test.describe('QA-08: BUILD screen + gold economy', () => {
     test.beforeEach(async ({ page }) => {
         page._jsErrors = [];
         page.on('pageerror', (err) => page._jsErrors.push(err.message));
@@ -17,26 +19,35 @@ test.describe('QA-08: Armory + gold economy', () => {
         await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
     });
 
-    test('openArmory enters ARMORY state and shows the overlay', async ({ page }) => {
+    test('openArmory enters BUILD mode and shows the tree overlay', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
-            const ov = document.getElementById('armory-overlay');
-            return { state: window.gameEngine.game.state, display: ov && ov.style.display };
+            const ov = document.getElementById('shop-overlay');
+            const footer = document.getElementById('shop-prerun-footer');
+            return {
+                state: window.gameEngine.game.state,
+                display: ov && ov.style.display,
+                footer: footer && footer.style.display,
+                open: window.gameEngine.isArmoryOpen(),
+            };
         });
         expect(r.state).toBe('ARMORY');
         expect(r.display).toBe('flex');
+        expect(r.footer).toBe('flex');
+        expect(r.open).toBe(true);
     });
 
-    test('BACK from the armory returns to the title screen', async ({ page }) => {
+    test('BACK from the BUILD tree returns to the title screen', async ({ page }) => {
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            ge._armoryOverlay.back();
-            const ov = document.getElementById('armory-overlay');
-            return { state: ge.game.state, display: ov && ov.style.display };
+            ge.cancelPreRunToTitle();
+            const ov = document.getElementById('shop-overlay');
+            return { state: ge.game.state, display: ov && ov.style.display, open: ge.isArmoryOpen() };
         });
         expect(r.state).toBe('TITLE_SCREEN');
         expect(r.display).toBe('none');
+        expect(r.open).toBe(false);
     });
 
     test('buying an unlock deducts account-gold and persists it', async ({ page }) => {
