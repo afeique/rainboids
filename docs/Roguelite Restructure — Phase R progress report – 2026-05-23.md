@@ -23,6 +23,7 @@ concerns to review, and the remaining (deferred/blocked) work.
 | 6.93.0 | **R7.1–3** | Validated the (already-functional) level→SP→Stats system; **fixed** the Stats-menu auto-open to fire on every stage clear when leveled. |
 | 6.94.0 | **R4.1/3** | **6th/7th card** (bonus pick) + **Revive Token** (1/run cheat-death) — **R4 complete**. |
 | 6.95.0 | **R7.4** | Boss bonus grants gold (not a passive); stat passives are **SP-only** — **R7 complete**. |
+| 6.96–6.99.0 | **R6.3** | **9 new abilities** added (4 batches): Blink, Gravity Snare, Designator, Second Wind, Elemental Infusion, Cryo Field, Stasis Field, Storm Cell, Pyre Aura — all purchasable + equippable. |
 
 **The full roguelite loop is playable end-to-end:** TITLE → ARMORY (unlocks /
 gear equip / Cores craft) → LOADOUT (pick 4+4+4) → run (5 relevance-filtered
@@ -30,7 +31,8 @@ card drafts; paid reroll / Repair Kit / 6th-7th card / Revive Token sinks;
 level-ups open the Stats menu) → run end banks gold + commits loot to the stash.
 
 **Phase R status:** R1 ✓ · R2.1–3 ✓ (R2.4 partial) · R3 ✓ · R4 ✓ · R5 ✓ ·
-R6.1–2 ✓ (R6.3 deferred) · R7 ✓ · R8.1–6/8 ✓ (R8.7/9 blocked on Phase C).
+R6.1–2 ✓ + R6.3 **9/12 abilities** (3 cross-cutting deferred) · R7 ✓ ·
+R8.1–6/8 ✓ (R8.7/9 blocked on Phase C). **20 commits, 6.84.0 → 6.99.0.**
 
 **Test totals:** 593 unit (was 505) + new QA suites 08-armory (21), 09-loadout
 (7), 10-cards (9), 11-leveling (5). Every commit kept the game launchable.
@@ -48,12 +50,19 @@ R6.1–2 ✓ (R6.3 deferred) · R7 ✓ · R8.1–6/8 ✓ (R8.7/9 blocked on Phas
    renders). Options for you: (a) full removal + skip/rewrite those 4 tests, or
    (b) keep the shop as an optional extra run-gold sink. R7.4's passive removal is
    already done independently (boss bonus → gold; passives SP-only).
-2. **Biggest deferred feature:** **R6.3** — the ~14 new purchasable abilities
-   (Blink, Bullet Time, Stasis Field, Gravity Snare, Decoy Beacon, Second Wind,
-   Elemental Infusion, Cryo Field, Storm Cell/Pyre Aura, Catalyst, Designator).
-   Each is a distinct gameplay verb needing its own implementation + live
-   consumer — a large, design-heavy build I left for your direction (verb choice,
-   balance, FX). The unlock-store + 4-slot model already support adding them.
+2. **R6.3 — 9 of 12 abilities done; 3 cross-cutting ones remain (deferred).**
+   Shipped (all purchasable + equipped, validated): Blink, Gravity Snare,
+   Designator, Second Wind, Elemental Infusion, Cryo Field, Stasis Field, Storm
+   Cell, Pyre Aura. **Deliberately deferred (each modifies a CORE system → real
+   regression risk + needs playtesting, not safe to do unsupervised):**
+   - **Decoy Beacon** — needs enemy retargeting across `updateTargetPriority` /
+     `updateFaceDirection` / movement (a combat-AI change).
+   - **Bullet Time** — needs selective slow-mo *inside the fixed-timestep loop*
+     (slow enemies/bullets, normal player) — high risk to the timestep.
+   - **Catalyst** — needs parameterizing the A.E4 reaction chains (SHATTER /
+     CASCADE spread depth) with a player multiplier.
+   The unlock-store + 4-slot model already support adding them; the abilities.js
+   activate + (for auras) the field-tick are the patterns to follow.
 3. **Blocked on Phase C (unimplemented):** **R8.7** (resist targeting → needs
    C.I2 tier-gated resist counts), **R8.9** (trait reroll → needs C.I3 traits).
 4. **R-BAL (balance) not started** — the whole point of "no mastery" is that
@@ -80,8 +89,9 @@ R6.1–2 ✓ (R6.3 deferred) · R7 ✓ · R8.1–6/8 ✓ (R8.7/9 blocked on Phas
 Phase R's bounded, low-risk scope is **done**. What remains all needs a product
 call or is blocked:
 
-- **Highest value, biggest effort:** R6.3 (new abilities batch) — gives the
-  ability lane real depth. Each is its own mini-feature (verb + FX + balance).
+- **R6.3 finish (3 cross-cutting abilities):** Decoy Beacon, Bullet Time,
+  Catalyst — each needs a careful core-system change (AI retargeting / fixed-step
+  slow-mo / reaction-chain depth) + playtesting. Worth a focused, supervised pass.
 - **Economy cleanup (product call):** R2.4-full — remove the mid-wave gold
   UPGRADES shop, OR keep it as an optional run-gold sink. Removal means
   skip/rewrite ~4 07-weapons shop tests + the 4 skipped e2e economy tests.
