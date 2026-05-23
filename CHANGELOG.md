@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.101.5] - 2026-05-23
+
+### Fixed — Asteroid fragments hard-floored to 5 HP
+
+- **Split asteroid fragments were clamped to a minimum of 5 HP** by a
+  `Math.max(5, …)` on `fragHP` in both fragmentation paths
+  (`collision-system.js`). A large rock with 2-3 HP would break into pieces
+  that each had *more* HP than the parent, and no asteroid could ever drop
+  below 5 — directly contradicting the size-tier base roll (small→1,
+  large→2-3) and the comment's own "slightly weaker than parent (70-90%)"
+  intent. Changed both floors to `Math.max(1, …)` (matching
+  `asteroid.initializeAsteroid`'s `Math.max(1, health)`), so fragments are now
+  ~70-90% of the parent's HP and the whole field stays in the intended 1-3
+  band early-game while still scaling with wave/level.
+
 ## [6.101.4] - 2026-05-23
 
 ### Fixed — Stop logging a console error for the retired pause-shop button

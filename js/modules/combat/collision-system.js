@@ -283,7 +283,7 @@ export function handleCollisions() {
                             const newAst = this.asteroidPool.get(ast.x, ast.y, newR, ast.level);
                             if (newAst) {
                                 // Slightly weaker than parent, with some randomness (70-90%)
-                                const fragHP = Math.max(5, Math.round(ast.maxHealth * random(0.7, 0.9)));
+                                const fragHP = Math.max(1, Math.round(ast.maxHealth * random(0.7, 0.9)));
                                 newAst.maxHealth = fragHP;
                                 newAst.health = fragHP;
 
@@ -2149,7 +2149,7 @@ export function destroyAsteroid(ast) {
         for (let k = 0; k < count; k++) {
             const newAst = this.asteroidPool.get(ast.x, ast.y, newR, ast.level);
             if (newAst) {
-                const fragHP = Math.max(5, Math.round((ast.maxHealth || 1) * random(0.7, 0.9)));
+                const fragHP = Math.max(1, Math.round((ast.maxHealth || 1) * random(0.7, 0.9)));
                 newAst.maxHealth = fragHP;
                 newAst.health = fragHP;
                 const angle = baseAngle + k * sliceWidth + random(-sliceWidth * 0.25, sliceWidth * 0.25);
