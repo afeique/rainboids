@@ -269,12 +269,13 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 
 **W0 DONE (6.103.0).** Pre-run is a tabbed bubble BUILD screen (gear + weapon/ability selection + unlock). Next: W1 (Attunement data model).
 
-### W1 — Attunement data model
-- [ ] `ATTUNEMENTS` table (`{id,name,element,weapon,description,behavior,cost}`) + per-weapon lists (design §5/§7)
-- [ ] Multi-element bullet stamping: `bullet.elements[]` (KINETIC when empty)
-- [ ] Damage-split: `dmg/N` per active element through `elementalMultiplier`, applying each signature status
-- [ ] Override priority (`weapons.js`): ELEMENTAL_INFUSION / Overdrive > equipped attunements > KINETIC
-- [ ] Unit tests: split math, stamping, override priority · commit
+### W1 — Attunement data model  ✅ DONE (6.104.0)
+- [x] `ATTUNEMENTS` table (`{id,name,element,weapon,description,behavior,cost}`) + per-weapon lists (design §5/§7) — ~93 attunements; `getAttunementsForWeapon`, `attunementElements`
+- [x] Multi-element bullet stamping: `bullet.elements[]` (KINETIC when empty); `bullet.element` = `elements[0]`
+- [x] Damage-split: averaged resist multiplier (`multiElementMultiplier`) applied once in `applyDamageToEnemy`; each active element applies its signature status (scaled by share)
+- [x] Override priority (`weapons.js`): ELEMENTAL_INFUSION / Overdrive > equipped attunements > base element (KINETIC) — via `resolveBulletElements`
+- [x] Unit tests (18): split math, element priority, table integrity, damage split through `applyDamageToEnemy` — 643 unit green · commit
+- Note: behavior-preserving for current weapons (single base element). `player.activeAttunements` map init'd; populated from loadout in W5.
 
 ### W2 — Attunement behaviors (per element batch)
 - [ ] PYRO (burn trails/pools, oil ignition) + tests · commit

@@ -2,7 +2,8 @@
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
 import { GAME_CONFIG } from '../core/constants.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity, attunementElements } from '../combat/weapon-data.js';
+import { resolveBulletElements } from '../combat/elements.js';
 import { autofireDiag } from '../autofire-diag.js';
 import { isMobile } from '../platform/platform-detect.js';
 
@@ -1045,11 +1046,18 @@ export function applyGlobalBulletUpgrades(bullet) {
     // damage path (E2) can apply enemy resistance. One chokepoint for every
     // primary bullet; falls back to the KINETIC baseline.
     const _wcfg = PRIMARY_WEAPONS[this.activePrimary];
-    // R6.3 — Elemental Infusion overrides the weapon's native element while
-    // active (beat resists / force reactions).
-    const _infused = this.activeAbilityEffects
-        && this.activeAbilityEffects.has('ELEMENTAL_INFUSION') && this._infusedElement;
-    bullet.element = _infused ? this._infusedElement : ((_wcfg && _wcfg.element) || 'KINETIC');
+    // W1 (Attunements) — a bullet now carries an ELEMENT ARRAY. Priority:
+    //   1. ELEMENTAL_INFUSION override (single element, beats resists)
+    //   2. the equipped attunements' elements for this weapon (the stack)
+    //   3. the weapon's base element (KINETIC for most)
+    // `bullet.element` is kept as elements[0] for single-element consumers.
+    const _baseEl = (_wcfg && _wcfg.element) || 'KINETIC';
+    const _override = (this.activeAbilityEffects
+        && this.activeAbilityEffects.has('ELEMENTAL_INFUSION') && this._infusedElement)
+        ? this._infusedElement : null;
+    const _attIds = (this.activeAttunements && this.activeAttunements[this.activePrimary]) || [];
+    bullet.elements = resolveBulletElements(_override, attunementElements(_attIds), _baseEl);
+    bullet.element = bullet.elements[0];
 
     // Phase 2 (2026-05-19) — global HOMING / PIERCING removed; each
     // weapon's firing path now reads its OWN per-weapon stack. Lookup

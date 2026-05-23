@@ -6,7 +6,7 @@ import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
-import { elementalMultiplier, adaptResist } from './elements.js';
+import { elementalMultiplier, multiElementMultiplier, adaptResist } from './elements.js';
 import { allyShieldMult } from '../enemy/support-aura.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
@@ -716,7 +716,8 @@ export function handleCollisions() {
                 const destroyed = enemy.takeDamage(damage, {
                     isCrit: !!(bullet.isCrit || bullet.isCritical),
                     isEmpowered: !!bullet.isEmpowered,
-                    element: bullet.element, // E2 — bullet carries its weapon's element
+                    element: bullet.element,    // back-compat single element
+                    elements: bullet.elements,  // W1 — multi-element resist split
                     hitX: bullet.x, hitY: bullet.y, // E8a — SENTINEL frontal-shield angle check
                 });
                 // 5.107.0 — Vampirism lifesteal on the damage actually
@@ -747,10 +748,16 @@ export function handleCollisions() {
                         enemy.x += Math.cos(ka) * shove;
                         enemy.y += Math.sin(ka) * shove;
                     }
-                    // E6 — the firing weapon applies its element's signature
-                    // status (Pyro burn, Cryo chill/freeze, Volt conduct + shock,
-                    // Toxic corrode + bleed, Void mark). Kinetic/Radiant no-op here.
-                    applyWeaponElementStatus.call(this, enemy, bullet.element, enemyApplied);
+                    // E6/W1 — the firing weapon applies EACH active element's
+                    // signature status (Pyro burn, Cryo chill/freeze, Volt
+                    // conduct + shock, Toxic corrode + bleed, Void mark). With
+                    // several elements the per-element share of damage scales
+                    // each status (focus vs coverage). Kinetic/Radiant no-op here.
+                    const _bels = (bullet.elements && bullet.elements.length)
+                        ? bullet.elements : [bullet.element];
+                    for (const _be of _bels) {
+                        applyWeaponElementStatus.call(this, enemy, _be, enemyApplied / _bels.length);
+                    }
                 }
 
                 if (bullet.isCrit || bullet.isCritical) {
@@ -2194,7 +2201,13 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     // is a weakness (>1); resist =1 is immune (×0). Enemy resist maps are
     // neutral defaults until E8, so this is inert in gameplay today but live
     // for any populated map (and exercised by the unit tests).
-    const _resistMult = elementalMultiplier(enemy.resist, opts.element || 'KINETIC');
+    // W1 (Attunements) — a hit can carry MULTIPLE elements (`opts.elements`).
+    // Damage divides evenly across them, so the resist multiplier is the
+    // average of the per-element multipliers (focus vs coverage). Single-element
+    // / legacy callers (`opts.element`) behave exactly as before.
+    const _els = (opts.elements && opts.elements.length)
+        ? opts.elements : [opts.element || 'KINETIC'];
+    const _resistMult = multiElementMultiplier(enemy.resist, _els);
     if (_resistMult !== 1) damage *= _resistMult;
 
     // E3 — CORRODE amplifies ALL incoming damage (+15% per stack); CONDUCT
@@ -2204,7 +2217,7 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (enemy.corrodeStacks > 0 && enemy.corrodeUntil > frameClock.now) {
         damage *= 1 + 0.15 * enemy.corrodeStacks;
     }
-    if (enemy.conductUntil > frameClock.now && (opts.element || 'KINETIC') === 'VOLT') {
+    if (enemy.conductUntil > frameClock.now && _els.includes('VOLT')) {
         damage *= 1.5;
     }
 
@@ -2246,7 +2259,7 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     // one element walls it; switching resets the pressure. Decay lives in
     // Enemy._processStatusEffects. Only adaptive enemies have the flag.
     if (enemy.adaptive && enemy.resist) {
-        adaptResist(enemy.resist, opts.element || 'KINETIC');
+        for (const _e of _els) adaptResist(enemy.resist, _e);
     }
 
     if (opts.showNumber !== false && typeof this.createDamageNumber === 'function') {
@@ -2297,7 +2310,10 @@ const FLARE_RADIUS = 100;
 
 function _triggerStatusReactions(enemy, dealt, opts) {
     const now = frameClock.now;
-    const element = opts.element || 'KINETIC';
+    // W1 — a hit may carry several elements; OIL FLARE ignites if any is PYRO.
+    const _els = (opts.elements && opts.elements.length)
+        ? opts.elements : [opts.element || 'KINETIC'];
+    const element = _els.includes('PYRO') ? 'PYRO' : (opts.element || 'KINETIC');
     const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
     if (!pool) return;
 

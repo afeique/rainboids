@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.104.0] - 2026-05-23
+
+### Added — Weapon Attunements: data model + multi-element damage (Phase W1)
+
+Foundation for the attunement system (groundwork — attunements aren't yet
+equippable in the UI; that lands in W5). Behavior is unchanged for current
+weapons (each still fires its single base element).
+
+- **`ATTUNEMENTS` table** (`weapon-data.js`) — per-weapon element upgrades for
+  every primary and power weapon (~50 + ~43), each `{id, name, element, weapon,
+  description, behavior, cost}`. Helpers: `getAttunementsForWeapon`,
+  `attunementElements`. The flavor *behaviors* land per-element in W2; W1 gives
+  each attunement its element identity (so equipping one will already apply
+  that element's resist interaction + signature status).
+- **Multi-element bullets** — `bullet.elements[]` (KINETIC when empty);
+  `bullet.element` kept as `elements[0]` for single-element consumers. Stamped
+  in `applyGlobalBulletUpgrades` via `resolveBulletElements` (priority:
+  ELEMENTAL_INFUSION/Overdrive override → equipped attunements → base element).
+- **Damage divides per element** — `multiElementMultiplier` (elements.js) is the
+  average of per-element resist multipliers, applied once in `applyDamageToEnemy`
+  (no kill/XP double-counting). Focus vs coverage: one element = full
+  weakness/resist; stacking averages out (never hard-walled, no big spike).
+  Each active element also applies its signature status (scaled by its share).
+- `player.activeAttunements` map initialized (empty; populated from the loadout
+  in W5).
+- 18 new unit tests (split math, element priority, table integrity, damage
+  split through `applyDamageToEnemy`); 643 unit total green.
+
 ## [6.103.0] - 2026-05-23
 
 ### Changed — Pre-run BUILD screen: the bubble tree replaces the flat list

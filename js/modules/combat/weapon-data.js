@@ -984,6 +984,184 @@ const WEAPON_ELEMENTS = {
 for (const w of Object.values(PRIMARY_WEAPONS)) w.element = WEAPON_ELEMENTS[w.id] || 'KINETIC';
 for (const w of Object.values(POWER_WEAPONS))   w.element = WEAPON_ELEMENTS[w.id] || 'KINETIC';
 
+// ─── ATTUNEMENTS (Phase W1 — per-weapon element upgrades) ───────────────────
+// Each attunement re-elements a weapon AND (W2) reshapes its behavior through
+// that weapon's verb. They STACK: a weapon can carry several, and its per-hit
+// damage divides evenly across the active elements (focus vs coverage — see
+// combat/elements.js multiElementMultiplier). Base weapons are element-agnostic;
+// attunements are the only source of elements (override: ELEMENTAL_INFUSION /
+// Overdrive). W1 declares the data + element identity (so equipping one already
+// grants the element's resist interaction + signature status via the existing
+// applyWeaponElementStatus); W2 adds the flavor behaviors via `behavior` flags.
+//
+// Spec rows: [suffix, element, name, description]. id = `${weapon}_${suffix}`.
+const _ATTUNE_SPEC = {
+    // ── Primaries ──
+    PULSE_CANNON: [
+        ['PYRO', 'PYRO', 'Tracer Ignition', 'Bullets lay a burning tracer; crossers burn, ignites oil.'],
+        ['CRYO', 'CRYO', 'Frost Lock', 'Every 4th shot is a heavy frostbolt that freezes; others chill.'],
+        ['VOLT', 'VOLT', 'Arc Coupler', 'Each hit forks a small bolt to one nearby enemy.'],
+        ['TOXIC', 'TOXIC', 'Hollow-Point Venom', 'Hits stack corrode + bleed.'],
+        ['RADIANT', 'RADIANT', 'Phase Rounds', 'Bullets pierce shields/armor; tighter, faster round.'],
+        ['VOID', 'VOID', 'Gravlock Rounds', 'Bullets mark and curve toward the marked target.'],
+    ],
+    STORM_NEEDLES: [
+        ['TOXIC', 'TOXIC', 'Venom Weave', 'Every needle adds corrode; at max stacks, a poison rupture.'],
+        ['PYRO', 'PYRO', 'Ember Hail', 'Needles ignite; rapid fire stacks deep burns fast.'],
+        ['VOLT', 'VOLT', 'Static Mesh', 'Every 8th needle links nearby enemies into a conduct web.'],
+        ['CRYO', 'CRYO', 'Glaciate', 'Sustained fire on one target ramps chill into freeze.'],
+    ],
+    SCATTER_GUN: [
+        ['PYRO', 'PYRO', "Dragon's Breath", 'Short-range flame fan; heavy burn + oil ignition.'],
+        ['CRYO', 'CRYO', 'Cryo Choke', 'A close hit with enough pellets freezes instantly.'],
+        ['TOXIC', 'TOXIC', 'Caustic Spray', 'Leaves a lingering acid mist cone that corrodes.'],
+        ['VOLT', 'VOLT', 'Tesla Shells', 'Pellets on one enemy chain-discharge for bonus shock.'],
+        ['RADIANT', 'RADIANT', 'Slug Converter', 'Hold-fire collapses the spread into one piercing slug.'],
+    ],
+    RAIL_DRIVER: [
+        ['RADIANT', 'RADIANT', 'Lance of Dawn', 'Purges every shielded/armored enemy it pierces.'],
+        ['CRYO', 'CRYO', 'Absolute Zero', 'Freezes the whole line — a freeze-train into shatter.'],
+        ['VOLT', 'VOLT', 'Railgun Capacitor', 'Charges while idle; next shot is a chaining lance.'],
+        ['TOXIC', 'TOXIC', 'Disintegration Scar', 'Leaves a corrosive scar along the path.'],
+        ['VOID', 'VOID', 'Singularity Round', 'Drags pierced enemies into its wake + marks them.'],
+    ],
+    CLUSTER_LAUNCHER: [
+        ['PYRO', 'PYRO', 'Napalm Cluster', 'Bomblets leave burning pools.'],
+        ['CRYO', 'CRYO', 'Cryo Cluster', 'Detonation drops a freezing frost field.'],
+        ['TOXIC', 'TOXIC', 'Toxic Cluster', 'Bomblets release a creeping corrode cloud.'],
+        ['VOID', 'VOID', 'Singularity Charge', 'Primary blast implodes, then scatters bomblets.'],
+    ],
+    SPLITTER: [
+        ['TOXIC', 'TOXIC', 'Viral Split', 'Shards inherit & spread corrode; corroded kills spawn more.'],
+        ['VOLT', 'VOLT', 'Spark Mitosis', 'Each split discharges a conduct pulse at the kill site.'],
+        ['CRYO', 'CRYO', 'Cryo Cells', 'Shards chill; shattering a frozen kill spawns more shards.'],
+        ['PYRO', 'PYRO', 'Phosphor Cells', 'Shards ignite; burning kills split into burning shards.'],
+        ['VOID', 'VOID', 'Mitogen Surge', 'Kills mark nearby enemies; shards home onto marked targets.'],
+    ],
+    RICOCHET: [
+        ['VOLT', 'VOLT', 'Chain Conductor', 'Each bounce discharges conduct; 3 bounces build a stun.'],
+        ['PYRO', 'PYRO', 'Ember Bounce', 'Each wall bounce leaves a burning mark; burn climbs per bounce.'],
+        ['CRYO', 'CRYO', 'Cryo Carom', 'Bounces chill; a bullet bounced 3+ times freezes on next hit.'],
+        ['VOID', 'VOID', "Hunter's Carom", 'Bounces redirect toward marked enemies.'],
+    ],
+    BOOMERANG: [
+        ['CRYO', 'CRYO', 'Frost Disc', 'Out-pass chills, return-pass freezes.'],
+        ['PYRO', 'PYRO', 'Cinder Disc', 'Leaves a ring of fire along its arc.'],
+        ['TOXIC', 'TOXIC', 'Corroding Edge', 'Each pass adds corrode — one throw double-stacks.'],
+        ['VOLT', 'VOLT', 'Tesla Disc', 'Tethers a conduct arc back to the ship the whole flight.'],
+        ['VOID', 'VOID', 'Event Disc', 'At the turn-around it pulls enemies, then drags them back.'],
+    ],
+    SPIN_CANNON: [
+        ['PYRO', 'PYRO', 'Overheat Coil', 'Heat builds with spin; full-spin rounds ignite + vent a fire nova.'],
+        ['VOLT', 'VOLT', 'Storm Spool', 'Full-spin rounds conduct and arc to a second target.'],
+        ['CRYO', 'CRYO', 'Cryo Barrel', 'The longer you hold one target, the colder — chill ramps to freeze.'],
+    ],
+    FLAK_CANNON: [
+        ['PYRO', 'PYRO', 'Incendiary Burst', 'Fire-bloom airburst; shrapnel burns + ignites oil.'],
+        ['CRYO', 'CRYO', 'Cryo Burst', 'Airburst freezes the whole ring.'],
+        ['VOLT', 'VOLT', 'EMP Burst', 'Airburst conducts + has a stun chance across the ring.'],
+        ['TOXIC', 'TOXIC', 'Gas Burst', 'Burst leaves a corrosive cloud at the airburst point.'],
+    ],
+    GRAVITY_LANCE: [
+        ['VOID', 'VOID', 'Event Horizon Rounds', 'The wake marks everything it pulls (crit from all sources).'],
+        ['PYRO', 'PYRO', 'Accretion Burn', 'The well is wreathed in fire; pulled enemies burn.'],
+        ['CRYO', 'CRYO', 'Cryo Well', 'The well chills everything pulled; implosion freezes the cluster.'],
+        ['VOLT', 'VOLT', 'Charged Singularity', 'Conducts pulled enemies; discharges a chain on implosion.'],
+    ],
+    // ── Powers ──
+    CHARGE_SHOT: [
+        ['RADIANT', 'RADIANT', 'Plasma Lance', 'Full charge = an armor-piercing purge bolt.'],
+        ['PYRO', 'PYRO', 'Fireball', 'Full charge blooms fire + leaves a burning crater.'],
+        ['CRYO', 'CRYO', 'Glacial Spike', 'Charge level sets freeze duration/area.'],
+        ['VOLT', 'VOLT', 'Thunderhead', 'Full charge calls a conduct strike that chains from impact.'],
+    ],
+    MINE_LAYER: [
+        ['PYRO', 'PYRO', 'Incendiary Mines', 'Blasts leave fire pools; turret bullets ignite.'],
+        ['CRYO', 'CRYO', 'Cryo Mines', 'Detonation freezes in radius.'],
+        ['VOLT', 'VOLT', 'Tesla Mines', 'Mines tether conduct arcs between each other.'],
+        ['TOXIC', 'TOXIC', 'Toxic Mines', 'Blasts leave corrosive zones; turret fire corrodes.'],
+    ],
+    NOVA_BLAST: [
+        ['VOLT', 'VOLT', 'Static Nova', 'Ring conducts all + chains lightning between everything caught.'],
+        ['RADIANT', 'RADIANT', 'Plasma Nova', 'Ring purges shields, briefly blinds.'],
+        ['CRYO', 'CRYO', 'Frost Nova', 'Ring freezes instead of pushing.'],
+        ['VOID', 'VOID', 'Gravity Nova', 'Inverts the ring to pull in instead of pushing out.'],
+    ],
+    MISSILE_SALVO: [
+        ['PYRO', 'PYRO', 'Thermite Warheads', 'Heavy burn + fire on impact.'],
+        ['CRYO', 'CRYO', 'Cryo Warheads', 'Impacts freeze; cluster splits freeze wide.'],
+        ['TOXIC', 'TOXIC', 'Corrosive Warheads', 'Impacts corrode + leave gas; melts tanky targets.'],
+        ['VOID', 'VOID', 'Singularity Warheads', 'Impacts mark; cluster splits implode-pull the group.'],
+    ],
+    LANCE_BEAM: [
+        ['RADIANT', 'RADIANT', 'Solar Lance', 'Purges everything swept, bonus vs armor.'],
+        ['PYRO', 'PYRO', 'Flamethrower Sweep', 'Swept arc becomes fire; broad burn + oil ignition.'],
+        ['CRYO', 'CRYO', 'Frostbeam', 'Sweep chills, freezes anything held in the arc.'],
+        ['TOXIC', 'TOXIC', 'Disintegration Beam', 'Sweep corrodes — held targets melt progressively.'],
+    ],
+    LIGHTNING_ARC: [
+        ['VOLT', 'VOLT', 'Tesla Cascade', 'Tether chains to multiple enemies; conduct targets take more.'],
+        ['RADIANT', 'RADIANT', 'Plasma Arc', 'Tether purges and ignores resists.'],
+        ['CRYO', 'CRYO', 'Cryo Arc', 'Sustained tether chills into freeze.'],
+        ['PYRO', 'PYRO', 'Ignition Arc', 'Tethered enemies catch spreading burn.'],
+    ],
+    SINGULARITY: [
+        ['VOID', 'VOID', 'Event Horizon', 'Collapse marks survivors and rips a bigger hole.'],
+        ['PYRO', 'PYRO', 'Hellpit', 'Burns everything held; collapse is a fire detonation.'],
+        ['CRYO', 'CRYO', 'Absolute Cold', 'Pulled enemies freeze; collapse shatters the cluster.'],
+        ['RADIANT', 'RADIANT', 'Plasma Collapse', 'Collapse purges + a blinding flash.'],
+    ],
+    PRISM_BEAM: [
+        ['SPECTRUM', 'RADIANT', 'Spectrum Split', 'Each ray a different element at once — maximum coverage.'],
+        ['PYRO', 'PYRO', 'Chromatic Burn', 'Every ray ignites — a wall of fire.'],
+        ['CRYO', 'CRYO', 'Refractive Freeze', 'Rays chill; overlapping rays freeze.'],
+        ['FOCUSED', 'RADIANT', 'Focused Prism', 'Collapse the fan into one purge mega-beam.'],
+    ],
+    ORBITAL_STRIKE: [
+        ['PYRO', 'PYRO', 'Hellfire Column', 'Leaves a large burning zone (area denial).'],
+        ['CRYO', 'CRYO', 'Glacial Column', 'Freezes the whole radius.'],
+        ['VOLT', 'VOLT', 'Ion Cannon', 'Purge + conduct with a stun pulse.'],
+        ['TOXIC', 'TOXIC', 'Acid Rain', 'A wide corrode drizzle instead of one column.'],
+    ],
+    CRYO_BURST: [
+        ['CRYO', 'CRYO', 'Absolute Zero', 'Instant freeze + brittle (baked-in shatter synergy).'],
+        ['FROSTFIRE', 'CRYO', 'Frostfire', 'Chills, then a delayed thermal-shock pulse shatters/ignites.'],
+        ['VOLT', 'VOLT', 'Static Frost', 'Frozen enemies become conductive — lightning crits them.'],
+    ],
+    OVERDRIVE: [
+        ['PYRO', 'PYRO', 'Pyro Overdrive', 'While active, your primary also ignites everything.'],
+        ['CRYO', 'CRYO', 'Cryo Overdrive', 'While active, primary hits chill/freeze.'],
+        ['VOLT', 'VOLT', 'Volt Overdrive', 'While active, primary hits chain conduct lightning.'],
+        ['TOXIC', 'TOXIC', 'Toxic Overdrive', 'While active, primary hits corrode.'],
+    ],
+};
+
+// Default account-gold cost per attunement (W7 will tune; signature vs exotic).
+const _ATTUNE_COST = 6000;
+export const ATTUNEMENTS = {};
+for (const [weapon, list] of Object.entries(_ATTUNE_SPEC)) {
+    for (const [suffix, element, name, description] of list) {
+        const id = `${weapon}_${suffix}`;
+        ATTUNEMENTS[id] = { id, name, element, weapon, description, behavior: {}, cost: _ATTUNE_COST };
+    }
+}
+
+/** All attunements for a weapon id. */
+export function getAttunementsForWeapon(weaponId) {
+    return Object.values(ATTUNEMENTS).filter((a) => a.weapon === weaponId);
+}
+
+/** Map a list of attunement ids → their element ids (skips unknown). */
+export function attunementElements(ids) {
+    const out = [];
+    if (!ids) return out;
+    for (const id of ids) {
+        const a = ATTUNEMENTS[id];
+        if (a && a.element) out.push(a.element);
+    }
+    return out;
+}
+
 // ─── POWER WEAPON UPGRADES ──────────────────────────────────────────────────
 
 // 5.76.0 — power-weapon upgrade costs scaled ~2× to match the gold curve.

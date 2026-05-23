@@ -110,6 +110,10 @@ export class Player {
         // menu treats every weapon and ability as equippable.
         this.activePrimary = 'PULSE_CANNON';
         this.activePower = 'CHARGE_SHOT';
+        // W1 (Attunements) — per-weapon active attunement ids: { weaponId: [id,…] }.
+        // Empty = element-agnostic (KINETIC). Populated from the loadout (W5);
+        // bullets read it in applyGlobalBulletUpgrades to stamp bullet.elements.
+        this.activeAttunements = {};
         this.ownedPrimaries = new Set(['PULSE_CANNON']);
         this.ownedPowers = new Set(['CHARGE_SHOT']);
         // R6.2 base kit — Bulwark + Field Medic available from run one.

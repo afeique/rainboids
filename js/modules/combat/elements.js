@@ -43,6 +43,42 @@ export function elementalMultiplier(resistMap, element) {
     return Math.min(2, Math.max(0, 1 - r));
 }
 
+/**
+ * Multiplier for a MULTI-element hit (W1 — Attunements). Damage is conceptually
+ * split evenly across the active elements, each portion taking that element's
+ * own resist/weakness multiplier — so the effective overall multiplier is the
+ * AVERAGE of the per-element multipliers. With one element this equals
+ * elementalMultiplier; with none it's neutral (1).
+ *
+ * This is the "focus vs coverage" balance lever: a single element gets the full
+ * weakness bonus / resist penalty, while stacking elements averages them out
+ * (never hard-walled by one resist, but no big single-element spike either).
+ */
+export function multiElementMultiplier(resistMap, elements) {
+    if (!elements || elements.length === 0) return 1;
+    if (elements.length === 1) return elementalMultiplier(resistMap, elements[0]);
+    let sum = 0;
+    for (const e of elements) sum += elementalMultiplier(resistMap, e);
+    return sum / elements.length;
+}
+
+/**
+ * Resolve the active element array for a shot (W1), in priority order:
+ *   1. an override element (ELEMENTAL_INFUSION / Overdrive) — replaces all
+ *   2. equipped attunement elements (deduped, order-preserved) — the stack
+ *   3. the weapon's base element (KINETIC for most)
+ * Always returns a non-empty array.
+ */
+export function resolveBulletElements(overrideEl, attunementEls, baseEl) {
+    if (overrideEl) return [overrideEl];
+    if (attunementEls && attunementEls.length) {
+        const seen = [];
+        for (const e of attunementEls) if (e && !seen.includes(e)) seen.push(e);
+        if (seen.length) return seen;
+    }
+    return [baseEl || DEFAULT_ELEMENT];
+}
+
 /** True if `id` is a known element. */
 export function isElement(id) {
     return Object.prototype.hasOwnProperty.call(ELEMENTS, id);
