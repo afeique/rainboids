@@ -294,3 +294,77 @@ test.describe('QA-08c: Equipment — no auto-equip + Armory equip (Phase R8.2/R8
         expect(equippedName).toBe('Run Core');
     });
 });
+
+test.describe('QA-08d: Cores crafting — reroll + tier-up (Phase R8.6/R8.8)', () => {
+    test.beforeEach(async ({ page }) => {
+        page._jsErrors = [];
+        page.on('pageerror', (err) => page._jsErrors.push(err.message));
+        await loadGame(page);
+        await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
+    });
+
+    test('reroll consumes Cores and re-rolls the affixes within tier', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            // A legendary hull (3 affixes) so reroll keeps 3.
+            const item = { slot: 'hull', level: 10, rarity: 'legendary', name: 'Old',
+                affixes: [{ type: 'hp', value: 1, label: '+1' }, { type: 'toughness', value: 1, label: '+1%' }, { type: 'regen', value: 0.1, label: '+0.1' }] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 100, stash: [item] }));
+            ge.openArmory();
+            const before = ge.game.cores;
+            const ok = ge._armoryOverlay.reroll(0);
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            return { ok, before, after: ge.game.cores, affixCount: meta.stash[0].affixes.length, rarity: meta.stash[0].rarity };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.after).toBeLessThan(r.before);   // Cores spent
+        expect(r.affixCount).toBe(3);              // legendary tier bound preserved
+        expect(r.rarity).toBe('legendary');        // rarity unchanged by reroll
+    });
+
+    test('tier-up raises rarity and consumes Cores', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const item = { slot: 'shielding', level: 10, rarity: 'common', name: 'Base',
+                affixes: [{ type: 'hp', value: 5, label: '+5' }] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 100, stash: [item] }));
+            ge.openArmory();
+            const before = ge.game.cores;
+            const ok = ge._armoryOverlay.tierUp(0);
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            return { ok, before, after: ge.game.cores, rarity: meta.stash[0].rarity, affixCount: meta.stash[0].affixes.length };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.rarity).toBe('rare');             // common → rare
+        expect(r.affixCount).toBe(2);              // rare tier affix count
+        expect(r.after).toBeLessThan(r.before);    // Cores spent
+    });
+
+    test('crafting is rejected without enough Cores', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const item = { slot: 'hull', level: 10, rarity: 'epic', name: 'X', affixes: [{ type: 'hp', value: 5, label: '+5' }] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 1, stash: [item] }));
+            ge.openArmory();
+            return { reroll: ge._armoryOverlay.reroll(0), tierUp: ge._armoryOverlay.tierUp(0), cores: ge.game.cores };
+        });
+        expect(r.reroll).toBe(false);
+        expect(r.tierUp).toBe(false);
+        expect(r.cores).toBe(1); // untouched
+    });
+
+    test('no fatal JS errors through the crafting flow', async ({ page }) => {
+        await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const item = { slot: 'hull', level: 10, rarity: 'common', name: 'X', affixes: [{ type: 'hp', value: 5, label: '+5' }] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 9999, stash: [item] }));
+            ge.openArmory();
+            ge._armoryOverlay.tierUp(0);
+            ge._armoryOverlay.reroll(0);
+        });
+        const fatal = page._jsErrors.filter(m =>
+            !m.includes('sfxr') && !m.includes('Audio') && !m.includes('audio') &&
+            !m.includes('Font') && !m.includes('net::ERR'));
+        expect(fatal, `Fatal JS errors: ${fatal.join('; ')}`).toHaveLength(0);
+    });
+});

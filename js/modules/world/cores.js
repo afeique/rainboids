@@ -39,6 +39,27 @@ export function totalSalvage(items) {
     return (items || []).reduce((sum, it) => sum + salvageValue(it), 0);
 }
 
+// ── Cores SINK costs (R8.6 / R8.8) ──────────────────────────────────────
+// Reroll an item's affixes within tier bounds. Scales with rarity so a
+// transcendental reroll is a serious commitment.
+export function rerollCost(item) {
+    return Math.max(2, rarityRank(item) * 3);
+}
+
+// Tier-up cost scales with the TARGET tier (rank+1), so each step up the
+// 8-tier ladder is steeper than the last. Returns Infinity at max tier.
+export function tierUpCost(item) {
+    const rank = rarityRank(item);
+    if (rank >= 8) return Infinity; // transcendental — no higher tier
+    return (rank + 1) * 12;
+}
+
+export function canAffordReroll(item, cores) { return (cores | 0) >= rerollCost(item); }
+export function canAffordTierUp(item, cores) {
+    const c = tierUpCost(item);
+    return c !== Infinity && (cores | 0) >= c;
+}
+
 /**
  * Bulk-salvage filter: items strictly worse (by score) than the best
  * equipped item in their slot are safe to mass-salvage. `equippedBySlot`

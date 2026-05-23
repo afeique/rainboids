@@ -77,27 +77,19 @@ function _rollRegenAffix(level) {
  *     accentColor,   // SLOT_ACCENT[slot]
  *   }
  */
-export function createItem(slot, level, rarityKey = null) {
-    if (!ITEM_BASES[slot]) slot = 'cockpit';
-    const rarity = rarityKey || rollRarity();
-    const tier = RARITY_TIERS[rarity] || RARITY_TIERS.common;
+// Roll `count` distinct affixes (excluding `excludeTypes`) for a given
+// wave-level + rarity. Each value is wave-scaled × an independent rarity-mult
+// roll. Extracted (R8.6/R8.8) so reroll + tier-up reuse the same roll logic.
+export function rollAffixSet(level, rarity, count, excludeTypes = []) {
     const L = Math.max(1, level | 0);
-
-    // 6.32.0 — Roll AFFIXES that mirror the passive stat set. Phase C.I1:
-    // affix count now comes straight off the tier (common 1 → rare 2 →
-    // exceptional/legendary 3 → epic/godlike 4 → divine/transcendental 5).
-    // Each affix value is wave-scaled × an independent rarity-mult roll,
-    // so two items of the same tier+slot still differ.
-    const affixCount = tier.affixCount || 1;
-    const pool = ITEM_AFFIX_POOL.slice();
-    // Fisher-Yates shuffle, take the first `affixCount` distinct affixes.
+    const ex = new Set(excludeTypes);
+    const pool = ITEM_AFFIX_POOL.filter((d) => !ex.has(d.type));
     for (let i = pool.length - 1; i > 0; i--) {
         const j = (Math.random() * (i + 1)) | 0;
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    const chosen = pool.slice(0, affixCount);
-
-    const affixes = chosen.map((def) => {
+    const chosen = pool.slice(0, Math.max(0, count | 0));
+    return chosen.map((def) => {
         const raw = (def.base + (L - 1) * def.perWave) * _rollMult(rarity);
         const value = def.pct
             ? Math.max(def.min, Math.round(raw * 10) / 10)
@@ -106,37 +98,74 @@ export function createItem(slot, level, rarityKey = null) {
                 : Math.max(def.min, Math.round(raw)));
         return { type: def.type, value, label: def.label(value) };
     });
+}
 
-    const bonusLabel = affixes.map((a) => a.label).join(' · ');
-
-    // Name: prefix family keyed off the first affix's flavor bucket.
-    const primary = chosen[0];
-    const prefix = _pick(ITEM_PREFIXES[primary.prefix] || ITEM_PREFIXES.hp);
+// Build the full item object (name, derived fields, rarity styling) from a
+// slot/level/rarity + a pre-rolled affix array.
+function _finalizeItem(slot, level, rarity, affixes) {
+    if (!ITEM_BASES[slot]) slot = 'cockpit';
+    const tier = RARITY_TIERS[rarity] || RARITY_TIERS.common;
+    const L = Math.max(1, level | 0);
+    const list = Array.isArray(affixes) && affixes.length ? affixes : [{ type: 'hp', value: 1, label: '+1 HP' }];
+    const bonusLabel = list.map((a) => a.label).join(' · ');
+    const primaryType = list[0].type;
+    const def = ITEM_AFFIX_POOL.find((d) => d.type === primaryType);
+    const prefix = _pick(ITEM_PREFIXES[(def && def.prefix) || 'hp'] || ITEM_PREFIXES.hp);
     const base   = _pick(ITEM_BASES[slot]);
     const adj = tier.rarityAdjective ? `${tier.rarityAdjective} ` : '';
     const name = `${adj}${prefix} ${base}`;
-
-    // Legacy fields kept for any straggler reads / display: primary
-    // affix becomes `bonus`/`bonusType`, and `regenBonus` sums any
-    // regen affixes (getEffectiveRegen now reads affixes directly).
-    const first = affixes[0];
-    const regenBonus = affixes.filter((a) => a.type === 'regen').reduce((s, a) => s + a.value, 0);
-
+    const regenBonus = list.filter((a) => a.type === 'regen').reduce((s, a) => s + a.value, 0);
     return {
-        slot,
-        level: L,
-        name,
-        affixes,
-        bonus: first.value,
-        bonusType: first.type,
-        bonusLabel,
-        regenBonus,
+        slot, level: L, name, affixes: list,
+        bonus: list[0].value, bonusType: list[0].type,
+        bonusLabel, regenBonus,
         rarity,
-        rarityColor: tier.color,
-        rarityLabel: tier.label,
-        rarityGlow:  tier.glow,
+        rarityColor: tier.color, rarityLabel: tier.label, rarityGlow: tier.glow,
         accentColor: SLOT_ACCENT[slot] || '#33ddff',
     };
+}
+
+export function createItem(slot, level, rarityKey = null) {
+    if (!ITEM_BASES[slot]) slot = 'cockpit';
+    const rarity = rarityKey || rollRarity();
+    const tier = RARITY_TIERS[rarity] || RARITY_TIERS.common;
+    const affixes = rollAffixSet(level, rarity, tier.affixCount || 1);
+    return _finalizeItem(slot, level, rarity, affixes);
+}
+
+// The next rarity up the 8-tier ladder, or null if already at the top.
+export function nextRarity(rarity) {
+    const i = RARITY_ORDER.indexOf(rarity);
+    if (i < 0 || i >= RARITY_ORDER.length - 1) return null;
+    return RARITY_ORDER[i + 1];
+}
+
+// R8.6 — reroll an item's affixes within its tier bounds (same slot/level/
+// rarity → same affix count). Returns a NEW item; preserves traits.
+export function rerollItemAffixes(item) {
+    if (!item || !item.slot) return item;
+    const tier = RARITY_TIERS[item.rarity] || RARITY_TIERS.common;
+    const count = tier.affixCount || (Array.isArray(item.affixes) ? item.affixes.length : 1);
+    const affixes = rollAffixSet(item.level, item.rarity, count);
+    const out = _finalizeItem(item.slot, item.level, item.rarity, affixes);
+    if (item.traits) out.traits = item.traits;
+    return out;
+}
+
+// R8.8 — raise an item one rarity tier, KEEPING its existing affixes and
+// rolling the added slot(s) the higher tier grants. Returns the same item
+// (unchanged) if already at the top tier.
+export function tierUpItem(item) {
+    if (!item || !item.slot) return item;
+    const next = nextRarity(item.rarity);
+    if (!next) return item;
+    const oldAffixes = Array.isArray(item.affixes) ? item.affixes.slice() : [];
+    const targetCount = (RARITY_TIERS[next].affixCount) || oldAffixes.length;
+    const add = Math.max(0, targetCount - oldAffixes.length);
+    const extra = rollAffixSet(item.level, next, add, oldAffixes.map((a) => a.type));
+    const out = _finalizeItem(item.slot, item.level, next, [...oldAffixes, ...extra]);
+    if (item.traits) out.traits = item.traits;
+    return out;
 }
 
 /**

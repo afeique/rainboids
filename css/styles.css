@@ -4512,6 +4512,7 @@ body.mobile-portrait .shop-help-icon {
 }
 .armory-buy:hover:not(:disabled) { background: rgba(255, 200, 60, 0.15); }
 .armory-buy:disabled { color: #5e6680; border-color: rgba(94, 102, 128, 0.4); cursor: not-allowed; }
+.armory-row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .armory-footer {
     display: flex;
     justify-content: space-between;

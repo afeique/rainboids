@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.88.0] - 2026-05-23
+
+### Added — Cores crafting: reroll affixes + tier-up (Phase R8.6 / R8.8)
+
+- **Reroll** (R8.6): spend Cores to re-roll a stashed item's affixes within its
+  tier (same slot/level/rarity → same affix count). Cost scales with rarity.
+- **Tier-up** (R8.8): spend Cores to raise an item one rarity tier — **keeps its
+  existing affixes** and rolls the new tier's added slot(s). Cost scales with the
+  target tier; disabled at Transcendental.
+- Both surfaced as per-item buttons in the ARMORY stash, alongside SALVAGE.
+- Extracted `rollAffixSet` + `_finalizeItem` from `createItem` (no behavior
+  change) so reroll/tier-up reuse the canonical roll logic; added `nextRarity`,
+  `rerollItemAffixes`, `tierUpItem` (`world/item-system.js`) and cost helpers
+  (`world/cores.js`). +9 unit tests, +4 QA tests (08-armory now 21).
+
+### Notes
+- **R8.7** (resist targeting) and **R8.9** (trait reroll) are **deferred** — they
+  depend on unimplemented Phase C work (C.I2 tier-gated resist counts and C.I3
+  item traits, respectively).
+
 ## [6.87.0] - 2026-05-23
 
 ### Changed — Inventory as meta: no auto-equip + Armory equip screen (Phase R8.2 / R8.3)

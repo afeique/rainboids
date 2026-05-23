@@ -12,8 +12,11 @@ import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from '../combat/weapon-data
 import {
     UNLOCK_CATEGORIES, unlockCost, getUnlockedSet, getLockedIds, applyUnlock,
 } from '../shop/armory.js';
-import { salvageValue, partitionBulkSalvage } from '../world/cores.js';
-import { scoreItem } from '../world/item-system.js';
+import {
+    salvageValue, partitionBulkSalvage,
+    rerollCost, tierUpCost, canAffordReroll, canAffordTierUp,
+} from '../world/cores.js';
+import { scoreItem, rerollItemAffixes, tierUpItem } from '../world/item-system.js';
 import { getEquipped, stashForSlot, equipFromStash, unequipSlot, equipDelta } from '../world/inventory.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 
@@ -162,6 +165,39 @@ export class ArmoryOverlay {
         if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = cores;
         this.render();
         return gained;
+    }
+
+    // Phase R8.6 — reroll a stash item's affixes (within its tier) for Cores.
+    reroll(index) {
+        const meta = loadMeta() || {};
+        const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
+        const item = stash[index];
+        if (!item) return false;
+        const cost = rerollCost(item);
+        const cores = this._cores();
+        if (cores < cost) return false;
+        stash[index] = rerollItemAffixes(item);
+        const remaining = cores - cost;
+        saveMeta({ stash, cores: remaining });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = remaining;
+        this.render();
+        return true;
+    }
+
+    // Phase R8.8 — raise a stash item one rarity tier for Cores.
+    tierUp(index) {
+        const meta = loadMeta() || {};
+        const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
+        const item = stash[index];
+        if (!item) return false;
+        if (!canAffordTierUp(item, this._cores())) return false;
+        const cost = tierUpCost(item);
+        stash[index] = tierUpItem(item);
+        const remaining = this._cores() - cost;
+        saveMeta({ stash, cores: remaining });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = remaining;
+        this.render();
+        return true;
     }
 
     // Phase R8.3 — equip stash[index] into its gear slot (swapping any
@@ -363,6 +399,7 @@ export class ArmoryOverlay {
         list.className = 'armory-list';
         // Show the most recent first; cap the rendered rows for sanity.
         const view = stash.map((it, i) => ({ it, i })).reverse().slice(0, 60);
+        const cores = this._cores();
         for (const { it, i } of view) {
             const row = document.createElement('div');
             row.className = 'armory-row';
@@ -370,11 +407,38 @@ export class ArmoryOverlay {
             name.className = 'armory-row-name';
             name.textContent = `${it.name || it.slot} · L${it.level || 1}`;
             if (it.rarityColor) name.style.color = it.rarityColor;
+
+            const actions = document.createElement('span');
+            actions.className = 'armory-row-actions';
+
+            // Reroll affixes (R8.6).
+            const reCost = rerollCost(it);
+            const reBtn = document.createElement('button');
+            reBtn.className = 'armory-buy';
+            reBtn.disabled = !canAffordReroll(it, cores);
+            reBtn.textContent = `REROLL · ${reCost} ✦`;
+            reBtn.addEventListener('click', () => this.reroll(i));
+            actions.appendChild(reBtn);
+
+            // Tier-up (R8.8) — hidden at max tier.
+            const tuCost = tierUpCost(it);
+            if (tuCost !== Infinity) {
+                const tuBtn = document.createElement('button');
+                tuBtn.className = 'armory-buy';
+                tuBtn.disabled = !canAffordTierUp(it, cores);
+                tuBtn.textContent = `TIER-UP · ${tuCost} ✦`;
+                tuBtn.addEventListener('click', () => this.tierUp(i));
+                actions.appendChild(tuBtn);
+            }
+
+            // Salvage (R8.5).
             const btn = document.createElement('button');
             btn.className = 'armory-buy';
             btn.textContent = `SALVAGE · ${salvageValue(it)} ✦`;
             btn.addEventListener('click', () => this.salvage(i));
-            row.append(name, btn);
+            actions.appendChild(btn);
+
+            row.append(name, actions);
             list.appendChild(row);
         }
         section.appendChild(list);
