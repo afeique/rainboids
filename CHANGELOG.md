@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.89.0] - 2026-05-23
+
+### Changed — Abilities: unique-verb audit + Field Medic (Phase R6.1 / R6.2)
+
+- **Repair Nanites → Field Medic.** The heal-over-time ability is replaced by
+  **Field Medic**: an instant burst heal (45% of max HP, +10%/POTENCY stack)
+  **plus a full status cleanse** (clears CHILL / CORRODE / BURN via
+  `cleansePlayerStatus`). The cleanse is the unique verb no card/stat/gear can
+  provide. EMERGENCY_PROTOCOL now auto-fires Field Medic below 20% HP.
+- **Base kit (R6.2):** Bulwark + Field Medic are unlocked from run one (plus the
+  free `Shift` Phase Dash), via `BASE_LOADOUT.abilities`.
+
+### Removed
+
+- **Tractor Shield cut from the ability roster** (R6.1) — redundant with the Orb
+  Magnet trait (loot-pull), Gravity Snare (enemy-pull), and Bulwark (shield). Its
+  tractor-beam physics in collision/render remain but are never engaged (no
+  ability sets `tractorShieldActive`); a full code sweep is slated for later. Its
+  upgrade tree (WIDE_ANGLE / PROFIT / REDIRECTION) and the EXTENDED_CARE heal
+  upgrade are removed.
+
+### Notes
+- **R6.3** (the ~14-ability purchasable batch — Blink, Bullet Time, Stasis Field,
+  Gravity Snare, Decoy Beacon, Second Wind, Elemental Infusion, Cryo Field, etc.)
+  is **deferred** — each is a distinct gameplay verb needing its own
+  implementation + live consumer; tracked as substantial follow-up work.
+
 ## [6.88.0] - 2026-05-23
 
 ### Added — Cores crafting: reroll affixes + tier-up (Phase R8.6 / R8.8)

@@ -97,7 +97,7 @@ function makeRecordingCtx() {
 
 function makePlayer(overrides = {}) {
     return {
-        equippedAbilities: ['BULWARK', 'REPAIR_NANITES', null, null],
+        equippedAbilities: ['BULWARK', 'FIELD_MEDIC', null, null],
         abilityCooldowns: [0, 5000, 0, 0],
         abilityCooldownsMax: [20000, 25000, 0, 0],
         ...overrides,

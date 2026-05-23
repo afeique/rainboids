@@ -89,17 +89,60 @@ function makeFakePlayer(overrides = {}) {
     return p;
 }
 
+describe('R6.1 — Field Medic (burst heal + cleanse)', () => {
+    test('activating Field Medic burst-heals % of max HP and cleanses statuses', () => {
+        const p = makeFakePlayer({
+            equippedAbilities: ['FIELD_MEDIC', null, null, null],
+            health: 50,
+            getEffectiveMaxHealth: () => 200,
+            // afflicted with every player status
+            pChillUntil: 999999, pCorrodeUntil: 999999, pCorrodeStacks: 2,
+            pBurnUntil: 999999, pBurnStacks: 3,
+        });
+        const ok = abilities.activateAbility.call(p, 0);
+        expect(ok).toBe(true);
+        // 45% of 200 = 90 → 50 + 90 = 140
+        expect(p.health).toBe(140);
+        // statuses cleansed
+        expect(p.pChillUntil).toBe(0);
+        expect(p.pCorrodeStacks).toBe(0);
+        expect(p.pBurnStacks).toBe(0);
+    });
+
+    test('Field Medic heal is capped at max HP', () => {
+        const p = makeFakePlayer({
+            equippedAbilities: ['FIELD_MEDIC', null, null, null],
+            health: 190, getEffectiveMaxHealth: () => 200,
+        });
+        abilities.activateAbility.call(p, 0);
+        expect(p.health).toBe(200);
+    });
+
+    test('POTENCY stacks add +10% heal each', () => {
+        const p = makeFakePlayer({
+            equippedAbilities: ['FIELD_MEDIC', null, null, null],
+            health: 0, getEffectiveMaxHealth: () => 100,
+            getPowerupStacks: (id) => (id === 'POTENCY' ? 2 : 0),
+        });
+        abilities.activateAbility.call(p, 0);
+        // (0.45 + 2*0.10) * 100 = 65
+        expect(p.health).toBe(65);
+    });
+});
+
 describe('Phase B.S1 — weapon-data ABILITIES export + alias', () => {
     test('ABILITIES and ABILITIES are the SAME object reference', () => {
         expect(ABILITIES).toBe(ABILITIES);
     });
 
-    test('Alias exposes the expected ability ids', () => {
-        for (const id of ['BULWARK', 'REPAIR_NANITES', 'DEFLECTOR_ORBS',
-                          'EMP_PULSE', 'TRACTOR_SHIELD', 'SENTRY_DRONE']) {
+    test('Roster exposes the expected ability ids (R6.1 — Field Medic in, Tractor out)', () => {
+        for (const id of ['BULWARK', 'FIELD_MEDIC', 'DEFLECTOR_ORBS',
+                          'EMP_PULSE', 'SENTRY_DRONE']) {
             expect(ABILITIES[id]).toBeDefined();
-            expect(ABILITIES[id]).toBe(ABILITIES[id]);
         }
+        // Cut/consolidated in R6.1.
+        expect(ABILITIES.TRACTOR_SHIELD).toBeUndefined();
+        expect(ABILITIES.REPAIR_NANITES).toBeUndefined();
     });
 });
 
@@ -112,12 +155,12 @@ describe('Phase B.S1 — 4-slot loadout', () => {
         expect(p.abilityCooldowns).toHaveLength(4);
         expect(p.abilityCooldownsMax).toHaveLength(4);
 
-        abilities.equipAbility.call(p, 'REPAIR_NANITES', 1);
+        abilities.equipAbility.call(p, 'FIELD_MEDIC', 1);
         abilities.equipAbility.call(p, 'EMP_PULSE', 2);
         abilities.equipAbility.call(p, 'SENTRY_DRONE', 3);
 
         expect(p.equippedAbilities).toEqual([
-            'BULWARK', 'REPAIR_NANITES', 'EMP_PULSE', 'SENTRY_DRONE',
+            'BULWARK', 'FIELD_MEDIC', 'EMP_PULSE', 'SENTRY_DRONE',
         ]);
     });
 
@@ -183,13 +226,13 @@ describe('Phase B.S1 — back-compat slot-0 accessors', () => {
 
     test('activeAbility getter mirrors equippedAbilities[0]', () => {
         expect(p.activeAbility).toBe('BULWARK');
-        p.equippedAbilities[0] = 'REPAIR_NANITES';
-        expect(p.activeAbility).toBe('REPAIR_NANITES');
+        p.equippedAbilities[0] = 'FIELD_MEDIC';
+        expect(p.activeAbility).toBe('FIELD_MEDIC');
     });
 
     test('setting activeAbility writes slot 0', () => {
-        p.activeAbility = 'TRACTOR_SHIELD';
-        expect(p.equippedAbilities[0]).toBe('TRACTOR_SHIELD');
+        p.activeAbility = 'SENTRY_DRONE';
+        expect(p.equippedAbilities[0]).toBe('SENTRY_DRONE');
         // Other slots unaffected.
         expect(p.equippedAbilities[1]).toBeNull();
     });

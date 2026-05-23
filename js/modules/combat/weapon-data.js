@@ -1146,18 +1146,22 @@ export const ABILITIES = {
         unlockWave: 2,
         upgrades: ['FORTIFY', 'IRON_WILL', 'RETALIATION'],
     },
-    REPAIR_NANITES: {
-        id: 'REPAIR_NANITES',
-        name: 'Repair Nanites',
-        description: 'Regen 3 HP/s for 5s',
+    // R6.1 — Field Medic replaces Repair Nanites' HoT. Its unique verb is
+    // the STATUS CLEANSE (clears CHILL/CORRODE/BURN) bundled with a burst
+    // heal — no card/stat/gear can cleanse, so it earns an ability slot.
+    FIELD_MEDIC: {
+        id: 'FIELD_MEDIC',
+        name: 'Field Medic',
+        description: 'Burst-heal 45% max HP + cleanse all statuses',
         icon: 'heart',
         color: '#44ff88',
-        cooldown: 25000,
-        duration: 5000,
-        healPerSecond: 3,
+        cooldown: 22000,
+        duration: 400,        // brief heal-flash; the heal+cleanse are instant
+        healPct: 0.45,        // fraction of effective max HP restored (+POTENCY)
+        cleanse: true,
         cost: 2,
         unlockWave: 2,
-        upgrades: ['POTENCY', 'EXTENDED_CARE', 'EMERGENCY_PROTOCOL'],
+        upgrades: ['POTENCY', 'EMERGENCY_PROTOCOL'],
     },
     // 5.93.0 — PHASE_DASH removed from ABILITIES. Dash is now a
     // core movement primitive on the SHIFT key (see Player._triggerDash
@@ -1192,20 +1196,10 @@ export const ABILITIES = {
         unlockWave: 5,
         upgrades: ['WIDE_BAND', 'EMP_OVERLOAD', 'CASCADE'],
     },
-    TRACTOR_SHIELD: {
-        id: 'TRACTOR_SHIELD',
-        name: 'Tractor Shield',
-        description: 'Forward shield absorbs bullets for coins',
-        icon: 'magnet',
-        color: '#ff88ff',
-        cooldown: 18000,
-        duration: 4000,
-        shieldArc: Math.PI / 2, // 90 degrees
-        coinsPerBullet: 5,
-        cost: 3,
-        unlockWave: 6,
-        upgrades: ['WIDE_ANGLE', 'PROFIT', 'REDIRECTION'],
-    },
+    // R6.1 — TRACTOR_SHIELD CUT from the roster (redundant: loot-pull = Orb
+    // Magnet trait, enemy-pull = Gravity Snare, shield = Bulwark). Its tractor
+    // physics in collision/render remain but are now never engaged (no ability
+    // sets tractorShieldActive). Slated for a full code sweep later.
     // SENTRY_DRONE — autonomous drones orbit the ship and auto-fire at the
     // nearest enemy for `duration`. Modeled on DEFLECTOR_ORBS (orbit) + the
     // mine turret-fire helper (allied bullets via bullet.shooter tag).
@@ -1236,10 +1230,9 @@ export const ABILITY_UPGRADES = {
     IRON_WILL:        { id: 'IRON_WILL',        name: 'Iron Will',        description: 'Resistance increased to 65%',         cost: 3, maxStacks: 1, ability: 'BULWARK', icon: 'shield' },
     RETALIATION:      { id: 'RETALIATION',      name: 'Retaliation',      description: 'Emit a damage pulse when hit',        cost: 3, maxStacks: 1, ability: 'BULWARK', icon: 'explosion' },
 
-    // Repair Nanites
-    POTENCY:          { id: 'POTENCY',          name: 'Potency',          description: '+1 HP/s per stack',                    cost: 2, maxStacks: 2, ability: 'REPAIR_NANITES', icon: 'pill' },
-    EXTENDED_CARE:    { id: 'EXTENDED_CARE',    name: 'Extended Care',    description: '+2s duration per stack',               cost: 2, maxStacks: 2, ability: 'REPAIR_NANITES', icon: 'stopwatch' },
-    EMERGENCY_PROTOCOL:{ id:'EMERGENCY_PROTOCOL',name:'Emergency',        description: 'Auto-activates below 20% HP',         cost: 3, maxStacks: 1, ability: 'REPAIR_NANITES', icon: 'siren' },
+    // Field Medic (R6.1)
+    POTENCY:          { id: 'POTENCY',          name: 'Potency',          description: '+10% burst heal per stack',            cost: 2, maxStacks: 2, ability: 'FIELD_MEDIC', icon: 'pill' },
+    EMERGENCY_PROTOCOL:{ id:'EMERGENCY_PROTOCOL',name:'Emergency',        description: 'Auto-activates below 20% HP',         cost: 3, maxStacks: 1, ability: 'FIELD_MEDIC', icon: 'siren' },
 
     // 5.93.0 — Phase Dash upgrades (EXTENDED_PHASE, AFTERIMAGE,
     // QUICK_PHASE) deleted along with the PHASE_DASH defense ability.
@@ -1256,10 +1249,7 @@ export const ABILITY_UPGRADES = {
     EMP_OVERLOAD:     { id: 'EMP_OVERLOAD',     name: 'Overload',         description: 'Stunned enemies take +20% damage',    cost: 3, maxStacks: 1, ability: 'EMP_PULSE', icon: 'bolt' },
     CASCADE:          { id: 'CASCADE',          name: 'Cascade',          description: 'Kill a stunned enemy to stun nearby',  cost: 3, maxStacks: 1, ability: 'EMP_PULSE', icon: 'chain' },
 
-    // Tractor Shield
-    WIDE_ANGLE:       { id: 'WIDE_ANGLE',       name: 'Wide Angle',       description: '+30° shield arc per stack',            cost: 2, maxStacks: 2, ability: 'TRACTOR_SHIELD', icon: 'ruler' },
-    PROFIT:           { id: 'PROFIT',           name: 'Profit',           description: '+5 coins per absorbed bullet',         cost: 2, maxStacks: 2, ability: 'TRACTOR_SHIELD', icon: 'money-bag' },
-    REDIRECTION:      { id: 'REDIRECTION',      name: 'Redirection',      description: '30% of absorbed bullets fire back',   cost: 3, maxStacks: 1, ability: 'TRACTOR_SHIELD', icon: 'undo' },
+    // Tractor Shield upgrades removed with the ability (R6.1).
 
     // Sentry Drone
     EXTRA_DRONE:      { id: 'EXTRA_DRONE',      name: 'Extra Drone',      description: '+1 drone per stack',                  cost: 3, maxStacks: 2, ability: 'SENTRY_DRONE', icon: 'satellite' },

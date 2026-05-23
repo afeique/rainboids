@@ -5,30 +5,21 @@ import { GAME_CONFIG } from '../core/constants.js';
 // Phase B.S1 — canonical export is now `ABILITIES` (was ABILITIES, kept
 // as a back-compat alias in weapon-data.js).
 import { ABILITIES, POWER_WEAPONS } from '../combat/weapon-data.js';
+import { cleansePlayerStatus } from './player-status.js';
 
 // ── Active ability updates ──────────────────────────────────────────────────
 
 export function updateActiveAbilities(dt) {
-    // Repair nanites: heal over time
-    if (this.activeAbilityEffects.has('REPAIR_NANITES')) {
-        const config = ABILITIES.REPAIR_NANITES;
-        const potencyStacks = this.getPowerupStacks('POTENCY');
-        const hps = config.healPerSecond + potencyStacks;
-        const healThisTick = hps * (dt / 1000);
-        this.health = Math.min(this.getEffectiveMaxHealth(), this.health + healThisTick);
-    }
+    // R6.1 — Field Medic is a BURST heal + cleanse on activate (no HoT here).
 
-    // EMERGENCY_PROTOCOL — auto-fire Repair Nanites when HP drops below
-    // 20% (only when Repair is equipped in some slot, that slot is off
-    // cooldown, and the heal isn't already running) so it lands without a
-    // manual panic-tap. Phase B.S1 — scans all 4 slots instead of the old
-    // single activeAbility, so it works regardless of which slot holds Repair.
+    // EMERGENCY_PROTOCOL — auto-fire Field Medic when HP drops below 20%
+    // (only when it's equipped in some slot and that slot is off cooldown)
+    // so the burst-heal + cleanse lands without a manual panic-tap.
     if (this.getPowerupStacks('EMERGENCY_PROTOCOL') > 0
-        && !this.activeAbilityEffects.has('REPAIR_NANITES')
         && this.health < this.getEffectiveMaxHealth() * 0.2) {
-        const repairSlot = this.equippedAbilities.indexOf('REPAIR_NANITES');
-        if (repairSlot !== -1 && this.abilityCooldowns[repairSlot] <= 0) {
-            this.activateAbility(repairSlot);
+        const medicSlot = this.equippedAbilities.indexOf('FIELD_MEDIC');
+        if (medicSlot !== -1 && this.abilityCooldowns[medicSlot] <= 0) {
+            this.activateAbility(medicSlot);
         }
     }
 
@@ -475,10 +466,9 @@ export function cycleAbility(slot = 0) {
 // Player._triggerDash, which plays it directly via audioManager.
 const ABILITY_ACTIVATE_SOUND = {
     BULWARK:        'bulwark',
-    REPAIR_NANITES: 'repairNanites',
+    FIELD_MEDIC:    'repairNanites', // reuse the heal chime
     DEFLECTOR_ORBS: 'deflectorOrbs',
     EMP_PULSE:      'empPulse',
-    TRACTOR_SHIELD: 'tractorShield',
 };
 
 export function activateAbility(slot = 0) {
@@ -497,12 +487,20 @@ export function activateAbility(slot = 0) {
     let duration = config.duration;
     if (abilityId === 'BULWARK') {
         duration += this.getPowerupStacks('FORTIFY') * 1000;
-    } else if (abilityId === 'REPAIR_NANITES') {
-        duration += this.getPowerupStacks('EXTENDED_CARE') * 2000;
     }
     this.activeAbilityEffects.set(abilityId, {
         timeRemaining: duration,
     });
+
+    // R6.1 — Field Medic: instant burst heal (% of max HP, +POTENCY) +
+    // cleanse all player statuses (CHILL / CORRODE / BURN). The cleanse is
+    // the unique verb no card/stat/gear can provide.
+    if (abilityId === 'FIELD_MEDIC') {
+        const pct = config.healPct + this.getPowerupStacks('POTENCY') * 0.10;
+        const maxHp = this.getEffectiveMaxHealth();
+        this.health = Math.min(maxHp, this.health + maxHp * pct);
+        if (config.cleanse) cleansePlayerStatus(this);
+    }
 
     // 6.x — Per-ability ON-ACTIVATE effects (previously DEFLECTOR_ORBS and
     // EMP_PULSE were placebos — they set the timer + sound but did
@@ -596,7 +594,7 @@ export function updateAbilityCooldowns(dt) {
         if (effect.timeRemaining <= 0) {
             this.activeAbilityEffects.delete(abilityId);
             if (abilityId === 'BULWARK') this.bulwarkActive = false;
-            if (abilityId === 'REPAIR_NANITES') this.regenActive = false;
+            if (abilityId === 'FIELD_MEDIC') this.regenActive = false;
             if (abilityId === 'DEFLECTOR_ORBS') this.deflectorOrbs = [];
             if (abilityId === 'TRACTOR_SHIELD') this.tractorShieldActive = false;
             if (abilityId === 'SENTRY_DRONE') this.sentryDrones = [];

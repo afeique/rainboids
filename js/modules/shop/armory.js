@@ -12,11 +12,12 @@
 // live run + the rainboidsMeta store.
 
 // Always-available loadout — never costs gold, never appears in the store.
-// (The base ability kit grows to Phase Dash + Field Medic + Bulwark in R6.)
+// R6.2 base kit: Bulwark + Field Medic from run one (Phase Dash is the free
+// SHIFT movement primitive, not a 4-slot ability).
 export const BASE_LOADOUT = {
     primaries: ['PULSE_CANNON'],
     powers:    ['CHARGE_SHOT'],
-    abilities: ['BULWARK'],
+    abilities: ['BULWARK', 'FIELD_MEDIC'],
 };
 
 // Per-category meta key + base set + unlock price. Abilities are priced

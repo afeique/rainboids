@@ -112,7 +112,8 @@ export class Player {
         this.activePower = 'CHARGE_SHOT';
         this.ownedPrimaries = new Set(['PULSE_CANNON']);
         this.ownedPowers = new Set(['CHARGE_SHOT']);
-        this.ownedAbilities = new Set(['BULWARK']);
+        // R6.2 base kit — Bulwark + Field Medic available from run one.
+        this.ownedAbilities = new Set(['BULWARK', 'FIELD_MEDIC']);
 
         // Phase B.S1 — 4-slot defense-ability loadout (NEW source of truth).
         //   equippedAbilities[i]   — ability id in slot i (0..3), or null.
