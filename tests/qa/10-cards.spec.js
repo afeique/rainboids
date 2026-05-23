@@ -143,6 +143,67 @@ test.describe('QA-10b: In-run gold sinks at the card moment (Phase R4)', () => {
         expect(r.health).toBeGreaterThan(1); // healed
     });
 
+    test('buying +CARD grants a bonus pick (6th/7th card)', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.ownedPrimaries = new Set(['PULSE_CANNON']);
+            p.ownedPowers = new Set(['CHARGE_SHOT']);
+            p.equippedAbilities = ['BULWARK', null, null, null];
+            ge.game.money = 5000;
+            ge._extraCardsThisRun = 0;
+            ge.openWavePickOverlay();
+            const extraBtn = [...document.querySelectorAll('#wave-pick-actions .wave-pick-action-btn')]
+                .find((b) => /\+CARD/.test(b.textContent));
+            const goldBefore = ge.game.money;
+            extraBtn.click();
+            const pendingAfterBuy = ge._bonusPickPending;
+            // now take a pick — should NOT close (re-draws for the bonus pick)
+            document.querySelector('#wave-pick-cards .wave-pick-card').click();
+            const ov = document.getElementById('wave-pick-overlay');
+            return {
+                spent: goldBefore - ge.game.money,
+                pendingAfterBuy,
+                pendingAfterPick: ge._bonusPickPending,
+                stillOpen: ov && ov.style.display === 'flex',
+            };
+        });
+        expect(r.spent).toBe(600); // first extra card
+        expect(r.pendingAfterBuy).toBe(1);
+        expect(r.pendingAfterPick).toBe(0); // consumed by the pick
+        expect(r.stillOpen).toBe(true);     // re-drew instead of closing
+    });
+
+    test('Revive Token: buying it then dying revives instead of game over', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.ownedPrimaries = new Set(['PULSE_CANNON']);
+            p.ownedPowers = new Set(['CHARGE_SHOT']);
+            p.equippedAbilities = ['BULWARK', null, null, null];
+            ge.game.money = 5000;
+            ge._revivesThisRun = 0;
+            ge.openWavePickOverlay();
+            const reviveBtn = [...document.querySelectorAll('#wave-pick-actions .wave-pick-action-btn')]
+                .find((b) => /REVIVE ·/.test(b.textContent));
+            reviveBtn.click();
+            const tokenAfterBuy = !!p._reviveToken;
+            // now die — the token should cheat death
+            p.health = 0;
+            ge.handlePlayerDeath();
+            return {
+                tokenAfterBuy,
+                tokenAfterDeath: !!p._reviveToken,
+                health: p.health,
+                state: ge.game.state,
+            };
+        });
+        expect(r.tokenAfterBuy).toBe(true);
+        expect(r.tokenAfterDeath).toBe(false); // consumed
+        expect(r.health).toBeGreaterThan(0);   // revived
+        expect(r.state).not.toBe('GAME_OVER');
+    });
+
     test('no fatal JS errors through the gold-sink flow', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;

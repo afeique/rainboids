@@ -388,6 +388,26 @@ export function accumulateOverflowToTank(credit) {
 }
 
 export function handlePlayerDeath() {
+    // R4.3 — Revive Token (bought at the card moment) cheats death once per
+    // run: consume it, restore to full HP + one spare tank, and skip the
+    // death sequence entirely so the run continues.
+    if (this.player && this.player._reviveToken) {
+        this.player._reviveToken = false;
+        const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
+            ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
+        this.player.health = maxHp;
+        if (typeof this.healthTanks === 'number') this.healthTanks = Math.max(this.healthTanks | 0, 1);
+        if (this.events?.emit) {
+            this.events.emit('audio:powerup');
+            this.events.emit('ui:show-message', {
+                title: '✦ REVIVED ✦', subtitle: 'Revive Token consumed',
+                duration: 1800, position: 'top',
+            });
+            this.events.emit('ui:update-tanks', { tanks: this.healthTanks });
+        }
+        return;
+    }
+
     const dx = this.player.x;
     const dy = this.player.y;
     const playerAngle = this.player.angle || 0;

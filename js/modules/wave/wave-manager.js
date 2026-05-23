@@ -19,6 +19,8 @@ import {
     rerollCost as rerollGoldCost, canReroll as rerollCanReroll,
     repairKitCost as repairKitGoldCost, canRepair as repairCanBuy,
     REPAIR_KIT_HEAL_PCT as REPAIR_HEAL_PCT,
+    extraCardCost as extraCardGoldCost, canBuyExtraCard as extraCardCanBuy,
+    reviveCost as reviveGoldCost, canRevive as reviveCanBuy,
 } from '../world/run-shop.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 
@@ -1480,7 +1482,8 @@ export function openWavePickOverlay() {
         return;
     }
     overlay.style.display = 'flex';
-    this._rerollsThisOffer = 0; // R4 — one paid reroll per offer
+    this._rerollsThisOffer = 0;  // R4 — one paid reroll per offer
+    this._bonusPickPending = 0;  // R4.1 — bought-but-unpicked extra cards
 
     const renderCards = (cardList) => {
     cardsContainer.replaceChildren();
@@ -1563,21 +1566,35 @@ export function openWavePickOverlay() {
                 }
             }
 
-            // R2.4 — the post-card gold UPGRADE quick-buy (shop-suggest) is
-            // retired now that cards provide upgrades. Go straight to the next
-            // wave (in-run gold is spent on the R4 reroll/repair sinks below).
-            this.closeWavePickOverlay();
+            // R4.1 — if the player bought an extra ("6th/7th") card, this pick
+            // consumes one bonus pick and re-draws a fresh offer instead of
+            // closing; otherwise the pick ends the draft → next wave.
+            // (R2.4: the post-card gold UPGRADE quick-buy is retired.)
+            if ((this._bonusPickPending | 0) > 0) {
+                this._bonusPickPending = (this._bonusPickPending | 0) - 1;
+                this._rerollsThisOffer = 0; // fresh offer → reroll available again
+                redraw();
+            } else {
+                this.closeWavePickOverlay();
+            }
         });
 
         cardsContainer.appendChild(card);
     }
     }; // end renderCards
 
-    renderCards(picks);
-    _renderDraftActions.call(this, () => {
-        picks = buildDraft(player, { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES });
+    // Re-draw a fresh offer (used by paid reroll + the bonus-pick path) and
+    // refresh the gold-sink action buttons.
+    const pools = { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES };
+    const redraw = () => {
+        picks = buildDraft(player, pools);
         renderCards(picks);
-    });
+        renderActions();
+    };
+    const renderActions = () => _renderDraftActions.call(this, redraw);
+
+    renderCards(picks);
+    renderActions();
 }
 
 // R4 — render the in-run gold-sink buttons (paid REROLL + REPAIR KIT) into
@@ -1634,6 +1651,48 @@ function _renderDraftActions(onReroll) {
             _renderDraftActions.call(this, onReroll);
         },
     ));
+
+    // R4.1 — buy the 6th/7th card: a bonus pick this draft (run-capped at 2,
+    // steeply escalating). The current cards stay pickable; taking a pick
+    // consumes one bonus and re-draws a fresh offer.
+    const extras = this._extraCardsThisRun | 0;
+    if (extraCardCanBuy(extras, gold) || extraCardGoldCost(extras) !== Infinity) {
+        actions.appendChild(mkBtn(
+            `+CARD · ${extraCardGoldCost(extras)}🪙`,
+            extraCardCanBuy(extras, gold),
+            () => {
+                const c = extraCardGoldCost(this._extraCardsThisRun | 0);
+                if ((this.game.money | 0) < c) return;
+                this.game.money = Math.max(0, (this.game.money | 0) - c);
+                this._extraCardsThisRun = (this._extraCardsThisRun | 0) + 1;
+                this._bonusPickPending = (this._bonusPickPending | 0) + 1;
+                if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
+                _renderDraftActions.call(this, onReroll);
+            },
+        ));
+    }
+
+    // R4.3 — Revive Token: very steep, once per run. Consumed on death
+    // (player._reviveToken) to cheat death once.
+    const revives = this._revivesThisRun | 0;
+    if (!(player && player._reviveToken) && reviveGoldCost(revives) !== Infinity) {
+        actions.appendChild(mkBtn(
+            `REVIVE · ${reviveGoldCost(revives)}🪙`,
+            reviveCanBuy(revives, gold),
+            () => {
+                const c = reviveGoldCost(this._revivesThisRun | 0);
+                if ((this.game.money | 0) < c) return;
+                this.game.money = Math.max(0, (this.game.money | 0) - c);
+                this._revivesThisRun = (this._revivesThisRun | 0) + 1;
+                if (player) player._reviveToken = true;
+                if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
+                _renderDraftActions.call(this, onReroll);
+            },
+        ));
+    } else if (player && player._reviveToken) {
+        const owned = mkBtn('REVIVE ✓', false, () => {});
+        actions.appendChild(owned);
+    }
 }
 
 // 5.98.0 — Tear down the wave-pick overlay and route into the next

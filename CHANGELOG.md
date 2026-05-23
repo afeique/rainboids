@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.94.0] - 2026-05-23
+
+### Added — 6th/7th card + Revive Token (Phase R4.1 / R4.3) — completes R4
+
+- **6th/7th card** (R4.1): a `+CARD` button at the draft buys a bonus pick
+  (steeply escalating: 600 then 1200 run-gold; hard-capped at 2 extra = 7 total
+  per run). Taking a pick consumes one bonus and re-draws a fresh offer instead
+  of ending the draft.
+- **Revive Token** (R4.3): a `REVIVE` button buys a one-per-run cheat-death
+  (3000 run-gold). On a lethal hit, `handlePlayerDeath` consumes the token,
+  restores full HP + a spare tank, and continues the run instead of GAME OVER.
+- Run-level counters (`_extraCardsThisRun`, `_revivesThisRun`) reset per run;
+  `_bonusPickPending` resets per draft. +2 QA tests (10-cards now 9).
+
+With this, **Phase R4 is complete** (reroll, Repair Kit, extra cards, Revive).
+
 ## [6.93.0] - 2026-05-23
 
 ### Fixed — Stats menu auto-opens on every stage clear when leveled (Phase R7.3)
