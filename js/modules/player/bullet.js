@@ -484,12 +484,32 @@ export class Bullet {
                 }
             }
         } else if (this.subBomb) {
-            // Sub-bomblet: simpler path. Travel for `subBombLifeFrames`
-            // logic ticks, then detonate. Collision-system handles
-            // enemy-contact early detonation via a similar AoE call.
+            // Sub-bomblet: flies off in its (random) launch direction and
+            // detonates the moment it hits SOMETHING — an enemy (handled by
+            // collision-system) or an asteroid (checked here) — otherwise it
+            // explodes after its fixed flight window (`subBombLifeFrames`).
+            // The random scatter + contact/timeout rule spreads blast damage
+            // across an area.
             this._smokeFrame++;
             if (particlePool && (this._smokeFrame % 4 === 0)) {
                 particlePool.get(this.x, this.y, 'clusterTrail');
+            }
+            // Asteroid contact. Sub-bombs carry no proximityRadius, so use a
+            // small contact threshold derived from the blast radius.
+            if (asteroidPool && asteroidPool.activeObjects) {
+                const contactR = Math.max(12, (this.blastRadius || 50) * 0.4);
+                const list = asteroidPool.activeObjects;
+                for (let i = 0; i < list.length; i++) {
+                    const a = list[i];
+                    if (!a || !a.active) continue;
+                    const dx = a.x - this.x;
+                    const dy = a.y - this.y;
+                    const rr = contactR + (a.radius || 0);
+                    if (dx * dx + dy * dy <= rr * rr) {
+                        this._detonate(gameEngine);
+                        return;
+                    }
+                }
             }
             if (this.life >= this.subBombLifeFrames) {
                 this._detonate(gameEngine);

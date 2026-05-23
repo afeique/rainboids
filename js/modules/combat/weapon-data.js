@@ -118,7 +118,7 @@ export const PRIMARY_WEAPONS = {
     CLUSTER_LAUNCHER: {
         id: 'CLUSTER_LAUNCHER',
         name: 'Cluster Launcher',
-        description: 'Hold to charge launch distance — tap lobs it close, full charge reaches the screen edge; explodes into spheres on contact or at range',
+        description: 'Hold to charge — a tap lobs a slow, floaty bomb a short way; a full charge hurls it fast to the screen edge. Detonates on contact or at the charged range, scattering bomblets that fly off and spread blast damage across the area',
         icon: 'bomb',
         color: '#ff5544',
         fireRate: 800,
@@ -140,15 +140,20 @@ export const PRIMARY_WEAPONS = {
         cost: 0,
         unlockWave: 10,
         // Cluster bomb tuning (6.26.0 — no halt / no arm):
-        //   initialVelocity  — constant flight speed (no friction).
+        //   initialVelocity  — FULL-CHARGE flight speed (constant; no friction).
+        //   minLaunchVelocity— quick-tap (zero-charge) flight speed. The launch
+        //                      speed lerps minLaunchVelocity→initialVelocity with
+        //                      the hold, so a tap floats and a full charge flies.
         //   travelFriction   — 1.0 (no deceleration).
-        //   contactRadius    — radius at which any enemy/asteroid/mine
-        //                      contact triggers detonation. Replaces
-        //                      the old proximityRadius.
-        //   blastRadius      — primary blast AoE (+30 per MEGA_CLUSTER stack).
-        //   subBombCount     — radial spheres emitted on detonation
-        //                      (+1 per MORE_BOMBLETS stack).
+        //   proximityRadius  — radius at which any enemy/asteroid/mine
+        //                      contact triggers detonation.
+        //   blastRadius      — primary blast AoE.
+        //   subBombCount     — bomblets scattered on detonation. They eject in
+        //                      RANDOM directions, glide (subBombFriction), and
+        //                      detonate on contact or after subBombLifeFrames —
+        //                      spreading the blast damage across an area.
         initialVelocity: 12,
+        minLaunchVelocity: 3,
         travelFriction: 1.0,
         haltVelocity: 0.0,
         armedDurationMs: 0,
@@ -156,9 +161,9 @@ export const PRIMARY_WEAPONS = {
         blastRadius: 90,
         blastDamage: 50,
         subBombCount: 5,
-        subBombSpeed: 4,
-        subBombFriction: 0.94,
-        subBombLifeFrames: 20,
+        subBombSpeed: 5,
+        subBombFriction: 0.96,
+        subBombLifeFrames: 30,
         subBombBlastRadius: 50,
         subBombDamage: 25,
         upgrades: ['CLUSTER_MULTI', 'CLUSTER_STUN', 'CLUSTER_KNOCK'],
@@ -340,6 +345,27 @@ export const PRIMARY_WEAPONS = {
     //   gates re-activation, which the existing power-weapon UI
     //   already displays as a ring around the player.
 };
+
+// Cluster Launcher — charge → launch distance/velocity mapping. SHARED by the
+// fire path (weapons.fireCluster) and the laser-sight preview (hud/cursor.js)
+// so the on-screen aim length is an HONEST preview of where the bomb detonates.
+//   • distance: a quick tap lobs to `minLaunchDist`; a full charge reaches
+//     ~0.55× the viewport diagonal (comfortably the screen edge).
+//   • velocity: lerps `minLaunchVelocity` (slow, floaty) → `initialVelocity`
+//     (fast) so the throw FEELS as far as it looks.
+export function clusterLaunchDistance(config, frac, viewW = 1280, viewH = 720) {
+    const f = Math.max(0, Math.min(1, frac || 0));
+    const minDist = (config && config.minLaunchDist != null) ? config.minLaunchDist : 70;
+    const maxDist = Math.hypot(viewW, viewH) * 0.55;
+    return minDist + (maxDist - minDist) * f;
+}
+
+export function clusterLaunchVelocity(config, frac) {
+    const f = Math.max(0, Math.min(1, frac || 0));
+    const minV = (config && config.minLaunchVelocity != null) ? config.minLaunchVelocity : 3;
+    const maxV = (config && config.initialVelocity != null) ? config.initialVelocity : 12;
+    return minV + (maxV - minV) * f;
+}
 
 // Streak damage tiers — 5.104.0 epicness-ordered ladder.
 //   Twenty distinct tiers at kills 10, 20, 30, ..., 200 so the player

@@ -9,8 +9,10 @@ const DEBRIS_COUNT = 5;
 // energy retention (slightly more elastic than the ship's 0.8).
 const ASTEROID_MAX_SPEED = 2.0;
 const ASTEROID_BOUNCE_DAMP = 0.9;
-// Asteroid HP scaling: base is 1-3 by size tier; HP grows +25% per asteroid
-// level on top of that (kept in sync with wave-data.getLevelScaledAsteroidStats).
+// Asteroid HP scaling: base HP is ROLLED by size tier (small = 1, medium = 1-2,
+// large = 2-3 — small rocks are reliably weak, large rocks have a chance to be
+// tough) and grows +25% per asteroid level on top of that. The per-level rate
+// is shared with wave-data.getLevelScaledAsteroidStats.
 export const ASTEROID_HP_PER_LEVEL = 0.25;
 
 export class Asteroid {
@@ -86,14 +88,17 @@ export class Asteroid {
         let health;
         const sizeRef = this.baseRadius || this.radius;
 
-        // Asteroids are candy to unwrap, not chores. Base HP is 1-3 by size
-        // tier (big = 3, medium = 2, small = 1) — at most 3 at level 1 — and
-        // SCALES UP with level (no hard cap), so early rocks pop in 1-3 hits
-        // while late-game rocks are tougher. Tune ASTEROID_HP_PER_LEVEL to
-        // taste.
-        if (sizeRef >= 40)      baseHealth = 3;   // big
-        else if (sizeRef >= 20) baseHealth = 2;   // medium
-        else                    baseHealth = 1;   // small
+        // Asteroids are candy to unwrap, not chores. Base HP is ROLLED by
+        // size tier with size-driven variance: SMALL rocks are reliably weak
+        // (always 1 HP), MEDIUM rocks are usually 1 with an occasional 2, and
+        // LARGE rocks are usually 2 but have a real chance to roll a tough 3.
+        // This keeps the opening field firmly in the 1-3 band while letting
+        // the odd big rock surprise you. HP then SCALES UP with asteroid level
+        // (no hard cap) so late-game rocks are tougher. Tune the roll chances
+        // and ASTEROID_HP_PER_LEVEL to taste.
+        if (sizeRef >= 40)      baseHealth = 2 + (Math.random() < 0.40 ? 1 : 0); // big: 2, 40% → 3
+        else if (sizeRef >= 20) baseHealth = 1 + (Math.random() < 0.35 ? 1 : 0); // medium: 1, 35% → 2
+        else                    baseHealth = 1;                                  // small: always 1
 
         // Gentle linear ramp with asteroid level (this.level). +25%/level.
         const levelMultiplier = 1 + (this.level - 1) * ASTEROID_HP_PER_LEVEL;

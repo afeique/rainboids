@@ -11,6 +11,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.101.1] - 2026-05-23
+
+### Fixed — Laser sights no longer extend off-screen
+
+- **All weapon laser sights are now capped at the viewport edge.** The single-
+  line laser (Pulse / Rail / non-spread weapons) drew to the predicted bullet
+  range with no screen clamp, so high-range builds shot the beam well past the
+  visible area. It now clamps to the screen edge via `_viewportRayDistance`
+  (the cone path already did this). The actual bullet still flies its full
+  range — only the on-screen trace is bounded (`hud/cursor.js`).
+
+## [6.101.0] - 2026-05-23
+
+### Changed — Cluster Launcher: charge-scaled velocity, scatter bomblets, charge-aware aim
+
+- **Launch velocity now scales with hold time.** A quick tap lobs the bomb
+  slowly (floaty drift); a full charge hurls it fast to the screen edge. Launch
+  speed lerps `minLaunchVelocity` (3) → `initialVelocity` (12) with the charge,
+  alongside the existing charge-for-distance, so the throw *feels* as far as it
+  looks (`weapon-data.js`, `weapons.fireCluster`).
+- **Charge-aware laser-sight preview.** The Cluster Launcher gets a dedicated
+  amber aim beam whose length grows with the current charge to show exactly how
+  far the bomb will fly before detonating, with a dashed blast-radius ring at
+  the tip (and an early-detonation marker if a target blocks the path). Driven
+  by the same `clusterLaunchDistance` helper the fire path uses, so the preview
+  is honest. Capped at the viewport edge (`hud/cursor.js`).
+- **Bomblets scatter and spread damage over an area.** On detonation the sub-
+  bomblets now eject in *random* directions at varied speeds, glide on their
+  own friction, and explode on contact with anything — enemies *or* asteroids
+  (asteroid contact is new) — or after a fixed flight window. Tuned for more
+  travel/spread: `subBombSpeed` 4→5, `subBombFriction` 0.94→0.96,
+  `subBombLifeFrames` 20→30 (`combat-manager.detonateCluster`, `bullet.js`).
+
+## [6.100.1] - 2026-05-23
+
+### Fixed — Asteroid HP double-scaled on wave spawns
+
+- **Wave-start asteroids were level-scaled twice.** `initializeLeveledAsteroid`
+  re-applied `getLevelScaledAsteroidStats()` on top of the health
+  `asteroid.initializeAsteroid()` had *already* level-scaled, double-counting
+  the +25%/level multiplier. That's why early rocks "still tended to have 4-5
+  HP" despite the 6.100.0 rebalance — a level-2 big rock landed at 5 HP instead
+  of the intended 3-4. The wrapper now delegates to `initializeWaveAsteroid`
+  and lets `asteroid.initializeAsteroid` be the single scaler.
+
+### Changed — Asteroid base HP is now size-driven with variance
+
+- **Small rocks are reliably weak; large rocks have a chance to be tough.** Base
+  HP is now rolled by size tier: **small = 1** (always), **medium = 1** (35% → 2),
+  **large = 2** (40% → 3). The opening field sits firmly in the 1-3 band, small
+  asteroids pop in one hit, and the occasional big rock rolls tougher — instead
+  of every tier being a flat, predictable value (`asteroid.js`).
+
 ## [6.100.0] - 2026-05-23
 
 ### Changed — Difficulty progression: player-anchored enemy levels + weaker asteroids

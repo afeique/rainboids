@@ -457,9 +457,12 @@ export function getLevelScaledEnemyStats(baseStats, level) {
 }
 
 // Asteroid HP — gentle linear ramp against asteroid level, kept in sync with
-// Asteroid.initializeAsteroid (ASTEROID_HP_PER_LEVEL = +25%/level). Base HP is
-// 1-3 by size tier, so a level-1 rock pops in 1-3 hits and late-game rocks are
-// tougher but never bullet sponges. Tune the per-level rate to taste.
+// Asteroid.initializeAsteroid (ASTEROID_HP_PER_LEVEL = +25%/level). The base
+// HP is ROLLED by size tier in Asteroid.initializeAsteroid (small = 1,
+// medium = 1-2, large = 2-3), so a level-1 rock pops in 1-3 hits and late-game
+// rocks are tougher but never bullet sponges. This pure helper applies only
+// the level multiplier; it is the single source of truth for that ramp and is
+// exercised by the unit tests. Tune the per-level rate to taste.
 //   1 + (L-1) · 0.25   →   L1: 1.0  L5: 2.0  L10: 3.25  L15: 4.5
 export const ASTEROID_HP_PER_LEVEL = 0.25;
 export function getLevelScaledAsteroidStats(baseHealth, level) {

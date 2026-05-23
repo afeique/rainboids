@@ -60,6 +60,7 @@ import {
 } from '../../js/modules/combat/combat-manager.js';
 import {
     PRIMARY_WEAPONS, PRIMARY_UPGRADES,
+    clusterLaunchDistance, clusterLaunchVelocity,
 } from '../../js/modules/combat/weapon-data.js';
 
 // ── Test fixtures ────────────────────────────────────────────────────
@@ -148,6 +149,48 @@ describe('PRIMARY_WEAPONS.CLUSTER_LAUNCHER — config sanity', () => {
     test('no CLUSTER_HOMING / CLUSTER_PIERCING upgrade exists (cluster has no seek/pierce)', () => {
         expect(PRIMARY_UPGRADES.CLUSTER_HOMING).toBeUndefined();
         expect(PRIMARY_UPGRADES.CLUSTER_PIERCING).toBeUndefined();
+    });
+});
+
+describe('clusterLaunchDistance / clusterLaunchVelocity — charge scaling', () => {
+    const cfg = PRIMARY_WEAPONS.CLUSTER_LAUNCHER;
+    const VW = 1280, VH = 720;
+
+    test('a quick tap (frac 0) lobs to the minimum launch distance', () => {
+        expect(clusterLaunchDistance(cfg, 0, VW, VH)).toBeCloseTo(cfg.minLaunchDist, 5);
+    });
+
+    test('a full charge (frac 1) reaches ~0.55× the viewport diagonal', () => {
+        const expected = Math.hypot(VW, VH) * 0.55;
+        expect(clusterLaunchDistance(cfg, 1, VW, VH)).toBeCloseTo(expected, 5);
+    });
+
+    test('launch distance grows monotonically with charge', () => {
+        const d0 = clusterLaunchDistance(cfg, 0, VW, VH);
+        const dHalf = clusterLaunchDistance(cfg, 0.5, VW, VH);
+        const d1 = clusterLaunchDistance(cfg, 1, VW, VH);
+        expect(dHalf).toBeGreaterThan(d0);
+        expect(d1).toBeGreaterThan(dHalf);
+    });
+
+    test('frac is clamped to [0,1]', () => {
+        expect(clusterLaunchDistance(cfg, -5, VW, VH)).toBeCloseTo(cfg.minLaunchDist, 5);
+        expect(clusterLaunchDistance(cfg, 99, VW, VH)).toBeCloseTo(clusterLaunchDistance(cfg, 1, VW, VH), 5);
+    });
+
+    test('a tap launches slow (floaty) and a full charge launches fast', () => {
+        expect(clusterLaunchVelocity(cfg, 0)).toBeCloseTo(cfg.minLaunchVelocity, 5);
+        expect(clusterLaunchVelocity(cfg, 1)).toBeCloseTo(cfg.initialVelocity, 5);
+        // The floaty tap is meaningfully slower than the full-charge throw.
+        expect(clusterLaunchVelocity(cfg, 0)).toBeLessThan(clusterLaunchVelocity(cfg, 1));
+    });
+
+    test('launch velocity grows monotonically with charge', () => {
+        const v0 = clusterLaunchVelocity(cfg, 0);
+        const vHalf = clusterLaunchVelocity(cfg, 0.5);
+        const v1 = clusterLaunchVelocity(cfg, 1);
+        expect(vHalf).toBeGreaterThan(v0);
+        expect(v1).toBeGreaterThan(vHalf);
     });
 });
 
@@ -269,6 +312,49 @@ describe('Bullet.updateClusterStage — enemy / asteroid contact detonation', ()
         let detonated = false;
         const stubGE = { detonateCluster() { detonated = true; b.active = false; } };
         b.updateClusterStage(null, makePool([]), stubGE, null, asteroidPool);
+        expect(detonated).toBe(true);
+    });
+});
+
+describe('Bullet.updateClusterStage — sub-bomblet contact / timeout detonation', () => {
+    const subCfg = { subBombFriction: 0.96, subBombLifeFrames: 30, subBombBlastRadius: 50, subBombDamage: 25 };
+
+    test('sub-bomblet detonates on asteroid contact (explodes when it hits something)', () => {
+        const b = new Bullet();
+        b.reset(500, 500, 0);
+        b.setupSubBomblet({ ...subCfg }, 0, 5);
+        b.x = 500; b.y = 500;
+        // contactR = max(12, 50*0.4) = 20; asteroid r=30 at ~45px → 20+30=50 overlaps.
+        const asteroid = { x: 545, y: 500, radius: 30, active: true };
+        let detonated = false;
+        const stubGE = { detonateSubBomblet() { detonated = true; b.active = false; } };
+        b.updateClusterStage(null, makePool([]), stubGE, { width: 1e5, height: 1e5 }, makePool([asteroid]));
+        expect(detonated).toBe(true);
+    });
+
+    test('sub-bomblet keeps flying when nothing is in range', () => {
+        const b = new Bullet();
+        b.reset(500, 500, 0);
+        b.setupSubBomblet({ ...subCfg }, 0, 5);
+        let detonated = false;
+        const stubGE = { detonateSubBomblet() { detonated = true; b.active = false; } };
+        // A handful of ticks, no targets, well within the flight window.
+        for (let i = 0; i < 5; i++) {
+            b.updateClusterStage(null, makePool([]), stubGE, { width: 1e5, height: 1e5 }, makePool([]));
+        }
+        expect(detonated).toBe(false);
+        expect(b.active).toBe(true);
+    });
+
+    test('sub-bomblet detonates after its fixed flight window (timeout)', () => {
+        const b = new Bullet();
+        b.reset(500, 500, 0);
+        b.setupSubBomblet({ ...subCfg, subBombLifeFrames: 5 }, 0, 5);
+        let detonated = false;
+        const stubGE = { detonateSubBomblet() { detonated = true; b.active = false; } };
+        for (let i = 0; i < 6 && !detonated; i++) {
+            b.updateClusterStage(null, makePool([]), stubGE, { width: 1e5, height: 1e5 }, makePool([]));
+        }
         expect(detonated).toBe(true);
     });
 });

@@ -2,7 +2,7 @@
 // Each function is called with `.call(this)` where `this` is the GameEngine instance,
 // so all `this.*` references work exactly as they did as class methods.
 
-import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, clusterLaunchDistance } from '../combat/weapon-data.js';
 import { GAME_CONFIG, GAME_STATES } from '../core/constants.js';
 // 5.95.1 — Mobile mode disables the laser-pointer aim trace (replaced by
 // the touch-position reticle drawn in mobile-reticle.js). Desktop and
@@ -511,6 +511,127 @@ function _drawSpreadCone(engine, player, ox, oy, angle, maxRange) {
     ctx.restore();
 }
 
+// Cluster Launcher aim preview. The bomb's flight distance is set by how long
+// fire is held (player.clusterChargeFrac), so the beam GROWS from a short stub
+// (quick tap → close lob) to a long reach (full charge → screen edge). A
+// dashed blast-radius ring at the tip shows where AND how big the detonation
+// is, making the charge-for-range mechanic read at a glance. The beam is amber
+// (vs the red bullet lasers) to signal an explosive lob, and is capped at the
+// viewport edge so it never runs off-screen. If a target sits on the path
+// before the charged distance, the preview shortens to that early-detonation
+// contact point.
+function _drawClusterAim(engine, player, ox, oy, angle, cfg) {
+    const ctx = engine.ctx;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    const frac = Math.max(0, Math.min(1, player.clusterChargeFrac || 0));
+    const viewW = engine.width || 1280;
+    const viewH = engine.height || 720;
+
+    // Charged launch distance, capped to the visible viewport.
+    let dist = clusterLaunchDistance(cfg, frac, viewW, viewH);
+    const screenCap = _viewportRayDistance(engine, ox, oy, cosA, sinA);
+    if (screenCap > 0) dist = Math.min(dist, screenCap);
+
+    // Early-detonation preview: if an enemy / asteroid lies on the flight
+    // path before the charged distance, the bomb explodes there instead.
+    const contactPad = cfg.proximityRadius || 18;
+    let endDist = dist;
+    let hitEntity = null;
+    const scan = (pool) => {
+        if (!pool || !pool.activeObjects) return;
+        for (const t of pool.activeObjects) {
+            if (!t.active || t.warping || t._deathFlash > 0) continue;
+            const dx = t.x - ox;
+            const dy = t.y - oy;
+            const along = dx * cosA + dy * sinA;
+            if (along <= 0 || along > endDist) continue;
+            const perp = Math.abs(-dx * sinA + dy * cosA);
+            const r = (t.radius || 10) + contactPad;
+            if (perp > r) continue;
+            const entry = Math.max(0, along - Math.sqrt(Math.max(0, r * r - perp * perp)));
+            if (entry < endDist) { endDist = entry; hitEntity = t; }
+        }
+    };
+    scan(engine.enemyPool);
+    scan(engine.asteroidPool);
+
+    const ex = ox + cosA * endDist;
+    const ey = oy + sinA * endDist;
+    const blastR = cfg.blastRadius || 90;
+
+    const t = Date.now() * 0.001;
+    const haloPulse = 1.0 + 0.10 * Math.sin(t * 1.7);
+    const corePulse = 0.92 + 0.08 * Math.sin(t * 4.3);
+    // Beam brightens as the charge builds, so a full-power throw reads "hot."
+    const chargeBoost = 0.5 + 0.5 * frac;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Amber beam — same 4-stack recipe as the red laser, retinted orange.
+    ctx.strokeStyle = 'rgba(255, 150, 40, 0.05)';
+    ctx.lineWidth = 14 * haloPulse;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 160, 50, ${0.06 + 0.16 * chargeBoost})`;
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 190, 90, ${0.40 * chargeBoost})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 240, 210, ${0.85 * corePulse})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ex, ey); ctx.stroke();
+
+    // Muzzle hotspot — anchors the lob to the gun barrel.
+    {
+        const r = 9 * corePulse;
+        const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+        grad.addColorStop(0.0, 'rgba(255, 240, 220, 0.85)');
+        grad.addColorStop(0.4, 'rgba(255, 150, 60, 0.45)');
+        grad.addColorStop(1.0, 'rgba(255, 90, 0, 0.0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(ox, oy, r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Blast-radius ring at the detonation point — dashed so it reads as
+    // "predicted AoE" not a solid object; brightens with charge.
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = `rgba(255, 170, 70, ${0.18 + 0.24 * frac})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(ex, ey, blastR, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Detonation-center bloom.
+    {
+        const r = 6 * corePulse;
+        const grad = ctx.createRadialGradient(ex, ey, 0, ex, ey, r);
+        grad.addColorStop(0.0, 'rgba(255, 240, 220, 0.95)');
+        grad.addColorStop(0.5, 'rgba(255, 140, 50, 0.55)');
+        grad.addColorStop(1.0, 'rgba(255, 90, 0, 0.0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(ex, ey, r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Ring the blocking target so the early-detonation contact is obvious.
+    if (hitEntity) {
+        const radius = (hitEntity.radius || 10) * 1.08 + 4;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = `rgba(255, 200, 120, ${0.7 * corePulse})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(hitEntity.x, hitEntity.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    ctx.restore();
+}
+
 // Render a thin laser-pointer trace from the player muzzle along the
 // current aim, tick-marked at the bullet's max range, with a subtle
 // reticle around the first entity the shot hits. Piercing builds get
@@ -542,19 +663,37 @@ export function drawLaserPointerAim() {
     const ox = player.x + cosA * muzzleDist;
     const oy = player.y + sinA * muzzleDist;
 
-    const maxRange = _predictPrimaryBulletRange(player);
+    let maxRange = _predictPrimaryBulletRange(player);
     if (!(maxRange > 0)) return;
+
+    const primaryCfg = player.getActivePrimaryConfig && player.getActivePrimaryConfig();
+
+    // Cluster Launcher gets a dedicated charge-based aim: the beam length
+    // grows with the current launch charge to preview exactly how far the
+    // bomb will fly before detonating, with a blast-radius ring at the tip.
+    // (It flies a CHARGED distance, not a bullet-lifetime distance, so it
+    // can't share the bullet-range laser below.)
+    if (player.activePrimary === 'CLUSTER_LAUNCHER') {
+        _drawClusterAim(this, player, ox, oy, angle, primaryCfg || PRIMARY_WEAPONS.CLUSTER_LAUNCHER);
+        return;
+    }
 
     // 5.113.1 — Cone-of-fire visualization for ANY weapon with
     // spreadAngle > 0. Scatter Shot (predictable pellet fan) AND
     // Storm Needles (single needle with randomized jitter within
     // the cone) both route here so the player can read the spread
     // at a glance instead of seeing a misleading single-line laser.
-    const primaryCfg = player.getActivePrimaryConfig && player.getActivePrimaryConfig();
+    // (Already viewport-clamped internally.)
     if (primaryCfg && (primaryCfg.spreadAngle || 0) > 0) {
         _drawSpreadCone(this, player, ox, oy, angle, maxRange);
         return;
     }
+
+    // 6.x — Clamp the single-line laser so it never extends past the visible
+    // viewport (matches the cone path). The actual bullet still flies its
+    // full range; only the on-screen trace is capped to the screen edge.
+    const screenCap = _viewportRayDistance(this, ox, oy, cosA, sinA);
+    if (screenCap > 0) maxRange = Math.min(maxRange, screenCap);
 
     const piercing = _predictPrimaryPiercing(player);
     const maxTargets = piercing + 1;

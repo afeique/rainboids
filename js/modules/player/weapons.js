@@ -2,7 +2,7 @@
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
 import { GAME_CONFIG } from '../core/constants.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity } from '../combat/weapon-data.js';
 import { autofireDiag } from '../autofire-diag.js';
 import { isMobile } from '../platform/platform-detect.js';
 
@@ -784,22 +784,20 @@ export function fireCluster(bulletPool, audioManager, config, chargeFrac = 1) {
     if (!bullet) return;
     bullet.weaponId = 'CLUSTER_LAUNCHER';
 
-    // Charge → launch distance. A quick tap (frac≈0) lobs the bomb a very
-    // short distance; a full charge (frac=1) sends it past the screen edge.
-    // The bomb still detonates early on contact; the target distance is the
-    // detonation point if it reaches open space without hitting anything.
+    // Charge → launch DISTANCE *and* VELOCITY. A quick tap (frac≈0) lobs the
+    // bomb slowly a short way (floaty drift); a full charge (frac=1) hurls it
+    // fast to the screen edge. Both come from the SAME helpers the laser sight
+    // uses, so the on-screen aim length honestly previews the detonation
+    // point. The bomb still detonates early on contact.
     const ge = this.gameEngine;
     const viewW = (ge && ge.width) || 1280;
     const viewH = (ge && ge.height) || 720;
-    const minDist = (config.minLaunchDist != null) ? config.minLaunchDist : 70;
-    // 0.55 × the viewport diagonal comfortably reaches the screen edge from a
-    // roughly camera-centered player.
-    const maxDist = Math.hypot(viewW, viewH) * 0.55;
     const frac = Math.max(0, Math.min(1, chargeFrac));
-    const targetDist = minDist + (maxDist - minDist) * frac;
+    const targetDist = clusterLaunchDistance(config, frac, viewW, viewH);
+    const launchVelocity = clusterLaunchVelocity(config, frac);
 
     bullet.setupClusterBomb({
-        initialVelocity: config.initialVelocity,
+        initialVelocity: launchVelocity,
         travelFriction: config.travelFriction,
         haltVelocity: config.haltVelocity,
         armedDurationMs,

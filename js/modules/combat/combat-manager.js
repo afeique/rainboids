@@ -2178,16 +2178,18 @@ export function detonateCluster(x, y, baseDamage, baseRadius, subBombCount, opts
     if (typeof this.triggerHitstop === 'function') this.triggerHitstop(3);
     if (typeof this.triggerScreenShake === 'function') this.triggerScreenShake(8, 5, baseRadius);
 
-    // 3. Spawn sub-bomblets at random angles. Each sub-bomb travels for
-    //    a short window then detonates on its own.
+    // 3. Scatter sub-bomblets in RANDOM directions at varied speeds. Each
+    //    flies off, glides on its own friction, and detonates on contact
+    //    with anything (or after its fixed flight window) — spreading the
+    //    blast damage across an area rather than one concentrated burst.
     if (subBombCount > 0 && this.bulletPool) {
         const subSpeed = opts.subBombSpeed || 4;
         for (let i = 0; i < subBombCount; i++) {
-            // Spread angles evenly with random jitter so the fan reads
-            // as procedural-but-fair (not perfectly symmetric).
-            const baseAngle = (i / subBombCount) * Math.PI * 2;
-            const angle = baseAngle + random(-0.4, 0.4);
-            spawnSubBomblet.call(this, x, y, angle, subSpeed, opts);
+            const angle = random(0, Math.PI * 2);
+            // Per-bomb speed jitter so they spread to different ranges and
+            // the scatter pattern reads as organic, not a uniform ring.
+            const speed = subSpeed * random(0.7, 1.3);
+            spawnSubBomblet.call(this, x, y, angle, speed, opts);
         }
     }
 }

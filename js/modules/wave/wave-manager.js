@@ -9,7 +9,7 @@ import { GAME_CONFIG, GAME_STATES, MAX_WAVES, WAVES_PER_STAGE, getEnemyFiringCoo
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
 import { linkBosses } from '../enemy/boss-rage.js';
-import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getLevelScaledAsteroidStats, getEnemySpeedMultiplier, getEnemyBulletSpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, BOSS_TIER_STATS, isBossWave } from './wave-data.js';
+import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getEnemySpeedMultiplier, getEnemyBulletSpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, BOSS_TIER_STATS, isBossWave } from './wave-data.js';
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
@@ -783,13 +783,14 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
 }
 
 export function initializeLeveledAsteroid(asteroid, opts = {}) {
-    // Use existing initialization but with level scaling
+    // initializeWaveAsteroid already calls asteroid.initializeAsteroid() with
+    // this.game.asteroidLevel, so HP is level-scaled exactly once in there.
+    // Do NOT re-scale here: the old code applied getLevelScaledAsteroidStats()
+    // ON TOP of the already-scaled health, double-counting the level
+    // multiplier and inflating even early-wave rocks to 4-5 HP. The size-tier
+    // base roll + single +25%/level ramp now lives entirely in
+    // asteroid.initializeAsteroid (6.100.1).
     this.initializeWaveAsteroid(asteroid, opts);
-
-    // Apply level scaling to health
-    const baseHealth = asteroid.health;
-    asteroid.health = getLevelScaledAsteroidStats(baseHealth, this.game.asteroidLevel);
-    asteroid.maxHealth = asteroid.health;
 }
 
 export function applyEnemyLevelScaling(enemy, opts = {}) {
