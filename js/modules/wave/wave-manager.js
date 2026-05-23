@@ -15,6 +15,11 @@ import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades, PASSIVE_UPGRADES, PASSIVE_REWARD_IDS, PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES } from '../combat/weapon-data.js';
 import { buildDraft, isCardStage } from '../combat/card-draft.js';
+import {
+    rerollCost as rerollGoldCost, canReroll as rerollCanReroll,
+    repairKitCost as repairKitGoldCost, canRepair as repairCanBuy,
+    REPAIR_KIT_HEAL_PCT as REPAIR_HEAL_PCT,
+} from '../world/run-shop.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 
 // Sub-wave advance thresholds — advance to next sub-wave when ≤ 2
@@ -1428,7 +1433,7 @@ export function openWavePickOverlay() {
     // Phase R3 — the per-run CARD draft: 2 weapon + 1 ability card, all
     // relevance-filtered to the equipped loadout (card-draft.js). Replaces
     // the old PASSIVE-stat survivor cards; stats now live in the SP menu.
-    const picks = buildDraft(player, { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES });
+    let picks = buildDraft(player, { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES });
 
     // If the player has maxed EVERY powerup, fall through to the
     // pre-5.98 pause-menu path so they at least see the wave-clear
@@ -1458,9 +1463,12 @@ export function openWavePickOverlay() {
         return;
     }
     overlay.style.display = 'flex';
+    this._rerollsThisOffer = 0; // R4 — one paid reroll per offer
+
+    const renderCards = (cardList) => {
     cardsContainer.replaceChildren();
 
-    for (const [type, cfg] of picks) {
+    for (const [type, cfg] of cardList) {
         const card = document.createElement('button');
         card.type = 'button';
         card.className = 'wave-pick-card';
@@ -1538,17 +1546,77 @@ export function openWavePickOverlay() {
                 }
             }
 
-            // 5.101.0 — chain into the shop-suggest overlay (3 picks
-            // tailored to the equipped weapons) before starting the
-            // next wave. If the player has no gold or no eligible
-            // upgrades, that overlay auto-skips into startNextWave.
-            const overlay = document.getElementById('wave-pick-overlay');
-            if (overlay) overlay.style.display = 'none';
-            openShopSuggestOverlay.call(this);
+            // R2.4 — the post-card gold UPGRADE quick-buy (shop-suggest) is
+            // retired now that cards provide upgrades. Go straight to the next
+            // wave (in-run gold is spent on the R4 reroll/repair sinks below).
+            this.closeWavePickOverlay();
         });
 
         cardsContainer.appendChild(card);
     }
+    }; // end renderCards
+
+    renderCards(picks);
+    _renderDraftActions.call(this, () => {
+        picks = buildDraft(player, { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES });
+        renderCards(picks);
+    });
+}
+
+// R4 — render the in-run gold-sink buttons (paid REROLL + REPAIR KIT) into
+// the card overlay's actions row. Run-gold spent here is gold not banked.
+function _renderDraftActions(onReroll) {
+    const actions = document.getElementById('wave-pick-actions');
+    if (!actions) return;
+    const player = this.player;
+    actions.replaceChildren();
+
+    const mkBtn = (label, enabled, onClick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'wave-pick-action-btn';
+        b.textContent = label;
+        b.disabled = !enabled;
+        if (enabled) b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+        return b;
+    };
+
+    const gold = (this.game && this.game.money) | 0;
+
+    // Paid reroll — once per offer.
+    const rerolls = this._rerollsThisOffer | 0;
+    actions.appendChild(mkBtn(
+        rerollCanReroll(rerolls, gold) ? `REROLL · ${rerollGoldCost(rerolls)}🪙` : (rerolls >= 1 ? 'REROLLED' : `REROLL · ${rerollGoldCost(rerolls)}🪙`),
+        rerollCanReroll(rerolls, gold),
+        () => {
+            const cost = rerollGoldCost(this._rerollsThisOffer | 0);
+            if ((this.game.money | 0) < cost) return;
+            this.game.money = Math.max(0, (this.game.money | 0) - cost);
+            this._rerollsThisOffer = (this._rerollsThisOffer | 0) + 1;
+            if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
+            onReroll();
+            _renderDraftActions.call(this, onReroll);
+        },
+    ));
+
+    // Repair Kit — escalating per use this run.
+    const repairs = this._repairsThisRun | 0;
+    const repairCost = repairKitGoldCost(repairs);
+    actions.appendChild(mkBtn(
+        `REPAIR · ${repairCost}🪙`,
+        repairCanBuy(repairs, gold) && player && player.health < player.getEffectiveMaxHealth(),
+        () => {
+            const c = repairKitGoldCost(this._repairsThisRun | 0);
+            if ((this.game.money | 0) < c) return;
+            const maxHp = player.getEffectiveMaxHealth();
+            if (player.health >= maxHp) return;
+            this.game.money = Math.max(0, (this.game.money | 0) - c);
+            player.health = Math.min(maxHp, player.health + maxHp * REPAIR_HEAL_PCT);
+            this._repairsThisRun = (this._repairsThisRun | 0) + 1;
+            if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
+            _renderDraftActions.call(this, onReroll);
+        },
+    ));
 }
 
 // 5.98.0 — Tear down the wave-pick overlay and route into the next

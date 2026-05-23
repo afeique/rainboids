@@ -633,9 +633,11 @@ function _buildWavePickOverlay() {
     const panel = el('div', {
         id: 'wave-pick-panel',
         children: [
-            el('h2',  { className: 'wave-pick-title',    text: 'WAVE CLEAR' }),
-            el('p',   { className: 'wave-pick-subtitle', text: 'PICK YOUR REWARD' }),
+            el('h2',  { className: 'wave-pick-title',    text: 'CARD DRAFT' }),
+            el('p',   { className: 'wave-pick-subtitle', text: 'PICK ONE' }),
             el('div', { id: 'wave-pick-cards' }),
+            // R4 — in-run gold sinks (reroll / repair) rendered here.
+            el('div', { id: 'wave-pick-actions' }),
         ],
     });
     overlay.appendChild(panel);

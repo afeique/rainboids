@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.92.0] - 2026-05-23
+
+### Added — In-run gold sinks at the card moment (Phase R4.2 / R4.3)
+
+- **Paid REROLL** of a card offer (R4.2): a button under the draft re-rolls the
+  offered cards for 200 run-gold, **once per offer**.
+- **Repair Kit** (R4.3): instant heal of 35% max HP for **escalating** run-gold
+  (250 × uses-this-run), shown only when hurt.
+- Pure, unit-tested cost curves for all four sinks in `world/run-shop.js`
+  (10 tests) + 3 QA tests; run-gold spent here is gold not banked (the design's
+  core opportunity-cost tension).
+
+### Changed — Retire the post-card upgrade quick-buy (Phase R2.4, partial)
+
+- Picking a card now goes **straight to the next wave**; the old post-card
+  gold-UPGRADE quick-buy (`shop-suggest`) is bypassed now that **cards** provide
+  weapon/ability upgrades. The wave-pick overlay is retitled "CARD DRAFT".
+
+### Notes
+- **R2.4 is partial:** the mid-wave **UPGRADES** shop (HUD 🛒 button / pause-menu
+  UPGRADES) still sells upgrade-tree stacks. Full removal is deferred to avoid a
+  large, risky change + churning the 07-weapons shop-tree tests; tracked.
+- **R4.1** (6th/7th extra card) + **Revive Token** are **deferred** — both need
+  more flow work (extra-card draw-tracking; revive death-path). Their cost curves
+  are already implemented + tested in `world/run-shop.js`.
+
 ## [6.91.0] - 2026-05-23
 
 ### Changed — Per-run card draft (Phase R3.1 / R3.2 / R3.3)

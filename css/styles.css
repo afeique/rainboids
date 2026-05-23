@@ -3535,6 +3535,25 @@ body.mobile-portrait #controls-tab h2 {
     white-space: nowrap;
 }
 
+/* R4 — in-run gold-sink actions (reroll / repair) under the cards. */
+#wave-pick-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 14px;
+}
+.wave-pick-action-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    color: #ffd75c;
+    background: transparent;
+    border: 1px solid rgba(255, 200, 60, 0.5);
+}
+.wave-pick-action-btn:hover:not(:disabled) { background: rgba(255, 200, 60, 0.15); }
+.wave-pick-action-btn:disabled { color: #5e6680; border-color: rgba(94, 102, 128, 0.4); cursor: not-allowed; }
+
 /* Portrait phone tightening — smaller card padding + icon so 3 cards
    plus title fit in a 640-px-tall viewport. */
 body.mobile-portrait #wave-pick-panel {

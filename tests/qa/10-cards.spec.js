@@ -91,3 +91,75 @@ test.describe('QA-10: Card draft (Phase R3)', () => {
         expect(fatal, `Fatal JS errors: ${fatal.join('; ')}`).toHaveLength(0);
     });
 });
+
+test.describe('QA-10b: In-run gold sinks at the card moment (Phase R4)', () => {
+    test.beforeEach(async ({ page }) => {
+        page._jsErrors = [];
+        page.on('pageerror', (err) => page._jsErrors.push(err.message));
+        await loadGame(page);
+        await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
+        await startGame(page);
+    });
+
+    test('paid REROLL deducts run-gold and is once per offer', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.ownedPrimaries = new Set(['PULSE_CANNON']);
+            p.ownedPowers = new Set(['CHARGE_SHOT']);
+            p.equippedAbilities = ['BULWARK', null, null, null];
+            ge.game.money = 5000;
+            ge.openWavePickOverlay();
+            const rerollBtn = () => [...document.querySelectorAll('#wave-pick-actions .wave-pick-action-btn')]
+                .find((b) => /REROLL/.test(b.textContent));
+            const before = ge.game.money;
+            rerollBtn().click();
+            const afterFirst = ge.game.money;
+            const disabledAfter = rerollBtn().disabled;
+            return { before, afterFirst, disabledAfter };
+        });
+        expect(r.afterFirst).toBe(r.before - 200);
+        expect(r.disabledAfter).toBe(true); // once per offer
+    });
+
+    test('REPAIR KIT heals and deducts run-gold', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.ownedPrimaries = new Set(['PULSE_CANNON']);
+            p.ownedPowers = new Set(['CHARGE_SHOT']);
+            p.equippedAbilities = ['BULWARK', null, null, null];
+            ge.game.money = 5000;
+            p.health = 1; // hurt
+            const maxHp = p.getEffectiveMaxHealth();
+            ge.openWavePickOverlay();
+            const repairBtn = [...document.querySelectorAll('#wave-pick-actions .wave-pick-action-btn')]
+                .find((b) => /REPAIR/.test(b.textContent));
+            const goldBefore = ge.game.money;
+            repairBtn.click();
+            return { goldBefore, goldAfter: ge.game.money, health: p.health, maxHp };
+        });
+        expect(r.goldAfter).toBe(r.goldBefore - 250);
+        expect(r.health).toBeGreaterThan(1); // healed
+    });
+
+    test('no fatal JS errors through the gold-sink flow', async ({ page }) => {
+        await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.ownedPrimaries = new Set(['PULSE_CANNON']);
+            p.ownedPowers = new Set(['CHARGE_SHOT']);
+            p.equippedAbilities = ['BULWARK', null, null, null];
+            ge.game.money = 5000;
+            p.health = 5;
+            ge.openWavePickOverlay();
+            for (const b of document.querySelectorAll('#wave-pick-actions .wave-pick-action-btn')) {
+                if (!b.disabled) b.click();
+            }
+        });
+        const fatal = page._jsErrors.filter((m) =>
+            !m.includes('sfxr') && !m.includes('Audio') && !m.includes('audio') &&
+            !m.includes('Font') && !m.includes('net::ERR'));
+        expect(fatal, `Fatal JS errors: ${fatal.join('; ')}`).toHaveLength(0);
+    });
+});

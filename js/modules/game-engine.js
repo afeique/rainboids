@@ -951,6 +951,7 @@ export class GameEngine {
     init({ writeWave1Save = true } = {}) {
         this._suppressWave1Save = !writeWave1Save;
         this._runGoldBanked = false; // arm run-end banking for this run
+        this._repairsThisRun = 0;    // R4 — Repair Kit escalation counter
         // Cancel any pending game timers from previous game
         for (let i = 0; i < this._gameTimers.length; i++) this._gameTimers[i].cancel();
         this._gameTimers.length = 0;
