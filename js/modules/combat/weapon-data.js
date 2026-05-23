@@ -1220,6 +1220,35 @@ export const ABILITIES = {
         unlockWave: 5,
         upgrades: ['EXTRA_DRONE', 'RAPID_DRONE', 'DRONE_CALIBER'],
     },
+    // ── R6.3 — new purchasable abilities (unique verbs only) ──
+    // Each is bought with account-gold in the ARMORY (it's a non-base
+    // ABILITIES key, so the unlock store offers it automatically) and
+    // equipped via the LOADOUT screen. Activated effects live in
+    // player/abilities.js activateAbility().
+    BLINK: {
+        id: 'BLINK', name: 'Blink',
+        description: 'Instantly teleport forward + brief i-frames',
+        icon: 'wind', color: '#aa88ff',
+        cooldown: 9000, duration: 200,
+        blinkDist: 220, iFrameMs: 350,
+        cost: 3, unlockWave: 0, upgrades: [],
+    },
+    GRAVITY_SNARE: {
+        id: 'GRAVITY_SNARE', name: 'Gravity Snare',
+        description: 'Yank nearby enemies inward to group them up',
+        icon: 'target', color: '#7744dd',
+        cooldown: 14000, duration: 200,
+        radius: 320, pullFactor: 0.6, minDist: 70,
+        cost: 3, unlockWave: 0, upgrades: [],
+    },
+    DESIGNATOR: {
+        id: 'DESIGNATOR', name: 'Designator',
+        description: 'MARK all nearby enemies (homing + crit + bonus loot)',
+        icon: 'target', color: '#ffcc44',
+        cooldown: 16000, duration: 200,
+        radius: 360, markMs: 6000,
+        cost: 3, unlockWave: 0, upgrades: [],
+    },
 };
 
 // ─── ABILITY UPGRADES ───────────────────────────────────────────────────────

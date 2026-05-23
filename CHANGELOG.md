@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.96.0] - 2026-05-23
+
+### Added — New abilities batch #1: Blink, Gravity Snare, Designator (Phase R6.3)
+
+- **Blink** — instant teleport forward (clamped to the field) + brief i-frames
+  (mobility verb; distinct from the Shift dash burst).
+- **Gravity Snare** — yanks nearby non-boss enemies inward to group them (control
+  verb; stops at a min distance so they do not land on you).
+- **Designator** — MARKs every enemy in range (homing-priority + crit + bonus
+  loot via the A.E3 status), an on-demand AoE MARK.
+- All three are purchasable in the ARMORY (non-base ABILITIES keys → the unlock
+  store offers them automatically) and equippable on the LOADOUT screen; no shop
+  upgrade trees. Activate verbs in player/abilities.js. +5 unit + 4 QA tests.
+- First slice of the R6.3 roster; more (Bullet Time, Stasis Field, Decoy Beacon,
+  Second Wind, Elemental Infusion, Cryo Field, Catalyst) to follow incrementally.
+
 ## [6.95.0] - 2026-05-23
 
 ### Changed — Boss bonus grants gold; stat passives are SP-only (Phase R7.4)

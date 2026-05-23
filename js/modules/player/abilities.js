@@ -545,6 +545,47 @@ export function activateAbility(slot = 0) {
                 fireTimer: 0,
             });
         }
+    } else if (abilityId === 'BLINK') {
+        // R6.3 — instant teleport forward (clamped to the field) + i-frames.
+        const d = config.blinkDist || 200;
+        this.x += Math.cos(this.angle) * d;
+        this.y += Math.sin(this.angle) * d;
+        const gf = this.gameEngine && this.gameEngine.gameField;
+        if (gf) {
+            this.x = Math.max(0, Math.min(gf.width, this.x));
+            this.y = Math.max(0, Math.min(gf.height, this.y));
+        }
+        if (typeof this.makeInvincible === 'function') this.makeInvincible(config.iFrameMs || 300);
+    } else if (abilityId === 'GRAVITY_SNARE') {
+        // R6.3 — yank nearby non-boss enemies inward (no closer than minDist).
+        const ge2 = this.gameEngine;
+        if (ge2 && ge2.enemyPool) {
+            const r = config.radius || 300;
+            const k = config.pullFactor || 0.5;
+            const minD = config.minDist || 60;
+            for (const enemy of ge2.enemyPool.activeObjects) {
+                if (!enemy || !enemy.active || enemy.isBoss) continue;
+                const dx = this.x - enemy.x, dy = this.y - enemy.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > minD && dist <= r) {
+                    const pull = Math.min(dist - minD, dist * k);
+                    enemy.x += (dx / dist) * pull;
+                    enemy.y += (dy / dist) * pull;
+                }
+            }
+        }
+    } else if (abilityId === 'DESIGNATOR') {
+        // R6.3 — MARK every enemy in range (homing-priority + crit + loot).
+        const ge3 = this.gameEngine;
+        if (ge3 && ge3.enemyPool && typeof ge3.applyMark === 'function') {
+            const r = config.radius || 350;
+            for (const enemy of ge3.enemyPool.activeObjects) {
+                if (!enemy || !enemy.active) continue;
+                if (Math.hypot(enemy.x - this.x, enemy.y - this.y) <= r) {
+                    ge3.applyMark(enemy, config.markMs || 6000);
+                }
+            }
+        }
     }
 
     // Play the per-ability activation sound (5.68.9). Falls back to the
