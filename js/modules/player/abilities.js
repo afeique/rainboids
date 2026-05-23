@@ -586,6 +586,16 @@ export function activateAbility(slot = 0) {
                 }
             }
         }
+    } else if (abilityId === 'SECOND_WIND') {
+        // R6.3 — arm a one-time death save; consumed in handlePlayerDeath.
+        this._secondWindArmed = true;
+    } else if (abilityId === 'ELEMENTAL_INFUSION') {
+        // R6.3 — cycle the loadout's on-hit element. The activeAbilityEffects
+        // entry (set above) tracks the duration; weapons.js reads
+        // _infusedElement while ELEMENTAL_INFUSION is active.
+        const els = config.elements || ['PYRO'];
+        this._infusionIndex = (this._infusionIndex == null) ? 0 : (this._infusionIndex + 1) % els.length;
+        this._infusedElement = els[this._infusionIndex];
     }
 
     // Play the per-ability activation sound (5.68.9). Falls back to the

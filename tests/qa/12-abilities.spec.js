@@ -58,11 +58,46 @@ test.describe('QA-12: R6.3 new abilities', () => {
         expect(offered.some((n) => /Designator/i.test(n))).toBe(true);
     });
 
+    test('Second Wind cheats death once', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.equippedAbilities = ['SECOND_WIND', null, null, null];
+            p.abilityCooldowns = [0, 0, 0, 0];
+            p.activateAbility(0);            // arm
+            const armed = !!p._secondWindArmed;
+            p.health = 0;
+            ge.handlePlayerDeath();          // should be saved
+            return { armed, afterArmed: !!p._secondWindArmed, health: p.health, state: ge.game.state };
+        });
+        expect(r.armed).toBe(true);
+        expect(r.afterArmed).toBe(false);    // consumed
+        expect(r.health).toBeGreaterThan(0); // revived
+        expect(r.state).not.toBe('GAME_OVER');
+    });
+
+    test('Elemental Infusion re-elements primary shots', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.equippedAbilities = ['ELEMENTAL_INFUSION', null, null, null];
+            p.abilityCooldowns = [0, 0, 0, 0];
+            p.activateAbility(0);
+            return {
+                infused: p._infusedElement,
+                active: p.activeAbilityEffects.has('ELEMENTAL_INFUSION'),
+            };
+        });
+        expect(typeof r.infused).toBe('string');
+        expect(r.infused.length).toBeGreaterThan(0);
+        expect(r.active).toBe(true);
+    });
+
     test('no fatal JS errors activating the new abilities', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             const p = ge.player;
-            for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR']) {
+            for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION']) {
                 p.equippedAbilities = [id, null, null, null];
                 p.abilityCooldowns = [0, 0, 0, 0];
                 p.activateAbility(0);

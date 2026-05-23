@@ -73,9 +73,37 @@ describe('R6.3 — DESIGNATOR', () => {
     });
 });
 
+describe('R6.3 — SECOND_WIND', () => {
+    test('arms a death save on activate', () => {
+        const p = makePlayer({ ability: 'SECOND_WIND' });
+        expect(!!p._secondWindArmed).toBe(false);
+        abilities.activateAbility.call(p, 0);
+        expect(p._secondWindArmed).toBe(true);
+    });
+});
+
+describe('R6.3 — ELEMENTAL_INFUSION', () => {
+    test('first cast infuses element[0]; the effect is active', () => {
+        const p = makePlayer({ ability: 'ELEMENTAL_INFUSION' });
+        abilities.activateAbility.call(p, 0);
+        expect(p._infusedElement).toBe(ABILITIES.ELEMENTAL_INFUSION.elements[0]);
+        expect(p.activeAbilityEffects.has('ELEMENTAL_INFUSION')).toBe(true);
+    });
+
+    test('successive casts cycle through the element list', () => {
+        const p = makePlayer({ ability: 'ELEMENTAL_INFUSION' });
+        const els = ABILITIES.ELEMENTAL_INFUSION.elements;
+        abilities.activateAbility.call(p, 0);
+        expect(p._infusedElement).toBe(els[0]);
+        p.abilityCooldowns[0] = 0; // clear cd for the next cast
+        abilities.activateAbility.call(p, 0);
+        expect(p._infusedElement).toBe(els[1]);
+    });
+});
+
 describe('R6.3 — roster registration', () => {
     test('new abilities exist in ABILITIES with cooldowns', () => {
-        for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR']) {
+        for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION']) {
             expect(ABILITIES[id]).toBeDefined();
             expect(ABILITIES[id].cooldown).toBeGreaterThan(0);
         }

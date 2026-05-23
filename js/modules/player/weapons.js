@@ -1043,7 +1043,11 @@ export function applyGlobalBulletUpgrades(bullet) {
     // damage path (E2) can apply enemy resistance. One chokepoint for every
     // primary bullet; falls back to the KINETIC baseline.
     const _wcfg = PRIMARY_WEAPONS[this.activePrimary];
-    bullet.element = (_wcfg && _wcfg.element) || 'KINETIC';
+    // R6.3 — Elemental Infusion overrides the weapon's native element while
+    // active (beat resists / force reactions).
+    const _infused = this.activeAbilityEffects
+        && this.activeAbilityEffects.has('ELEMENTAL_INFUSION') && this._infusedElement;
+    bullet.element = _infused ? this._infusedElement : ((_wcfg && _wcfg.element) || 'KINETIC');
 
     // Phase 2 (2026-05-19) — global HOMING / PIERCING removed; each
     // weapon's firing path now reads its OWN per-weapon stack. Lookup

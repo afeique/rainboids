@@ -388,11 +388,12 @@ export function accumulateOverflowToTank(credit) {
 }
 
 export function handlePlayerDeath() {
-    // R4.3 — Revive Token (bought at the card moment) cheats death once per
-    // run: consume it, restore to full HP + one spare tank, and skip the
-    // death sequence entirely so the run continues.
-    if (this.player && this.player._reviveToken) {
+    // R4.3 Revive Token (bought) + R6.3 Second Wind (ability) both cheat death
+    // once: consume whichever is set, restore to full HP + one spare tank, and
+    // skip the death sequence so the run continues.
+    if (this.player && (this.player._reviveToken || this.player._secondWindArmed)) {
         this.player._reviveToken = false;
+        this.player._secondWindArmed = false;
         const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
             ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
         this.player.health = maxHp;

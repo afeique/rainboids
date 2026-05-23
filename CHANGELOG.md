@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.97.0] - 2026-05-23
+
+### Added — New abilities batch #2: Second Wind, Elemental Infusion (Phase R6.3)
+
+- **Second Wind** — arming it cheats death once: a lethal hit consumes it and
+  restores full HP + a spare tank instead of GAME OVER (reuses the
+  handlePlayerDeath revive path shared with the Revive Token).
+- **Elemental Infusion** — re-elements your primary shots to the next element
+  (Pyro→Cryo→Volt→Toxic→Void→Radiant) for 8s, to beat resists / force reactions.
+  Overrides the bullet element chokepoint while the effect is active.
+- Both purchasable in the ARMORY + equippable in LOADOUT. +3 unit + 2 QA tests
+  (601 unit total).
+
 ## [6.96.0] - 2026-05-23
 
 ### Added — New abilities batch #1: Blink, Gravity Snare, Designator (Phase R6.3)

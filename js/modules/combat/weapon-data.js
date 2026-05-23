@@ -1249,6 +1249,21 @@ export const ABILITIES = {
         radius: 360, markMs: 6000,
         cost: 3, unlockWave: 0, upgrades: [],
     },
+    SECOND_WIND: {
+        id: 'SECOND_WIND', name: 'Second Wind',
+        description: 'Arm a death save — survive the next lethal hit (once per cast)',
+        icon: 'heart', color: '#ff66aa',
+        cooldown: 45000, duration: 200,
+        cost: 4, unlockWave: 0, upgrades: [],
+    },
+    ELEMENTAL_INFUSION: {
+        id: 'ELEMENTAL_INFUSION', name: 'Elemental Infusion',
+        description: 'Re-element your shots to the next element for 8s (beat resists)',
+        icon: 'spiral', color: '#66ffcc',
+        cooldown: 16000, duration: 8000,
+        elements: ['PYRO', 'CRYO', 'VOLT', 'TOXIC', 'VOID', 'RADIANT'],
+        cost: 4, unlockWave: 0, upgrades: [],
+    },
 };
 
 // ─── ABILITY UPGRADES ───────────────────────────────────────────────────────
