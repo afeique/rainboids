@@ -1,0 +1,93 @@
+/**
+ * QA-10: Per-run card draft (Phase R3)
+ *
+ * Validates the wave-clear card overlay shows relevance-filtered weapon +
+ * ability powerup cards (not the old PASSIVE stat cards) and applies a pick.
+ */
+
+import { test, expect } from '@playwright/test';
+import { loadGame, startGame } from '../helpers/game-helpers.js';
+
+async function setLoadoutAndDraft(page) {
+    return page.evaluate(() => {
+        const ge = window.gameEngine;
+        const p = ge.player;
+        // Known loadout: Pulse Cannon primary, Charge Shot power, Bulwark ability.
+        p.ownedPrimaries = new Set(['PULSE_CANNON']);
+        p.ownedPowers = new Set(['CHARGE_SHOT']);
+        p.equippedAbilities = ['BULWARK', null, null, null];
+        ge.openWavePickOverlay();
+        const cards = [...document.querySelectorAll('#wave-pick-cards .wave-pick-card')]
+            .map((c) => c.querySelector('.wave-pick-card-name')?.textContent || '');
+        const ov = document.getElementById('wave-pick-overlay');
+        return { cards, display: ov && ov.style.display };
+    });
+}
+
+test.describe('QA-10: Card draft (Phase R3)', () => {
+    test.beforeEach(async ({ page }) => {
+        page._jsErrors = [];
+        page.on('pageerror', (err) => page._jsErrors.push(err.message));
+        await loadGame(page);
+        await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
+        await startGame(page);
+    });
+
+    test('draft overlay opens with 1–3 cards', async ({ page }) => {
+        const r = await setLoadoutAndDraft(page);
+        expect(r.display).toBe('flex');
+        expect(r.cards.length).toBeGreaterThanOrEqual(1);
+        expect(r.cards.length).toBeLessThanOrEqual(3);
+    });
+
+    test('cards are relevance-filtered to the equipped loadout', async ({ page }) => {
+        // With only Pulse/Charge/Bulwark equipped, no card should belong to a
+        // weapon/ability the player is NOT carrying (e.g. Storm Needles).
+        const names = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.ownedPrimaries = new Set(['PULSE_CANNON']);
+            p.ownedPowers = new Set(['CHARGE_SHOT']);
+            p.equippedAbilities = ['BULWARK', null, null, null];
+            // run several drafts and collect every offered card name
+            const seen = new Set();
+            for (let i = 0; i < 12; i++) {
+                ge.openWavePickOverlay();
+                for (const c of document.querySelectorAll('#wave-pick-cards .wave-pick-card')) {
+                    seen.add(c.querySelector('.wave-pick-card-name')?.textContent || '');
+                }
+                // close overlay between draws
+                const ov = document.getElementById('wave-pick-overlay');
+                if (ov) ov.style.display = 'none';
+            }
+            return [...seen];
+        });
+        // Storm Needles upgrade names ("Needle ...") must never appear.
+        expect(names.some((n) => /needle/i.test(n))).toBe(false);
+    });
+
+    test('clicking a card applies a powerup stack', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.ownedPrimaries = new Set(['PULSE_CANNON']);
+            p.ownedPowers = new Set(['CHARGE_SHOT']);
+            p.equippedAbilities = ['BULWARK', null, null, null];
+            const before = p.powerups ? p.powerups.size : 0;
+            ge.openWavePickOverlay();
+            const card = document.querySelector('#wave-pick-cards .wave-pick-card');
+            if (card) card.click();
+            const after = p.powerups ? p.powerups.size : 0;
+            return { before, after };
+        });
+        expect(r.after).toBeGreaterThan(r.before);
+    });
+
+    test('no fatal JS errors through the draft flow', async ({ page }) => {
+        await setLoadoutAndDraft(page);
+        const fatal = page._jsErrors.filter((m) =>
+            !m.includes('sfxr') && !m.includes('Audio') && !m.includes('audio') &&
+            !m.includes('Font') && !m.includes('net::ERR'));
+        expect(fatal, `Fatal JS errors: ${fatal.join('; ')}`).toHaveLength(0);
+    });
+});

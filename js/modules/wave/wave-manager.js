@@ -13,7 +13,8 @@ import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStat
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades, PASSIVE_UPGRADES, PASSIVE_REWARD_IDS } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades, PASSIVE_UPGRADES, PASSIVE_REWARD_IDS, PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES } from '../combat/weapon-data.js';
+import { buildDraft, isCardStage } from '../combat/card-draft.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 
 // Sub-wave advance thresholds — advance to next sub-wave when ≤ 2
@@ -158,7 +159,10 @@ export function updateWaveSystem() {
         this.player.gainExperience(bonusXP);
         this.game.money += bonusCoins;
         const _mob = isMobile();
-        const survivorWave = stageClear;
+        // Phase R3 — the card draft now fires on 5 stages per run (every 2nd
+        // stage clear: waves 6/12/18/24/30), not on every stage. Odd stage
+        // clears still grant the bigger gold bonus + the boss, just no card.
+        const survivorWave = isCardStage(clearedWave);
 
         // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
         // the bonus gold + pick info to the message renderer.
@@ -1421,34 +1425,10 @@ export function openWavePickOverlay() {
     if (!this.player) return;
     const player = this.player;
 
-    // 5.101.0 — Survivor cards balance: 2 OFFENSE + 1 DEFENSE per pick.
-    //   Filter all eligible (non-maxed, non-hidden) entries by category
-    //   and draw 2 from OFFENSE + 1 from DEFENSE. If a category is short
-    //   (e.g. all DEFENSE powerups maxed) we fall back to filling from
-    //   whichever pool still has entries so the player still gets 3.
-    // 6.30.0 — Survivor cards now draw from the PASSIVE reward pool
-    // (Health, Toughness, Vampirism, Thorns, Crit Chance, Crit Damage,
-    // Evasion, Speed). Passives are obtainable ONLY here — the shop has
-    // no PASSIVE buy tab — so each pick is a deliberate playstyle choice.
-    const eligible = PASSIVE_REWARD_IDS
-        .map(id => [id, PASSIVE_UPGRADES[id]])
-        .filter(([id, cfg]) => {
-            if (!cfg) return false;
-            const cap = cfg.maxStacks || 99;
-            const stacks = player.getPowerupStacks ? player.getPowerupStacks(id) : 0;
-            return stacks < cap;
-        });
-
-    const shuffle = (arr) => {
-        const a = arr.slice();
-        for (let i = a.length - 1; i > 0; i--) {
-            const j = (Math.random() * (i + 1)) | 0;
-            [a[i], a[j]] = [a[j], a[i]];
-        }
-        return a;
-    };
-
-    const picks = shuffle(eligible).slice(0, 3);
+    // Phase R3 — the per-run CARD draft: 2 weapon + 1 ability card, all
+    // relevance-filtered to the equipped loadout (card-draft.js). Replaces
+    // the old PASSIVE-stat survivor cards; stats now live in the SP menu.
+    const picks = buildDraft(player, { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES });
 
     // If the player has maxed EVERY powerup, fall through to the
     // pre-5.98 pause-menu path so they at least see the wave-clear

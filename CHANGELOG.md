@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.91.0] - 2026-05-23
+
+### Changed — Per-run card draft (Phase R3.1 / R3.2 / R3.3)
+
+- The wave-clear card overlay is **repurposed into a per-run powerup draft**
+  (`combat/card-draft.js`). Each draft offers **2 weapon + 1 ability** cards,
+  all **relevance-filtered to the equipped loadout** — a card is never offered
+  for a weapon/ability you aren't carrying. Picking one applies a permanent
+  upgrade stack (reuses `player.addPowerup`). Replaces the old PASSIVE-stat
+  survivor cards (stats now live in the SP menu).
+- **Cadence (R3.2):** the draft now fires on **5 stage clears per run** — every
+  2nd stage (waves 6/12/18/24/30) — instead of all 10. Odd stage clears keep the
+  bigger gold bonus + boss, just no card (`isCardStage`).
+- Pure, unit-tested pool/compose/cadence logic (`weaponCards`, `abilityCards`,
+  `composeDraft`, `isCardStage`) — 9 unit tests + 4 QA tests
+  (`tests/qa/10-cards.spec.js`).
+
+### Notes
+- **R3.4** (sequence the card draft with the SP Stats menu at wave clear) is a
+  no-op until **R7** reactivates leveling — leveling is currently inert, so the
+  Stats menu never auto-opens. Wire the ordering when R7 lands.
+
 ## [6.90.0] - 2026-05-23
 
 ### Added — LOADOUT screen + chosen-loadout model (Phase R5)
