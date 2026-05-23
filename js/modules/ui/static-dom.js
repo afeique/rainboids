@@ -234,9 +234,11 @@ function _buildPauseMenu() {
     // spending surface; making it the visually-louder option steers
     // players into the new flow.
     const actions = el('div', { className: 'pause-menu-actions' });
-    const shopBtn = _pauseActionBtn('pause-shop-button', '🛒', 'UPGRADES');
-    shopBtn.classList.add('pause-action-btn--primary');
-    actions.appendChild(shopBtn);
+    // Legacy gold UPGRADES shop button — commented out (retired in favor of the
+    // per-run CARD draft + pre-run ARMORY). shop-dom.js is kept for reuse.
+    // const shopBtn = _pauseActionBtn('pause-shop-button', '🛒', 'UPGRADES');
+    // shopBtn.classList.add('pause-action-btn--primary');
+    // actions.appendChild(shopBtn);
     actions.appendChild(_pauseActionBtn('pause-resume-button', '►', 'RESUME'));
     menu.appendChild(actions);
 

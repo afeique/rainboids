@@ -70,17 +70,18 @@ export function getHudButtonRects(canvasW, canvasH) {
     const bh = mobile ? MOBILE_BUTTON_H : BUTTON_H;
     const bg = mobile ? MOBILE_BUTTON_GAP : BUTTON_GAP;
 
-    // Layout: SHOP, STATS, PAUSE centered at bottom. Total width =
-    //   3 × bw + 2 × bg. Buttons share a baseline.
-    // 5.79.14 — added PAUSE as the third canvas button.
-    const totalW = 3 * bw + 2 * bg;
+    // Layout: STATS, PAUSE centered at bottom. (Legacy SHOP/UPGRADES button
+    // commented out — the gold upgrade-tree shop is retired in favor of the
+    // per-run CARD draft + the pre-run ARMORY. shop-dom.js / openShop are kept
+    // intact for reuse; the shop is just no longer reachable from the HUD.)
+    const totalW = 2 * bw + 1 * bg;
     const startX = Math.round((canvasW - totalW) / 2);
     const y = canvasH - BOTTOM_MARGIN - bh;
     const slot = (i) => startX + i * (bw + bg);
     const rects = {
-        shop:  { id: 'shop',  x: slot(0), y, w: bw, h: bh, icon: 'cart',  label: 'UPGRADES' },
-        stats: { id: 'stats', x: slot(1), y, w: bw, h: bh, icon: 'chart', label: 'STATS' },
-        pause: { id: 'pause', x: slot(2), y, w: bw, h: bh, icon: 'pause', label: 'PAUSE' },
+        // shop:  { id: 'shop',  x: slot(0), y, w: bw, h: bh, icon: 'cart',  label: 'UPGRADES' }, // legacy shop — commented out
+        stats: { id: 'stats', x: slot(0), y, w: bw, h: bh, icon: 'chart', label: 'STATS' },
+        pause: { id: 'pause', x: slot(1), y, w: bw, h: bh, icon: 'pause', label: 'PAUSE' },
     };
 
     // 5.100.0 — PRM / PWR side buttons retired on mobile. The new

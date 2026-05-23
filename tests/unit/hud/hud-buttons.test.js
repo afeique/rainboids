@@ -47,11 +47,12 @@ afterEach(() => {
 });
 
 describe('getHudButtonRects — desktop mode (5.94.0)', () => {
-    test('returns exactly 3 bottom-bar buttons on desktop', () => {
+    test('returns the STATS + PAUSE bottom-bar buttons on desktop (legacy SHOP retired)', () => {
         _resetUrlOverrideForTests(false);
         const rects = getHudButtonRects(1280, 720);
         const keys = Object.keys(rects).sort();
-        expect(keys).toEqual(['pause', 'shop', 'stats']);
+        expect(keys).toEqual(['pause', 'stats']);
+        expect(rects.shop).toBeUndefined(); // legacy gold shop commented out
     });
 
     test('desktop: no PRM/PWR side buttons present', () => {
@@ -63,11 +64,11 @@ describe('getHudButtonRects — desktop mode (5.94.0)', () => {
 });
 
 describe('getHudButtonRects — mobile mode (5.100.0)', () => {
-    test('mobile mode returns 3 bottom-bar buttons (SHOP/STATS/PAUSE only — PRM/PWR removed in 5.100.0)', () => {
+    test('mobile mode returns STATS + PAUSE (legacy SHOP retired; PRM/PWR removed in 5.100.0)', () => {
         _resetUrlOverrideForTests(true);
         const rects = getHudButtonRects(400, 800);
         const keys = Object.keys(rects).sort();
-        expect(keys).toEqual(['pause', 'shop', 'stats']);
+        expect(keys).toEqual(['pause', 'stats']);
     });
 
     test('mobile: PRM and PWR rects do not exist (weapon swap moved to pause menu in 5.100.0)', () => {
@@ -86,12 +87,12 @@ describe('hudButtonHitTest — mobile mode (5.100.0)', () => {
         expect(hudButtonHitTest(engine, 200, 100)).toBe(null);
     });
 
-    test('returns "shop" when point falls inside the SHOP rect', () => {
+    test('returns "stats" when point falls inside the STATS rect', () => {
         _resetUrlOverrideForTests(true);
         const rects = getHudButtonRects(400, 800);
-        const cx = rects.shop.x + rects.shop.w / 2;
-        const cy = rects.shop.y + rects.shop.h / 2;
+        const cx = rects.stats.x + rects.stats.w / 2;
+        const cy = rects.stats.y + rects.stats.h / 2;
         const engine = { _hudButtonRects: rects };
-        expect(hudButtonHitTest(engine, cx, cy)).toBe('shop');
+        expect(hudButtonHitTest(engine, cx, cy)).toBe('stats');
     });
 });

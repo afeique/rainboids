@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.101.3] - 2026-05-23
+
+### Removed — Legacy gold UPGRADES/SHOP button retired from the HUD
+
+- **The SHOP/UPGRADES button is gone from both the canvas HUD bottom-bar and
+  the pause menu.** The gold upgrade-tree shop is retired in favor of the
+  per-run CARD draft + the pre-run ARMORY, so its entry points are removed; the
+  bottom bar is now just STATS + PAUSE (`hud-buttons.js`, `static-dom.js`).
+  `shop-dom.js` / `openShop` are intentionally kept intact for reuse — the shop
+  is simply no longer reachable from the HUD. Tests updated to expect the
+  two-button bar (`tests/unit/hud/hud-buttons.test.js`).
+
 ## [6.101.2] - 2026-05-23
 
 ### Changed — Cluster bomb decelerates in flight (lobbed-mortar feel)

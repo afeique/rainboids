@@ -150,6 +150,22 @@ Builds on **shipped** B.S1–S3 (4-slot ability model, Digit1-4 input, HUD bar) 
 **EXECUTION ORDER:** R1 → R2 → R8 → R6 → R5 → R3 → R4 → R7 (R6/R7 parallelizable). Follow each
 task's Depends. **Versioning:** these are code changes — bump VERSION + CHANGELOG.md per task/phase.
 
+> **✅ Phase R — SHIPPED 6.84.0 → 6.93.0** (full detail + concerns in
+> `docs/Roguelite Restructure — Phase R progress report – 2026-05-23.md`):
+> - **R1** rename (6.84.0) · **R2.1–3** gold economy + ARMORY + unlocks (6.85.0) ·
+>   **R8.1–8** stash + Cores salvage/reroll/tier-up + no-auto-equip + equip screen
+>   (6.86–6.88.0) · **R6.1/2** Field Medic + base kit, Tractor cut (6.89.0) ·
+>   **R5** LOADOUT screen + chosen 4+4+4 (6.90.0) · **R3.1–3** card draft (6.91.0) ·
+>   **R4** card-moment gold sinks — reroll/repair/6th-7th card/Revive (6.92.0+6.94.0) ·
+>   **R7.1–3** leveling→SP→Stats validated + auto-open fixed (6.93.0) ·
+>   post-card shop retired (6.92.0).
+> - The full loop is playable: TITLE → ARMORY → LOADOUT → run (cards + sinks) →
+>   bank gold + loot. 593 unit + QA 08–11 green. **R1–R8 essentially complete.**
+> - **DEFERRED / remaining:** **R6.3** (~14 new abilities — biggest chunk) ·
+>   **R2.4-full** mid-wave gold UPGRADES shop removal + **R7.4** gold PASSIVE tab
+>   removal (would churn 07-weapons shop tests) · **R8.7/R8.9** blocked on Phase C
+>   (C.I2 / C.I3) · **R-BAL** balance pass + AI-survival run on a meta account.
+
 ### R1 — Terminology: Skills → Abilities  *(do first; ~15 files)*
 
 | Task | 内容 | DoD | Depends | Status |
