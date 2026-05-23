@@ -134,11 +134,23 @@ describe('R6.3 — CRYO_FIELD / STASIS_FIELD (positioned status auras)', () => {
         expect(eff.x).toBe(700);
         expect(eff.y).toBe(100);
     });
+
+    test('Storm Cell and Pyre Aura also drop positioned zones', () => {
+        for (const id of ['STORM_CELL', 'PYRE_AURA']) {
+            const p = makePlayer({ ability: id, x: 250, y: 350 });
+            abilities.activateAbility.call(p, 0);
+            const eff = p.activeAbilityEffects.get(id);
+            expect(eff).toBeTruthy();
+            expect(eff.x).toBe(250);
+            expect(eff.y).toBe(350);
+            expect(eff.tickAcc).toBe(0);
+        }
+    });
 });
 
 describe('R6.3 — roster registration', () => {
     test('new abilities exist in ABILITIES with cooldowns', () => {
-        for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION', 'CRYO_FIELD', 'STASIS_FIELD']) {
+        for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION', 'CRYO_FIELD', 'STASIS_FIELD', 'STORM_CELL', 'PYRE_AURA']) {
             expect(ABILITIES[id]).toBeDefined();
             expect(ABILITIES[id].cooldown).toBeGreaterThan(0);
         }

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.99.0] - 2026-05-23
+
+### Added — New abilities batch #4: Storm Cell + Pyre Aura (Phase R6.3)
+
+- **Storm Cell** — drops a positioned zone that CONDUCTS (shocks) enemies inside
+  (ge.applyConduct via the shared field tick).
+- **Pyre Aura** — drops a zone that BURNS enemies inside (ge.applyBurn).
+- Reuse the Cryo/Stasis field-tick (one status dispatch per zone). +1 unit + QA
+  sweep over all 9 new abilities (604 unit total).
+- R6.3 now has 9 of the roster live (Blink, Gravity Snare, Designator, Second
+  Wind, Elemental Infusion, Cryo Field, Stasis Field, Storm Cell, Pyre Aura).
+  Remaining: Decoy Beacon (aggro redirect), Bullet Time (time-scale), Catalyst
+  (reaction chains) — the cross-cutting trio.
+
 ## [6.98.0] - 2026-05-23
 
 ### Added — New abilities batch #3: Cryo Field + Stasis Field (Phase R6.3)

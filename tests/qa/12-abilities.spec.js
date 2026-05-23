@@ -114,11 +114,11 @@ test.describe('QA-12: R6.3 new abilities', () => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             const p = ge.player;
-            for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION', 'CRYO_FIELD', 'STASIS_FIELD']) {
+            for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION', 'CRYO_FIELD', 'STASIS_FIELD', 'STORM_CELL', 'PYRE_AURA']) {
                 p.equippedAbilities = [id, null, null, null];
                 p.abilityCooldowns = [0, 0, 0, 0];
                 p.activateAbility(0);
-                p.updateActiveAbilities(300);
+                p.updateActiveAbilities(450);
             }
         });
         const fatal = page._jsErrors.filter((m) =>

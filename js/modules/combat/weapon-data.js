@@ -1280,6 +1280,22 @@ export const ABILITIES = {
         radius: 210, tickMs: 250,
         cost: 4, unlockWave: 0, upgrades: [],
     },
+    STORM_CELL: {
+        id: 'STORM_CELL', name: 'Storm Cell',
+        description: 'Drop a storm zone that CONDUCTS (shocks) enemies inside for 5s',
+        icon: 'bolt', color: '#ffe44d',
+        cooldown: 16000, duration: 5000,
+        radius: 200, tickMs: 300,
+        cost: 4, unlockWave: 0, upgrades: [],
+    },
+    PYRE_AURA: {
+        id: 'PYRE_AURA', name: 'Pyre Aura',
+        description: 'Drop a flame zone that BURNS enemies inside for 5s',
+        icon: 'bomb', color: '#ff7a2a',
+        cooldown: 16000, duration: 5000,
+        radius: 190, tickMs: 400, burnDmg: 6,
+        cost: 4, unlockWave: 0, upgrades: [],
+    },
 };
 
 // ─── ABILITY UPGRADES ───────────────────────────────────────────────────────

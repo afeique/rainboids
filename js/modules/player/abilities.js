@@ -28,7 +28,7 @@ export function updateActiveAbilities(dt) {
     // the enemy status engine, so the verb is visible without a zone sprite.
     const ge = this.gameEngine;
     if (ge && ge.enemyPool) {
-        for (const fieldId of ['CRYO_FIELD', 'STASIS_FIELD']) {
+        for (const fieldId of ['CRYO_FIELD', 'STASIS_FIELD', 'STORM_CELL', 'PYRE_AURA']) {
             const eff = this.activeAbilityEffects.get(fieldId);
             if (!eff) continue;
             const cfg = ABILITIES[fieldId];
@@ -43,6 +43,8 @@ export function updateActiveAbilities(dt) {
                 if (Math.hypot(enemy.x - eff.x, enemy.y - eff.y) > r) continue;
                 if (fieldId === 'CRYO_FIELD' && typeof ge.applyFreeze === 'function') ge.applyFreeze(enemy, statusDur);
                 else if (fieldId === 'STASIS_FIELD' && typeof ge.applyChill === 'function') ge.applyChill(enemy, statusDur);
+                else if (fieldId === 'STORM_CELL' && typeof ge.applyConduct === 'function') ge.applyConduct(enemy, statusDur);
+                else if (fieldId === 'PYRE_AURA' && typeof ge.applyBurn === 'function') ge.applyBurn(enemy, (cfg && cfg.burnDmg) || 5, statusDur);
             }
         }
     }
@@ -620,9 +622,11 @@ export function activateAbility(slot = 0) {
         const els = config.elements || ['PYRO'];
         this._infusionIndex = (this._infusionIndex == null) ? 0 : (this._infusionIndex + 1) % els.length;
         this._infusedElement = els[this._infusionIndex];
-    } else if (abilityId === 'CRYO_FIELD' || abilityId === 'STASIS_FIELD') {
-        // R6.3 — drop a positioned field at the player's current spot. The
-        // per-frame tick (updateActiveAbilities) freezes/chills enemies inside.
+    } else if (abilityId === 'CRYO_FIELD' || abilityId === 'STASIS_FIELD'
+            || abilityId === 'STORM_CELL' || abilityId === 'PYRE_AURA') {
+        // R6.3 — drop a positioned status field at the player's current spot.
+        // The per-frame tick (updateActiveAbilities) applies its status to
+        // enemies inside.
         const eff = this.activeAbilityEffects.get(abilityId);
         if (eff) { eff.x = this.x; eff.y = this.y; eff.tickAcc = 0; }
     }
