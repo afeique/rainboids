@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.87.0] - 2026-05-23
+
+### Changed — Inventory as meta: no auto-equip + Armory equip screen (Phase R8.2 / R8.3)
+
+- **Gear no longer auto-equips.** `registerItemDrop` no longer calls `equipItem`;
+  mid-run pickups just accrue to the loot feed + run collection (→ stash at run
+  end). Gear is now **chosen pre-run in the ARMORY and locked for the run**.
+- **ARMORY EQUIPMENT section** (R8.3): the 5 gear slots show the equipped item +
+  up to 4 best stash candidates per slot with **score deltas**; EQUIP swaps a
+  stash item into its slot (displacing the old one back to the stash), UNEQUIP
+  returns it. Edits persist to `rainboidsMeta.equippedItems` and apply to the
+  next run via `applyPersistentProfile`. An item lives in exactly one place
+  (stash XOR equipped). Pure, unit-tested model in `world/inventory.js` (8 tests)
+  + 4 QA tests.
+- The in-run `I` inventory is now **read-only** (drops are informational; equip
+  in the Armory) — gear is frozen once a run begins.
+
 ## [6.86.0] - 2026-05-23
 
 ### Added — Persistent stash + Cores salvage (Phase R8.1 / R8.4 / R8.5)

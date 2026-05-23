@@ -357,19 +357,17 @@ export class Player {
      *   - HP items grow getEffectiveMaxHealth → bump current health by
      *     the bonus delta so the wider bar isn't visibly empty.
      */
-    // 6.x — Register a dropped item into the left-edge loot feed and
-    // auto-equip it if it beats the equipped slot. All drops are kept
-    // (newest first, capped) so the 'I' inventory can re-equip a past
-    // one. Returns the feed entry.
+    // Phase R8.2 — drops NO LONGER auto-equip. Gear is chosen pre-run in the
+    // ARMORY inventory screen and locked for the run; mid-run pickups just
+    // accrue to the loot feed (display) + the run collection, which is
+    // committed to the persistent stash at run end. Returns the feed entry.
     registerItemDrop(item) {
         if (!item || !item.slot) return null;
-        const res = this.equipItem(item);
-        const equipped = !!(res && res.equipped);
         if (!this.lootFeed) this.lootFeed = [];
         const entry = {
             id: ++this._lootFeedSeq,
             item,
-            equipped,
+            equipped: false, // never auto-equipped (R8.2)
             born: (typeof performance !== 'undefined' ? performance.now() : Date.now()),
         };
         this.lootFeed.unshift(entry);

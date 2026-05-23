@@ -216,3 +216,81 @@ test.describe('QA-08b: Stash + Cores salvage (Phase R8)', () => {
         expect(fatal, `Fatal JS errors: ${fatal.join('; ')}`).toHaveLength(0);
     });
 });
+
+test.describe('QA-08c: Equipment — no auto-equip + Armory equip (Phase R8.2/R8.3)', () => {
+    test.beforeEach(async ({ page }) => {
+        page._jsErrors = [];
+        page.on('pageerror', (err) => page._jsErrors.push(err.message));
+        await loadGame(page);
+        await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
+    });
+
+    test('drops no longer auto-equip mid-run (R8.2)', async ({ page }) => {
+        await startGame(page);
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            p.equippedItems = { cockpit: null, hull: null, shielding: null, chassis: null, nanites: null };
+            p.runCollected = [];
+            const item = { slot: 'cockpit', level: 9, rarity: 'epic', name: 'Should Not Equip',
+                           affixes: [{ type: 'hp', value: 99, label: '+99 HP' }] };
+            p.registerItemDrop(item);
+            return {
+                equipped: p.equippedItems.cockpit,
+                collected: p.runCollected.length,
+                feed: (p.lootFeed || []).length,
+            };
+        });
+        expect(r.equipped).toBeNull();   // NOT auto-equipped
+        expect(r.collected).toBe(1);     // accrued for the stash
+        expect(r.feed).toBeGreaterThan(0); // shown in the feed
+    });
+
+    test('equipping a stash item in the Armory persists it for the next run', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            localStorage.setItem('rainboidsMeta', JSON.stringify({
+                equippedItems: {},
+                stash: [{ slot: 'hull', level: 8, rarity: 'rare', name: 'Plating',
+                          affixes: [{ type: 'hp', value: 40, label: '+40' }] }],
+            }));
+            ge.openArmory();
+            const ok = ge._armoryOverlay.equip(0);
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            return { ok, equippedHull: meta.equippedItems.hull, stashLen: (meta.stash || []).length };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.equippedHull && r.equippedHull.name).toBe('Plating');
+        expect(r.stashLen).toBe(0);
+    });
+
+    test('unequip returns the item to the stash', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            localStorage.setItem('rainboidsMeta', JSON.stringify({
+                equippedItems: { chassis: { slot: 'chassis', level: 4, rarity: 'common', name: 'Frame', affixes: [{ type: 'toughness', value: 2, label: '+2%' }] } },
+                stash: [],
+            }));
+            ge.openArmory();
+            const ok = ge._armoryOverlay.unequip('chassis');
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            return { ok, equippedChassis: meta.equippedItems.chassis, stashLen: (meta.stash || []).length };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.equippedChassis).toBeNull();
+        expect(r.stashLen).toBe(1);
+    });
+
+    test('equipped gear applies to the run via applyPersistentProfile', async ({ page }) => {
+        const equippedName = await page.evaluate(() => {
+            localStorage.setItem('rainboidsMeta', JSON.stringify({
+                equippedItems: { cockpit: { slot: 'cockpit', level: 10, rarity: 'legendary', name: 'Run Core', affixes: [{ type: 'hp', value: 75, label: '+75' }] } },
+            }));
+            const ge = window.gameEngine;
+            ge.startNewRun(); // init → applyPersistentProfile loads equippedItems
+            const it = ge.player.equippedItems.cockpit;
+            return it && it.name;
+        });
+        expect(equippedName).toBe('Run Core');
+    });
+});

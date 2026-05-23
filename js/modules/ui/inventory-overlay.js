@@ -135,9 +135,12 @@ export class InventoryOverlay {
         body.appendChild(grid);
 
         // ── RECENT DROPS ──
+        // Phase R8.2/R8.3 — gear is locked during a run; drops just accrue
+        // and bank to the persistent stash at run end. Equip from the ARMORY
+        // before the next run. This list is informational only.
         const dropTitle = document.createElement('div');
         dropTitle.className = 'inv-section-title';
-        dropTitle.textContent = 'RECENT DROPS — click to equip';
+        dropTitle.textContent = 'RECENT DROPS — banked to stash at run end · equip in the Armory';
         body.appendChild(dropTitle);
 
         const list = document.createElement('div');
@@ -153,10 +156,9 @@ export class InventoryOverlay {
             const it = entry.item;
             if (!it) continue;
             const rarity = it.rarityColor || '#cccccc';
-            const equippedNow = player.equippedItems && player.equippedItems[it.slot] === it;
-            const row = document.createElement('button');
-            row.type = 'button';
-            row.className = 'inv-drop-row' + (equippedNow ? ' inv-drop-row--equipped' : '');
+            // Informational only (R8.2 — no mid-run equipping).
+            const row = document.createElement('div');
+            row.className = 'inv-drop-row';
             row.style.setProperty('--inv-rarity', rarity);
 
             row.appendChild(glyphCanvas(it.slot, rarity, 30));
@@ -176,17 +178,9 @@ export class InventoryOverlay {
 
             const tag = document.createElement('div');
             tag.className = 'inv-drop-tag';
-            tag.textContent = equippedNow ? 'EQUIPPED' : 'EQUIP';
+            tag.textContent = `L${it.level || 1}`;
             row.appendChild(tag);
 
-            if (!equippedNow) {
-                row.addEventListener('click', () => {
-                    player.equipItem(it, { force: true });
-                    this.render();
-                });
-            } else {
-                row.disabled = true;
-            }
             list.appendChild(row);
         }
         body.appendChild(list);

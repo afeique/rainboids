@@ -14,6 +14,8 @@ import {
 } from '../shop/armory.js';
 import { salvageValue, partitionBulkSalvage } from '../world/cores.js';
 import { scoreItem } from '../world/item-system.js';
+import { getEquipped, stashForSlot, equipFromStash, unequipSlot, equipDelta } from '../world/inventory.js';
+import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 
 const CATEGORY_DEFS = {
     primaries: { label: 'PRIMARY WEAPONS', defs: () => PRIMARY_WEAPONS },
@@ -162,6 +164,27 @@ export class ArmoryOverlay {
         return gained;
     }
 
+    // Phase R8.3 — equip stash[index] into its gear slot (swapping any
+    // currently-equipped item back to the stash). Persists to meta; the
+    // run picks it up at init via applyPersistentProfile.
+    equip(index) {
+        const meta = loadMeta() || {};
+        const { ok, meta: next } = equipFromStash(meta, index);
+        if (!ok) return false;
+        saveMeta({ stash: next.stash, equippedItems: next.equippedItems });
+        this.render();
+        return true;
+    }
+
+    unequip(slot) {
+        const meta = loadMeta() || {};
+        const { ok, meta: next } = unequipSlot(meta, slot);
+        if (!ok) return false;
+        saveMeta({ stash: next.stash, equippedItems: next.equippedItems });
+        this.render();
+        return true;
+    }
+
     // Phase R8.5 — bulk-salvage every stash item strictly worse than the
     // equipped item in its slot.
     salvageAllBelowEquipped() {
@@ -243,7 +266,70 @@ export class ArmoryOverlay {
             body.appendChild(section);
         }
 
+        this._renderEquipment(body, meta);
         this._renderStash(body, meta);
+    }
+
+    // Phase R8.3 — the 5 gear slots: equipped item + the best stash
+    // candidates to swap in, with score deltas. Editable only here (pre-run);
+    // gear is locked once a run begins.
+    _renderEquipment(body, meta) {
+        const equipped = getEquipped(meta);
+        const section = document.createElement('div');
+        section.className = 'armory-section';
+        const secTitle = document.createElement('div');
+        secTitle.className = 'armory-section-title';
+        secTitle.textContent = 'EQUIPMENT  ·  5 gear slots (locked once a run starts)';
+        section.appendChild(secTitle);
+
+        const list = document.createElement('div');
+        list.className = 'armory-list';
+        for (const slot of SLOT_ORDER) {
+            const cur = equipped[slot];
+            const row = document.createElement('div');
+            row.className = 'armory-row';
+            const name = document.createElement('span');
+            name.className = 'armory-row-name';
+            const label = SLOT_LABEL[slot] || slot.toUpperCase();
+            if (cur) {
+                name.textContent = `${label}: ${cur.name || slot} (L${cur.level || 1})`;
+                if (cur.rarityColor) name.style.color = cur.rarityColor;
+            } else {
+                name.textContent = `${label}: — empty —`;
+            }
+            row.appendChild(name);
+            if (cur) {
+                const un = document.createElement('button');
+                un.className = 'armory-buy';
+                un.textContent = 'UNEQUIP';
+                un.addEventListener('click', () => this.unequip(slot));
+                row.appendChild(un);
+            }
+            list.appendChild(row);
+
+            // Up to 4 best candidates from the stash for this slot.
+            const candidates = stashForSlot(meta, slot)
+                .map((c) => ({ ...c, delta: equipDelta(meta, c.item, scoreItem) }))
+                .sort((a, b) => b.delta - a.delta)
+                .slice(0, 4);
+            for (const c of candidates) {
+                const crow = document.createElement('div');
+                crow.className = 'armory-row armory-row--candidate';
+                const cn = document.createElement('span');
+                cn.className = 'armory-row-name';
+                const sign = c.delta >= 0 ? '+' : '';
+                cn.textContent = `  ↳ ${c.item.name || slot} (L${c.item.level || 1})  ${sign}${c.delta}`;
+                if (c.item.rarityColor) cn.style.color = c.item.rarityColor;
+                const btn = document.createElement('button');
+                btn.className = 'armory-buy';
+                btn.textContent = 'EQUIP';
+                btn.addEventListener('click', () => this.equip(c.index));
+                crow.append(cn, btn);
+                list.appendChild(crow);
+            }
+        }
+        section.appendChild(list);
+        body.appendChild(section);
     }
 
     // Phase R8.1/R8.5 — the persistent gear stash: collected loot, each
