@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.93.0] - 2026-05-23
+
+### Fixed — Stats menu auto-opens on every stage clear when leveled (Phase R7.3)
+
+- The level-up STATS screen interpose lived only in the card-pick flow
+  (`closeWavePickOverlay`). After R3 cut the card draft to 5 stages, the **odd
+  stage clears (3/9/15/21/27) stopped auto-prompting** the STATS screen even
+  when the player had leveled up. Added the interpose to the non-card wave-clear
+  path too: any **stage clear** with a pending level-up now pauses and opens the
+  STATS screen before the next wave (mid-stage waves still bank the SP silently).
+
+### Added (validation)
+- Confirmed the meta leveling system (6.35.0) is fully functional and tested it:
+  `addXp` → level → +1 SP → `_leveledUpPending` → persist (`saveMetaState`);
+  `allocateSp`/`deallocateSp` with caps. 9 unit tests (`leveling-sp`) + 5 QA
+  tests (`11-leveling`).
+
+### Notes
+- **R7.4** (stat passives SP-only — remove the gold PASSIVE buy) is **deferred**,
+  tied to the deferred full removal of the gold UPGRADES shop (R2.4-full): the
+  SP-driven stats already exist; the redundant gold passive tab is what remains.
+
 ## [6.92.0] - 2026-05-23
 
 ### Added — In-run gold sinks at the card moment (Phase R4.2 / R4.3)

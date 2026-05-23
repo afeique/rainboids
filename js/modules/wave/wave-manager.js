@@ -200,13 +200,30 @@ export function updateWaveSystem() {
             if (fireSurvivorOverlay) {
                 this.openWaveClearPowerupsMenu();
             } else {
-                // No survivor card this wave — slide straight into the
-                // next one. Mimic the resume-from-wave-clear path that
-                // closeWavePickOverlay normally takes.
-                this._pausedFromWaveClear = false;
-                if (typeof this.startNextWave === 'function') {
-                    this.startNextWave();
+                // No card this wave. Mimic the resume-from-wave-clear path.
+                const proceed = () => {
+                    this._pausedFromWaveClear = false;
+                    if (typeof this.startNextWave === 'function') this.startNextWave();
+                };
+                // R7.3 — on a non-card STAGE clear where the player leveled up,
+                // interpose the STATS screen so freshly-earned SP is spent
+                // before the next wave (restores the pre-R3 every-stage-clear
+                // prompt; the card stages still prompt via closeWavePickOverlay).
+                // Pause first so the deferred STATS mode holds gameplay. Mid-
+                // stage waves bank the SP silently (spend it next stage clear).
+                if (stageClear && this.player && this.player._leveledUpPending
+                    && typeof this.openStatsForLevelUp === 'function') {
+                    this.player._leveledUpPending = false;
+                    this.game.state = GAME_STATES.PAUSED;
+                    if (this.player.pauseChargeShot) this.player.pauseChargeShot();
+                    const opened = this.openStatsForLevelUp(() => {
+                        if (this.player && this.player.resumeChargeShot) this.player.resumeChargeShot();
+                        proceed();
+                    });
+                    if (opened) return;            // proceed() fires on close
+                    this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → undo pause
                 }
+                proceed();
             }
         }, 2700);
     }
