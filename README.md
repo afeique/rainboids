@@ -44,7 +44,7 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 
 ## ⚙️ How It Works
 
-**🔫 Arsenal** — **11 primary** + **11 power** weapons, swappable from the radial menus. Weapons are **permanent account unlocks** bought with **account-gold** in the pre-run **ARMORY** (no more wave-milestone auto-unlocks). Pour in-run **gold** into per-weapon upgrade trees — Multishot, Rapid Fire, Piercing, Big Bullets, Explosive, Homing, Stun, Knockback, plus per-weapon capstones. `Phase Dash` is a free movement primitive on `Shift`.
+**🔫 Arsenal** — **11 primary** + **11 power** weapons, swappable from the radial menus. Weapons are **permanent account unlocks** bought with **account-gold** in the pre-run **ARMORY** (no more wave-milestone auto-unlocks). Specialize a weapon mid-run through the **card draft** — Multishot, Rapid Fire, Piercing, Big Bullets, Explosive, Homing, Stun, Knockback, and per-weapon capstones now arrive as **powerup cards** (the old in-run gold upgrade-tree shop is retired). `Phase Dash` is a free movement primitive on `Shift`.
 
 **✨ Abilities** — a 4-slot loadout (keys `1`–`4`) of **unique-verb** abilities: Bulwark (on-demand resist window), **Field Medic** (burst heal **+ status cleanse**), Deflector Orbs, EMP Pulse, Sentry Drone, **Blink** (teleport + i-frames), **Gravity Snare** (yank enemies inward), **Designator** (AoE MARK), **Second Wind** (cheat death once), **Elemental Infusion** (re-element your shots), **Cryo Field** (freeze zone), **Stasis Field** (slow zone), **Storm Cell** (shock zone), **Pyre Aura** (burn zone). The base kit (Bulwark + Field Medic, plus the free `Shift` Phase Dash) is available from run one; more are unlocked in the Armory.
 

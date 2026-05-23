@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.101.4] - 2026-05-23
+
+### Fixed — Stop logging a console error for the retired pause-shop button
+
+- After the SHOP button was retired (6.101.3), `pause-shop-button` no longer
+  exists in the DOM, so the pause-menu wiring logged `pauseShopButton element
+  not found!` on every UI setup. Removed the dead `else` error branch; the
+  guarded listener now silently skips wiring (and still re-wires if the button
+  is ever re-added) (`ui-manager.js`).
+
 ## [6.101.3] - 2026-05-23
 
 ### Removed — Legacy gold UPGRADES/SHOP button retired from the HUD

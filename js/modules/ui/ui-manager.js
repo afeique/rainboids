@@ -1483,18 +1483,17 @@ export class UIManager {
             this.elements.pauseOverlay.addEventListener('click', dismissOnBackdrop);
         }
 
-        // Pause menu action buttons
+        // Pause menu action buttons. The legacy gold UPGRADES/SHOP button is
+        // retired (see static-dom.js / hud-buttons.js), so this element is
+        // normally absent — the guard simply skips wiring. The listener is
+        // kept for reuse: if the button is ever re-added, it wires up again.
         if (this.elements.pauseShopButton) {
             this.elements.pauseShopButton.addEventListener('click', () => {
                 if (this.gameEngine) {
                     this.elements.pauseOverlay.style.display = 'none';
                     this.gameEngine.openShop();
-                } else {
-                    console.error('❌ this.gameEngine not available for shop button');
                 }
             });
-        } else {
-            console.error('❌ pauseShopButton element not found!');
         }
 
         // Powerups sub-tab buttons (Offense / Drops) inside the
