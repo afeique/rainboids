@@ -1264,6 +1264,22 @@ export const ABILITIES = {
         elements: ['PYRO', 'CRYO', 'VOLT', 'TOXIC', 'VOID', 'RADIANT'],
         cost: 4, unlockWave: 0, upgrades: [],
     },
+    CRYO_FIELD: {
+        id: 'CRYO_FIELD', name: 'Cryo Field',
+        description: 'Drop a frost field that FREEZES enemies inside for 5s',
+        icon: 'snowflake', color: '#88ddff',
+        cooldown: 18000, duration: 5000,
+        radius: 180, tickMs: 250,
+        cost: 4, unlockWave: 0, upgrades: [],
+    },
+    STASIS_FIELD: {
+        id: 'STASIS_FIELD', name: 'Stasis Field',
+        description: 'Drop a field that CHILLS (slows) enemies inside for 5s',
+        icon: 'spiral', color: '#aabbff',
+        cooldown: 16000, duration: 5000,
+        radius: 210, tickMs: 250,
+        cost: 4, unlockWave: 0, upgrades: [],
+    },
 };
 
 // ─── ABILITY UPGRADES ───────────────────────────────────────────────────────

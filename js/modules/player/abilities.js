@@ -23,6 +23,30 @@ export function updateActiveAbilities(dt) {
         }
     }
 
+    // R6.3 — field auras (Cryo Field / Stasis Field): on a throttled tick,
+    // FREEZE/CHILL enemies inside the dropped zone. The status FX render via
+    // the enemy status engine, so the verb is visible without a zone sprite.
+    const ge = this.gameEngine;
+    if (ge && ge.enemyPool) {
+        for (const fieldId of ['CRYO_FIELD', 'STASIS_FIELD']) {
+            const eff = this.activeAbilityEffects.get(fieldId);
+            if (!eff) continue;
+            const cfg = ABILITIES[fieldId];
+            const tickMs = (cfg && cfg.tickMs) || 250;
+            eff.tickAcc = (eff.tickAcc || 0) + dt;
+            if (eff.tickAcc < tickMs) continue;
+            eff.tickAcc = 0;
+            const r = (cfg && cfg.radius) || 180;
+            const statusDur = tickMs * 4;
+            for (const enemy of ge.enemyPool.activeObjects) {
+                if (!enemy || !enemy.active || enemy.isBoss) continue;
+                if (Math.hypot(enemy.x - eff.x, enemy.y - eff.y) > r) continue;
+                if (fieldId === 'CRYO_FIELD' && typeof ge.applyFreeze === 'function') ge.applyFreeze(enemy, statusDur);
+                else if (fieldId === 'STASIS_FIELD' && typeof ge.applyChill === 'function') ge.applyChill(enemy, statusDur);
+            }
+        }
+    }
+
     // Bulwark: set flag for damage reduction
     this.bulwarkActive = this.activeAbilityEffects.has('BULWARK');
 
@@ -596,6 +620,11 @@ export function activateAbility(slot = 0) {
         const els = config.elements || ['PYRO'];
         this._infusionIndex = (this._infusionIndex == null) ? 0 : (this._infusionIndex + 1) % els.length;
         this._infusedElement = els[this._infusionIndex];
+    } else if (abilityId === 'CRYO_FIELD' || abilityId === 'STASIS_FIELD') {
+        // R6.3 — drop a positioned field at the player's current spot. The
+        // per-frame tick (updateActiveAbilities) freezes/chills enemies inside.
+        const eff = this.activeAbilityEffects.get(abilityId);
+        if (eff) { eff.x = this.x; eff.y = this.y; eff.tickAcc = 0; }
     }
 
     // Play the per-ability activation sound (5.68.9). Falls back to the

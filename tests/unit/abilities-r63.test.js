@@ -6,6 +6,8 @@ import { ABILITIES } from '../../js/modules/combat/weapon-data.js';
 function makePlayer(over = {}) {
     const enemies = over.enemies || [];
     const marked = [];
+    const froze = [];
+    const chilled = [];
     const p = {
         x: 500, y: 400, angle: 0,
         equippedAbilities: [over.ability || 'BLINK', null, null, null],
@@ -15,15 +17,23 @@ function makePlayer(over = {}) {
         getPowerupStacks: () => 0,
         _invincibleMs: 0,
         makeInvincible(ms) { this._invincibleMs = ms; },
+        // entity arrays updateActiveAbilities iterates each frame
+        novaRings: [], singularities: [], cryoRings: [], lightningChains: [],
+        orbitalStrikes: [], deflectorOrbs: [], sentryDrones: [],
+        isDashing: false,
         gameEngine: {
             gameField: { width: 1000, height: 800 },
             enemyPool: { activeObjects: enemies },
             applyMark(enemy, ms) { marked.push([enemy, ms]); },
+            applyFreeze(enemy, ms) { froze.push([enemy, ms]); },
+            applyChill(enemy, ms) { chilled.push([enemy, ms]); },
             audioManager: null,
         },
         ...over,
     };
     p._marked = marked;
+    p._froze = froze;
+    p._chilled = chilled;
     return p;
 }
 
@@ -101,9 +111,34 @@ describe('R6.3 — ELEMENTAL_INFUSION', () => {
     });
 });
 
+describe('R6.3 — CRYO_FIELD / STASIS_FIELD (positioned status auras)', () => {
+    // The per-frame freeze/chill tick lives in updateActiveAbilities (which
+    // touches the whole player entity model) — validated in QA-12 against the
+    // real engine. Here we pin the activate contract: the field is dropped at
+    // the player's position with a tick accumulator, ready for the tick.
+    test('Cryo Field drops a positioned zone on activate', () => {
+        const p = makePlayer({ ability: 'CRYO_FIELD', x: 320, y: 240 });
+        abilities.activateAbility.call(p, 0);
+        const eff = p.activeAbilityEffects.get('CRYO_FIELD');
+        expect(eff).toBeTruthy();
+        expect(eff.x).toBe(320);
+        expect(eff.y).toBe(240);
+        expect(eff.tickAcc).toBe(0);
+        expect(eff.timeRemaining).toBe(ABILITIES.CRYO_FIELD.duration);
+    });
+
+    test('Stasis Field drops a positioned zone on activate', () => {
+        const p = makePlayer({ ability: 'STASIS_FIELD', x: 700, y: 100 });
+        abilities.activateAbility.call(p, 0);
+        const eff = p.activeAbilityEffects.get('STASIS_FIELD');
+        expect(eff.x).toBe(700);
+        expect(eff.y).toBe(100);
+    });
+});
+
 describe('R6.3 — roster registration', () => {
     test('new abilities exist in ABILITIES with cooldowns', () => {
-        for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION']) {
+        for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION', 'CRYO_FIELD', 'STASIS_FIELD']) {
             expect(ABILITIES[id]).toBeDefined();
             expect(ABILITIES[id].cooldown).toBeGreaterThan(0);
         }

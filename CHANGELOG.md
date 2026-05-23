@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.98.0] - 2026-05-23
+
+### Added — New abilities batch #3: Cryo Field + Stasis Field (Phase R6.3)
+
+- **Cryo Field** — drops a positioned frost zone at your location that FREEZES
+  enemies inside for its duration (throttled 250ms tick in updateActiveAbilities
+  → ge.applyFreeze).
+- **Stasis Field** — same, but CHILLS (slows) enemies inside (ge.applyChill).
+- Both are positioned "terrain" (dropped where you stand, not player-attached);
+  the verb is visible via the enemy freeze/chill status FX. Purchasable in the
+  ARMORY + equippable in LOADOUT. +2 unit + 1 QA test (603 unit total).
+- R6.3 now has 7 of the roster live (Blink, Gravity Snare, Designator, Second
+  Wind, Elemental Infusion, Cryo Field, Stasis Field). Remaining: Bullet Time,
+  Decoy Beacon, Storm Cell/Pyre Aura, Catalyst.
+
 ## [6.97.0] - 2026-05-23
 
 ### Added — New abilities batch #2: Second Wind, Elemental Infusion (Phase R6.3)

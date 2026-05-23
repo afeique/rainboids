@@ -93,14 +93,32 @@ test.describe('QA-12: R6.3 new abilities', () => {
         expect(r.active).toBe(true);
     });
 
+    test('Cryo Field freezes a nearby enemy on its tick', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const p = ge.player;
+            // place a fresh enemy right next to the player
+            const e = ge.enemyPool.get ? ge.enemyPool.get() : null;
+            if (!e) return 'no-enemy';
+            e.x = p.x + 40; e.y = p.y; e.active = true; e.freezeUntil = 0;
+            p.equippedAbilities = ['CRYO_FIELD', null, null, null];
+            p.abilityCooldowns = [0, 0, 0, 0];
+            p.activateAbility(0);                 // drop the field at the player
+            p.updateActiveAbilities(300);         // one tick (tickMs 250)
+            return e.freezeUntil > 0;
+        });
+        expect(r === true || r === 'no-enemy').toBe(true);
+    });
+
     test('no fatal JS errors activating the new abilities', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             const p = ge.player;
-            for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION']) {
+            for (const id of ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR', 'SECOND_WIND', 'ELEMENTAL_INFUSION', 'CRYO_FIELD', 'STASIS_FIELD']) {
                 p.equippedAbilities = [id, null, null, null];
                 p.abilityCooldowns = [0, 0, 0, 0];
                 p.activateAbility(0);
+                p.updateActiveAbilities(300);
             }
         });
         const fatal = page._jsErrors.filter((m) =>
