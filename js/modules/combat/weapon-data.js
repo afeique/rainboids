@@ -180,13 +180,16 @@ export const PRIMARY_WEAPONS = {
     // reads custom fields off this config in its fire fn (weapons.js) and
     // its projectile behavior (bullet.js). All are FREE, gated by unlockWave.
 
-    // SPLITTER — bullets split into smaller shards when they KILL an enemy
-    // (cascading clears through dense waves). Shards spawn fanned from the
-    // kill site at reduced damage/size. See collision-system kill block.
+    // SPLITTER — every round fragments on IMPACT (hit or kill) into bright,
+    // seeking shards. Shards hunt nearby targets and chain once more when THEY
+    // land a kill, so the weapon cascades through dense waves yet still pays
+    // off against single tanky targets (shards curve back). See
+    // collision-system (impact + kill triggers) and combat-manager
+    // (mitosisSplit / spawnSplitShards).
     SPLITTER: {
         id: 'SPLITTER',
         name: 'Mitosis Rounds',
-        description: 'Rounds split into shards on each kill — cascading clears',
+        description: 'Rounds fragment on impact into seeking shards that chain on kills',
         icon: 'multi-shot',
         color: '#66ff99',
         fireRate: 380,
@@ -199,12 +202,12 @@ export const PRIMARY_WEAPONS = {
         range: 1.0,
         cost: 0,
         unlockWave: 6,
-        // Split tuning (read in collision-system on kill):
-        splitOnKill: true,
-        splitCount: 2,            // shards spawned per kill (+SPLIT_CELLS)
+        // Split tuning (read in collision-system + combat-manager):
+        splitOnImpact: true,      // primaries fragment on any impact
+        splitCount: 2,            // shards spawned per split (+SPLIT_CELLS)
         splitDamageFactor: 0.5,   // shard damage = parent damage × this
         splitSpeed: 0.85,         // shard speed relative to a fresh bullet
-        splitGenerations: 1,      // shards don't re-split unless MEIOSIS owned
+        splitGenerations: 2,      // 1 cascade by default; MEIOSIS adds another
         upgrades: ['SPLITTER_MULTI', 'SPLITTER_RAPID', 'SPLITTER_BIG', 'SPLITTER_HOMING', 'SPLITTER_STUN', 'SPLITTER_KNOCK', 'SPLIT_CELLS', 'MEIOSIS'],
     },
 
@@ -676,8 +679,8 @@ export const PRIMARY_UPGRADES = {
     SPLITTER_HOMING: { id: 'SPLITTER_HOMING', name: 'Seeking Cells',  description: 'Rounds seek nearest enemy',   cost: 1600, maxStacks: 3, weapon: 'SPLITTER', icon: 'target' },
     SPLITTER_STUN:   { id: 'SPLITTER_STUN',   name: 'Shock Cells',    description: '+12% chance to stun on hit',  cost: 1500, maxStacks: 3, weapon: 'SPLITTER', icon: 'spiral' },
     SPLITTER_KNOCK:  { id: 'SPLITTER_KNOCK',  name: 'Burst Cells',    description: '+15% chance to knock back',   cost: 1300, maxStacks: 3, weapon: 'SPLITTER', icon: 'wind' },
-    SPLIT_CELLS:     { id: 'SPLIT_CELLS',     name: 'Hyperplasia',    description: '+1 shard spawned per kill',   cost: 2200, maxStacks: 3, weapon: 'SPLITTER', icon: 'multi-shot' },
-    MEIOSIS:         { id: 'MEIOSIS',         name: 'Meiosis',        description: 'Shards split once more on kill', cost: 2700, maxStacks: 1, weapon: 'SPLITTER', icon: 'shuffle' },
+    SPLIT_CELLS:     { id: 'SPLIT_CELLS',     name: 'Hyperplasia',    description: '+1 shard spawned per split',  cost: 2200, maxStacks: 3, weapon: 'SPLITTER', icon: 'multi-shot' },
+    MEIOSIS:         { id: 'MEIOSIS',         name: 'Meiosis',        description: 'Shards cascade one generation deeper', cost: 2700, maxStacks: 1, weapon: 'SPLITTER', icon: 'shuffle' },
 
     // ── Caroms (RICOCHET) ──
     RICOCHET_MULTI:   { id: 'RICOCHET_MULTI',   name: 'Double Bank',   description: '+1 round per shot',           cost: 1800, maxStacks: 3, weapon: 'RICOCHET', icon: 'multi-shot' },

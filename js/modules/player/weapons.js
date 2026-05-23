@@ -850,7 +850,9 @@ export function fireSplitter(bulletPool, audioManager, config) {
         bullet.rangeMultiplier = this.getRangeMultiplier() * config.range;
         bullet.maxLife = Math.round(bullet.maxLife * config.range);
         bullet.color = config.color;
-        bullet.splitOnKill = true;
+        // Primaries fragment on ANY impact (hit or kill); shards spawned from
+        // them chain only on kills (set in spawnSplitShards via splitOnKill).
+        bullet.splitOnImpact = true;
         bullet.splitCount = splitCount;
         bullet.splitDamageFactor = config.splitDamageFactor;
         bullet.splitSpeed = config.splitSpeed;

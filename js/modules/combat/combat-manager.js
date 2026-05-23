@@ -2260,16 +2260,49 @@ export function spawnFlakBurst(x, y, opts = {}) {
     if (typeof this.triggerScreenShake === 'function') this.triggerScreenShake(4, 3, blastR || 50);
 }
 
-// Mitosis Rounds — spawn a fan of shard bullets at a kill site. If `generations`
-// remain (MEIOSIS), the shards themselves are flagged to split once more.
+// Mitosis Rounds — bright shard color so fragments read as a distinct event.
+// (The primary fires a deeper green, #66ff99; shards glow paler/hotter.)
+const SPLITTER_SHARD_COLOR = '#aaffcc';
+
+// Fire one Mitosis split burst from `bullet` at (x, y). Centralizes the shard
+// parameters so every trigger site (primary impact, shard kill, on both the
+// enemy and asteroid paths) stays consistent. No-op when the bullet has no
+// generations or shard budget left.
+export function mitosisSplit(bullet, x, y) {
+    if (!bullet || bullet.splitGenerations <= 0 || bullet.splitCount <= 0) return;
+    if (typeof this.spawnSplitShards !== 'function') return;
+    this.spawnSplitShards(x, y, {
+        count: bullet.splitCount,
+        damage: (bullet.damage || 1) * (bullet.splitDamageFactor || 0.5),
+        generations: bullet.splitGenerations - 1,
+        angle: Math.atan2(bullet.vel.y, bullet.vel.x),
+        splitDamageFactor: bullet.splitDamageFactor,
+        splitSpeed: bullet.splitSpeed,
+        // Shards inherit a light seek; Seeking Cells (homingStrength on the
+        // parent) makes the whole cascade hunt harder.
+        homingStrength: bullet.homingStrength || 0,
+    });
+}
+
+// Spawn a fan of shard bullets at a split site. Shards are bright, seek nearby
+// targets (so the cascade actually connects), travel at a fixed fraction of a
+// fresh bullet's speed, and — while `generations` remain — re-split when THEY
+// land a kill. A small flash + shrapnel + pop sell the split as its own event.
 export function spawnSplitShards(x, y, opts = {}) {
     if (!this.bulletPool) return;
     const count = opts.count || 2;
     const dmg = opts.damage || 1;
-    const speed = opts.speed || 6;
     const gens = opts.generations || 0;
     const baseAngle = opts.angle || 0;
-    const color = opts.color || '#66ff99';
+    const color = opts.color || SPLITTER_SHARD_COLOR;
+    const splitSpeed = opts.splitSpeed || 0.85;
+    // Speed relative to a real bullet — was hardcoded to 6, which made shards
+    // ~64% of a fresh bullet despite the 0.85 factor claiming 85%. Now honors
+    // BULLET_SPEED so shards keep pace and actually reach a second target.
+    const speed = GAME_CONFIG.BULLET_SPEED * splitSpeed;
+    // Light baseline seek; stronger if the parent carried Seeking Cells.
+    const homingStrength = Math.min(0.4, Math.max(0.12, opts.homingStrength || 0));
+
     for (let i = 0; i < count; i++) {
         const a = baseAngle + (i - (count - 1) / 2) * 0.6 + random(-0.12, 0.12);
         const b = this.bulletPool.get(x, y, a);
@@ -2278,21 +2311,37 @@ export function spawnSplitShards(x, y, opts = {}) {
         b.weaponId = 'SPLITTER';
         b.damage = dmg;
         b.piercing = 0;
-        b.homing = false;
         b.explosive = false;
         b.color = color;
-        b.baseRadius = 3; b.radius = 3;
-        b.rangeMultiplier = 0.8;
+        b.baseRadius = 3.4; b.radius = 3.4;
+        b.rangeMultiplier = 0.85;
         b.vel.x = Math.cos(a) * speed;
         b.vel.y = Math.sin(a) * speed;
+        // Shards hunt so fragments curve into nearby targets instead of
+        // sailing into empty space — the fix that makes the weapon "connect".
+        b.homing = true;
+        b.homingStrength = homingStrength;
         if (gens > 0) {
+            // Shards chain only when THEY land a kill (keeps the cascade
+            // bounded — primaries split on any impact, shards on kills).
             b.splitOnKill = true;
             b.splitCount = count;
             b.splitDamageFactor = opts.splitDamageFactor || 0.5;
-            b.splitSpeed = opts.splitSpeed || 0.85;
+            b.splitSpeed = splitSpeed;
             b.splitGenerations = gens;
         }
     }
+
+    // Split cue — a small bright pop + shrapnel so the player sees it happen.
+    if (this.particlePool) {
+        const pp = this.particlePool;
+        pp.get(x, y, 'explosionFlash', 7, color);
+        for (let i = 0; i < 5; i++) {
+            const sa = (i / 5) * Math.PI * 2 + random(-0.3, 0.3);
+            pp.get(x, y, 'explosionShrapnel', sa, 2 + Math.random() * 2.5, color);
+        }
+    }
+    if (this.audioManager) this.audioManager.playSound('hit');
 }
 
 export function detonateSubBomblet(x, y, baseDamage, baseRadius) {

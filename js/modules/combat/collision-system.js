@@ -297,19 +297,11 @@ export function handleCollisions() {
                         }
                     }
 
-                    // Mitosis Rounds — split on asteroid kills too.
-                    if (bullet.splitOnKill && bullet.splitCount > 0 && bullet.splitGenerations > 0
-                        && typeof this.spawnSplitShards === 'function') {
-                        this.spawnSplitShards(ast.x, ast.y, {
-                            count: bullet.splitCount,
-                            damage: (bullet.damage || 1) * (bullet.splitDamageFactor || 0.5),
-                            speed: 6 * (bullet.splitSpeed || 0.85),
-                            generations: bullet.splitGenerations - 1,
-                            angle: Math.atan2(bullet.vel.y, bullet.vel.x),
-                            color: bullet.color,
-                            splitDamageFactor: bullet.splitDamageFactor,
-                            splitSpeed: bullet.splitSpeed,
-                        });
+                    // Mitosis Rounds — fragment on the killing blow. Primaries
+                    // (splitOnImpact) and chaining shards (splitOnKill) both
+                    // fire here; mitosisSplit no-ops when no generations remain.
+                    if (bullet.splitOnImpact || bullet.splitOnKill) {
+                        this.mitosisSplit(bullet, ast.x, ast.y);
                     }
                 }
 
@@ -347,6 +339,12 @@ export function handleCollisions() {
 
                 // Only break if bullet is destroyed (no piercing left)
                 if (!bullet.active) {
+                    // Mitosis — a primary consumed by a non-killing hit still
+                    // fragments (the kill case fragmented in the block above).
+                    // Shards (splitOnKill, not splitOnImpact) don't chain here.
+                    if (bullet.splitOnImpact && ast.health > 0.001) {
+                        this.mitosisSplit(bullet, ast.x, ast.y);
+                    }
                     break;
                 }
             }
@@ -846,19 +844,11 @@ export function handleCollisions() {
                     // Drop health and money orbs
                     this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
 
-                    // Mitosis Rounds — spawn shards on kill (cascading clear).
-                    if (bullet.splitOnKill && bullet.splitCount > 0 && bullet.splitGenerations > 0
-                        && typeof this.spawnSplitShards === 'function') {
-                        this.spawnSplitShards(enemy.x, enemy.y, {
-                            count: bullet.splitCount,
-                            damage: (bullet.damage || 1) * (bullet.splitDamageFactor || 0.5),
-                            speed: 6 * (bullet.splitSpeed || 0.85),
-                            generations: bullet.splitGenerations - 1,
-                            angle: Math.atan2(bullet.vel.y, bullet.vel.x),
-                            color: bullet.color,
-                            splitDamageFactor: bullet.splitDamageFactor,
-                            splitSpeed: bullet.splitSpeed,
-                        });
+                    // Mitosis Rounds — fragment on the killing blow. Primaries
+                    // (splitOnImpact) and chaining shards (splitOnKill) both
+                    // fire here; mitosisSplit no-ops when no generations remain.
+                    if (bullet.splitOnImpact || bullet.splitOnKill) {
+                        this.mitosisSplit(bullet, enemy.x, enemy.y);
                     }
 
                     // 5.70.0 — powerups no longer drop from enemy kills.
@@ -908,6 +898,12 @@ export function handleCollisions() {
 
                 // Only break if bullet is destroyed (no piercing left)
                 if (!bullet.active) {
+                    // Mitosis — a primary consumed by a non-killing hit still
+                    // fragments (kills fragment in the block above; shards only
+                    // chain on kills, so they're excluded via splitOnImpact).
+                    if (bullet.splitOnImpact && !destroyed) {
+                        this.mitosisSplit(bullet, enemy.x, enemy.y);
+                    }
                     break;
                 }
             }

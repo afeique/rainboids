@@ -2658,6 +2658,9 @@ export class GameEngine {
     spawnSplitShards(x, y, opts) {
         return combat.spawnSplitShards.call(this, x, y, opts);
     }
+    mitosisSplit(bullet, x, y) {
+        return combat.mitosisSplit.call(this, bullet, x, y);
+    }
 
     // Phase 4 (2026-05-19) — Nova Chain Reaction secondary spawn.
     //   Pushes a smaller nova ring onto the player's `novaRings` queue

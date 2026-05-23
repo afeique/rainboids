@@ -123,7 +123,9 @@ export class Bullet {
         this.pullRadius = 0;
         this.pullStrength = 0;
         this.implosion = false;
-        // Mitosis Rounds (Splitter): spawn shards on kill.
+        // Mitosis Rounds (Splitter): primaries fragment on impact
+        // (splitOnImpact); spawned shards re-split on kill (splitOnKill).
+        this.splitOnImpact = false;
         this.splitOnKill = false;
         this.splitCount = 0;
         this.splitDamageFactor = 0;

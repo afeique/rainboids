@@ -11,6 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.102.0] - 2026-05-23
+
+### Changed — Mitosis Rounds (SPLITTER) overhaul: a real cascade weapon
+
+Mitosis Rounds previously split **only on the killing blow**, into 2 slow,
+short-lived shards that flew straight ahead and almost always sailed into
+empty space — so against single or sparse targets the weapon behaved like a
+plain single-shot cannon, and even when it did split the fragments rarely hit
+anything. The whole split mechanic is reworked so the weapon expresses its
+identity in every fight:
+
+- **Fragment on impact, not just on kill.** Primary rounds now split on *any*
+  impact (hit or kill), so the weapon does something distinct even against
+  tanky targets it can't one-shot. Spawned shards still chain only when *they*
+  land a kill, which keeps the cascade bounded.
+- **Shards seek.** Fragments now home toward nearby targets (a light baseline
+  seek; stronger with **Seeking Cells**), so the cascade actually connects
+  instead of flying off into the void — and shards curve back into a single
+  boss for meaningful follow-up damage.
+- **Cascade by default.** Base `splitGenerations` raised 1 → 2, so shards
+  re-split once on their own kills *without* needing **Meiosis**. Meiosis now
+  adds a *second* cascade generation on top (re-described accordingly).
+- **Distinct look & sound.** Shards spawn in a brighter mint green (`#aaffcc`)
+  vs. the primary's `#66ff99`, are slightly larger, and every split emits a
+  small flash + shrapnel pop with a throttled impact cue — so the player can
+  see and hear fragmentation happen.
+- `SPLIT_CELLS` (Hyperplasia) re-described "per kill" → "per split" to match
+  the new impact trigger.
+
+### Fixed — Mitosis shard speed honored the wrong baseline
+
+Shard speed was hardcoded as `6 × splitSpeed`, making fragments ~64% of a
+fresh bullet's speed despite the `splitSpeed: 0.85` factor implying 85%. Shards
+now derive from `BULLET_SPEED × splitSpeed`, so they keep pace and reach a
+second target before expiring.
+
 ## [6.101.5] - 2026-05-23
 
 ### Fixed — Asteroid fragments hard-floored to 5 HP
