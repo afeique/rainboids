@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.101.2] - 2026-05-23
+
+### Changed — Cluster bomb decelerates in flight (lobbed-mortar feel)
+
+- **The cluster bomb now launches fast and slows substantially toward the end
+  of its range**, instead of flying at constant velocity. `travelFriction` is
+  `0.965` (was `1.0`) and the muzzle velocity is *derived* from the charged
+  target distance so the bomb arrives at the detonation point travelling at
+  `haltVelocity` (~1 px/frame): `v0 = targetDist·(1−friction) + haltVelocity`.
+  Muzzle speed still scales with the hold (a tap launches gently, a full charge
+  launches hard — well above the old constant `12`), and the laser-sight
+  preview is unchanged since it still detonates at the charged distance.
+  Supersedes the constant-velocity charge lerp from 6.101.0.
+- **Movement is now sub-stepped** (`CLUSTER_SUBSTEP_PX = 8`) with a per-step
+  contact + distance check, so the higher launch speed can't tunnel a bomb
+  past a small target between frames (`bullet.js`).
+
 ## [6.101.1] - 2026-05-23
 
 ### Fixed — Laser sights no longer extend off-screen

@@ -105,9 +105,10 @@ function makeEnemy(x, y, hp = 100) {
 
 describe('PRIMARY_WEAPONS.CLUSTER_LAUNCHER — config sanity', () => {
     test('cluster launcher config exists with correct defaults', () => {
-        // 6.26.0 — nucleus-cluster rework: range effectively unlimited
-        // (9999), no friction halt, no armed window. Detonates on first
-        // contact with any enemy / asteroid / mine.
+        // Nucleus-cluster rework: range effectively unlimited (9999), no
+        // armed window. Detonates on contact with any enemy / asteroid / mine,
+        // or at the charged distance. The bomb decelerates under friction
+        // (< 1) and arrives at ~haltVelocity.
         const cfg = PRIMARY_WEAPONS.CLUSTER_LAUNCHER;
         expect(cfg).toBeDefined();
         expect(cfg.id).toBe('CLUSTER_LAUNCHER');
@@ -117,7 +118,8 @@ describe('PRIMARY_WEAPONS.CLUSTER_LAUNCHER — config sanity', () => {
         expect(cfg.blastRadius).toBe(90);
         expect(cfg.blastDamage).toBe(50);
         expect(cfg.subBombCount).toBe(5);
-        expect(cfg.travelFriction).toBe(1.0);
+        expect(cfg.travelFriction).toBeLessThan(1.0); // decelerates in flight
+        expect(cfg.haltVelocity).toBeGreaterThan(0);   // arrival speed at target
         expect(cfg.armedDurationMs).toBe(0);
         expect(cfg.proximityRadius).toBe(18);
         expect(cfg.piercing).toBe(0); // Cluster bombs do not pierce by spec
@@ -178,17 +180,34 @@ describe('clusterLaunchDistance / clusterLaunchVelocity — charge scaling', () 
         expect(clusterLaunchDistance(cfg, 99, VW, VH)).toBeCloseTo(clusterLaunchDistance(cfg, 1, VW, VH), 5);
     });
 
-    test('a tap launches slow (floaty) and a full charge launches fast', () => {
-        expect(clusterLaunchVelocity(cfg, 0)).toBeCloseTo(cfg.minLaunchVelocity, 5);
-        expect(clusterLaunchVelocity(cfg, 1)).toBeCloseTo(cfg.initialVelocity, 5);
-        // The floaty tap is meaningfully slower than the full-charge throw.
-        expect(clusterLaunchVelocity(cfg, 0)).toBeLessThan(clusterLaunchVelocity(cfg, 1));
+    test('muzzle velocity is derived to arrive at the target near haltVelocity', () => {
+        // v0 = targetDist·(1-f) + haltVelocity. A bomb launched at v0 and
+        // decelerating by (1-f) each tick covers (v0-halt)/(1-f) = targetDist
+        // before slowing to haltVelocity — i.e. it arrives at the target.
+        const f = cfg.travelFriction;
+        const halt = cfg.haltVelocity;
+        for (const D of [70, 400, 808]) {
+            const v0 = clusterLaunchVelocity(cfg, D);
+            const reach = (v0 - halt) / (1 - f);
+            expect(reach).toBeCloseTo(D, 5);
+        }
     });
 
-    test('launch velocity grows monotonically with charge', () => {
-        const v0 = clusterLaunchVelocity(cfg, 0);
-        const vHalf = clusterLaunchVelocity(cfg, 0.5);
-        const v1 = clusterLaunchVelocity(cfg, 1);
+    test('a short lob launches gently; a long throw launches hard (and faster than current 12)', () => {
+        const vTap = clusterLaunchVelocity(cfg, 70);
+        const vFull = clusterLaunchVelocity(cfg, 808);
+        expect(vTap).toBeLessThan(vFull);
+        // "Increased muzzle velocity to compensate" — a full throw launches
+        // well above the old constant-velocity value of 12.
+        expect(vFull).toBeGreaterThan(12);
+        // The arrival speed never drops below haltVelocity (no creep).
+        expect(vTap).toBeGreaterThanOrEqual(cfg.haltVelocity);
+    });
+
+    test('muzzle velocity grows monotonically with launch distance', () => {
+        const v0 = clusterLaunchVelocity(cfg, 70);
+        const vHalf = clusterLaunchVelocity(cfg, 400);
+        const v1 = clusterLaunchVelocity(cfg, 808);
         expect(vHalf).toBeGreaterThan(v0);
         expect(v1).toBeGreaterThan(vHalf);
     });
@@ -230,36 +249,36 @@ describe('Bullet.setupClusterBomb — initial state', () => {
     });
 });
 
-// 6.26.0 — flight model: constant-velocity straight-line flight at
-// initialVelocity (no friction, no halt). The old travel→armed FSM and
-// armed-timer detonation paths were removed; the bomb is "always armed"
-// and detonates on the first contact with any enemy or asteroid.
-describe('Bullet.updateClusterStage — flight model (6.26.0)', () => {
-    test('flies at constant velocity (no friction deceleration)', () => {
+// Flight model: the bomb launches fast and DECELERATES under friction toward
+// the charged target distance, detonating on arrival or on first contact with
+// any enemy / asteroid. Single 'flying' stage (no travel→armed FSM).
+describe('Bullet.updateClusterStage — flight model', () => {
+    test('decelerates under friction (slows toward the end of its flight)', () => {
         const b = new Bullet();
         b.reset(500, 500, 0);
         b.setupClusterBomb(makeClusterConfig());
         const emptyPool = makePool([]);
         const v0 = Math.hypot(b.vel.x, b.vel.y);
-        for (let i = 0; i < 30; i++) {
-            b.updateClusterStage(null, emptyPool, null, null);
+        for (let i = 0; i < 10; i++) {
+            b.updateClusterStage(null, emptyPool, null, null, makePool([]));
         }
-        const v30 = Math.hypot(b.vel.x, b.vel.y);
-        // Friction = 1.0, so velocity stays constant across 30 ticks.
-        expect(v30).toBeCloseTo(v0, 5);
+        const v10 = Math.hypot(b.vel.x, b.vel.y);
+        // travelFriction < 1, so velocity decays over the flight.
+        expect(v10).toBeLessThan(v0);
         // Stage stays 'flying' (no transition to 'armed').
         expect(b.stage).toBe('flying');
     });
 
-    test('stage stays "flying" indefinitely without contact', () => {
+    test('stage stays "flying" until it reaches range or makes contact', () => {
         const b = new Bullet();
         b.reset(500, 500, 0);
+        // makeClusterConfig supplies no targetDist → Infinity, so with no
+        // contact the bomb just decelerates and keeps flying.
         b.setupClusterBomb(makeClusterConfig());
         const emptyPool = makePool([]);
         for (let i = 0; i < 100; i++) {
-            b.updateClusterStage(null, emptyPool, null, null);
+            b.updateClusterStage(null, emptyPool, null, null, makePool([]));
         }
-        // No friction halt → never transitions to 'armed' / 'detonated'.
         expect(b.stage).toBe('flying');
         expect(b.active).toBe(true);
     });

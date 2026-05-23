@@ -2,6 +2,12 @@
 import { GAME_CONFIG } from '../core/constants.js';
 import { wrap, random, bakedBulletSpriteCache } from '../core/utils.js';
 
+// Cluster bombs launch fast and decelerate (friction), so a single frame's
+// movement can exceed an enemy's contact radius. Movement is sub-stepped in
+// chunks no larger than this (px) with a contact + distance check at each
+// sub-step so a fast bomb can't tunnel past a small target between frames.
+const CLUSTER_SUBSTEP_PX = 8;
+
 export class Bullet {
     constructor() {
         this.width = window.innerWidth;
@@ -137,8 +143,8 @@ export class Bullet {
         this.stage = 'flying';
         this.armedAt = 0;
         this.armedDuration = config.armedDurationMs;
-        this.clusterFriction = config.travelFriction; // = 1.0 now (no decel)
-        this.haltVelocity = config.haltVelocity;      // unused under flying-only
+        this.clusterFriction = config.travelFriction; // < 1 → decelerates in flight
+        this.haltVelocity = config.haltVelocity;       // arrival speed at the target
         this.proximityRadius = config.proximityRadius; // contact radius
         this.blastRadius = config.blastRadius;
         this.blastDamage = config.blastDamage;
@@ -152,23 +158,22 @@ export class Bullet {
         this.piercing = 0;
         this.homing = false;
         this.explosive = false;
-        // Override the initial velocity to the cluster-launch speed.
-        // 6.26.0 — `this.angle` is the player's aim angle (set from the
-        // click direction in player.js), so the bomb flies exactly
-        // toward the cursor.
+        // Override the initial velocity to the cluster-launch (muzzle) speed.
+        // `this.angle` is the player's aim angle (set from the click direction
+        // in player.js), so the bomb flies toward the cursor. The bomb then
+        // decelerates under clusterFriction toward the target — fireCluster
+        // derives initialVelocity so it arrives at clusterTargetDist at ~the
+        // haltVelocity, slowing substantially over the flight.
         const speed = config.initialVelocity;
         this.vel.x = Math.cos(this.angle) * speed;
         this.vel.y = Math.sin(this.angle) * speed;
-        // 6.55.0 — charge-for-distance. The bomb detonates once it has
-        // travelled `clusterTargetDist` px (set from the launch charge) if
-        // it hasn't already hit something. Infinity = legacy fly-til-contact.
+        // Charge-for-distance. The bomb detonates once it has travelled
+        // `clusterTargetDist` px (set from the launch charge) if it hasn't
+        // already hit something. Infinity = legacy fly-til-contact.
         this.clusterTargetDist = (config.targetDist != null) ? config.targetDist : Infinity;
         this._clusterDist = 0;
-        // 6.26.0 — Generous lifetime safety net. At velocity 12 / frame
-        // the bomb crosses the field diagonal (~2200 px) in ~184 frames.
-        // 1200 frames is ~6x that, well past any sensible cursor
-        // distance; the off-field cull triggers detonation long before
-        // this fires.
+        // Generous lifetime safety net well past any sensible cursor distance;
+        // the off-field cull / target-distance detonation fire long before.
         this.maxLife = Math.round(1200 / GAME_CONFIG.TICK_SCALE);
         this.rangeMultiplier = 1.0;
         // 6.26.0 — Nucleus cluster body: ~10 px core lets the per-orbit
@@ -419,23 +424,21 @@ export class Bullet {
     updateClusterStage(particlePool, enemyPool, gameEngine, gameField, asteroidPool = null) {
         this.life++;
 
-        // Apply friction to velocity. travelFriction (0.92 cluster /
-        // 0.94 sub-bomb) is applied per LOGIC tick, so the projectile
-        // reaches near-zero velocity in ~30 frames (cluster) / ~20
-        // frames (sub-bomb).
+        // Apply friction to velocity. travelFriction (< 1) decelerates the
+        // bomb so it slows substantially toward the end of its flight; the
+        // muzzle velocity is set high (derived in fireCluster) to compensate
+        // so the charged target distance is still reached. Sub-bombs use
+        // their own subBombFriction.
         this.vel.x *= this.clusterFriction;
         this.vel.y *= this.clusterFriction;
 
-        // Position update.
-        this.x += this.vel.x;
-        this.y += this.vel.y;
-
-        // ── Primary cluster bomb (6.26.0 — flying-until-contact) ───────
-        // No travel/armed split: the bomb flies at constant velocity
-        // toward the cursor and detonates the instant it touches any
-        // enemy. Asteroid + mine contact is handled in collision-system.js
-        // for spatial-grid efficiency; this loop only checks enemies
-        // (small list, fine to scan linearly).
+        // ── Primary cluster bomb ───────────────────────────────────────
+        // Launches fast and decelerates toward the charged target distance,
+        // detonating when it arrives (or on first contact with any enemy /
+        // asteroid). Because the launch speed can be high, movement is
+        // SUB-STEPPED in <= CLUSTER_SUBSTEP_PX chunks with a contact +
+        // distance check at each sub-step, so a fast bomb can't tunnel past a
+        // small target between frames.
         if (this.cluster) {
             // Advance spin for the nucleus render so satellite spheres
             // orbit visibly while in flight.
@@ -445,45 +448,56 @@ export class Bullet {
             if (particlePool && (this._smokeFrame % 3 === 0)) {
                 particlePool.get(this.x, this.y, 'clusterTrail');
             }
-            // 6.55.0 — detonate once the charged launch distance is reached
-            // (constant-velocity flight, so distance accumulates linearly).
-            this._clusterDist = (this._clusterDist || 0) + Math.hypot(this.vel.x, this.vel.y);
-            if (this._clusterDist >= this.clusterTargetDist) {
-                this._detonate(gameEngine);
-                return;
-            }
-            // Detonate on first enemy contact within proximityRadius.
-            if (enemyPool && this.proximityRadius > 0) {
-                const r2 = this.proximityRadius * this.proximityRadius;
-                const list = enemyPool.activeObjects || [];
-                for (let i = 0; i < list.length; i++) {
-                    const e = list[i];
-                    if (!e || !e.active) continue;
-                    if (e.warping || e._deathFlash > 0) continue;
-                    const dx = e.x - this.x;
-                    const dy = e.y - this.y;
-                    if (dx * dx + dy * dy <= r2) {
-                        this._detonate(gameEngine);
-                        return;
+            const stepLen = Math.hypot(this.vel.x, this.vel.y);
+            const sub = Math.max(1, Math.ceil(stepLen / CLUSTER_SUBSTEP_PX));
+            const incX = this.vel.x / sub;
+            const incY = this.vel.y / sub;
+            const incLen = Math.hypot(incX, incY);
+            const proxR = this.proximityRadius || 0;
+            const enemyList = (enemyPool && proxR > 0) ? (enemyPool.activeObjects || null) : null;
+            const astList = (asteroidPool && proxR > 0) ? (asteroidPool.activeObjects || null) : null;
+            const r2 = proxR * proxR;
+            for (let s = 0; s < sub; s++) {
+                this.x += incX;
+                this.y += incY;
+                // Detonate once the charged launch distance is reached.
+                this._clusterDist = (this._clusterDist || 0) + incLen;
+                if (this._clusterDist >= this.clusterTargetDist) {
+                    this._detonate(gameEngine);
+                    return;
+                }
+                // First enemy contact within proximityRadius.
+                if (enemyList) {
+                    for (let i = 0; i < enemyList.length; i++) {
+                        const e = enemyList[i];
+                        if (!e || !e.active || e.warping || e._deathFlash > 0) continue;
+                        const dx = e.x - this.x;
+                        const dy = e.y - this.y;
+                        if (dx * dx + dy * dy <= r2) {
+                            this._detonate(gameEngine);
+                            return;
+                        }
                     }
                 }
-            }
-            // Asteroid contact triggers detonation too.
-            if (asteroidPool && this.proximityRadius > 0) {
-                const list = asteroidPool.activeObjects || [];
-                for (let i = 0; i < list.length; i++) {
-                    const a = list[i];
-                    if (!a || !a.active) continue;
-                    const dx = a.x - this.x;
-                    const dy = a.y - this.y;
-                    const r = this.proximityRadius + (a.radius || 0);
-                    if (dx * dx + dy * dy <= r * r) {
-                        this._detonate(gameEngine);
-                        return;
+                // Asteroid contact (combined radii).
+                if (astList) {
+                    for (let i = 0; i < astList.length; i++) {
+                        const a = astList[i];
+                        if (!a || !a.active) continue;
+                        const dx = a.x - this.x;
+                        const dy = a.y - this.y;
+                        const r = proxR + (a.radius || 0);
+                        if (dx * dx + dy * dy <= r * r) {
+                            this._detonate(gameEngine);
+                            return;
+                        }
                     }
                 }
             }
         } else if (this.subBomb) {
+            // Position update (full step; sub-bomb speeds stay low).
+            this.x += this.vel.x;
+            this.y += this.vel.y;
             // Sub-bomblet: flies off in its (random) launch direction and
             // detonates the moment it hits SOMETHING — an enemy (handled by
             // collision-system) or an asteroid (checked here) — otherwise it

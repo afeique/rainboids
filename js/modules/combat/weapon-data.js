@@ -139,12 +139,19 @@ export const PRIMARY_WEAPONS = {
         range: 9999,
         cost: 0,
         unlockWave: 10,
-        // Cluster bomb tuning (6.26.0 — no halt / no arm):
-        //   initialVelocity  — FULL-CHARGE flight speed (constant; no friction).
-        //   minLaunchVelocity— quick-tap (zero-charge) flight speed. The launch
-        //                      speed lerps minLaunchVelocity→initialVelocity with
-        //                      the hold, so a tap floats and a full charge flies.
-        //   travelFriction   — 1.0 (no deceleration).
+        // Cluster bomb tuning — the bomb LAUNCHES FAST and DECELERATES toward
+        // the charged target distance, like a lobbed mortar (it slows
+        // substantially before it detonates).
+        //   travelFriction   — per-tick velocity decay (< 1). Lower = slows
+        //                      harder = needs more muzzle velocity to reach
+        //                      range.
+        //   haltVelocity     — the arrival speed at the target. The muzzle
+        //                      velocity is DERIVED in fireCluster from the
+        //                      charged distance + friction + haltVelocity, so
+        //                      the bomb arrives at ~haltVelocity exactly when
+        //                      it reaches the charged range (muzzle speed still
+        //                      scales with the hold via the charged distance).
+        //   initialVelocity  — fallback muzzle speed if no charge is supplied.
         //   proximityRadius  — radius at which any enemy/asteroid/mine
         //                      contact triggers detonation.
         //   blastRadius      — primary blast AoE.
@@ -153,9 +160,8 @@ export const PRIMARY_WEAPONS = {
         //                      detonate on contact or after subBombLifeFrames —
         //                      spreading the blast damage across an area.
         initialVelocity: 12,
-        minLaunchVelocity: 3,
-        travelFriction: 1.0,
-        haltVelocity: 0.0,
+        travelFriction: 0.965,
+        haltVelocity: 1.0,
         armedDurationMs: 0,
         proximityRadius: 18,
         blastRadius: 90,
@@ -346,13 +352,12 @@ export const PRIMARY_WEAPONS = {
     //   already displays as a ring around the player.
 };
 
-// Cluster Launcher — charge → launch distance/velocity mapping. SHARED by the
-// fire path (weapons.fireCluster) and the laser-sight preview (hud/cursor.js)
-// so the on-screen aim length is an HONEST preview of where the bomb detonates.
-//   • distance: a quick tap lobs to `minLaunchDist`; a full charge reaches
-//     ~0.55× the viewport diagonal (comfortably the screen edge).
-//   • velocity: lerps `minLaunchVelocity` (slow, floaty) → `initialVelocity`
-//     (fast) so the throw FEELS as far as it looks.
+// Cluster Launcher — charge → launch distance. SHARED by the fire path
+// (weapons.fireCluster) and the laser-sight preview (hud/cursor.js) so the
+// on-screen aim length is an HONEST preview of where the bomb detonates.
+// A quick tap lobs to `minLaunchDist`; a full charge reaches ~0.55× the
+// viewport diagonal (comfortably the screen edge). The muzzle velocity is
+// derived from this distance by `clusterLaunchVelocity` below.
 export function clusterLaunchDistance(config, frac, viewW = 1280, viewH = 720) {
     const f = Math.max(0, Math.min(1, frac || 0));
     const minDist = (config && config.minLaunchDist != null) ? config.minLaunchDist : 70;
@@ -360,11 +365,17 @@ export function clusterLaunchDistance(config, frac, viewW = 1280, viewH = 720) {
     return minDist + (maxDist - minDist) * f;
 }
 
-export function clusterLaunchVelocity(config, frac) {
-    const f = Math.max(0, Math.min(1, frac || 0));
-    const minV = (config && config.minLaunchVelocity != null) ? config.minLaunchVelocity : 3;
-    const maxV = (config && config.initialVelocity != null) ? config.initialVelocity : 12;
-    return minV + (maxV - minV) * f;
+// Muzzle (launch) velocity for a cluster bomb that must DECELERATE under
+// `travelFriction` and arrive at `targetDist` travelling at ~`haltVelocity`.
+// Closed form: a projectile losing a fraction (1-f) of its speed each tick
+// covers (v0 - vEnd)/(1-f) before it slows from v0 to vEnd, so to land
+// `targetDist` away at `haltVelocity` we launch at:
+//   v0 = targetDist·(1-f) + haltVelocity
+// Since targetDist scales with the hold, so does the muzzle speed.
+export function clusterLaunchVelocity(config, targetDist) {
+    const f = (config && config.travelFriction != null) ? config.travelFriction : 0.965;
+    const halt = (config && config.haltVelocity != null) ? config.haltVelocity : 1.0;
+    return Math.max(halt, targetDist * (1 - f) + halt);
 }
 
 // Streak damage tiers — 5.104.0 epicness-ordered ladder.

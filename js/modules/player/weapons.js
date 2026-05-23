@@ -784,17 +784,19 @@ export function fireCluster(bulletPool, audioManager, config, chargeFrac = 1) {
     if (!bullet) return;
     bullet.weaponId = 'CLUSTER_LAUNCHER';
 
-    // Charge → launch DISTANCE *and* VELOCITY. A quick tap (frac≈0) lobs the
-    // bomb slowly a short way (floaty drift); a full charge (frac=1) hurls it
-    // fast to the screen edge. Both come from the SAME helpers the laser sight
-    // uses, so the on-screen aim length honestly previews the detonation
-    // point. The bomb still detonates early on contact.
+    // Charge → launch DISTANCE (how far it lands), shared with the laser
+    // sight so the on-screen aim length honestly previews the detonation
+    // point. The MUZZLE VELOCITY is then derived from that distance so the
+    // bomb launches fast and DECELERATES under friction, arriving at the
+    // target at ~haltVelocity (a lobbed-mortar feel). A quick tap lands close
+    // and launches gently; a full charge lands far and launches hard. The
+    // bomb still detonates early on contact.
     const ge = this.gameEngine;
     const viewW = (ge && ge.width) || 1280;
     const viewH = (ge && ge.height) || 720;
     const frac = Math.max(0, Math.min(1, chargeFrac));
     const targetDist = clusterLaunchDistance(config, frac, viewW, viewH);
-    const launchVelocity = clusterLaunchVelocity(config, frac);
+    const launchVelocity = clusterLaunchVelocity(config, targetDist);
 
     bullet.setupClusterBomb({
         initialVelocity: launchVelocity,
