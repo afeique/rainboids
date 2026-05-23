@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.90.0] - 2026-05-23
+
+### Added — LOADOUT screen + chosen-loadout model (Phase R5)
+
+- **LOADOUT pre-run screen** (`ui/loadout-overlay.js`): pick up to **4 primary +
+  4 power + 4 ability** from the unlocked pool. Flow is now TITLE → ARMORY →
+  **LOADOUT** → run; CONTINUE still skips both. BACK returns to the Armory; BEGIN
+  starts the run with the chosen loadout. The choice persists to
+  `rainboidsMeta.loadout` and pre-fills next time.
+- **R5.1 chosen-loadout model:** at run start the owned pool is **narrowed to the
+  chosen ≤4 per category** (was: the whole unlocked pool). `startNewRun(loadout)`
+  seeds it; `applyPersistentProfile` no longer widens the pool when a loadout was
+  chosen. Abilities fill the 4 slots; primaries/powers set the active + cycle pool.
+- **R5.3 in-run switching** reuses the shipped systems unchanged — the weapon
+  radials / `[ ` `]` cycle and Digit 1-4 abilities now operate on the chosen ≤4.
+- Pure, unit-tested helpers `toggleSelection` + `normalizeLoadout` in
+  `shop/armory.js` (9 unit tests) + 7 QA tests (`tests/qa/09-loadout.spec.js`).
+- `_rollRandomLoadout` is retired from the NEW GAME path (the screen replaces it).
+
 ## [6.89.0] - 2026-05-23
 
 ### Changed — Abilities: unique-verb audit + Field Medic (Phase R6.1 / R6.2)

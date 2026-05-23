@@ -110,12 +110,16 @@ export class ArmoryOverlay {
     }
 
     startRun() {
+        // Phase R5 — the ARMORY now leads to the LOADOUT screen, which picks
+        // the chosen 4+4+4 and starts the run (and finalizes the title exit).
         this.close();
         const ge = this.gameEngine;
         if (!ge) return;
-        // Finalize the title-screen exit (audio/music/listener teardown) the
-        // first time we commit to a run from the title. No-op when entered
-        // from GAME_OVER (listeners already gone).
+        if (typeof ge.openLoadout === 'function') {
+            ge.openLoadout();
+            return;
+        }
+        // Fallback: no loadout screen → start directly (finalize title here).
         if (typeof ge._finalizeTitleExit === 'function') {
             try { ge._finalizeTitleExit(); } catch {}
         }

@@ -42,6 +42,46 @@ export function getUnlockedSet(category, meta) {
     return new Set([...c.base, ...purchased]);
 }
 
+// Phase R5 — the per-run loadout: ≤4 chosen ids per category, all from the
+// unlocked pool. Locked once the run starts.
+export const LOADOUT_SLOTS = 4;
+
+/** Toggle `id` in a selection list, capped at `max`. Returns a NEW array. */
+export function toggleSelection(list, id, max = LOADOUT_SLOTS) {
+    const cur = Array.isArray(list) ? list.slice() : [];
+    const at = cur.indexOf(id);
+    if (at !== -1) { cur.splice(at, 1); return cur; }
+    if (cur.length >= max) return cur; // at cap — ignore
+    cur.push(id);
+    return cur;
+}
+
+/**
+ * Normalize a chosen loadout against the unlocked pool: keep only unlocked
+ * ids, dedupe, clamp to LOADOUT_SLOTS, and guarantee ≥1 per category (falling
+ * back to the first unlocked id). Returns { primaries, powers, abilities }.
+ */
+export function normalizeLoadout(chosen, meta) {
+    const out = {};
+    for (const category of Object.keys(UNLOCK_CATEGORIES)) {
+        const unlocked = getUnlockedSet(category, meta);
+        const picked = (chosen && Array.isArray(chosen[category])) ? chosen[category] : [];
+        const seen = new Set();
+        const list = [];
+        for (const id of picked) {
+            if (unlocked.has(id) && !seen.has(id) && list.length < LOADOUT_SLOTS) {
+                seen.add(id); list.push(id);
+            }
+        }
+        if (list.length === 0) {
+            const first = [...unlocked][0];
+            if (first) list.push(first);
+        }
+        out[category] = list;
+    }
+    return out;
+}
+
 /** True when `id` is already owned (base or purchased) in `category`. */
 export function isUnlocked(category, id, meta) {
     return getUnlockedSet(category, meta).has(id);

@@ -64,6 +64,7 @@ import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './c
 import { StatsOverlay } from './ui/stats-overlay.js';
 import { InventoryOverlay } from './ui/inventory-overlay.js';
 import { ArmoryOverlay } from './ui/armory-overlay.js';
+import { LoadoutOverlay } from './ui/loadout-overlay.js';
 import { AnalogStick } from './ui/analog-stick.js';
 
 // 5.100.0 — localStorage key for the analog-stick side preference.
@@ -971,12 +972,34 @@ export class GameEngine {
         this.player.x = this.gameField.width / 2;
         this.player.y = this.gameField.height / 2;
 
-        // 5.79.0 — apply randomized loadout if startNewRun seeded one.
-        //   Skipped on Continue (startContinueRun bypasses this branch
-        //   by calling init({ writeWave1Save:false }) without seeding).
+        // Phase R5 — apply the chosen loadout if one was seeded. The new
+        // form is arrays { primaries, powers, abilities } (≤4 each) from the
+        // LOADOUT screen; the legacy single form is kept for back-compat.
+        // When a loadout is chosen, `_loadoutChosen` tells
+        // applyPersistentProfile NOT to widen the owned pool back to all
+        // unlocked. Skipped on Continue (no seeded loadout).
+        this._loadoutChosen = false;
         const loadout = this._pendingNewRunLoadout;
         this._pendingNewRunLoadout = null;
-        if (loadout) {
+        if (loadout && (loadout.primaries || loadout.powers || loadout.abilities)) {
+            this._loadoutChosen = true;
+            const prim = (loadout.primaries || []).filter((id) => PRIMARY_WEAPONS[id]);
+            const powr = (loadout.powers || []).filter((id) => POWER_WEAPONS[id]);
+            const abil = (loadout.abilities || []).filter((id) => ABILITIES[id]);
+            if (prim.length) {
+                this.player.ownedPrimaries = new Set(prim);
+                this.player.activePrimary = prim[0];
+            }
+            if (powr.length) {
+                this.player.ownedPowers = new Set(powr);
+                this.player.activePower = powr[0];
+            }
+            if (abil.length) {
+                this.player.ownedAbilities = new Set(abil);
+                this.player.equippedAbilities = [abil[0] || null, abil[1] || null, abil[2] || null, abil[3] || null];
+            }
+        } else if (loadout) {
+            // Legacy single-form { primary, power, ability }.
             if (loadout.primary && PRIMARY_WEAPONS[loadout.primary]) {
                 this.player.activePrimary = loadout.primary;
                 this.player.ownedPrimaries = new Set([loadout.primary]);
@@ -1415,15 +1438,20 @@ export class GameEngine {
         // earned in-run.
         this.game.accountGold = resolveAccountGold(meta);
         this.game.cores = (meta && typeof meta.cores === 'number') ? Math.max(0, meta.cores | 0) : 0;
-        // Owned weapons/abilities = base ∪ purchased unlocks. This makes the
-        // in-run radial/switch pool reflect what the account has unlocked.
-        p.ownedPrimaries = getUnlockedSet('primaries', meta);
-        p.ownedPowers    = getUnlockedSet('powers', meta);
-        p.ownedAbilities = getUnlockedSet('abilities', meta);
-        // Keep the active selection valid against the (possibly larger) pool.
-        if (!p.ownedPrimaries.has(p.activePrimary)) p.activePrimary = [...p.ownedPrimaries][0] || p.activePrimary;
-        if (!p.ownedPowers.has(p.activePower))      p.activePower   = [...p.ownedPowers][0] || p.activePower;
-        if (!p.ownedAbilities.has(p.activeAbility)) p.activeAbility = [...p.ownedAbilities][0] || p.activeAbility;
+        // Owned weapons/abilities = base ∪ purchased unlocks — UNLESS the run
+        // started from a chosen LOADOUT (R5), in which case init() already
+        // narrowed the owned pool to the chosen ≤4 per category and we must
+        // not widen it back. This makes the in-run radial/switch pool reflect
+        // either the chosen loadout or (fallback) the whole unlocked pool.
+        if (!this._loadoutChosen) {
+            p.ownedPrimaries = getUnlockedSet('primaries', meta);
+            p.ownedPowers    = getUnlockedSet('powers', meta);
+            p.ownedAbilities = getUnlockedSet('abilities', meta);
+            // Keep the active selection valid against the (possibly larger) pool.
+            if (!p.ownedPrimaries.has(p.activePrimary)) p.activePrimary = [...p.ownedPrimaries][0] || p.activePrimary;
+            if (!p.ownedPowers.has(p.activePower))      p.activePower   = [...p.ownedPowers][0] || p.activePower;
+            if (!p.ownedAbilities.has(p.activeAbility)) p.activeAbility = [...p.ownedAbilities][0] || p.activeAbility;
+        }
         if (!meta) {
             if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
             return;
@@ -1514,13 +1542,13 @@ export class GameEngine {
         }
     }
 
-    startNewRun() {
+    startNewRun(loadout = null) {
         clearSave();
-        // 5.79.0 — randomize starting loadout (primary, power, ability).
-        //   We seed `_pendingNewRunLoadout` here and `init()` reads it
-        //   right after the Player is constructed so the assignment
-        //   happens BEFORE the wave-1 save is written.
-        this._pendingNewRunLoadout = this._rollRandomLoadout();
+        // Phase R5 — the LOADOUT screen passes the chosen 4+4+4
+        // ({primaries, powers, abilities}); init() narrows the owned pool to
+        // it. With no loadout (direct restart / tests) the owned pool defaults
+        // to the full unlocked set (applyPersistentProfile).
+        this._pendingNewRunLoadout = loadout;
         this.init();
     }
 
@@ -3154,7 +3182,7 @@ export class GameEngine {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.asteroidShardPool.updateActive();
-        } else if (this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY) {
+        } else if (this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT) {
             // Sandstorm-grade chaotic drift — multiple sine waves at
             // distinct frequencies sum into a fast, direction-shifting
             // motion. Near-depth stars rip across the field while far
@@ -3297,7 +3325,7 @@ export class GameEngine {
             // (but the deepest barely moves, giving a "much-farther-away"
             // parallax feel relative to the foreground starfield). Also
             // pipes a slow rotation so the lens flare layers tumble.
-            const onTitle = this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY;
+            const onTitle = this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT;
             const nebDriftX = onTitle ? (this._titleNebulaDriftX || 0) : 0;
             const nebDriftY = onTitle ? (this._titleNebulaDriftY || 0) : 0;
             const nebRot    = onTitle ? (this._titleNebulaRotation || 0) : 0;
@@ -3353,9 +3381,9 @@ export class GameEngine {
             const vB = cy + visH / 2 + pad;
 
             // Entity / HUD rendering — skipped on the pre-init title screen
-            // AND the ARMORY screen (both pre-run: pools are empty, player
-            // may be null, and the ship would otherwise appear under the menu).
-            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY) {
+            // AND the ARMORY/LOADOUT screens (all pre-run: pools are empty,
+            // player may be null, and the ship would otherwise show under the menu).
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT) {
                 this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidShardPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 // Two-layer particle render — every bright/glowing type
@@ -3423,7 +3451,7 @@ export class GameEngine {
 
             this.ctx.restore();
 
-            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY) {
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT) {
                 // Draw UI elements without camera transformation
                 // Sync DOM powerup HUD
                 this.syncPowerupHUD();
@@ -3945,6 +3973,20 @@ export class GameEngine {
     }
 
     isArmoryOpen() { return !!(this._armoryOverlay && this._armoryOverlay.isOpen()); }
+
+    // Phase R5 — pre-run LOADOUT screen (ARMORY → LOADOUT → run). Pick the
+    // chosen ≤4 per category; its BEGIN button calls startNewRun(loadout).
+    openLoadout() {
+        if (this._armoryOverlay && this._armoryOverlay.isOpen()) this._armoryOverlay.close();
+        if (!this._loadoutOverlay) {
+            this._loadoutOverlay = new LoadoutOverlay();
+            this._loadoutOverlay.setGameEngine(this);
+        }
+        this.game.state = GAME_STATES.LOADOUT;
+        this._loadoutOverlay.open();
+    }
+
+    isLoadoutOpen() { return !!(this._loadoutOverlay && this._loadoutOverlay.isOpen()); }
 
     // 6.36.0 — Open the STATS screen as a wave-clear level-up step. The
     // game is already paused by the wave-clear flow; `onClose` continues

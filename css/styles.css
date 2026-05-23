@@ -4513,6 +4513,13 @@ body.mobile-portrait .shop-help-icon {
 .armory-buy:hover:not(:disabled) { background: rgba(255, 200, 60, 0.15); }
 .armory-buy:disabled { color: #5e6680; border-color: rgba(94, 102, 128, 0.4); cursor: not-allowed; }
 .armory-row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+/* R5 — selected loadout pick (green like the START button). */
+.loadout-pick--on {
+    color: #9affb0;
+    border-color: rgba(120, 255, 150, 0.7);
+    background: rgba(120, 255, 150, 0.12);
+}
+.loadout-pick--on:hover:not(:disabled) { background: rgba(120, 255, 150, 0.2); }
 .armory-footer {
     display: flex;
     justify-content: space-between;
