@@ -4460,10 +4460,17 @@ body.mobile-portrait .shop-help-icon {
     color: #8fd0ff;
     text-shadow: 0 0 12px rgba(64, 150, 255, 0.5);
 }
+.armory-header > .armory-cores { margin-left: auto; }
 .armory-gold {
     font-size: 16px;
     color: #ffd75c;
     text-shadow: 0 0 10px rgba(255, 200, 60, 0.5);
+    margin-left: 14px;
+}
+.armory-cores {
+    font-size: 16px;
+    color: #7fe0ff;
+    text-shadow: 0 0 10px rgba(90, 200, 255, 0.5);
 }
 .armory-sub { font-size: 9px; line-height: 1.7; color: #7d8aa6; }
 .armory-body {

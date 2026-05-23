@@ -12,6 +12,8 @@ import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from '../combat/weapon-data
 import {
     UNLOCK_CATEGORIES, unlockCost, getUnlockedSet, getLockedIds, applyUnlock,
 } from '../shop/armory.js';
+import { salvageValue, partitionBulkSalvage } from '../world/cores.js';
+import { scoreItem } from '../world/item-system.js';
 
 const CATEGORY_DEFS = {
     primaries: { label: 'PRIMARY WEAPONS', defs: () => PRIMARY_WEAPONS },
@@ -51,7 +53,9 @@ export class ArmoryOverlay {
         title.textContent = 'ARMORY';
         const gold = document.createElement('div');
         gold.className = 'armory-gold';
-        header.append(title, gold);
+        const cores = document.createElement('div');
+        cores.className = 'armory-cores';
+        header.append(title, cores, gold);
         panel.appendChild(header);
 
         const sub = document.createElement('div');
@@ -77,7 +81,7 @@ export class ArmoryOverlay {
         panel.appendChild(footer);
 
         overlay.appendChild(panel);
-        this.elements = { overlay, gold, body };
+        this.elements = { overlay, gold, cores, body };
         this._built = true;
     }
 
@@ -131,11 +135,54 @@ export class ArmoryOverlay {
         return true;
     }
 
+    _cores() {
+        const ge = this.gameEngine;
+        if (ge && ge.game && typeof ge.game.cores === 'number') return ge.game.cores | 0;
+        const meta = loadMeta();
+        return (meta && typeof meta.cores === 'number') ? meta.cores | 0 : 0;
+    }
+
+    _equippedBySlot() {
+        const p = this.gameEngine && this.gameEngine.player;
+        return (p && p.equippedItems) ? p.equippedItems : {};
+    }
+
+    // Phase R8.5 — salvage the stash item at `index` for Cores.
+    salvage(index) {
+        const meta = loadMeta() || {};
+        const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
+        const item = stash[index];
+        if (!item) return false;
+        const gained = salvageValue(item);
+        stash.splice(index, 1);
+        const cores = this._cores() + gained;
+        saveMeta({ stash, cores });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = cores;
+        this.render();
+        return gained;
+    }
+
+    // Phase R8.5 — bulk-salvage every stash item strictly worse than the
+    // equipped item in its slot.
+    salvageAllBelowEquipped() {
+        const meta = loadMeta() || {};
+        const stash = Array.isArray(meta.stash) ? meta.stash : [];
+        const { keep, salvage } = partitionBulkSalvage(stash, this._equippedBySlot(), scoreItem);
+        if (salvage.length === 0) return 0;
+        const gained = salvage.reduce((s, it) => s + salvageValue(it), 0);
+        const cores = this._cores() + gained;
+        saveMeta({ stash: keep, cores });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = cores;
+        this.render();
+        return gained;
+    }
+
     render() {
-        const { gold, body } = this.elements;
+        const { gold, cores, body } = this.elements;
         if (!body) return;
         const accountGold = this._accountGold();
         if (gold) gold.textContent = `${accountGold} ⬢`;
+        if (cores) cores.textContent = `${this._cores()} ✦`;
         body.replaceChildren();
 
         const meta = loadMeta() || {};
@@ -195,5 +242,56 @@ export class ArmoryOverlay {
             section.appendChild(list);
             body.appendChild(section);
         }
+
+        this._renderStash(body, meta);
+    }
+
+    // Phase R8.1/R8.5 — the persistent gear stash: collected loot, each
+    // salvageable for Cores, plus a bulk "salvage all below equipped".
+    _renderStash(body, meta) {
+        const stash = Array.isArray(meta.stash) ? meta.stash : [];
+        const section = document.createElement('div');
+        section.className = 'armory-section';
+
+        const secTitle = document.createElement('div');
+        secTitle.className = 'armory-section-title';
+        secTitle.textContent = `STASH  ·  ${stash.length} item${stash.length === 1 ? '' : 's'}`;
+        section.appendChild(secTitle);
+
+        if (stash.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'armory-sub';
+            empty.textContent = 'Loot you collect on a run is committed here when the run ends. Salvage it for Cores (✦).';
+            section.appendChild(empty);
+            body.appendChild(section);
+            return;
+        }
+
+        const bulk = document.createElement('button');
+        bulk.className = 'armory-buy';
+        bulk.textContent = 'SALVAGE ALL BELOW EQUIPPED';
+        bulk.addEventListener('click', () => this.salvageAllBelowEquipped());
+        section.appendChild(bulk);
+
+        const list = document.createElement('div');
+        list.className = 'armory-list';
+        // Show the most recent first; cap the rendered rows for sanity.
+        const view = stash.map((it, i) => ({ it, i })).reverse().slice(0, 60);
+        for (const { it, i } of view) {
+            const row = document.createElement('div');
+            row.className = 'armory-row';
+            const name = document.createElement('span');
+            name.className = 'armory-row-name';
+            name.textContent = `${it.name || it.slot} · L${it.level || 1}`;
+            if (it.rarityColor) name.style.color = it.rarityColor;
+            const btn = document.createElement('button');
+            btn.className = 'armory-buy';
+            btn.textContent = `SALVAGE · ${salvageValue(it)} ✦`;
+            btn.addEventListener('click', () => this.salvage(i));
+            row.append(name, btn);
+            list.appendChild(row);
+        }
+        section.appendChild(list);
+        body.appendChild(section);
     }
 }

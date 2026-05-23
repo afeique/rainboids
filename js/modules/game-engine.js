@@ -580,6 +580,7 @@ export class GameEngine {
         this.game = {
             money: 0,        // run-gold: starts at 0, accrues from kills, banked at run end
             accountGold: 0,  // persistent wallet (loaded from meta in applyPersistentProfile)
+            cores: 0,        // Phase R8 — item-crafting currency (meta.cores mirror)
             survivalTime: 0, // Time survived in milliseconds
             survivalRecord: parseInt(localStorage.getItem('rainboidsSurvivalRecord')) || 0, // Best survival time
             gameStartTime: 0, // When the current game started
@@ -608,6 +609,17 @@ export class GameEngine {
                 weaponShots: {},         // weaponId → shots fired
             },
         };
+
+        // Phase R2/R8 — seed the persistent wallet + Cores from meta at boot
+        // (and every init) so a title-screen autosave (saveProgress fires on
+        // the ~15s timer + visibilitychange/unload) can't clobber them with 0
+        // before a run has loaded the profile. applyPersistentProfile re-seeds
+        // the same values at run-init.
+        try {
+            const _meta = loadMeta();
+            this.game.accountGold = resolveAccountGold(_meta);
+            this.game.cores = (_meta && typeof _meta.cores === 'number') ? Math.max(0, _meta.cores | 0) : 0;
+        } catch {}
 
         // Wire this.game.state as getter/setter to the state machine
         // so all existing reads (this.game.state === X) work unchanged
@@ -1351,6 +1363,7 @@ export class GameEngine {
                 level: p.level | 0, xp: p.xp | 0, sp: p.sp | 0,
                 spStats: p.spStats || {},
                 accountGold: this.game.accountGold | 0,
+                cores: this.game.cores | 0,
                 powerups,
                 equippedItems,
             });
@@ -1359,12 +1372,32 @@ export class GameEngine {
 
     // Phase R2 — bank this run's leftover run-gold into the persistent
     // account wallet. Idempotent within a run via _runGoldBanked so a
-    // GAME_OVER → restart can't bank twice.
+    // GAME_OVER → restart can't bank twice. Also commits this run's loot to
+    // the persistent stash (R8.4) in the same end-of-run step.
     bankRunGold() {
         if (this._runGoldBanked) return;
         this._runGoldBanked = true;
         this.game.accountGold = bankRunGold(this.game.accountGold, this.game.money);
+        this.commitRunLootToStash();
         this.savePersistentProfile();
+    }
+
+    // Phase R8.1/R8.4 — append this run's collected items to the persistent
+    // meta stash (capped so a marathon run can't bloat localStorage). Items
+    // are plain objects from createItem, JSON-serializable as-is.
+    commitRunLootToStash() {
+        const p = this.player;
+        const collected = (p && Array.isArray(p.runCollected)) ? p.runCollected : [];
+        if (collected.length === 0) return;
+        try {
+            const meta = loadMeta() || {};
+            const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
+            for (const it of collected) if (it && it.slot) stash.push(it);
+            const STASH_CAP = 200; // keep the highest-value tail if it overflows
+            if (stash.length > STASH_CAP) stash.splice(0, stash.length - STASH_CAP);
+            saveMeta({ stash });
+            if (p) p.runCollected = [];
+        } catch {}
     }
 
     // Apply the persistent profile onto a freshly-initialized run. Called
@@ -1381,6 +1414,7 @@ export class GameEngine {
         // Run-gold (game.money) is NOT carried over — it starts at 0 and is
         // earned in-run.
         this.game.accountGold = resolveAccountGold(meta);
+        this.game.cores = (meta && typeof meta.cores === 'number') ? Math.max(0, meta.cores | 0) : 0;
         // Owned weapons/abilities = base ∪ purchased unlocks. This makes the
         // in-run radial/switch pool reflect what the account has unlocked.
         p.ownedPrimaries = getUnlockedSet('primaries', meta);
@@ -3899,11 +3933,12 @@ export class GameEngine {
             this._armoryOverlay = new ArmoryOverlay();
             this._armoryOverlay.setGameEngine(this);
         }
-        // Seed game.accountGold from meta so the screen + the upcoming run
-        // agree on the wallet (init()→applyPersistentProfile re-reads it).
+        // Seed game.accountGold + cores from meta so the screen + the
+        // upcoming run agree (init()→applyPersistentProfile re-reads them).
         try {
             const meta = loadMeta();
             this.game.accountGold = resolveAccountGold(meta);
+            this.game.cores = (meta && typeof meta.cores === 'number') ? Math.max(0, meta.cores | 0) : 0;
         } catch {}
         this.game.state = GAME_STATES.ARMORY;
         this._armoryOverlay.open();

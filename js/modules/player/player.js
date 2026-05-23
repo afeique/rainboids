@@ -245,6 +245,10 @@ export class Player {
         // auto-equip if they beat the slot (see registerItemDrop).
         this.lootFeed = [];
         this._lootFeedSeq = 0;
+        // Phase R8.1/R8.4 — every item collected THIS run (uncapped, unlike
+        // the 7-entry lootFeed). Committed to the persistent meta stash at
+        // run end (game-engine.commitRunLootToStash).
+        this.runCollected = [];
 
         this.initializePlayer();
     }
@@ -371,6 +375,10 @@ export class Player {
         this.lootFeed.unshift(entry);
         const MAX_FEED = 7;
         if (this.lootFeed.length > MAX_FEED) this.lootFeed.length = MAX_FEED;
+        // Phase R8.1 — keep the full run collection for the run-end stash
+        // commit (the lootFeed above is display-only and capped).
+        if (!this.runCollected) this.runCollected = [];
+        this.runCollected.push(item);
         return entry;
     }
 

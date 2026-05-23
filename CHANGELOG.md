@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.86.0] - 2026-05-23
+
+### Added — Persistent stash + Cores salvage (Phase R8.1 / R8.4 / R8.5)
+
+- **Persistent gear stash** (`rainboidsMeta.stash`). Every item collected during
+  a run is committed to the stash when the run ends (`commitRunLootToStash`,
+  capped at 200). Viewable in the **ARMORY**'s new STASH section.
+- **Cores** (✦) — the item-crafting currency (`rainboidsMeta.cores`). **Salvage**
+  any stashed item for Cores (value = rarity-rank × affix-count, level-scaled,
+  +3 per trait) or **SALVAGE ALL BELOW EQUIPPED** in one click. Pure, unit-tested
+  economy in `world/cores.js` (8 tests) + 4 QA tests.
+- Player now tracks `runCollected` (uncapped) alongside the 7-entry display
+  `lootFeed`.
+
+### Fixed
+
+- **Title-screen autosave could wipe account-gold and Cores.** `game.accountGold`
+  / `game.cores` were only loaded from meta at run-init, so a `saveProgress`
+  fired at the title screen (the ~15s autosave timer or a visibilitychange /
+  tab-close) persisted `0` over the real banked values. They're now seeded from
+  meta in `initializeGameState` (boot + every init), so a title save round-trips
+  the correct values. (Latent since the pre-R2 `money` wallet; now also covers
+  account-gold + Cores.)
+
 ## [6.85.0] - 2026-05-23
 
 ### Added — Gold economy + ARMORY pre-run flow (Phase R2.1–R2.3)
