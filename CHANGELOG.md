@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.100.0] - 2026-05-23
+
+### Changed — Difficulty progression: player-anchored enemy levels + weaker asteroids
+
+- **Asteroids are weaker + scale cleanly.** Base HP is now **1-3 by size tier**
+  (big 3 / medium 2 / small 1; at most 3 at level 1) and **scales +25%/level**
+  (no hard cap) — early rocks pop in 1-3 hits, late-game rocks are tougher but
+  never sponges. Replaced the old steep ×6.5 asteroid curve + the per-tier 4/2
+  cap (`asteroid.js` + `wave-data.getLevelScaledAsteroidStats`, kept in sync via
+  `ASTEROID_HP_PER_LEVEL`).
+- **Enemy level now tracks the PLAYER level, biased by wave.** `getEnemyLevel`
+  returns roughly the player's account level shifted from **−2 at wave 1** to
+  **+4 at the final wave**, clamped to a sane band (`MAX_WAVES + 15`). Early waves
+  spawn enemies slightly below the player (gentle on-ramp); late waves slightly
+  above (a real test) — a clear in-run difficulty curve that rises with the
+  account's meta power. Enemy HP/points still scale via `getLevelScaledEnemyStats`;
+  enemy *speed* stays wave-based. Bias endpoints are tunable constants
+  (`ENEMY_LEVEL_BIAS_EARLY/LATE`). **First-cut balance — to be refined.**
+
 ## [6.99.0] - 2026-05-23
 
 ### Added — New abilities batch #4: Storm Cell + Pyre Aura (Phase R6.3)

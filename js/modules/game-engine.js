@@ -1349,7 +1349,7 @@ export class GameEngine {
         // Realign asteroid+enemy level for the resumed wave.
         try {
             const { getEnemyLevel, getAsteroidLevel } = wave;
-            if (typeof getEnemyLevel === 'function') this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
+            if (typeof getEnemyLevel === 'function') this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level);
             if (typeof getAsteroidLevel === 'function') this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
         } catch {}
         // HUD refresh — tanks render straight from `this.healthTanks` on

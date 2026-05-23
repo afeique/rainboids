@@ -488,7 +488,7 @@ export function startNextWave() {
 export function spawnWaveEntities() {
     const waveConfig = getWaveConfig(this.game.currentWave);
 
-    this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
+    this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level);
     this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
 
     // Reset sub-wave bookkeeping each wave start.
@@ -866,7 +866,7 @@ export function completeWave() {
     this.wavePhase = 'waiting';
 
     // Use canonical level formulas from wave-data.js
-    this.game.enemyLevel = getEnemyLevel(this.game.currentWave);
+    this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level);
     this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
 
     // Wave clear bonus: XP + coins scale with wave number, plus a

@@ -96,20 +96,22 @@ describe('getWaveConfig() – 20-wave campaign', () => {
 // ---------------------------------------------------------------------------
 
 describe('getEnemyLevel()', () => {
-  test('level equals wave number across the campaign', () => {
-    for (let w = 1; w <= MAX_WAVES; w++) {
-      expect(getEnemyLevel(w)).toBe(w);
-    }
+  // Enemy level now tracks the PLAYER's level, biased by wave (early below,
+  // late above). See scaling-tuning.test.js for the full contract.
+  test('tracks the player level with a wave bias (early below, late above)', () => {
+    const pl = 12;
+    expect(getEnemyLevel(1, pl)).toBeLessThan(pl);          // early: weaker
+    expect(getEnemyLevel(MAX_WAVES, pl)).toBeGreaterThan(pl); // late: tougher
   });
 
-  test('clamps below 1 / above MAX_WAVES', () => {
-    expect(getEnemyLevel(0)).toBe(1);
-    expect(getEnemyLevel(-3)).toBe(1);
-    expect(getEnemyLevel(MAX_WAVES + 5)).toBe(MAX_WAVES);
+  test('clamps below 1; bounded above for high-level accounts', () => {
+    expect(getEnemyLevel(0, 1)).toBe(1);
+    expect(getEnemyLevel(-3, 1)).toBe(1);
+    expect(getEnemyLevel(MAX_WAVES + 5, 100)).toBeLessThanOrEqual(MAX_WAVES + 15);
   });
 
   test('returns integer values', () => {
-    for (let w = 1; w <= 30; w++) expect(Number.isInteger(getEnemyLevel(w))).toBe(true);
+    for (let w = 1; w <= 30; w++) expect(Number.isInteger(getEnemyLevel(w, 10))).toBe(true);
   });
 });
 
@@ -197,10 +199,13 @@ describe('getLevelScaledAsteroidStats()', () => {
     expect(getLevelScaledAsteroidStats(10, 1)).toBe(10);
   });
 
-  test('HP follows a power curve (gentle early, steep late)', () => {
+  test('HP ramps gently with level (+25%/level, no steep curve)', () => {
+    // base 10 → L1: 10, L5: round(10*2.0)=20, L10: round(10*3.25)=33.
     expect(getLevelScaledAsteroidStats(10, 1)).toBe(10);
-    expect(getLevelScaledAsteroidStats(10, 3)).toBeLessThan(30);    // early waves climbable
-    expect(getLevelScaledAsteroidStats(10, 10)).toBeGreaterThan(40); // late game tough
+    expect(getLevelScaledAsteroidStats(10, 5)).toBe(20);
+    expect(getLevelScaledAsteroidStats(10, 10)).toBe(33);
+    // monotonic up, but stays "candy" — never the old ×6.5+ blowup.
+    expect(getLevelScaledAsteroidStats(10, 10)).toBeGreaterThan(getLevelScaledAsteroidStats(10, 5));
   });
 
   test('returns an integer', () => {

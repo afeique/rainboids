@@ -9,6 +9,9 @@ const DEBRIS_COUNT = 5;
 // energy retention (slightly more elastic than the ship's 0.8).
 const ASTEROID_MAX_SPEED = 2.0;
 const ASTEROID_BOUNCE_DAMP = 0.9;
+// Asteroid HP scaling: base is 1-3 by size tier; HP grows +25% per asteroid
+// level on top of that (kept in sync with wave-data.getLevelScaledAsteroidStats).
+export const ASTEROID_HP_PER_LEVEL = 0.25;
 
 export class Asteroid {
     constructor(x, y, radius, level = 1) {
@@ -80,33 +83,23 @@ export class Asteroid {
         // Calculate health based on size tiers and level:
         // Use baseRadius for consistent health calculation
         let baseHealth;
-        let healthCap;
         let health;
         const sizeRef = this.baseRadius || this.radius;
 
-        // Asteroids are candy to unwrap, not chores. Big rocks need only
-        // 3-4 hits, smaller ones 1-2 — a HARD per-tier cap so they never
-        // become tanky no matter how high the level climbs. The early game
-        // in particular should feel like popping bubble wrap.
-        if (sizeRef >= 40) {
-            baseHealth = Math.floor(3 + (sizeRef - 40) / 20);  // 3-4
-            healthCap = 4;
-        } else if (sizeRef >= 20) {
-            baseHealth = Math.round(1 + (sizeRef - 20) / 20);  // 1-2
-            healthCap = 2;
-        } else {
-            baseHealth = 1;                                     // small = one-shot
-            healthCap = 2;
-        }
+        // Asteroids are candy to unwrap, not chores. Base HP is 1-3 by size
+        // tier (big = 3, medium = 2, small = 1) — at most 3 at level 1 — and
+        // SCALES UP with level (no hard cap), so early rocks pop in 1-3 hits
+        // while late-game rocks are tougher. Tune ASTEROID_HP_PER_LEVEL to
+        // taste.
+        if (sizeRef >= 40)      baseHealth = 3;   // big
+        else if (sizeRef >= 20) baseHealth = 2;   // medium
+        else                    baseHealth = 1;   // small
 
-        // A gentle level ramp still nudges HP up, but the per-tier cap keeps
-        // even L20+ asteroids in the 3-4 / 1-2 candy range.
-        const levelMultiplier = 1 + (this.level - 1) * 0.35;
+        // Gentle linear ramp with asteroid level (this.level). +25%/level.
+        const levelMultiplier = 1 + (this.level - 1) * ASTEROID_HP_PER_LEVEL;
         health = Math.round(baseHealth * levelMultiplier);
 
-        // Clamp to [1, tier cap] so big asteroids top out at 4 and smaller
-        // ones at 2 — the "only need 3-4 / 1-2 hp at most" contract.
-        this.maxHealth = Math.max(1, Math.min(healthCap, health));
+        this.maxHealth = Math.max(1, health);
         this.health = this.maxHealth;
     }
 

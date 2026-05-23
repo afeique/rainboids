@@ -329,8 +329,21 @@ export function isBossWave(waveNumber) {
 // plateaus. (5.101.0 — MAX_WAVES is 30 now; the underlying stat
 // curves in getLevelScaledEnemyStats use the live MAX_WAVES so the
 // per-level deltas stretch to fit.)
-export function getEnemyLevel(waveNumber) {
-    return Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
+// Enemy level now TRACKS THE PLAYER's account level, biased by wave so the run
+// has a clear difficulty curve: early waves spawn enemies slightly BELOW the
+// player's level (gentle), late waves slightly ABOVE it (a real test). The bias
+// sweeps linearly from EARLY → LATE across the 30-wave run. Clamped to a sane
+// band so the stat curve (getLevelScaledEnemyStats) can't explode for very
+// high-level accounts. Tune the bias endpoints to taste.
+export const ENEMY_LEVEL_BIAS_EARLY = -2; // wave 1: player level − 2
+export const ENEMY_LEVEL_BIAS_LATE  = 4;  // final wave: player level + 4
+const ENEMY_LEVEL_MAX = MAX_WAVES + 15;   // cap so high accounts stay bounded
+export function getEnemyLevel(waveNumber, playerLevel = 1) {
+    const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
+    const t = (w - 1) / Math.max(1, MAX_WAVES - 1);
+    const bias = ENEMY_LEVEL_BIAS_EARLY + t * (ENEMY_LEVEL_BIAS_LATE - ENEMY_LEVEL_BIAS_EARLY);
+    const lvl = Math.round(Math.max(1, playerLevel | 0 || 1) + bias);
+    return Math.max(1, Math.min(ENEMY_LEVEL_MAX, lvl));
 }
 
 // Asteroid level lifts every other wave (1,1,2,2,3,3,...) so rocks
@@ -443,18 +456,16 @@ export function getLevelScaledEnemyStats(baseStats, level) {
     };
 }
 
-// Asteroid HP — power-curved against asteroid level (1..10 across waves
-// 1..20). Gentle through level 4 then sharply steeper.
-// 5.73.0 — exponent 1.5 → 1.0, scale 4.0 → 6.5 to ramp asteroid HP
-// much harder by wave 5+. Players hit the same plateau of "feels too
-// easy mid-run" with asteroids as with enemies; this fix is parallel.
-//   1 + ((L-1)/9)^1.0 · 6.5
-//   L1: 1.0  L3: 2.44  L5: 3.89  L7: 5.33  L10: 7.50
+// Asteroid HP — gentle linear ramp against asteroid level, kept in sync with
+// Asteroid.initializeAsteroid (ASTEROID_HP_PER_LEVEL = +25%/level). Base HP is
+// 1-3 by size tier, so a level-1 rock pops in 1-3 hits and late-game rocks are
+// tougher but never bullet sponges. Tune the per-level rate to taste.
+//   1 + (L-1) · 0.25   →   L1: 1.0  L5: 2.0  L10: 3.25  L15: 4.5
+export const ASTEROID_HP_PER_LEVEL = 0.25;
 export function getLevelScaledAsteroidStats(baseHealth, level) {
     const L = Math.max(1, level | 0);
-    const t = (L - 1) / 9;
-    const hpMul = 1 + t * 6.5;
-    return Math.floor(baseHealth * hpMul);
+    const hpMul = 1 + (L - 1) * ASTEROID_HP_PER_LEVEL;
+    return Math.max(1, Math.round(baseHealth * hpMul));
 }
 
 // Boss HP / size multipliers per boss tier (1 → 4). Boss enemies are TITAN
