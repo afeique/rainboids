@@ -1,116 +1,91 @@
 # Roguelite Restructure — Phase R Progress Report
 
-作成日: 2026-05-23 · Autonomous /loop sprint against `Plans.md` Phase R (+ R1)
+作成日: 2026-05-23 · Updated after the full autonomous /loop sprint (6.84.0 → 6.93.0).
 
-This report covers the work shipped this sprint, the concerns I want you to
-review, and the recommended sequencing for the (substantial) remaining work.
-
----
-
-## ✅ Shipped this sprint (committed to `master`)
-
-### 6.84.0 — R1: terminology Skills → Abilities (pure rename)
-- Renamed the entire 4-slot active-"skill" vocabulary to **abilities** across
-  23 source files + tests + CSS (word-boundary `perl` rename). `SKILLS`→
-  `ABILITIES` (alias retired), `SKILL_UPGRADES`→`ABILITY_UPGRADES`,
-  `equippedSkills`/`skillCooldowns`/`activeSkill…` → `…Ability…`,
-  `player/skills.js` → **`player/abilities.js`**, radial `'skill'`→`'ability'`,
-  `data-tab` CSS hooks.
-- **Deliberately left** `skillPoints` untouched — it's a *separate* legacy
-  stat-point currency, not an active ability (handled in R7).
-- **No behavior change.** Validated: 505/505 unit + QA 07-weapons 19/19.
-
-### 6.85.0 — R2.1 / R2.2 / R2.3: gold economy + ARMORY pre-run flow
-- **Two wallets.** Run-gold (`game.money`) starts at **0**, accrues from kills,
-  **banks** into persistent **account-gold** at run end (idempotent). Account-gold
-  lives in `rainboidsMeta.accountGold` (migrated from the pre-R2 `money` field).
-- **ARMORY screen** (`ui/armory-overlay.js`): NEW GAME → ARMORY → run; post-run
-  NEW GAME routes through it too; CONTINUE skips it. Spend account-gold on
-  permanent weapon/ability **unlocks** (abilities priced higher).
-- Pure economy core `shop/armory.js`; new `ARMORY`/`LOADOUT` states (LOADOUT
-  reserved for R5).
-- **R2.3:** retired `unlockWave` wave-milestone auto-unlocks. Owned pool is now
-  base ∪ purchased unlocks, resolved once per run.
-- Validated: 528 unit (+17 economy, +6 state-flow) + 40 QA (+9 armory) all green.
+This report covers the entire Phase R restructure shipped this sprint, the
+concerns to review, and the remaining (deferred/blocked) work.
 
 ---
 
-## ⚠️ Concerns / things to review
+## ✅ Shipped this sprint — 11 versions, all validated + committed to `master`
 
-1. **R2.4 is intentionally NOT done.** Retiring the gold *upgrade-tree shop*
-   depends on **R3 (cards)** existing to replace it (Plans.md marks R2.4
-   `Depends: R3.1`). Until then the **old shop coexists** as a run-gold sink.
-   This is a coherent transitional state, but it means there are currently
-   *two* gold-spend surfaces (in-run shop on run-gold, Armory on account-gold).
+| Ver | Phase | Summary |
+|-----|-------|---------|
+| 6.84.0 | **R1** | Skills → Abilities rename (23 files; `player/skills.js`→`abilities.js`). |
+| 6.85.0 | **R2.1–3** | Gold economy: run-gold→0 + banked account-gold (migrated); **ARMORY** pre-run screen + unlock store; `unlockWave` retired. |
+| 6.86.0 | **R8.1/4/5** | Persistent gear **stash** + **Cores** salvage. Fixed a latent title-autosave data-loss bug (wiped account-gold/Cores). |
+| 6.87.0 | **R8.2/3** | No auto-equip; ARMORY **EQUIPMENT** screen (equip stash→slots, deltas). |
+| 6.88.0 | **R8.6/8** | Cores **reroll** + **tier-up** crafting. |
+| 6.89.0 | **R6.1/2** | Abilities audit: Repair Nanites → **Field Medic** (burst heal + cleanse); base kit; **Tractor Shield cut**. |
+| 6.90.0 | **R5** | **LOADOUT** screen (chosen 4+4+4 from unlocked pool, narrows the run). |
+| 6.91.0 | **R3.1–3** | Per-run **card draft** (2 weapon + 1 ability, relevance-filtered, 5/run). |
+| 6.92.0 | **R4.2/3 + R2.4(part)** | In-run gold sinks: paid **reroll** + **Repair Kit** at the card moment; post-card upgrade quick-buy retired. |
+| 6.93.0 | **R7** | Validated the (already-functional) level→SP→Stats system; **fixed** the Stats-menu auto-open to fire on every stage clear when leveled. |
 
-2. **Transitional regression for existing players (by design).** Run-gold now
-   starts at 0, so a previously-carried wallet moves to **account-gold** and is
-   only spendable in the ARMORY (not the in-run shop). This matches the design
-   doc, but it's a noticeable change for anyone with a saved profile.
+**The full roguelite loop is playable end-to-end:** TITLE → ARMORY (unlocks /
+gear equip / Cores craft) → LOADOUT (pick 4+4+4) → run (5 relevance-filtered
+card drafts, paid reroll/repair sinks, level-ups open the Stats menu) → run end
+banks gold + commits loot to the stash.
 
-3. **4 e2e tests skipped** (`tests/e2e/10-weapon-economy.spec.js`): the
-   wave-unlock / unlock-notification tests assert behavior **deliberately
-   removed** in R2.3. I skipped (didn't delete) them with inline reasons; the
-   test-tamper hook flagged each — that's expected here. They need re-authoring
-   for the new economy alongside R2.4/R3. The other 3 tests in that file
-   (shop ramp, weapon stats) remain active.
-
-4. **Machine-load test flakiness.** The first full QA run showed 14 "failures"
-   that were purely load-induced timeouts (load avg ~60 at the time); the same
-   tests pass in isolation. The deterministic **unit suite is the reliable
-   gate**; treat full-suite QA flakes under load with suspicion, not as
-   regressions. CI uses `retries:1`, local uses `retries:0`.
-
-5. **`core/version.js` is stale** (`VERSION='6.45.1'` while `/VERSION` is at
-   6.85.0). Its comment claims per-release sync but it has drifted ~40 versions.
-   The title screen renders this tag. I left it untouched (out of scope) — worth
-   a one-line fix if the in-game build tag matters.
-
-6. **R7 (leveling→SP→Stats) is more tangled than the plan implies.** There are
-   **two parallel systems**: the inert `experience`/`skillPoints`/
-   `experienceToNextLevel` (no-op `gainExperience` since 6.0.0) and the *active*
-   `sp`/`spStats` SP system (`sp-stats.js`, `sp-allocation.js`, `stats-overlay.js`,
-   `allocateSp`). `savePersistentProfile` writes `level/xp/sp/spStats` but
-   `applyPersistentProfile` does **not** restore them (save/load asymmetry).
-   R7.1 ("reactivate leveling") must reconcile these two systems and fix the
-   load path — it's not a quick toggle. Recommend a focused design pass.
-
-7. **R8 (inventory-as-meta) has an ordering hazard.** R8.2 ("remove auto-equip")
-   is **regressive on its own** — without R8.3 (the inventory-equip screen in
-   the Armory), gear would never get equipped. R8.1/R8.2/R8.3 should land
-   together. R8.5 (Cores + salvage) is pure logic and unit-testable in isolation
-   (mirror `shop/armory.js`) but dormant until the salvage UI exists.
-
-8. **`Plans.md` is over its 200-line soft cap** (245 lines; a hook flagged it).
-   Consider `/maintenance` to archive the shipped ledger once the sprint settles.
+**Test totals:** 593 unit (was 505) + new QA suites 08-armory (21), 09-loadout
+(7), 10-cards (7), 11-leveling (5). Every commit kept the game launchable.
 
 ---
 
-## 🔭 Recommended sequencing for the rest of Phase R
+## ⚠️ Concerns to review
 
-The execution order (R8 → R6 → R5 → R3 → R4 → R7) is sound, with these notes:
+1. **R2.4 is partial.** The post-card upgrade quick-buy (`shop-suggest`) is
+   retired, but the **mid-wave UPGRADES shop** (HUD 🛒 + pause-menu UPGRADES)
+   still sells gold upgrade-tree stacks — redundant with cards now. Full removal
+   was deferred because it would churn the 07-weapons shop-tree QA tests and is a
+   large change. **R7.4** (passives SP-only) is tied to this: the redundant gold
+   PASSIVE tab should go with it.
+2. **Deferred features (large/flow-intrusive), all documented in CHANGELOG:**
+   - **R6.3** — the ~14 new purchasable abilities (Blink, Bullet Time, Stasis
+     Field, Gravity Snare, Decoy Beacon, Second Wind, Elemental Infusion, Cryo
+     Field, Storm Cell/Pyre Aura, Catalyst, Designator). Each is a distinct
+     gameplay verb needing its own implementation + live consumer — the single
+     biggest remaining chunk.
+   - **R4.1** (6th/7th extra card) + **Revive Token** — cost curves are
+     implemented + tested in `world/run-shop.js`; not wired (extra-card needs
+     draw-tracking + a no-close-after-paid-pick overlay; revive needs death-path).
+3. **Blocked on Phase C (unimplemented):** **R8.7** (resist targeting → needs
+   C.I2 tier-gated resist counts), **R8.9** (trait reroll → needs C.I3 traits).
+4. **R-BAL (balance) not started** — the whole point of "no mastery" is that
+   difficulty is tuned around meta power (SP + gear + unlocks). With the meta now
+   in place, a balance pass + an AI-survival run on a progressed account is the
+   natural next validation. Not attempted (needs playtesting, not just code).
+5. **Tractor Shield physics left dormant** — cut from the roster but the
+   collision/render beam code remains (guarded by an always-false
+   `has('TRACTOR_SHIELD')`). Safe, but a cleanup sweep is owed.
+6. **`core/version.js` stale** (`6.45.1`) vs `/VERSION` (6.93.0) — the in-game
+   title build tag. Pre-existing; left untouched.
+7. **QA flakiness under machine load** — earlier in the sprint the machine hit
+   load avg ~60 and QA timed out spuriously; the unit suite is the reliable gate.
+   `tests/e2e/10-weapon-economy.spec.js` still has 4 tests skipped (assert
+   retired wave-unlocks) pending a roguelite-economy e2e rewrite.
+8. **`Plans.md` is ~270 lines** (over its 200 soft cap) — the per-task tables
+   still say `cc:TODO` while the top banner tracks what shipped. A `/maintenance`
+   pass to reconcile the tables + archive the shipped ledger is worth doing.
 
-- **R8 (next):** do R8.1+R8.2+R8.3 as one commit (persistent stash + no
-  auto-equip + Armory inventory-equip screen) to avoid the regression. Then
-  R8.5 (Cores logic, pure/testable) → R8.6–R8.9 (Cores sinks) + R8.4 (run-end
-  reconciliation). The ARMORY screen built this sprint is the natural host for
-  the inventory tab.
-- **R6 (abilities):** R6.1 (cut Tractor Shield, consolidate the two heals into
-  Field Medic) touches spread-out consumers (`collision-system`,
-  `weapon-effects-renderer`, `abilities.js`, `ABILITY_UPGRADES`) — budget for
-  careful test updates. R6.3 (new ability batch) is large; gate each new ability
-  on a live consumer.
-- **R5 (loadout screen):** slot the `LOADOUT` state (already reserved + wired in
-  the transition table) between ARMORY and the run; replace `_rollRandomLoadout`
-  with the chosen 4+4+4 picker reading the unlocked pool.
-- **R3 then R2.4:** build the card draft (repurpose `#wave-pick-overlay`), then
-  retire the gold upgrade-tree shop and re-author the skipped e2e economy tests.
-- **R7 last:** reconcile the two leveling systems first (concern #6).
+---
+
+## 🔭 Recommended next steps (need your prioritization)
+
+- **Highest value, biggest effort:** R6.3 (new abilities batch) — gives the
+  ability lane real depth. Each ability is its own mini-feature.
+- **Cleanup that completes the economy:** R2.4-full (remove the mid-wave gold
+  UPGRADES shop) + R7.4 (drop the gold PASSIVE tab) + re-author the 07-weapons
+  shop tests + the 4 skipped e2e economy tests.
+- **Quick wins:** wire R4.1 (extra card) + Revive Token (costs already done).
+- **Validation:** an R-BAL balance pass + AI-survival run on a meta-progressed
+  account once the above land.
+- **Blocked:** R8.7/R8.9 await Phase C (C.I2 resist counts, C.I3 traits).
 
 ---
 
 ## Validation summary
-- **Unit:** 528/528 green (`npm run test:unit`).
-- **QA (isolation, load normal):** 01-load 13/13, 07-weapons 19/19,
-  08-armory 9/9 — full boot + armory flow + banking + rename all verified.
-- **e2e:** not run (slow + 4 obsolete tests skipped pending economy rewrite).
+- **Unit:** 593/593 green (`npm run test:unit`).
+- **QA (isolation):** 01/07/08/09/10/11 all green — boot, weapons, armory,
+  loadout, cards+sinks, leveling.
+- **e2e:** not run (slow; 4 obsolete economy tests skipped pending rewrite).
