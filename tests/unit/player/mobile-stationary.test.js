@@ -42,7 +42,7 @@ function makeInput({ stickX = 0, stickY = 0 } = {}) {
         aimX: 1000, aimY: 1000,
         screenAimX: 0, screenAimY: 0,
         fire: false, fireSecondary: false,
-        activateSkill: false,
+        activateAbility: false,
         stickInput: { x: stickX, y: stickY, magnitude },
         updateAimForPlayerMovement: () => {},
     };

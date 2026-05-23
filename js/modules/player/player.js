@@ -2,7 +2,7 @@
 import { GAME_CONFIG } from '../core/constants.js';
 import { random, wrap } from '../core/utils.js';
 import * as weapons from './weapons.js';
-import * as skills from './skills.js';
+import * as abilities from './abilities.js';
 import * as progression from './progression.js';
 import * as playerRenderer from './renderer.js';
 import { scoreItem } from '../world/item-system.js';
@@ -104,34 +104,34 @@ export class Player {
         this.energy = 0;
         this.maxEnergy = 100;
 
-        // Weapon system. All primaries / powers / skills are FREE and
+        // Weapon system. All primaries / powers / abilities are FREE and
         // selectable from start (5.64.11). The owned-sets are still
         // tracked for legacy upgrade-tree compatibility but the pause
-        // menu treats every weapon and skill as equippable.
+        // menu treats every weapon and ability as equippable.
         this.activePrimary = 'PULSE_CANNON';
         this.activePower = 'CHARGE_SHOT';
         this.ownedPrimaries = new Set(['PULSE_CANNON']);
         this.ownedPowers = new Set(['CHARGE_SHOT']);
-        this.ownedSkills = new Set(['BULWARK']);
+        this.ownedAbilities = new Set(['BULWARK']);
 
-        // Phase B.S1 — 4-slot defense-skill loadout (NEW source of truth).
-        //   equippedSkills[i]   — skill id in slot i (0..3), or null.
-        //   skillCooldowns[i]   — ms remaining on slot i's cooldown.
-        //   skillCooldownsMax[i]— the cooldown the slot was last set to
+        // Phase B.S1 — 4-slot defense-ability loadout (NEW source of truth).
+        //   equippedAbilities[i]   — ability id in slot i (0..3), or null.
+        //   abilityCooldowns[i]   — ms remaining on slot i's cooldown.
+        //   abilityCooldownsMax[i]— the cooldown the slot was last set to
         //                         (drives the charge-ring fill on the HUD).
-        // Multiple slots can be active at once; per-skill active state lives
-        // in `activeSkillEffects` (a Map keyed by skill id — unchanged).
+        // Multiple slots can be active at once; per-ability active state lives
+        // in `activeAbilityEffects` (a Map keyed by ability id — unchanged).
         //
-        // Back-compat: the legacy `activeSkill` / `activeSkillCooldown` /
-        // `activeSkillCooldownMax` properties are defined as getter/setter
+        // Back-compat: the legacy `activeAbility` / `activeAbilityCooldown` /
+        // `activeAbilityCooldownMax` properties are defined as getter/setter
         // accessors below that proxy slot 0, so HUD / input / shop / save
         // code that still reads or writes those names keeps working until the
-        // S2/S3/S4 phases migrate them. Migrate the old single-skill default
+        // S2/S3/S4 phases migrate them. Migrate the old single-ability default
         // (`'BULWARK'`) into slot 0.
-        this.equippedSkills = ['BULWARK', null, null, null];
-        this.skillCooldowns = [0, 0, 0, 0];
-        this.skillCooldownsMax = [0, 0, 0, 0];
-        this._defineSkillSlotAccessors();
+        this.equippedAbilities = ['BULWARK', null, null, null];
+        this.abilityCooldowns = [0, 0, 0, 0];
+        this.abilityCooldownsMax = [0, 0, 0, 0];
+        this._defineAbilitySlotAccessors();
 
         // Streak buff — set by combat-manager.onEnemyKill when the kill
         // streak crosses a tier threshold. Drives damage multiplier and the
@@ -140,12 +140,12 @@ export class Player {
         this.streakBuffEndTime = 0;
         this.streakTierLabel = null;
 
-        // Defense skill state. Cooldowns live in the per-slot arrays above
-        // (slot 0 reachable via the `activeSkillCooldown` back-compat
-        // accessor). `activeSkillEffects` is a Map keyed by skill id — with
-        // the 4-slot model multiple skills can be active at once, and since
+        // Defense ability state. Cooldowns live in the per-slot arrays above
+        // (slot 0 reachable via the `activeAbilityCooldown` back-compat
+        // accessor). `activeAbilityEffects` is a Map keyed by ability id — with
+        // the 4-slot model multiple abilities can be active at once, and since
         // it already keys by id it needs no change.
-        this.activeSkillEffects = new Map(); // skill id -> {timeRemaining, ...state}
+        this.activeAbilityEffects = new Map(); // ability id -> {timeRemaining, ...state}
 
         // Power weapon cooldown
         this.powerCooldown = 0;
@@ -174,7 +174,7 @@ export class Player {
         // Missile state
         this.activeMissiles = [];
 
-        // ── New power-weapon + skill state (brainstorm drop) ──
+        // ── New power-weapon + ability state (brainstorm drop) ──
         this.singularities = [];      // SINGULARITY gravity wells
         this.orbitalStrikes = [];     // ORBITAL_STRIKE telegraph markers
         this.cryoRings = [];          // CRYO_BURST frost rings
@@ -183,7 +183,7 @@ export class Player {
         this.prismTimer = 0;
         this.prismAngle = 0;
         this.overdriveTimer = 0;      // OVERDRIVE primary buff (ms remaining)
-        this.sentryDrones = [];       // SENTRY_DRONE defense skill
+        this.sentryDrones = [];       // SENTRY_DRONE defense ability
 
         // Rail driver state
         this.lastPrimaryFireTime = 0; // for Railgun Capacitor upgrade
@@ -201,15 +201,15 @@ export class Player {
         this.empPulseActive = false;
         this.empPulseStartTime = 0;
 
-        // Dash state (5.93.0 — was PHASE_DASH defense skill, now a
+        // Dash state (5.93.0 — was PHASE_DASH defense ability, now a
         // SHIFT-key core movement primitive).
         //   isDashing      — true during the active dash burst; doubles as
         //                    the i-frame signal (see isDashIFrameActive()).
         //   dashTimer      — ms remaining in the current dash burst.
         //   dashVelX/VelY  — fixed-velocity vector for the dash (px/sec);
-        //                    integrated each frame in skills.updateActiveSkills.
+        //                    integrated each frame in abilities.updateActiveAbilities.
         //   dashCooldown   — ms until the next dash can be triggered; decays
-        //                    each frame in updateSkillCooldowns.
+        //                    each frame in updateAbilityCooldowns.
         this.isDashing = false;
         this.dashTimer = 0;
         this.dashVelX = 0;
@@ -281,7 +281,7 @@ export class Player {
         // Reset powerups
         this.powerups.clear();
 
-        // Reset weapon active states (keep owned weapons/skills)
+        // Reset weapon active states (keep owned weapons/abilities)
         this.energy = 0; // 6.29.0 — start each run with an empty energy meter
         this.powerCooldown = 0;
         this.beamActive = false;
@@ -311,14 +311,14 @@ export class Player {
         this.needleCount = 0;
         this.scatterShotCount = 0;
         this.lastPrimaryFireTime = 0;
-        // Phase B.S1 — reset per-slot cooldowns (keep equipped skills, like
+        // Phase B.S1 — reset per-slot cooldowns (keep equipped abilities, like
         // owned weapons). Writing via the arrays keeps the legacy
-        // activeSkillCooldown / activeSkillCooldownMax accessors in sync
+        // activeAbilityCooldown / activeAbilityCooldownMax accessors in sync
         // (they proxy slot 0). Guard for the case initializePlayer runs
         // before the constructor has built the arrays.
-        if (this.skillCooldowns) this.skillCooldowns.fill(0);
-        if (this.skillCooldownsMax) this.skillCooldownsMax.fill(0);
-        this.activeSkillEffects = new Map();
+        if (this.abilityCooldowns) this.abilityCooldowns.fill(0);
+        if (this.abilityCooldownsMax) this.abilityCooldownsMax.fill(0);
+        this.activeAbilityEffects = new Map();
         this.deflectorOrbs = [];
         this.isDashing = false;
         this.dashTimer = 0;
@@ -590,7 +590,7 @@ export class Player {
         const prevX = this.x;
         const prevY = this.y;
 
-        // Update invincibility timer (still used by deliberate-save skills:
+        // Update invincibility timer (still used by deliberate-save abilities:
         // REFLEXES, LAST_STAND, plus the wave-start grace window). The
         // SHIFT-key dash i-frames live on `isDashing` / `dashTimer` and
         // are checked via `isDashIFrameActive()` at the collision sites
@@ -945,26 +945,26 @@ export class Player {
             this.spawnChargeBeamParticles(particlePool);
         }
 
-        // Defense skills — B.S2 number keys 1–4 activate the four
-        // equipped skill slots. Each input.activateSkillSlot[i] is a
+        // Defense abilities — B.S2 number keys 1–4 activate the four
+        // equipped ability slots. Each input.activateAbilitySlot[i] is a
         // one-shot rising-edge pulse from input-handler.js; consume each
         // true pulse and clear it (the per-slot cooldown / empty-slot
-        // guard lives in Player.activateSkill(slot)).
-        const skillSlots = input.activateSkillSlot;
-        if (skillSlots) {
-            for (let slot = 0; slot < skillSlots.length; slot++) {
-                if (skillSlots[slot]) {
-                    this.activateSkill(slot);
-                    skillSlots[slot] = false; // consume one-shot pulse
+        // guard lives in Player.activateAbility(slot)).
+        const abilitySlots = input.activateAbilitySlot;
+        if (abilitySlots) {
+            for (let slot = 0; slot < abilitySlots.length; slot++) {
+                if (abilitySlots[slot]) {
+                    this.activateAbility(slot);
+                    abilitySlots[slot] = false; // consume one-shot pulse
                 }
             }
         }
         // Back-compat slot-0 pulse: the gamepad path (gamepad-handler.js,
-        // BTN_CIRCLE) still raises the legacy input.activateSkill flag.
+        // BTN_CIRCLE) still raises the legacy input.activateAbility flag.
         // Map it to slot 0 until the gamepad gains a 4-slot mapping.
-        if (input.activateSkill) {
-            this.activateSkill(0);
-            input.activateSkill = false; // consume one-shot pulse
+        if (input.activateAbility) {
+            this.activateAbility(0);
+            input.activateAbility = false; // consume one-shot pulse
         }
 
         // 5.93.0 — SHIFT-key dash. One-shot pulse from input-handler.js
@@ -999,13 +999,13 @@ export class Player {
         // the weapons.js update loop. The legacy timer is preserved but
         // no longer drives state.
 
-        // Update active skill effects (regen, dash, etc.)
-        this.updateActiveSkills(1000 / GAME_CONFIG.LOGIC_HZ);
+        // Update active ability effects (regen, dash, etc.)
+        this.updateActiveAbilities(1000 / GAME_CONFIG.LOGIC_HZ);
 
     }
 
-    updateActiveSkills(dt) {
-        return skills.updateActiveSkills.call(this, dt);
+    updateActiveAbilities(dt) {
+        return abilities.updateActiveAbilities.call(this, dt);
     }
     
     draw(ctx) {
@@ -1135,32 +1135,32 @@ export class Player {
     
     // ── Weapon System Methods ──────────────────────────────────────────────
 
-    // Phase B.S1 — back-compat accessors for the legacy single-skill API.
-    // The 4-slot arrays (equippedSkills / skillCooldowns / skillCooldownsMax)
+    // Phase B.S1 — back-compat accessors for the legacy single-ability API.
+    // The 4-slot arrays (equippedAbilities / abilityCooldowns / abilityCooldownsMax)
     // are the source of truth; these three properties proxy SLOT 0 so all
     // existing readers/writers (HUD status.js, renderer.js, radial-menu.js,
     // save/load in game-engine.js, input-handler) keep working unchanged.
     // Defined per-instance (not on the prototype) because they shadow what
     // were plain data properties; `Object.defineProperty` makes them
     // non-enumerable accessors that read/write the underlying arrays.
-    _defineSkillSlotAccessors() {
-        Object.defineProperty(this, 'activeSkill', {
+    _defineAbilitySlotAccessors() {
+        Object.defineProperty(this, 'activeAbility', {
             configurable: true,
             enumerable: true,
-            get() { return this.equippedSkills[0]; },
-            set(v) { this.equippedSkills[0] = v; },
+            get() { return this.equippedAbilities[0]; },
+            set(v) { this.equippedAbilities[0] = v; },
         });
-        Object.defineProperty(this, 'activeSkillCooldown', {
+        Object.defineProperty(this, 'activeAbilityCooldown', {
             configurable: true,
             enumerable: true,
-            get() { return this.skillCooldowns[0]; },
-            set(v) { this.skillCooldowns[0] = v; },
+            get() { return this.abilityCooldowns[0]; },
+            set(v) { this.abilityCooldowns[0] = v; },
         });
-        Object.defineProperty(this, 'activeSkillCooldownMax', {
+        Object.defineProperty(this, 'activeAbilityCooldownMax', {
             configurable: true,
             enumerable: true,
-            get() { return this.skillCooldownsMax[0]; },
-            set(v) { this.skillCooldownsMax[0] = v; },
+            get() { return this.abilityCooldownsMax[0]; },
+            set(v) { this.abilityCooldownsMax[0] = v; },
         });
     }
 
@@ -1188,20 +1188,20 @@ export class Player {
         return weapons.buyPower.call(this, weaponId);
     }
 
-    equipSkill(skillId, slot = 0) {
-        return skills.equipSkill.call(this, skillId, slot);
+    equipAbility(abilityId, slot = 0) {
+        return abilities.equipAbility.call(this, abilityId, slot);
     }
 
-    cycleSkill(slot = 0) {
-        return skills.cycleSkill.call(this, slot);
+    cycleAbility(slot = 0) {
+        return abilities.cycleAbility.call(this, slot);
     }
 
-    activateSkill(slot = 0) {
-        return skills.activateSkill.call(this, slot);
+    activateAbility(slot = 0) {
+        return abilities.activateAbility.call(this, slot);
     }
 
     // ── SHIFT-key dash (5.93.0) ─────────────────────────────────────────
-    // Core movement primitive — no longer a defense skill. Pure player
+    // Core movement primitive — no longer a defense ability. Pure player
     // input + position kinematics, so it's MP-safe with no server-side
     // mirror needed (position updates flow through the existing predicted-
     // ship pipeline).
@@ -1267,7 +1267,7 @@ export class Player {
             this.makeInvincible(dashInvulnMs);
         }
 
-        // Audio — keep the existing phaseDash.wav (defense-skill removal
+        // Audio — keep the existing phaseDash.wav (defense-ability removal
         // doesn't kill the sound). audioManager may be null in test paths;
         // also fall back to the live gameEngine reference if available.
         const audio = audioManager || (this.gameEngine && this.gameEngine.audioManager) || null;
@@ -1282,14 +1282,14 @@ export class Player {
         return !!this.isDashing && this.dashTimer > 0;
     }
 
-    getActiveSkillConfig(slot = 0) {
-        return skills.getActiveSkillConfig.call(this, slot);
+    getActiveAbilityConfig(slot = 0) {
+        return abilities.getActiveAbilityConfig.call(this, slot);
     }
 
     // Phase B.S1 — alias matching the refactor's intended name. Returns the
-    // SKILLS config for the skill in `slot` (default 0).
-    getEquippedSkill(slot = 0) {
-        return skills.getActiveSkillConfig.call(this, slot);
+    // ABILITIES config for the ability in `slot` (default 0).
+    getEquippedAbility(slot = 0) {
+        return abilities.getActiveAbilityConfig.call(this, slot);
     }
 
     getEffectivePrimaryFireRate() {
@@ -1322,8 +1322,8 @@ export class Player {
         this.energy = Math.max(0, Math.min(this.maxEnergy, (this.energy || 0) + amount));
     }
 
-    updateSkillCooldowns(dt) {
-        return skills.updateSkillCooldowns.call(this, dt);
+    updateAbilityCooldowns(dt) {
+        return abilities.updateAbilityCooldowns.call(this, dt);
     }
 
     // Wave bonus shield system removed - replaced with shop system

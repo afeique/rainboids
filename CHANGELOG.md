@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.84.0] - 2026-05-22
+
+### Changed — Terminology: Skills → Abilities (Phase R1)
+
+- **Roguelite restructure groundwork.** Renamed the entire 4-slot active-"skill"
+  vocabulary to **"abilities"** so the codebase matches the new roguelite model
+  (see `docs/Roguelite Restructure …` and `Plans.md` → Phase R). This is a pure
+  rename — **no behavior change**.
+- Data/exports (`combat/weapon-data.js`): `SKILLS` → `ABILITIES` (the
+  `DEFENSE_SKILLS` back-compat alias is retired), `SKILL_UPGRADES` →
+  `ABILITY_UPGRADES`, `getSkillUpgrades` → `getAbilityUpgrades`, and the
+  per-upgrade `skill:` parent pointer → `ability:`.
+- Player model (`player/skills.js` → **`player/abilities.js`**): `equippedSkills`
+  → `equippedAbilities`, `skillCooldowns(Max)` → `abilityCooldowns(Max)`,
+  `activeSkillEffects` → `activeAbilityEffects`, `activeSkill` → `activeAbility`,
+  `ownedSkills` → `ownedAbilities`, and `equip/activate/cycle/updateActive/
+  updateCooldowns…Skill` → `…Ability`.
+- UI/HUD: radial type `'skill'` → `'ability'` (label `ABILITY`), HUD bar
+  drawers, and the `[data-tab="skills"]`/`[data-tab="SKILLS"]` CSS hooks.
+- Left untouched: the legacy `skillPoints` field (separate SP currency, handled
+  in Phase R7). Full unit + QA suites green.
+
 ## [6.83.0] - 2026-05-22
 
 ### Added — Ally support auras + Lumen Drone (Phase A.E9-S7 + E8d)

@@ -1,23 +1,23 @@
 // Radial menu — held-key (E/R/F) overlay for picking the equipped primary
-// weapon, power weapon, or defense skill. Pauses gameplay while open;
+// weapon, power weapon, or defense ability. Pauses gameplay while open;
 // mouse cursor angle picks the slice and a left-click commits the choice.
 // Releasing the held key without clicking closes the menu without changing
 // the equipped item.
 
-import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from '../combat/weapon-data.js';
 import { getIconImage, resolveIconSlug } from './icons.js';
 
 const TYPE_LABELS = {
     primary: 'PRM',
     power:   'PWR',
-    skill:   'SKILL',
+    ability:   'ABILITY',
 };
 
 export class RadialMenu {
     constructor(gameEngine) {
         this.engine = gameEngine;
         this.open = false;
-        this.type = null;       // 'primary' | 'power' | 'skill'
+        this.type = null;       // 'primary' | 'power' | 'ability'
         this.options = [];      // [{id, name, icon, color}]
         this.currentId = null;  // currently equipped id (highlighted)
     }
@@ -31,7 +31,7 @@ export class RadialMenu {
         let map, currentId;
         if (type === 'primary') { map = PRIMARY_WEAPONS; currentId = player.activePrimary; }
         else if (type === 'power') { map = POWER_WEAPONS; currentId = player.activePower; }
-        else if (type === 'skill') { map = DEFENSE_SKILLS; currentId = player.activeSkill; }
+        else if (type === 'ability') { map = ABILITIES; currentId = player.activeAbility; }
         else return;
         this.type = type;
         this.options = Object.values(map);
@@ -90,8 +90,8 @@ export class RadialMenu {
                     player.ownedPowers.add(opt.id);
                 }
                 player.equipPower(opt.id);
-            } else if (this.type === 'skill') {
-                player.equipSkill(opt.id);
+            } else if (this.type === 'ability') {
+                player.equipAbility(opt.id);
             }
             if (eng.events) eng.events.emit('audio:coin');
         }

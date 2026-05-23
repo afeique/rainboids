@@ -629,8 +629,8 @@ button:not([disabled]),
 }
 
 /* Kill the inherited .ui-element text-shadow inside the pause menu — it
-   makes body text look blurred (visible on the SKILLS tab instructions in
-   particular). Empty skill slots opt back into a faint dim look via their
+   makes body text look blurred (visible on the ABILITIES tab instructions in
+   particular). Empty ability slots opt back into a faint dim look via their
    own classes; they don't need this glow. */
 #pause-menu,
 #pause-menu * {
@@ -1271,7 +1271,7 @@ button:not([disabled]),
 .pause-tab[data-tab="controls"] { --tab-color: #cccccc; --tab-glow: rgba(204, 204, 204, 0.35); }
 .pause-tab[data-tab="primary"]  { --tab-color: #00ccff; --tab-glow: rgba(0,   204, 255, 0.40); }
 .pause-tab[data-tab="power"]    { --tab-color: #ff4444; --tab-glow: rgba(255,  68,  68, 0.40); }
-.pause-tab[data-tab="skills"]   { --tab-color: #aa66ff; --tab-glow: rgba(170, 102, 255, 0.40); }
+.pause-tab[data-tab="abilities"]   { --tab-color: #aa66ff; --tab-glow: rgba(170, 102, 255, 0.40); }
 .pause-tab[data-tab="powerups"] { --tab-color: #ffd700; --tab-glow: rgba(255, 215,   0, 0.40); }
 .pause-tab[data-tab="assists"]  { --tab-color: #66ddcc; --tab-glow: rgba(102, 221, 204, 0.40); }
 .pause-tab[data-tab="timer"]    { --tab-color: #ff66cc; --tab-glow: rgba(255, 102, 204, 0.40); }
@@ -1460,7 +1460,7 @@ button:not([disabled]),
 .shop-tabs {
     /* 7 tabs: HELP + 6 category tabs. 4-column grid lays them out as
        4 + 3 (HELP / OFFENSE / PRIMARY / POWER on row 1; DEFENSE /
-       DROPS / SKILLS on row 2). Width capped to keep tab cells from
+       DROPS / ABILITIES on row 2). Width capped to keep tab cells from
        getting too wide on ultrawide screens. */
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1505,7 +1505,7 @@ button:not([disabled]),
 .shop-tab[data-tab="DROPS"]   { --tab-color: #44dd88; --tab-glow: rgba( 68, 221, 136, 0.40); }
 .shop-tab[data-tab="PRIMARY"] { --tab-color: #00ccff; --tab-glow: rgba(  0, 204, 255, 0.40); }
 .shop-tab[data-tab="POWER"]   { --tab-color: #ff4444; --tab-glow: rgba(255,  68,  68, 0.40); }
-.shop-tab[data-tab="SKILLS"]  { --tab-color: #aa66ff; --tab-glow: rgba(170, 102, 255, 0.40); }
+.shop-tab[data-tab="ABILITIES"]  { --tab-color: #aa66ff; --tab-glow: rgba(170, 102, 255, 0.40); }
 
 /* 5.99.0 — Per-WEAPON shop tab colors. The 5.79.57 per-weapon tab strip
    (PULSE / NEEDLES / SCATTER / RAIL / CHARGE / MINES / NOVA / MISSILES /
@@ -3324,7 +3324,7 @@ body.mobile-portrait #shop-menu {
 
 /* 5.94.0 — Pause menu portrait text fit.
    In narrow portrait viewports (phones held vertically) the 9 pause-tab
-   labels (CONTROLS / PRIMARY / POWER / SKILLS / POWERUPS / ASSISTS /
+   labels (CONTROLS / PRIMARY / POWER / ABILITIES / POWERUPS / ASSISTS /
    TIMER / MUSIC / SFX) overflow their 3-column grid cells at the default
    18-px Press Start 2P. The SHOP / RESUME action buttons also clip with
    their 14-px label + 26-px icon. Shrink both font sizes and tighten the
@@ -3797,16 +3797,16 @@ body.mobile-portrait .shop-help-icon {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
- * SHOP SKILL TREE (Phase 7 — 2026-05-19)
+ * SHOP ABILITY TREE (Phase 7 — 2026-05-19)
  *
  * Diablo-style visual replacing the legacy tab + list layout. Four
- * cluster regions stacked vertically; within each cluster, weapon/skill
+ * cluster regions stacked vertically; within each cluster, weapon/ability
  * "parent" nodes have their upgrade nodes orbiting them in a ring. The
  * PASSIVES cluster uses a flat hex-style grid instead. No dependency
  * lines between nodes — every node is independently available.
  * ────────────────────────────────────────────────────────────────────── */
 
-/* Base overlay swap — the skill-tree shop replaces the legacy list-
+/* Base overlay swap — the ability-tree shop replaces the legacy list-
  * style layout, so override the old shop-menu sizing rules. */
 .shop-menu--tree {
     position: relative;
@@ -3950,7 +3950,7 @@ body.mobile-portrait .shop-help-icon {
     min-height: 0;
 }
 
-/* Weapon/skill rings (and the passive grid) laid out in 2 columns. */
+/* Weapon/ability rings (and the passive grid) laid out in 2 columns. */
 .shop-tree-cluster-body {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3963,7 +3963,7 @@ body.mobile-portrait .shop-help-icon {
     overflow-y: auto;
 }
 
-/* ── Weapon/skill subgroup (parent + orbiting upgrades) ──────────── */
+/* ── Weapon/ability subgroup (parent + orbiting upgrades) ──────────── */
 .shop-tree-subgroup {
     --node-accent: #888;
     flex: 0 0 auto;
@@ -3984,7 +3984,7 @@ body.mobile-portrait .shop-help-icon {
     left: 50%;
 }
 
-/* The parent (weapon/skill) sits at the centre. JS doesn't translate
+/* The parent (weapon/ability) sits at the centre. JS doesn't translate
  * it, so a default centre transform applies. */
 .shop-tree-ring > .shop-node--parent {
     transform: translate(-50%, -50%);

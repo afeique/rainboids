@@ -1,17 +1,17 @@
-// Player skill system — extracted from Player class
+// Player ability system — extracted from Player class
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
 import { GAME_CONFIG } from '../core/constants.js';
-// Phase B.S1 — canonical export is now `SKILLS` (was DEFENSE_SKILLS, kept
+// Phase B.S1 — canonical export is now `ABILITIES` (was ABILITIES, kept
 // as a back-compat alias in weapon-data.js).
-import { SKILLS, POWER_WEAPONS } from '../combat/weapon-data.js';
+import { ABILITIES, POWER_WEAPONS } from '../combat/weapon-data.js';
 
-// ── Active skill updates ──────────────────────────────────────────────────
+// ── Active ability updates ──────────────────────────────────────────────────
 
-export function updateActiveSkills(dt) {
+export function updateActiveAbilities(dt) {
     // Repair nanites: heal over time
-    if (this.activeSkillEffects.has('REPAIR_NANITES')) {
-        const config = SKILLS.REPAIR_NANITES;
+    if (this.activeAbilityEffects.has('REPAIR_NANITES')) {
+        const config = ABILITIES.REPAIR_NANITES;
         const potencyStacks = this.getPowerupStacks('POTENCY');
         const hps = config.healPerSecond + potencyStacks;
         const healThisTick = hps * (dt / 1000);
@@ -22,29 +22,29 @@ export function updateActiveSkills(dt) {
     // 20% (only when Repair is equipped in some slot, that slot is off
     // cooldown, and the heal isn't already running) so it lands without a
     // manual panic-tap. Phase B.S1 — scans all 4 slots instead of the old
-    // single activeSkill, so it works regardless of which slot holds Repair.
+    // single activeAbility, so it works regardless of which slot holds Repair.
     if (this.getPowerupStacks('EMERGENCY_PROTOCOL') > 0
-        && !this.activeSkillEffects.has('REPAIR_NANITES')
+        && !this.activeAbilityEffects.has('REPAIR_NANITES')
         && this.health < this.getEffectiveMaxHealth() * 0.2) {
-        const repairSlot = this.equippedSkills.indexOf('REPAIR_NANITES');
-        if (repairSlot !== -1 && this.skillCooldowns[repairSlot] <= 0) {
-            this.activateSkill(repairSlot);
+        const repairSlot = this.equippedAbilities.indexOf('REPAIR_NANITES');
+        if (repairSlot !== -1 && this.abilityCooldowns[repairSlot] <= 0) {
+            this.activateAbility(repairSlot);
         }
     }
 
     // Bulwark: set flag for damage reduction
-    this.bulwarkActive = this.activeSkillEffects.has('BULWARK');
+    this.bulwarkActive = this.activeAbilityEffects.has('BULWARK');
 
     // Tractor shield: set flag
-    this.tractorShieldActive = this.activeSkillEffects.has('TRACTOR_SHIELD');
+    this.tractorShieldActive = this.activeAbilityEffects.has('TRACTOR_SHIELD');
     if (this.tractorShieldActive) {
         this.tractorShieldAngle = this.angle;
     }
 
-    // Dash motion (5.93.0 — was the PHASE_DASH defense skill; now a
+    // Dash motion (5.93.0 — was the PHASE_DASH defense ability; now a
     // SHIFT-key core movement primitive triggered by Player._triggerDash).
     // The per-frame kinematics + auto-exit logic live here because the
-    // dash position update has always been driven from updateActiveSkills.
+    // dash position update has always been driven from updateActiveAbilities.
     // I-frames are signalled by `isDashing` itself (see player.isDashIFrameActive).
     if (this.isDashing) {
         this.dashTimer -= dt;
@@ -384,7 +384,7 @@ export function updateActiveSkills(dt) {
 
     // Sentry drones — orbit the ship and auto-fire at the nearest enemy.
     if (this.sentryDrones.length > 0) {
-        const cfg = SKILLS.SENTRY_DRONE;
+        const cfg = ABILITIES.SENTRY_DRONE;
         const orbitRadius = cfg.orbitRadius;
         const orbitSpeed = 0.004;
         const rapid = this.getPowerupStacks('RAPID_DRONE');
@@ -430,50 +430,50 @@ export function updateActiveSkills(dt) {
     }
 }
 
-// ── Defense-skill loadout — equip / cycle / activate ─────────────────────
+// ── Defense-ability loadout — equip / cycle / activate ─────────────────────
 //
-// Phase B.S1 — 4-slot model. `equippedSkills[0..3]` is the source of truth;
-// the legacy `activeSkill` accessor proxies slot 0 for back-compat. All
-// defense skills are FREE and selectable from the start (parallels the
+// Phase B.S1 — 4-slot model. `equippedAbilities[0..3]` is the source of truth;
+// the legacy `activeAbility` accessor proxies slot 0 for back-compat. All
+// defense abilities are FREE and selectable from the start (parallels the
 // primary/power weapon model). Each function takes an optional `slot`
 // (default 0) so the current single-slot input/HUD path keeps working until
 // the S2 input phase wires up the other three slots.
 
-export function getActiveSkillConfig(slot = 0) {
-    return SKILLS[this.equippedSkills[slot]] || null;
+export function getActiveAbilityConfig(slot = 0) {
+    return ABILITIES[this.equippedAbilities[slot]] || null;
 }
 
-export function equipSkill(skillId, slot = 0) {
-    if (!SKILLS[skillId]) return false;
-    this.equippedSkills[slot] = skillId;
-    this.ownedSkills.add(skillId);
+export function equipAbility(abilityId, slot = 0) {
+    if (!ABILITIES[abilityId]) return false;
+    this.equippedAbilities[slot] = abilityId;
+    this.ownedAbilities.add(abilityId);
     return true;
 }
 
-export function cycleSkill(slot = 0) {
-    const ids = Object.keys(SKILLS);
+export function cycleAbility(slot = 0) {
+    const ids = Object.keys(ABILITIES);
     if (ids.length === 0) return false;
-    const i = ids.indexOf(this.equippedSkills[slot]);
+    const i = ids.indexOf(this.equippedAbilities[slot]);
     const next = ids[(i + 1) % ids.length];
-    this.equippedSkills[slot] = next;
-    this.ownedSkills.add(next);
+    this.equippedAbilities[slot] = next;
+    this.ownedAbilities.add(next);
     // Mirror E/R weapon-cycle behaviour: trigger HUD pulse + audio
-    // ping so cycling skills feels the same as cycling weapons.
+    // ping so cycling abilities feels the same as cycling weapons.
     if (this.gameEngine) {
         if (typeof this.gameEngine.triggerWeaponCycleAnim === 'function') {
-            this.gameEngine.triggerWeaponCycleAnim('skill');
+            this.gameEngine.triggerWeaponCycleAnim('ability');
         }
         if (this.gameEngine.events) this.gameEngine.events.emit('audio:coin');
     }
     return true;
 }
 
-// Maps DEFENSE_SKILLS id → audio MANIFEST sound name. 5.68.9 — was
-// silent; each skill now plays its accent on activation.
-// 5.93.0 — PHASE_DASH removed from defense skills (now a SHIFT-key
+// Maps ABILITIES id → audio MANIFEST sound name. 5.68.9 — was
+// silent; each ability now plays its accent on activation.
+// 5.93.0 — PHASE_DASH removed from defense abilities (now a SHIFT-key
 // movement primitive). The `phaseDash` sound is still used — see
 // Player._triggerDash, which plays it directly via audioManager.
-const SKILL_ACTIVATE_SOUND = {
+const ABILITY_ACTIVATE_SOUND = {
     BULWARK:        'bulwark',
     REPAIR_NANITES: 'repairNanites',
     DEFLECTOR_ORBS: 'deflectorOrbs',
@@ -481,34 +481,34 @@ const SKILL_ACTIVATE_SOUND = {
     TRACTOR_SHIELD: 'tractorShield',
 };
 
-export function activateSkill(slot = 0) {
-    const skillId = this.equippedSkills[slot];
-    if (!skillId) return false;
-    if (this.skillCooldowns[slot] > 0) return false;
+export function activateAbility(slot = 0) {
+    const abilityId = this.equippedAbilities[slot];
+    if (!abilityId) return false;
+    if (this.abilityCooldowns[slot] > 0) return false;
 
-    const config = SKILLS[skillId];
+    const config = ABILITIES[abilityId];
     if (!config) return false;
 
-    this.skillCooldowns[slot] = config.cooldown;
+    this.abilityCooldowns[slot] = config.cooldown;
     // 6.31.0 — stash the max so the ship-tip charge ring can show the
-    // skill's auto-recharge fill.
-    this.skillCooldownsMax[slot] = config.cooldown;
+    // ability's auto-recharge fill.
+    this.abilityCooldownsMax[slot] = config.cooldown;
     // FORTIFY / EXTENDED_CARE extend the active duration per stack.
     let duration = config.duration;
-    if (skillId === 'BULWARK') {
+    if (abilityId === 'BULWARK') {
         duration += this.getPowerupStacks('FORTIFY') * 1000;
-    } else if (skillId === 'REPAIR_NANITES') {
+    } else if (abilityId === 'REPAIR_NANITES') {
         duration += this.getPowerupStacks('EXTENDED_CARE') * 2000;
     }
-    this.activeSkillEffects.set(skillId, {
+    this.activeAbilityEffects.set(abilityId, {
         timeRemaining: duration,
     });
 
-    // 6.x — Per-skill ON-ACTIVATE effects (previously DEFLECTOR_ORBS and
+    // 6.x — Per-ability ON-ACTIVATE effects (previously DEFLECTOR_ORBS and
     // EMP_PULSE were placebos — they set the timer + sound but did
     // nothing). The collision / render / stun scaffolding already exists;
     // these wire the missing trigger.
-    if (skillId === 'DEFLECTOR_ORBS') {
+    if (abilityId === 'DEFLECTOR_ORBS') {
         const orbCount = config.orbCount + this.getPowerupStacks('EXTRA_ORB');
         const hits = config.hitsPerOrb + this.getPowerupStacks('HARDENED_ORBS') * 2;
         this.deflectorOrbs = [];
@@ -522,7 +522,7 @@ export function activateSkill(slot = 0) {
                 active: true,
             });
         }
-    } else if (skillId === 'EMP_PULSE') {
+    } else if (abilityId === 'EMP_PULSE') {
         this.empPulseActive = true;
         this.empPulseStartTime = Date.now();
         const ge = this.gameEngine;
@@ -534,7 +534,7 @@ export function activateSkill(slot = 0) {
                 if (dist <= radius) ge.applyStun(enemy, config.duration);
             }
         }
-    } else if (skillId === 'SENTRY_DRONE') {
+    } else if (abilityId === 'SENTRY_DRONE') {
         const count = config.droneCount + this.getPowerupStacks('EXTRA_DRONE');
         this.sentryDrones = [];
         for (let i = 0; i < count; i++) {
@@ -549,11 +549,11 @@ export function activateSkill(slot = 0) {
         }
     }
 
-    // Play the per-skill activation sound (5.68.9). Falls back to the
+    // Play the per-ability activation sound (5.68.9). Falls back to the
     // generic shield sound if a specific clip isn't registered.
     const ge = this.gameEngine;
     if (ge && ge.audioManager) {
-        const soundName = SKILL_ACTIVATE_SOUND[skillId];
+        const soundName = ABILITY_ACTIVATE_SOUND[abilityId];
         if (!soundName || !ge.audioManager.playSound(soundName)) {
             ge.audioManager.playSound('shield');
         }
@@ -561,15 +561,15 @@ export function activateSkill(slot = 0) {
     return true;
 }
 
-// ── Skill cooldowns ───────────────────────────────────────────────────────
+// ── Ability cooldowns ───────────────────────────────────────────────────────
 
-export function updateSkillCooldowns(dt) {
+export function updateAbilityCooldowns(dt) {
     // Phase B.S1 — decay all 4 slot cooldowns (slot 0 is also reachable via
-    // the legacy activeSkillCooldown accessor, but we write the array
+    // the legacy activeAbilityCooldown accessor, but we write the array
     // directly to cover every slot uniformly).
-    for (let i = 0; i < this.skillCooldowns.length; i++) {
-        if (this.skillCooldowns[i] > 0) {
-            this.skillCooldowns[i] = Math.max(0, this.skillCooldowns[i] - dt);
+    for (let i = 0; i < this.abilityCooldowns.length; i++) {
+        if (this.abilityCooldowns[i] > 0) {
+            this.abilityCooldowns[i] = Math.max(0, this.abilityCooldowns[i] - dt);
         }
     }
 
@@ -584,22 +584,22 @@ export function updateSkillCooldowns(dt) {
     }
 
     // 5.93.0 — dash cooldown (SHIFT-key core movement primitive).
-    // Decays each frame independently of the defense-skill cooldown so
-    // dashing doesn't interfere with the activeSkill cycle.
+    // Decays each frame independently of the defense-ability cooldown so
+    // dashing doesn't interfere with the activeAbility cycle.
     if (this.dashCooldown > 0) {
         this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     }
 
-    // Update active skill effects
-    for (const [skillId, effect] of this.activeSkillEffects) {
+    // Update active ability effects
+    for (const [abilityId, effect] of this.activeAbilityEffects) {
         effect.timeRemaining -= dt;
         if (effect.timeRemaining <= 0) {
-            this.activeSkillEffects.delete(skillId);
-            if (skillId === 'BULWARK') this.bulwarkActive = false;
-            if (skillId === 'REPAIR_NANITES') this.regenActive = false;
-            if (skillId === 'DEFLECTOR_ORBS') this.deflectorOrbs = [];
-            if (skillId === 'TRACTOR_SHIELD') this.tractorShieldActive = false;
-            if (skillId === 'SENTRY_DRONE') this.sentryDrones = [];
+            this.activeAbilityEffects.delete(abilityId);
+            if (abilityId === 'BULWARK') this.bulwarkActive = false;
+            if (abilityId === 'REPAIR_NANITES') this.regenActive = false;
+            if (abilityId === 'DEFLECTOR_ORBS') this.deflectorOrbs = [];
+            if (abilityId === 'TRACTOR_SHIELD') this.tractorShieldActive = false;
+            if (abilityId === 'SENTRY_DRONE') this.sentryDrones = [];
         }
     }
 }

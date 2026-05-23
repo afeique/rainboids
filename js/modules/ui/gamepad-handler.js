@@ -1,7 +1,7 @@
 // GamepadHandler — dual-analog (twin-stick) gamepad input for DualShock 4
 // / Xbox controllers. Left stick moves, right stick aims; triggers fire,
 // bumpers open the weapon radials, face buttons dash / activate the
-// defense skill, Options/Start pauses.
+// defense ability, Options/Start pauses.
 //
 // Activation is governed by the player's chosen control scheme (see
 // game-engine.controlScheme): the pad only drives gameplay when the scheme
@@ -20,7 +20,7 @@
 //   Left stick / D-pad → move          Right stick → aim
 //   R2 → fire primary                  L2 → fire / charge power
 //   R1 (hold) → primary weapon radial  L1 (hold) → power weapon radial
-//   Triangle (hold) → defense radial   Circle → activate defense skill
+//   Triangle (hold) → defense radial   Circle → activate defense ability
 //   Cross → dash                       Options → pause / resume
 // While a radial is held, the sticks pick the slice and releasing the
 // button commits it (dead-zone release cancels).
@@ -34,7 +34,7 @@ const RADIAL_SELECT_DEADZONE = 0.35; // stick deflection needed to pick a slice
 
 // Button indices (standard mapping).
 const BTN_CROSS = 0;     // dash
-const BTN_CIRCLE = 1;    // activate defense skill
+const BTN_CIRCLE = 1;    // activate defense ability
 const BTN_TRIANGLE = 3;  // defense radial (hold)
 const BTN_L1 = 4;        // power radial (hold)
 const BTN_R1 = 5;        // primary radial (hold)
@@ -62,7 +62,7 @@ export class GamepadHandler {
         this._index = null;
         // Rising-edge trackers for one-shot actions.
         this._prevDash = false;
-        this._prevSkill = false;
+        this._prevAbility = false;
         this._prevPause = false;
         // Which radial type (if any) the gamepad currently has open.
         this._heldRadial = null;
@@ -169,7 +169,7 @@ export class GamepadHandler {
         if (!radial) return;
         const want = this._pressed(gp, BTN_R1) ? 'primary'
                    : this._pressed(gp, BTN_L1) ? 'power'
-                   : this._pressed(gp, BTN_TRIANGLE) ? 'skill'
+                   : this._pressed(gp, BTN_TRIANGLE) ? 'ability'
                    : null;
         const state = this.engine.game && this.engine.game.state;
         const playable = state === GAME_STATES.PLAYING || state === GAME_STATES.WAVE_TRANSITION;
@@ -228,7 +228,7 @@ export class GamepadHandler {
     }
 
     // ── Gameplay poll (PLAYING / WAVE_TRANSITION) ───────────────────────
-    // Writes movement / aim / fire / dash / skill. Not called while a radial
+    // Writes movement / aim / fire / dash / ability. Not called while a radial
     // is open (the update loop is frozen then) — radial input lives in
     // pollFrame above.
     poll(input) {
@@ -266,11 +266,11 @@ export class GamepadHandler {
         }
         this._prevDash = dash;
 
-        const skill = this._pressed(gp, BTN_CIRCLE);
-        if (skill && !this._prevSkill) {
-            input.activateSkill = true;
+        const ability = this._pressed(gp, BTN_CIRCLE);
+        if (ability && !this._prevAbility) {
+            input.activateAbility = true;
         }
-        this._prevSkill = skill;
+        this._prevAbility = ability;
     }
 
     // Release any input the pad was driving (scheme switched away or pad
@@ -284,6 +284,6 @@ export class GamepadHandler {
             input.aimStick = ZERO_VEC;
         }
         this._prevDash = false;
-        this._prevSkill = false;
+        this._prevAbility = false;
     }
 }

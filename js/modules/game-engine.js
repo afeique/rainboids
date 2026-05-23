@@ -27,7 +27,7 @@ import { LineDebris } from './world/line-debris.js';
 import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
-import { DEFENSE_SKILLS, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
+import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
@@ -359,8 +359,8 @@ export class GameEngine {
 
         // Make game engine globally accessible for entities
         window.gameEngine = this;
-        this._defenseSkillsRef = DEFENSE_SKILLS; // Expose for UI manager skill slots
-        // Hold-to-open radial menu for E (primary) / R (power) / F (skill).
+        this._abilitiesRef = ABILITIES; // Expose for UI manager ability slots
+        // Hold-to-open radial menu for E (primary) / R (power) / F (ability).
         // Pauses gameplay; mouse picks the slice, click commits, key release cancels.
         this.radialMenu = new RadialMenu(this);
 
@@ -732,7 +732,7 @@ export class GameEngine {
   CHEAT CODES (keyboard, during gameplay):
   [        – +1000 Gold
   ]        – +5 SP
-  (SHIFT+ cheats removed in 5.64.11 — SHIFT is now the skill-cycle key.
+  (SHIFT+ cheats removed in 5.64.11 — SHIFT is now the ability-cycle key.
    For dev/testing, drive cheats from the console:
        window.gameEngine.cheats.onePunchMan = true
        window.gameEngine.game.money += N
@@ -964,9 +964,9 @@ export class GameEngine {
                 this.player.activePower = loadout.power;
                 this.player.ownedPowers = new Set([loadout.power]);
             }
-            if (loadout.skill && DEFENSE_SKILLS[loadout.skill]) {
-                this.player.activeSkill = loadout.skill;
-                this.player.ownedSkills = new Set([loadout.skill]);
+            if (loadout.ability && ABILITIES[loadout.ability]) {
+                this.player.activeAbility = loadout.ability;
+                this.player.ownedAbilities = new Set([loadout.ability]);
             }
         }
         // 5.88.3 — energy tanks unified with the triforce. healthTanks is
@@ -1133,7 +1133,7 @@ export class GameEngine {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
                 'wave1-cycle-weapons-v6',
-                'Press <strong>F</strong> to cycle primary weapons, <strong>E</strong> for power weapons, <strong>R</strong> for skills.',
+                'Press <strong>F</strong> to cycle primary weapons, <strong>E</strong> for power weapons, <strong>R</strong> for abilities.',
                 7500,
                 { once: false },
             );
@@ -1141,8 +1141,8 @@ export class GameEngine {
         this._gameTimers.push(new GameTimer(12000, () => {
             if (this.game.state !== GAME_STATES.PLAYING) return;
             showHint(
-                'wave1-fire-and-skill-v5',
-                'Hold <strong>Space</strong> (or right-click) to fire your power weapon. Press <strong>Q</strong> to activate your skill.',
+                'wave1-fire-and-ability-v5',
+                'Hold <strong>Space</strong> (or right-click) to fire your power weapon. Press <strong>Q</strong> to activate your ability.',
                 8000,
                 { once: false },
             );
@@ -1218,10 +1218,10 @@ export class GameEngine {
                 healthTanks: p.healthTanks | 0,
                 activePrimary: p.activePrimary,
                 activePower: p.activePower,
-                activeSkill: p.activeSkill,
+                activeAbility: p.activeAbility,
                 ownedPrimaries: Array.from(p.ownedPrimaries || []),
                 ownedPowers: Array.from(p.ownedPowers || []),
-                ownedSkills: Array.from(p.ownedSkills || []),
+                ownedAbilities: Array.from(p.ownedAbilities || []),
                 powerups,
             },
         };
@@ -1279,10 +1279,10 @@ export class GameEngine {
         if (typeof ps.healthTanks === 'number') p.healthTanks = Math.max(0, ps.healthTanks | 0);
         if (typeof ps.activePrimary === 'string') p.activePrimary = ps.activePrimary;
         if (typeof ps.activePower === 'string')   p.activePower   = ps.activePower;
-        if (typeof ps.activeSkill === 'string')   p.activeSkill   = ps.activeSkill;
+        if (typeof ps.activeAbility === 'string')   p.activeAbility   = ps.activeAbility;
         if (Array.isArray(ps.ownedPrimaries)) p.ownedPrimaries = new Set(ps.ownedPrimaries);
         if (Array.isArray(ps.ownedPowers))    p.ownedPowers    = new Set(ps.ownedPowers);
-        if (Array.isArray(ps.ownedSkills))    p.ownedSkills    = new Set(ps.ownedSkills);
+        if (Array.isArray(ps.ownedAbilities))    p.ownedAbilities    = new Set(ps.ownedAbilities);
         // Rehydrate powerups via POWERUP_TYPES so cards / stats look up
         // configs correctly. Falls back to a minimal stub if the type
         // was deleted in a later patch.
@@ -1443,7 +1443,7 @@ export class GameEngine {
 
     startNewRun() {
         clearSave();
-        // 5.79.0 — randomize starting loadout (primary, power, skill).
+        // 5.79.0 — randomize starting loadout (primary, power, ability).
         //   We seed `_pendingNewRunLoadout` here and `init()` reads it
         //   right after the Player is constructed so the assignment
         //   happens BEFORE the wave-1 save is written.
@@ -1460,7 +1460,7 @@ export class GameEngine {
         return {
             primary: pickKey(PRIMARY_WEAPONS),
             power:   pickKey(POWER_WEAPONS),
-            skill:   pickKey(DEFENSE_SKILLS),
+            ability:   pickKey(ABILITIES),
         };
     }
 
@@ -2456,7 +2456,7 @@ export class GameEngine {
 
     _buildPowerTabItems(weaponId = null) { return shop._buildPowerTabItems.call(this, weaponId); }
 
-    // Phase 7 (2026-05-19) — Unified item list for the skill-tree shop.
+    // Phase 7 (2026-05-19) — Unified item list for the ability-tree shop.
     _buildTreeItems() { return shop._buildTreeItems.call(this); }
 
     // 6.1.0 — POWERUPS tab restored. Builds a gold-priced list from
@@ -2717,7 +2717,7 @@ export class GameEngine {
     // Mine defensive plasma shield zone — 6.23.0 (2026-05-19), refactored
     //   from Phase 5. Shield now comes from PLAYER mines that own the
     //   MINE_SHIELD_RADIUS upgrade (set on the mine at lay-time via
-    //   skills.js). If the player is standing inside any of their own
+    //   abilities.js). If the player is standing inside any of their own
     //   armed mine's shield zone, refund 40% of damage taken. Done as a
     //   thin wrapper here (rather than in collision-system.js) so the
     //   underlying collision pipeline stays untouched — all the FX,
@@ -2813,7 +2813,7 @@ export class GameEngine {
             const input = this.inputHandler.getInput();
             // Poll the gamepad into the shared input object before the
             // player reads it — left stick → movement, right stick → aim,
-            // triggers → fire/power, A → dash, B/X → skill.
+            // triggers → fire/power, A → dash, B/X → ability.
             if (this.gamepad) this.gamepad.poll(input);
             // Add the update method to the input object so player can call it
             input.updateAimForPlayerMovement = this._boundAimForPlayerMovement;
@@ -3420,7 +3420,7 @@ export class GameEngine {
 
     drawWeaponEffects() { return weaponFx.drawWeaponEffects.call(this); }
 
-    drawSkillCooldownHUD() { return hudStatus.drawSkillCooldownHUD.call(this); }
+    drawAbilityCooldownHUD() { return hudStatus.drawAbilityCooldownHUD.call(this); }
 
     // 5.99.2 — Canvas-rendered pickup toast (replaces the dead
     // showMessage / #game-message-overlay DOM path). Set by

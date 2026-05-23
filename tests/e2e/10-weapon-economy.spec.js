@@ -48,7 +48,7 @@ test.describe('E2E-10: Weapon economy & gameplay flow', () => {
                     activePrimary: p.activePrimary,
                     ownedPrimaries: [...p.ownedPrimaries],
                     ownedPowers: [...p.ownedPowers],
-                    ownedSkills: [...p.ownedSkills],
+                    ownedAbilities: [...p.ownedAbilities],
                     powerupStacks: Object.fromEntries(
                         [...p.powerups.entries()].map(([k, v]) => [k, v.stacks])
                     ),
@@ -64,7 +64,7 @@ test.describe('E2E-10: Weapon economy & gameplay flow', () => {
                 const bought = [];
                 ge.openShop();
 
-                const tabs = ['OFFENSE', 'PRIMARY', 'POWER', 'DEFENSE', 'SKILLS'];
+                const tabs = ['OFFENSE', 'PRIMARY', 'POWER', 'DEFENSE', 'ABILITIES'];
                 for (const tab of tabs) {
                     ge.shopCategory = tab;
                     ge._rebuildShopCache();

@@ -2,7 +2,7 @@
  * QA-07: Weapon system and shop tabs
  *
  * Verifies the weapon system initialisation, shop tab structure,
- * and basic weapon/skill data availability.
+ * and basic weapon/ability data availability.
  */
 
 import { test, expect } from '@playwright/test';
@@ -40,16 +40,16 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         expect(owned.powers).toContain('CHARGE_SHOT');
     });
 
-    test('player has a single equipped skill (5.64.11 — was 4 slots)', async ({ page }) => {
-        const skill = await page.evaluate(() => window.gameEngine?.player?.activeSkill);
-        expect(typeof skill).toBe('string');
-        expect(skill.length).toBeGreaterThan(0);
+    test('player has a single equipped ability (5.64.11 — was 4 slots)', async ({ page }) => {
+        const ability = await page.evaluate(() => window.gameEngine?.player?.activeAbility);
+        expect(typeof ability).toBe('string');
+        expect(ability.length).toBeGreaterThan(0);
     });
 
-    test('player starts with default skill in ownedSkills', async ({ page }) => {
+    test('player starts with default ability in ownedAbilities', async ({ page }) => {
         const data = await page.evaluate(() => ({
-            size: window.gameEngine?.player?.ownedSkills?.size ?? -1,
-            active: window.gameEngine?.player?.activeSkill,
+            size: window.gameEngine?.player?.ownedAbilities?.size ?? -1,
+            active: window.gameEngine?.player?.activeAbility,
         }));
         expect(data.size).toBeGreaterThanOrEqual(1);
         expect(data.active).toBeTruthy();
@@ -65,12 +65,12 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     // Shop is now strictly the gold + SP economy — picks-currency
     // purchases happen in the pause menu's POWERUPS tab.
 
-    // Phase 7 (2026-05-19) — Shop is now a Diablo-style skill tree
+    // Phase 7 (2026-05-19) — Shop is now a Diablo-style ability tree
     // with four cluster regions (PRIMARY / POWER / DEFENSE / PASSIVES)
     // displayed at once. The legacy `.shop-tab` strip is retained as a
     // hidden DOM stub for back-compat, but the visible navigation lives
     // in `#shop-tree`. Assert on the new cluster structure.
-    test('shop renders four skill-tree clusters', async ({ page }) => {
+    test('shop renders four ability-tree clusters', async ({ page }) => {
         await page.evaluate(() => window.gameEngine.openShop());
         await page.waitForTimeout(100);
         const clusters = await page.evaluate(() =>
@@ -88,7 +88,7 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
             [...document.querySelectorAll('#shop-tree .shop-node')]
                 .map(n => n.dataset.id)
         );
-        // Parent nodes — weapon / skill IDs.
+        // Parent nodes — weapon / ability IDs.
         expect(ids).toContain('PULSE_CANNON');
         expect(ids).toContain('CHARGE_SHOT');
         expect(ids).toContain('BULWARK');
@@ -96,12 +96,12 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         // trait set for primaries; 6.30.0 reward-only passive grid).
         expect(ids).toContain('PULSE_MULTI');    // PULSE_CANNON upgrade
         expect(ids).toContain('CHARGE_POWER');   // CHARGE_SHOT upgrade
-        expect(ids).toContain('FORTIFY');        // BULWARK skill upgrade
+        expect(ids).toContain('FORTIFY');        // BULWARK ability upgrade
         expect(ids).toContain('CRIT_CHANCE');    // passive
     });
 
     // 5.79.57 — shop is per-weapon now. Each PRIMARY/POWER weapon ID is
-    // its own tab category; SKILLS / generic PRIMARY / generic POWER are
+    // its own tab category; ABILITIES / generic PRIMARY / generic POWER are
     // suspended. Drive PULSE_CANNON + CHARGE_SHOT as canonical cases.
     test('PULSE_CANNON shop tab shows upgrades for that weapon', async ({ page }) => {
         await page.evaluate(() => {
@@ -133,16 +133,16 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         for (const item of items) expect(item.isUpg).toBe(true);
     });
 
-    // 5.101.0 — Defensive skill shop tab retired with the rest of the
-    // skill system. Switching shopCategory to SKILLS now produces an
-    // empty filtered-item list (the legacy SKILLS / DEFENSE branches in
+    // 5.101.0 — Defensive ability shop tab retired with the rest of the
+    // ability system. Switching shopCategory to ABILITIES now produces an
+    // empty filtered-item list (the legacy ABILITIES / DEFENSE branches in
     // _rebuildShopCache return []). This test pins that contract so a
     // future revival has to update it in the same commit.
-    test('SKILLS shopCategory is now empty (5.101.0 retirement)', async ({ page }) => {
+    test('ABILITIES shopCategory is now empty (5.101.0 retirement)', async ({ page }) => {
         const itemCount = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openShop();
-            ge.shopCategory = 'SKILLS';
+            ge.shopCategory = 'ABILITIES';
             ge._rebuildShopCache();
             return ge.shopFilteredItems?.length ?? 0;
         });
@@ -196,19 +196,19 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     });
 
     // ------------------------------------------------------------------
-    // Skill purchase and assignment
+    // Ability purchase and assignment
     // ------------------------------------------------------------------
 
-    // 5.101.0 — Defensive skill purchases retired. `buyShopItem('BULWARK')`
-    // hits the empty SKILLS filtered-item branch in shop-manager and
+    // 5.101.0 — Defensive ability purchases retired. `buyShopItem('BULWARK')`
+    // hits the empty ABILITIES filtered-item branch in shop-manager and
     // returns false. Test pins the new contract so a future revival
     // updates this assertion explicitly.
-    test('buying a defense skill is rejected (5.101.0 retirement)', async ({ page }) => {
+    test('buying a defense ability is rejected (5.101.0 retirement)', async ({ page }) => {
         const success = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.player.skillPoints = 10;
             ge.openShop();
-            ge.shopCategory = 'SKILLS';
+            ge.shopCategory = 'ABILITIES';
             ge._rebuildShopCache();
             return ge.buyShopItem('BULWARK');
         });
@@ -276,28 +276,28 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
     });
 
     // ------------------------------------------------------------------
-    // Pause menu SKILLS tab
+    // Pause menu ABILITIES tab
     // ------------------------------------------------------------------
 
-    // 5.101.0 — Pause-menu SKILLS tab retired with the defensive skill
+    // 5.101.0 — Pause-menu ABILITIES tab retired with the defensive ability
     // system. Test pins the new contract so a future revival has to
     // update it in the same commit.
-    test('pause menu no longer has a SKILLS tab (5.101.0 retirement)', async ({ page }) => {
+    test('pause menu no longer has a ABILITIES tab (5.101.0 retirement)', async ({ page }) => {
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
 
-        const tab = page.locator('.pause-tab', { hasText: 'SKILLS' });
+        const tab = page.locator('.pause-tab', { hasText: 'ABILITIES' });
         await expect(tab).toHaveCount(0);
     });
 
-    test('skills-tab DOM stub is absent (5.101.0 retirement)', async ({ page }) => {
-        // 5.101.0 — `#skills-tab` content stub is no longer built; the
-        // SKILLS tab strip entry + content node are both retired. Pin the
-        // new contract: querySelector('#skills-tab') returns null on the
+    test('abilities-tab DOM stub is absent (5.101.0 retirement)', async ({ page }) => {
+        // 5.101.0 — `#abilities-tab` content stub is no longer built; the
+        // ABILITIES tab strip entry + content node are both retired. Pin the
+        // new contract: querySelector('#abilities-tab') returns null on the
         // paused pause-menu DOM.
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
-        const hasNode = await page.evaluate(() => !!document.getElementById('skills-tab'));
+        const hasNode = await page.evaluate(() => !!document.getElementById('abilities-tab'));
         expect(hasNode).toBe(false);
     });
 

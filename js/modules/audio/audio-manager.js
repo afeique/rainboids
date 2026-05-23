@@ -116,7 +116,7 @@ const MANIFEST = {
     enemyHit_lay_mine:         ['enemyHit_lay_mine.wav'],
     enemyHit_sweep_laser:      ['enemyHit_sweep_laser.wav'],
 
-    // ── Defense skill activations ───────────────────────────────────
+    // ── Defense ability activations ───────────────────────────────────
     bulwark:                 ['bulwark.wav'],
     repairNanites:           ['repairNanites.wav'],
     phaseDash:               ['phaseDash.wav'],
@@ -216,7 +216,7 @@ function uniquePaths() {
 //
 // Selection rule: immediate-response combat SFX where first-play
 // latency would be audible as missing-sound. Long-tail sounds
-// (per-weapon hit variants, boss death roars, defense-skill triggers,
+// (per-weapon hit variants, boss death roars, defense-ability triggers,
 // loops) lazy-load on first use; the player accepts ~50-150 ms one-
 // time fetch delay the first time each fires.
 const EAGER_SOUNDS = new Set([

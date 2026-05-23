@@ -242,30 +242,30 @@ test.describe('E2E-03: Weapon system', () => {
     });
 
     // -----------------------------------------------------------------------
-    // Defense skill system
+    // Defense ability system
     // -----------------------------------------------------------------------
 
-    test.describe('defense skills', () => {
+    test.describe('defense abilities', () => {
         test('buying and assigning Bulwark to slot 1', async ({ page }) => {
             const result = await page.evaluate(() => {
                 const ge = window.gameEngine;
                 ge.player.skillPoints = 10;
-                ge.player.buySkill('BULWARK');
+                ge.player.buyAbility('BULWARK');
                 return {
-                    owned: ge.player.ownedSkills.has('BULWARK'),
-                    slot0: ge.player.skillSlots[0],
+                    owned: ge.player.ownedAbilities.has('BULWARK'),
+                    slot0: ge.player.abilitySlots[0],
                 };
             });
             expect(result.owned).toBe(true);
             expect(result.slot0).toBe('BULWARK');
         });
 
-        test('skill cooldowns start at zero', async ({ page }) => {
+        test('ability cooldowns start at zero', async ({ page }) => {
             const cooldowns = await page.evaluate(() => {
                 const ge = window.gameEngine;
                 ge.player.skillPoints = 10;
-                ge.player.buySkill('BULWARK');
-                return ge.player.skillCooldowns;
+                ge.player.buyAbility('BULWARK');
+                return ge.player.abilityCooldowns;
             });
             expect(cooldowns[0]).toBe(0);
         });

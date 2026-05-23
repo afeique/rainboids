@@ -403,7 +403,7 @@ describe('Phase 4 — NOVA_CHAIN secondary nova on kills', () => {
         // processes the rings currently in the player's novaRings array,
         // so we have to drive 4 separate calls (one per generation). This
         // mirrors the real game where the ring lifecycle is updated by
-        // skills.js between frames. At each step we add a fresh enemy at
+        // abilities.js between frames. At each step we add a fresh enemy at
         // the new ring's position so the chain has something to kill.
         const initialRing = makeRing(0, 0, 100);
         const enemy0 = makeEnemy(100, 0, { health: 1 });

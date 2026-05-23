@@ -182,7 +182,7 @@ export function getBulletVelocityDamageMult(weaponId) {
 export function updateChargingSystem(input, bulletPool, audioManager, particlePool) {
     const now = Date.now();
     const dt = 1000 / GAME_CONFIG.LOGIC_HZ; // ms per tick
-    this.updateSkillCooldowns(dt);
+    this.updateAbilityCooldowns(dt);
 
     // ── Primary weapon: fires while LEFT-CLICK is held, gated only by
     //    fire-rate now. Clips were removed — unlimited continuous fire,
@@ -1556,7 +1556,7 @@ export function fireMissiles(bulletPool, config) {
     // 6.34.0 — Missile Salvo concentrates ALL missiles on a SINGLE
     // target (nearest enemy, else nearest asteroid) to maximize burst
     // damage. If that target dies, each missile re-acquires the new
-    // nearest target in flight (see updateMissiles in skills.js).
+    // nearest target in flight (see updateMissiles in abilities.js).
     const eng = this.gameEngine;
     const enemies = (eng && eng.enemyPool && eng.enemyPool.activeObjects) || [];
     const asteroids = (eng && eng.asteroidPool && eng.asteroidPool.activeObjects) || [];
@@ -1772,7 +1772,7 @@ export function getHitStreakMultiplier() {
     //   (1.3×) + streakGoldMult (2.5×) the player got 31× baseline
     //   drop yield at high streak/wave — runaway feedback loop where
     //   the heal orbs alone made the player invincible. Now caps at
-    //   2× so the streak rewards skill without snowballing.
+    //   2× so the streak rewards ability without snowballing.
     if (this.hitStreak < 5)  return 1;
     if (this.hitStreak < 15) return 1.25;
     if (this.hitStreak < 30) return 1.5;

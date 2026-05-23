@@ -9,21 +9,21 @@ import { GAME_STATES } from '../core/constants.js';
 import {
     PRIMARY_WEAPONS,
     POWER_WEAPONS,
-    DEFENSE_SKILLS,
+    ABILITIES,
     PASSIVE_UPGRADES,
     getPrimaryUpgrades,
     getPowerUpgrades,
-    getSkillUpgrades,
+    getAbilityUpgrades,
     getPassiveUpgrades,
     UPGRADE_COST_MULT,
     buildStackCosts,
 } from '../combat/weapon-data.js';
 
-// Defense-skill upgrades are authored in skill points (SP); this is the
+// Defense-ability upgrades are authored in ability points (SP); this is the
 // SP→gold conversion, kept on the same economy curve as weapon upgrades
 // (the legacy ×800 base, then the shared UPGRADE_COST_MULT scale + per-stack
 // ramp via buildStackCosts). See weapon-data.js for the economy knobs.
-const SKILL_SP_TO_GOLD = 800;
+const ABILITY_SP_TO_GOLD = 800;
 import { POWERUP_TYPES, powerupGoldCost } from '../world/powerup.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { showShopDom, hideShopDom, renderShopDom, updateShopCurrencyDom } from './shop-dom.js';
@@ -37,16 +37,16 @@ export function sellShopItem(itemId) {
         }
         if (!item) return false;
 
-        // Can't sell weapons or skills themselves
-        if (item.isWeapon || item.isSkill) return false;
+        // Can't sell weapons or abilities themselves
+        if (item.isWeapon || item.isAbility) return false;
 
         const currentStacks = this.player.getPowerupStacks(itemId);
         if (currentStacks === 0) return false;
 
         // Refund the exact at-cost price of the LAST stack owned. Every
         // upgrade now carries a ramped `costOverrides` array (see
-        // weapon-data._scaleUpgradeTable + shop-manager skill build), so this
-        // single branch covers weapon, power, and skill upgrades alike.
+        // weapon-data._scaleUpgradeTable + shop-manager ability build), so this
+        // single branch covers weapon, power, and ability upgrades alike.
         let lastStackCost = item.cost;
         if (item.costOverrides) {
             lastStackCost = item.costOverrides[Math.min(currentStacks - 1, item.costOverrides.length - 1)] || item.cost;
@@ -120,7 +120,7 @@ export function openShop() {
         }
 
 
-        // Phase 7 (2026-05-19) — Skill-tree shop. No tabs; the tree
+        // Phase 7 (2026-05-19) — Ability-tree shop. No tabs; the tree
         // displays every category at once. `shopCategory` is left as
         // 'TREE' so `_rebuildShopCache` builds the unified item list
         // the new UI consumes. Legacy tests that flip shopCategory to
@@ -159,7 +159,7 @@ export function openShop() {
 
 }
 
-// Phase 7 (2026-05-19) — Skill-tree shop. The tree UI shows every
+// Phase 7 (2026-05-19) — Ability-tree shop. The tree UI shows every
 // category at once, so the legacy "filter by tab" cache is now a
 // unified list of every purchasable upgrade across PRIMARY / POWER /
 // DEFENSE / PASSIVES. Tests + the per-weapon tab path still flip
@@ -192,11 +192,11 @@ export function _rebuildShopCache() {
             this.shopFilteredItems = [];
             return;
         }
-        // 5.101.0 contract — `shopCategory === 'SKILLS'` returns an
-        // empty list. The Phase 7 tree exposes skill upgrades through
+        // 5.101.0 contract — `shopCategory === 'ABILITIES'` returns an
+        // empty list. The Phase 7 tree exposes ability upgrades through
         // the DEFENSE cluster, but this legacy category remains empty
         // so the corresponding QA tests continue to pin the contract.
-        if (this.shopCategory === 'SKILLS' || this.shopCategory === 'DEFENSE') {
+        if (this.shopCategory === 'ABILITIES' || this.shopCategory === 'DEFENSE') {
             this.shopFilteredItems = [];
             return;
         }
@@ -219,7 +219,7 @@ export function _rebuildShopCache() {
 // every PRIMARY / POWER / DEFENSE weapon and emits their upgrades, plus
 // the PASSIVE_UPGRADES set. Each item carries enough metadata for
 // shop-dom to render a node AND for buyShopItem to route the purchase
-// (`isWeaponUpgrade` / `isPassive` / `isSkillUpgrade`).
+// (`isWeaponUpgrade` / `isPassive` / `isAbilityUpgrade`).
 export function _buildTreeItems() {
     const items = [];
 
@@ -265,15 +265,15 @@ export function _buildTreeItems() {
         }
     }
 
-    // DEFENSE skill upgrades — convert SP cost into gold using the same
+    // DEFENSE ability upgrades — convert SP cost into gold using the same
     // multiplier shop-dom applies for display. Without this the buy
-    // path would deduct only 2-3 gold for skill upgrades, making them
+    // path would deduct only 2-3 gold for ability upgrades, making them
     // effectively free.
-    for (const s of Object.values(DEFENSE_SKILLS)) {
-        for (const upg of getSkillUpgrades(s.id)) {
+    for (const s of Object.values(ABILITIES)) {
+        for (const upg of getAbilityUpgrades(s.id)) {
             // Same economy as weapon upgrades: SP→gold, scaled, then a
-            // per-stack ramp so stacking a skill trait escalates in cost.
-            const base1 = (upg.cost || 0) * SKILL_SP_TO_GOLD * UPGRADE_COST_MULT;
+            // per-stack ramp so stacking a ability trait escalates in cost.
+            const base1 = (upg.cost || 0) * ABILITY_SP_TO_GOLD * UPGRADE_COST_MULT;
             const costOverrides = buildStackCosts(base1, upg.maxStacks || 1);
             items.push({
                 id: upg.id,
@@ -283,11 +283,11 @@ export function _buildTreeItems() {
                 cost: costOverrides[0],
                 costOverrides,
                 maxStacks: upg.maxStacks,
-                category: 'SKILLS',
+                category: 'ABILITIES',
                 currency: 'COINS',
-                isSkillUpgrade: true,
+                isAbilityUpgrade: true,
                 isWeaponUpgrade: true,    // routed through _handleUpgradeBuy
-                parentSkill: upg.skill,
+                parentAbility: upg.ability,
                 tier: upg.tier,
                 requires: upg.requires,
             });
@@ -341,7 +341,7 @@ export function _buildPowerupsTabItems() {
 }
 
 // Phase 1 (2026-05-19) — Builds the PASSIVE shop tab. Walks
-// PASSIVE_UPGRADES (always-on, weapon-agnostic, skill-agnostic
+// PASSIVE_UPGRADES (always-on, weapon-agnostic, ability-agnostic
 // upgrades) and produces a shop item per non-hidden entry. Pricing
 // uses each upgrade's static `cost` (no per-stack ramp yet — Phase 7
 // can layer that on with the UI rewrite). All items use
@@ -370,7 +370,7 @@ export function _buildPassiveTabItems() {
 //   stub was kept "in case any save/replay path serialized the
 //   function name" — verified that no such path exists, so the
 //   stub joins the rest of the dead shop-tab code (POWERUPS,
-//   SKILLS, DEFENSE) in the trash. Powerups live exclusively on
+//   ABILITIES, DEFENSE) in the trash. Powerups live exclusively on
 //   the pause-menu POWERUPS tab (ui-manager.renderPowerupsOverlay).
 
 // 5.76.1 — fire 🎖️ MASTERY UNLOCKED toast the first time each capstone
@@ -484,13 +484,13 @@ export function _buildPowerTabItems(weaponId = null) {
         this.shopFilteredItems = items;
 }
 
-// 5.79.62 — `_buildSkillsTabItems` removed. The SKILLS shop tab was
-//   suspended in 5.79.57 along with DEFENSE; defense skills are equipped
-//   via the radial menu / DEFENSE shop tab. (The dead pause-menu SKILLS
-//   tab + its updateSkillsTab builder were removed in the 6.51.0 sweep.)
+// 5.79.62 — `_buildAbilitiesTabItems` removed. The ABILITIES shop tab was
+//   suspended in 5.79.57 along with DEFENSE; defense abilities are equipped
+//   via the radial menu / DEFENSE shop tab. (The dead pause-menu ABILITIES
+//   tab + its updateAbilitiesTab builder were removed in the 6.51.0 sweep.)
 //   The builder was never called by `_rebuildShopCache` after that patch
-//   and the items it produced (`isSkill: true` / `isSkillUpgrade: true`)
-//   never reached the shop list. Removed alongside `_handleSkillBuy`
+//   and the items it produced (`isAbility: true` / `isAbilityUpgrade: true`)
+//   never reached the shop list. Removed alongside `_handleAbilityBuy`
 //   (the corresponding purchase handler) in the same cleanup.
 
 export function closeShop() {
@@ -561,7 +561,7 @@ export function buyShopItem(itemId) {
             }
 
             // Weapon upgrades from the per-weapon shop tabs.
-            if (filteredItem && (filteredItem.isWeaponUpgrade || filteredItem.isSkillUpgrade)) {
+            if (filteredItem && (filteredItem.isWeaponUpgrade || filteredItem.isAbilityUpgrade)) {
                 return this._handleUpgradeBuy(filteredItem);
             }
 
@@ -638,12 +638,12 @@ export function buyShopItem(itemId) {
         }
 }
 
-// 5.79.62 — `_handleWeaponBuyOrEquip` and `_handleSkillBuy` removed.
+// 5.79.62 — `_handleWeaponBuyOrEquip` and `_handleAbilityBuy` removed.
 //   Weapon equipping moved to the pause-menu PRIMARY / POWER tabs in
-//   5.74.x and skill equipping moved to the pause-menu SKILLS tab in
-//   5.64.11. After 5.79.57 stripped the SKILLS shop tab and the
+//   5.74.x and ability equipping moved to the pause-menu ABILITIES tab in
+//   5.64.11. After 5.79.57 stripped the ABILITIES shop tab and the
 //   per-weapon shop tabs only surface upgrade items (no isWeapon /
-//   isSkill rows), neither handler can be reached. Their `buyShopItem`
+//   isAbility rows), neither handler can be reached. Their `buyShopItem`
 //   dispatch branches were removed in the same cleanup; only
 //   `_handleUpgradeBuy` (for weapon-upgrade rows) is live.
 

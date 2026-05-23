@@ -151,7 +151,7 @@ test.describe('Blog article screenshots', () => {
 
     test('05-pause-shop', async ({ page }) => {
         // The shop overlay — slimmed to 4 tabs (HELP/PRIMARY/POWER/
-        // DEFENSE/SKILLS) after offense + drops moved to powerups.
+        // DEFENSE/ABILITIES) after offense + drops moved to powerups.
         await startGame(page);
         await page.evaluate(() => {
             const ge = window.gameEngine;

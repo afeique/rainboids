@@ -1,11 +1,11 @@
 /**
- * tests/unit/skill-hud.test.js — Phase B.S3 4-slot skill bar HUD smoke test.
+ * tests/unit/ability-hud.test.js — Phase B.S3 4-slot ability bar HUD smoke test.
  *
  * Canvas rendering can't be visually asserted in Jest, so this is a
- * SMOKE test: it drives `drawSkillSlotBar` (the exported 4-slot skill-bar
+ * SMOKE test: it drives `drawAbilitySlotBar` (the exported 4-slot ability-bar
  * renderer in hud/status.js) with a mock 2D context whose every method is
- * a recording no-op, plus a mock player carrying the 4-slot skill model
- * (equippedSkills / skillCooldowns / skillCooldownsMax). It pins:
+ * a recording no-op, plus a mock player carrying the 4-slot ability model
+ * (equippedAbilities / abilityCooldowns / abilityCooldownsMax). It pins:
  *   - the render does not throw with a mix of filled + empty slots
  *   - it issues draw calls (fill/stroke/etc.) for the non-empty slots
  *   - the keybind labels 1–4 are emitted (one per slot, via fillText)
@@ -59,7 +59,7 @@ if (typeof globalThis.Path2D === 'undefined') {
 }
 
 import { describe, expect, test, jest } from '@jest/globals';
-import { drawSkillSlotBar } from '../../js/modules/hud/status.js';
+import { drawAbilitySlotBar } from '../../js/modules/hud/status.js';
 
 // ── Recording mock 2D context ──────────────────────────────────────────
 // Tracks fillText invocations + a few key method names so the smoke test
@@ -97,28 +97,28 @@ function makeRecordingCtx() {
 
 function makePlayer(overrides = {}) {
     return {
-        equippedSkills: ['BULWARK', 'REPAIR_NANITES', null, null],
-        skillCooldowns: [0, 5000, 0, 0],
-        skillCooldownsMax: [20000, 25000, 0, 0],
+        equippedAbilities: ['BULWARK', 'REPAIR_NANITES', null, null],
+        abilityCooldowns: [0, 5000, 0, 0],
+        abilityCooldownsMax: [20000, 25000, 0, 0],
         ...overrides,
     };
 }
 
-describe('B.S3 — 4-slot skill bar HUD render (drawSkillSlotBar)', () => {
+describe('B.S3 — 4-slot ability bar HUD render (drawAbilitySlotBar)', () => {
     test('exports a callable renderer', () => {
-        expect(typeof drawSkillSlotBar).toBe('function');
+        expect(typeof drawAbilitySlotBar).toBe('function');
     });
 
     test('does not throw with a mix of filled + empty slots', () => {
         const { ctx } = makeRecordingCtx();
         const self = { player: makePlayer() };
-        expect(() => drawSkillSlotBar.call(self, ctx, 36, 600)).not.toThrow();
+        expect(() => drawAbilitySlotBar.call(self, ctx, 36, 600)).not.toThrow();
     });
 
     test('issues draw calls for the non-empty slots (background + border fills/strokes)', () => {
         const { ctx, calls } = makeRecordingCtx();
         const self = { player: makePlayer() };
-        drawSkillSlotBar.call(self, ctx, 36, 600);
+        drawAbilitySlotBar.call(self, ctx, 36, 600);
         // Every slot fills its background panel (4 fills minimum); filled
         // slots add a colored border stroke; empty slots add a dim stroke.
         expect(calls.fill).toBeGreaterThanOrEqual(2);   // ≥ 2 non-empty backgrounds
@@ -128,7 +128,7 @@ describe('B.S3 — 4-slot skill bar HUD render (drawSkillSlotBar)', () => {
     test('emits a keybind label 1–4 for every slot', () => {
         const { ctx, calls } = makeRecordingCtx();
         const self = { player: makePlayer() };
-        drawSkillSlotBar.call(self, ctx, 36, 600);
+        drawAbilitySlotBar.call(self, ctx, 36, 600);
         // Keybind labels are drawn with fillText (and stroked behind).
         for (const key of ['1', '2', '3', '4']) {
             expect(calls.fillText).toContain(key);
@@ -139,7 +139,7 @@ describe('B.S3 — 4-slot skill bar HUD render (drawSkillSlotBar)', () => {
         const { ctx, calls } = makeRecordingCtx();
         // Slot 1 is at 5000ms remaining → ceil(5000/1000) = "5".
         const self = { player: makePlayer() };
-        drawSkillSlotBar.call(self, ctx, 36, 600);
+        drawAbilitySlotBar.call(self, ctx, 36, 600);
         expect(calls.clip).toBeGreaterThanOrEqual(1);     // cooldown overlay clip
         expect(calls.fillRect.length).toBeGreaterThanOrEqual(1); // overlay fill
         expect(calls.fillText).toContain('5');            // seconds readout
@@ -147,9 +147,9 @@ describe('B.S3 — 4-slot skill bar HUD render (drawSkillSlotBar)', () => {
 
     test('no cooldown text when all cooldowns are zero', () => {
         const { ctx, calls } = makeRecordingCtx();
-        const self = { player: makePlayer({ skillCooldowns: [0, 0, 0, 0] }) };
-        drawSkillSlotBar.call(self, ctx, 36, 600);
-        // No clip/fillRect overlay should fire for ready skills.
+        const self = { player: makePlayer({ abilityCooldowns: [0, 0, 0, 0] }) };
+        drawAbilitySlotBar.call(self, ctx, 36, 600);
+        // No clip/fillRect overlay should fire for ready abilities.
         expect(calls.clip).toBe(0);
         expect(calls.fillRect.length).toBe(0);
     });
@@ -157,14 +157,14 @@ describe('B.S3 — 4-slot skill bar HUD render (drawSkillSlotBar)', () => {
     test('safely no-ops when player is missing', () => {
         const { ctx, calls } = makeRecordingCtx();
         const self = { player: null };
-        expect(() => drawSkillSlotBar.call(self, ctx, 36, 600)).not.toThrow();
+        expect(() => drawAbilitySlotBar.call(self, ctx, 36, 600)).not.toThrow();
         expect(calls.fill).toBe(0);
     });
 
-    test('tolerates missing skill arrays (treats slots as empty)', () => {
+    test('tolerates missing ability arrays (treats slots as empty)', () => {
         const { ctx, calls } = makeRecordingCtx();
         const self = { player: {} };
-        expect(() => drawSkillSlotBar.call(self, ctx, 36, 600)).not.toThrow();
+        expect(() => drawAbilitySlotBar.call(self, ctx, 36, 600)).not.toThrow();
         // Four empty placeholders → four background fills, zero cooldown text.
         expect(calls.fill).toBe(4);
         expect(calls.clip).toBe(0);

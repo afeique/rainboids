@@ -20,11 +20,11 @@
 //     hidden `_tankProgress` counter; each full max-HP-worth of
 //     overflow grants +1 spare, capped at 3.
 //
-// Defense skills / movement primitives that grant deliberate invuln
+// Defense abilities / movement primitives that grant deliberate invuln
 // (LAST_STAND, REFLEXES, the SHIFT-key dash burst, wave-start grace)
 // still call makeInvincible or rely on player.isDashIFrameActive() —
 // those are active-ability windows, not damage-aftermath grace.
-// (5.93.0 — PHASE_DASH was promoted from a defense skill to the
+// (5.93.0 — PHASE_DASH was promoted from a defense ability to the
 // SHIFT-key core movement primitive; its i-frames now live in
 // player.isDashIFrameActive(), checked at the collision sites.)
 
@@ -191,9 +191,9 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     const wave = (this.game && this.game.currentWave) ? (this.game.currentWave | 0) : 1;
     reducedDamage *= getMobileIncomingDamageMultiplier(wave);
 
-    // BULWARK active-skill damage reduction (was applied inline at the
+    // BULWARK active-ability damage reduction (was applied inline at the
     // collision sites). IRON_WILL deepens it 50% → 65%.
-    if (this.player.activeSkillEffects && this.player.activeSkillEffects.has('BULWARK')) {
+    if (this.player.activeAbilityEffects && this.player.activeAbilityEffects.has('BULWARK')) {
         const bulwarkReduction = (this.player.getPowerupStacks
             && this.player.getPowerupStacks('IRON_WILL') > 0) ? 0.65 : 0.5;
         reducedDamage *= (1 - bulwarkReduction);
@@ -244,7 +244,7 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         }
         // RETALIATION — taking a hit while BULWARK is active emits an AoE
         // damage pulse around the ship.
-        if (this.player.activeSkillEffects && this.player.activeSkillEffects.has('BULWARK')
+        if (this.player.activeAbilityEffects && this.player.activeAbilityEffects.has('BULWARK')
             && this.player.getPowerupStacks && this.player.getPowerupStacks('RETALIATION') > 0
             && this.enemyPool && typeof this.damageEnemy === 'function') {
             const PULSE_R = 180;

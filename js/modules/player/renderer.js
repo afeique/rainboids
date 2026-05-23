@@ -395,7 +395,7 @@ export function draw(ctx) {
         // 6.31.0 — Charge Shot keeps its hold-to-charge body glow. The
         // old cooldown-based power-weapon body glow is gone (power
         // weapons run on energy now); the ship-tip ring shows the
-        // defense-skill charge instead (see drawCooldownTimer).
+        // defense-ability charge instead (see drawCooldownTimer).
         const cfg = this.getActivePowerConfig?.();
         if (cfg && cfg.isChargeBased && this.isCharging) {
             this.drawChargingEffects(ctx);
@@ -601,15 +601,15 @@ export function drawLevelUpEffects(ctx) {
 // ── Cooldown timer ────────────────────────────────────────────────────────
 
 export function drawCooldownTimer(ctx) {
-    // 6.31.0 — Ship-tip charge ring now shows the active DEFENSE SKILL's
+    // 6.31.0 — Ship-tip charge ring now shows the active DEFENSE ABILITY's
     // auto-recharge (was the power-weapon readiness ring; power weapons
-    // run on the energy meter now). The ring fills as the skill's
+    // run on the energy meter now). The ring fills as the ability's
     // cooldown elapses and pulses fully-charged when it's ready to use.
-    const skillCfg = this.getActiveSkillConfig?.();
-    if (!skillCfg) return;
+    const abilityCfg = this.getActiveAbilityConfig?.();
+    if (!abilityCfg) return;
 
-    const max = this.activeSkillCooldownMax || skillCfg.cooldown || 1;
-    const remaining = Math.max(0, this.activeSkillCooldown || 0);
+    const max = this.activeAbilityCooldownMax || abilityCfg.cooldown || 1;
+    const remaining = Math.max(0, this.activeAbilityCooldown || 0);
     const charge = 1 - Math.min(1, remaining / max);
     const isFullyCharged = remaining <= 0;
 

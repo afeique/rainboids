@@ -18,23 +18,23 @@ export class InputHandler {
             rotateRight: false,
             fire: false,
             fireSecondary: false,
-            // B.S2 — per-slot skill activation. Number keys 1–4 (Digit1..4 /
+            // B.S2 — per-slot ability activation. Number keys 1–4 (Digit1..4 /
             // Numpad1..4) each set a one-shot rising-edge pulse for the
-            // matching equipped-skill slot (Digit1→0 … Digit4→3). Player.update
+            // matching equipped-ability slot (Digit1→0 … Digit4→3). Player.update
             // consumes each true pulse and clears it (cooldown guard lives in
-            // Player.activateSkill(slot)). Replaces the retired TAB/Q single
-            // `activateSkill` flag.
-            activateSkillSlot: [false, false, false, false],
+            // Player.activateAbility(slot)). Replaces the retired TAB/Q single
+            // `activateAbility` flag.
+            activateAbilitySlot: [false, false, false, false],
             // Back-compat slot-0 pulse. The keyboard path no longer sets this
-            // (it uses activateSkillSlot above), but the gamepad path in
+            // (it uses activateAbilitySlot above), but the gamepad path in
             // gamepad-handler.js still raises it on BTN_CIRCLE; Player.update
             // maps it to slot 0. Keep until gamepad gains a 4-slot mapping.
-            activateSkill: false,
+            activateAbility: false,
             // 5.93.0 — SHIFT-key dash. `shift` is the continuous-state
             // mirror of the Shift key (held → true). `dashPulse` is the
             // one-shot rising-edge pulse consumed once per dash trigger
             // by Player.update — set on Shift keydown (without auto-repeat),
-            // cleared after consumption. Mirrors the activateSkill pulse
+            // cleared after consumption. Mirrors the activateAbility pulse
             // pattern so Player owns the cooldown / already-dashing guards.
             shift: false,
             dashPulse: false,
@@ -117,7 +117,7 @@ export class InputHandler {
                 this.input.fire = true;
             }
             // Right mouse button — power weapon. (5.64.11 removed the
-            // Space binding; Space is now skill-activate. Power weapon
+            // Space binding; Space is now ability-activate. Power weapon
             // is right-click only.)
             if (e.button === 2) {
                 this.input.fireSecondary = true;
@@ -194,27 +194,27 @@ export class InputHandler {
                 this.input.fireSecondary = true;
                 e.preventDefault();
                 break;
-            // B.S2 — number keys 1–4 activate the four equipped skill
+            // B.S2 — number keys 1–4 activate the four equipped ability
             // slots (Digit1→0 … Digit4→3, Numpad1..4 mirrored). Each sets
             // a one-shot rising-edge pulse consumed by Player.update; the
-            // per-slot cooldown guard lives in Player.activateSkill(slot).
+            // per-slot cooldown guard lives in Player.activateAbility(slot).
             // Auto-repeat (e.repeat) is ignored so holding a number key
             // doesn't spam re-activations. Replaces the retired TAB binding.
             case 'Digit1':
             case 'Numpad1':
-                if (!e.repeat) this.input.activateSkillSlot[0] = true;
+                if (!e.repeat) this.input.activateAbilitySlot[0] = true;
                 break;
             case 'Digit2':
             case 'Numpad2':
-                if (!e.repeat) this.input.activateSkillSlot[1] = true;
+                if (!e.repeat) this.input.activateAbilitySlot[1] = true;
                 break;
             case 'Digit3':
             case 'Numpad3':
-                if (!e.repeat) this.input.activateSkillSlot[2] = true;
+                if (!e.repeat) this.input.activateAbilitySlot[2] = true;
                 break;
             case 'Digit4':
             case 'Numpad4':
-                if (!e.repeat) this.input.activateSkillSlot[3] = true;
+                if (!e.repeat) this.input.activateAbilitySlot[3] = true;
                 break;
             // 5.93.0 — SHIFT triggers the core dash movement primitive.
             // Set `shift` (continuous-state mirror) so callers can read
@@ -269,7 +269,7 @@ export class InputHandler {
             case 'ShiftRight':
                 this.input.shift = false;
                 break;
-            // B.S2 — number keys 1–4 set one-shot activateSkillSlot pulses
+            // B.S2 — number keys 1–4 set one-shot activateAbilitySlot pulses
             // consumed (and cleared) by the player update loop, so no
             // keyup-side reset is needed for them.
         }

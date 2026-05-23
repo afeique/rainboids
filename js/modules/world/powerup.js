@@ -50,7 +50,7 @@ function getPowerupGradients(ctx, gradientColors) {
 // every drop as `isPermanent: true`. Each entry now declares a
 // `category` so the Powerups overlay can group them under
 // Offense / Drops sub-tabs.
-// 5.79.16 — Per-powerup spCost (skill-point cost) replaces the flat
+// 5.79.16 — Per-powerup spCost (ability-point cost) replaces the flat
 //   1-SP-per-stack pricing. Tiered by impact:
 //     Tier 1 (5 SP): major multiplicative DPS or survival levers
 //     Tier 2 (3 SP): meaningful but capped or single-axis bonuses
@@ -211,7 +211,7 @@ export const POWERUP_TYPES = {
     // still gates around player choice (damage shape per build).
 
     // 5.101.0 — Defensive powerups restored to POWERUP_TYPES. With
-    // defense skills retired, these become the player's main defensive
+    // defense abilities retired, these become the player's main defensive
     // levers alongside the Diablo-style inventory. All three appear in
     // the pause-menu POWERUPS tab AND the survivor-card wave-clear pick
     // (one defensive slot per pick, see openWavePickOverlay).

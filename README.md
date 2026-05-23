@@ -112,7 +112,7 @@ js/
     game-engine.js      # Game loop orchestrator
     core/               # constants, state machine, pools, event bus, timers, storage
     platform/           # device + viewport detection
-    player/             # entity, weapons, skills, progression, lifecycle, renderer
+    player/             # entity, weapons, abilities, progression, lifecycle, renderer
     enemy/              # entity, data, movement, firing, AI, shapes
     combat/             # elements, collision, weapon-data, combat-manager
     hud/ · world/ · shop/ · ui/ · wave/ · audio/ · performance/ · render/

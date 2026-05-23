@@ -1,9 +1,9 @@
-// Shop DOM — Phase 7 skill-tree rewrite (2026-05-19).
+// Shop DOM — Phase 7 ability-tree rewrite (2026-05-19).
 //
-// Renders a Diablo-style visual skill tree into the #shop-overlay
+// Renders a Diablo-style visual ability tree into the #shop-overlay
 // instead of the previous tab + scrollable-list layout. Four clusters
 // — PRIMARY / POWER / DEFENSE / PASSIVES — are displayed at once. For
-// the first three, each weapon/skill is a parent node with its
+// the first three, each weapon/ability is a parent node with its
 // per-weapon upgrade nodes orbiting it on a ring at radius ~120px. The
 // PASSIVES cluster uses a flat hex grid (no parent-child structure).
 //
@@ -25,10 +25,10 @@ import { renderIconHTML } from '../ui/icons.js';
 import {
     PRIMARY_WEAPONS,
     POWER_WEAPONS,
-    DEFENSE_SKILLS,
+    ABILITIES,
     getPrimaryUpgrades,
     getPowerUpgrades,
-    getSkillUpgrades,
+    getAbilityUpgrades,
     getPassiveUpgrades,
 } from '../combat/weapon-data.js';
 
@@ -43,11 +43,11 @@ const STATE_COLORS = {
     MAXED:        '#a060e0',
 };
 
-// Skill-upgrade SP-era costs ranged 2-3. SP was retired in 6.0.0; for
-// the tree to show meaningful gold prices we multiply by SKILL_COST_MULT
-// when materializing skill upgrades. Tuned so a baseline "+1 duration"
-// skill upgrade costs ~1600g (matches the lowest weapon-upgrade tier).
-const SKILL_COST_MULT = 800;
+// Ability-upgrade SP-era costs ranged 2-3. SP was retired in 6.0.0; for
+// the tree to show meaningful gold prices we multiply by ABILITY_COST_MULT
+// when materializing ability upgrades. Tuned so a baseline "+1 duration"
+// ability upgrade costs ~1600g (matches the lowest weapon-upgrade tier).
+const ABILITY_COST_MULT = 800;
 
 // Coin SVG path (copied from the HUD coin icon).
 const COIN_SVG_PATH = "M59.989,21c-0.099-1.711-2.134-3.048-6.204-4.068c0.137-0.3,0.214-0.612,0.215-0.936V9h-0.017C53.625,3.172,29.743,3,27,3 S0.375,3.172,0.017,9H0v0.13v0v0l0,6.869c0.005,1.9,2.457,3.387,6.105,4.494c-0.05,0.166-0.08,0.335-0.09,0.507H6v0.13v0v0l0,6.857 C2.07,28.999,0.107,30.317,0.01,32H0v0.13v0v0l0,6.869c0.003,1.323,1.196,2.445,3.148,3.38C3.075,42.581,3.028,42.788,3.015,43H3 v0.13v0v0l0,6.869c0.008,3.326,7.497,5.391,15.818,6.355c0.061,0.012,0.117,0.037,0.182,0.037c0.019,0,0.035-0.01,0.054-0.011 c1.604,0.181,3.234,0.322,4.847,0.423c0.034,0.004,0.064,0.02,0.099,0.02c0.019,0,0.034-0.01,0.052-0.011 C26.1,56.937,28.115,57,30,57c1.885,0,3.9-0.063,5.948-0.188c0.018,0.001,0.034,0.011,0.052,0.011c0.035,0,0.065-0.017,0.099-0.02 c1.613-0.101,3.243-0.241,4.847-0.423C40.965,56.38,40.981,56.39,41,56.39c0.065,0,0.121-0.025,0.182-0.037 c8.321-0.964,15.809-3.03,15.818-6.357V43h-0.016c-0.07-1.226-1.115-2.249-3.179-3.104c0.126-0.289,0.195-0.589,0.195-0.9V32.46 c3.59-1.104,5.995-2.581,6-4.464V21H59.989z";
@@ -118,7 +118,7 @@ export function initShopDom(gameEngine) {
             if (!node) return;
             const id = node.dataset.id;
             if (!id) return;
-            // Parent nodes (weapon/skill themselves) are not buyable;
+            // Parent nodes (weapon/ability themselves) are not buyable;
             // only upgrade nodes carry a non-empty `data-buyable`.
             if (node.dataset.buyable !== '1') return;
             // Ignore a second buy within 200ms (double-click / double-fire)
@@ -218,7 +218,7 @@ export function renderShopDom() {
     const player = _engine.player;
     if (!player) return;
 
-    // 6.30.0 — Weapon/skill clusters are buyable; the PASSIVE cluster is
+    // 6.30.0 — Weapon/ability clusters are buyable; the PASSIVE cluster is
     // READ-ONLY (passives come from wave-clear cards, not the shop) — it
     // just visualizes what the player has collected.
     _renderWeaponCluster(_elements.clusterPrimary, _collectPrimaryGroups(), player);
@@ -229,7 +229,7 @@ export function renderShopDom() {
 
 // ── Cluster builders ───────────────────────────────────────────────
 
-// Each "group" describes one weapon/skill node + its orbiting upgrade
+// Each "group" describes one weapon/ability node + its orbiting upgrade
 // nodes. Shape:
 //   { parent: { id, name, icon, color },
 //     upgrades: [{ id, name, icon, description, cost, maxStacks }, ...] }
@@ -281,21 +281,21 @@ function _collectPowerGroups() {
 
 function _collectDefenseGroups() {
     const groups = [];
-    for (const s of Object.values(DEFENSE_SKILLS)) {
+    for (const s of Object.values(ABILITIES)) {
         groups.push({
             parent: { id: s.id, name: s.name, icon: s.icon, color: s.color, description: s.description },
-            upgrades: getSkillUpgrades(s.id).map(u => ({
+            upgrades: getAbilityUpgrades(s.id).map(u => ({
                 id: u.id,
                 name: u.name,
                 icon: u.icon,
                 description: u.description || '',
                 // SP-era costs scaled into gold so the tree displays a
-                // meaningful number. See SKILL_COST_MULT note up top.
-                cost: (u.cost || 0) * SKILL_COST_MULT,
+                // meaningful number. See ABILITY_COST_MULT note up top.
+                cost: (u.cost || 0) * ABILITY_COST_MULT,
                 costOverrides: null,
                 maxStacks: u.maxStacks || 1,
                 color: s.color,
-                skillId: s.id,
+                abilityId: s.id,
                 tier: u.tier || 1,
                 requires: u.requires || null,
             })),

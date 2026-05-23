@@ -1,5 +1,5 @@
-// Weapon effects rendering: beams, mines, nova rings, lightning, missiles, skill effects
-import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from './weapon-data.js';
+// Weapon effects rendering: beams, mines, nova rings, lightning, missiles, ability effects
+import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
 
 // 5.79.4 — Module-level scratch buffers for jagged-arc paths. Replace
 //   the per-call `path = [].push([x,y])` allocations that the perf
@@ -1020,9 +1020,9 @@ export function drawWeaponEffects() {
         for (const orb of p.deflectorOrbs) {
             if (!orb.active || orb.hits <= 0) continue;
             ctx.save();
-            ctx.fillStyle = DEFENSE_SKILLS.DEFLECTOR_ORBS.color;
+            ctx.fillStyle = ABILITIES.DEFLECTOR_ORBS.color;
             ctx.globalAlpha = 0.7 + 0.3 * Math.sin(Date.now() * 0.006);
-            ctx.shadowColor = DEFENSE_SKILLS.DEFLECTOR_ORBS.color;
+            ctx.shadowColor = ABILITIES.DEFLECTOR_ORBS.color;
             ctx.shadowBlur = 8;
             ctx.beginPath();
             ctx.arc(orb.x, orb.y, 6, 0, Math.PI * 2);
@@ -1032,11 +1032,11 @@ export function drawWeaponEffects() {
     }
 
     // ─── Bulwark Aura ───────────────────────────────────────────────
-    if (p.activeSkillEffects && p.activeSkillEffects.has('BULWARK')) {
+    if (p.activeAbilityEffects && p.activeAbilityEffects.has('BULWARK')) {
         ctx.save();
         const pulse = 0.3 + 0.15 * Math.sin(Date.now() * 0.004);
         ctx.globalAlpha = pulse;
-        ctx.fillStyle = DEFENSE_SKILLS.BULWARK.color;
+        ctx.fillStyle = ABILITIES.BULWARK.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, 35, 0, Math.PI * 2);
         ctx.fill();
@@ -1044,12 +1044,12 @@ export function drawWeaponEffects() {
     }
 
     // ─── Tractor Shield ────────────────────────────────────────────
-    if (p.activeSkillEffects && p.activeSkillEffects.has('TRACTOR_SHIELD')) {
-        const skill = DEFENSE_SKILLS.TRACTOR_SHIELD;
-        const arc = skill.shieldArc + this.player.getPowerupStacks('WIDE_ANGLE') * (Math.PI / 6);
+    if (p.activeAbilityEffects && p.activeAbilityEffects.has('TRACTOR_SHIELD')) {
+        const ability = ABILITIES.TRACTOR_SHIELD;
+        const arc = ability.shieldArc + this.player.getPowerupStacks('WIDE_ANGLE') * (Math.PI / 6);
         ctx.save();
         ctx.globalAlpha = 0.4;
-        ctx.fillStyle = skill.color;
+        ctx.fillStyle = ability.color;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
         ctx.arc(p.x, p.y, 50, p.angle - arc / 2, p.angle + arc / 2);
@@ -1060,15 +1060,15 @@ export function drawWeaponEffects() {
 
     // ─── EMP Pulse ─────────────────────────────────────────────────
     if (p.empPulseActive) {
-        const skill = DEFENSE_SKILLS.EMP_PULSE;
-        const radius = skill.radius + this.player.getPowerupStacks('WIDE_BAND') * 60;
+        const ability = ABILITIES.EMP_PULSE;
+        const radius = ability.radius + this.player.getPowerupStacks('WIDE_BAND') * 60;
         const elapsed = Date.now() - (p.empPulseStartTime || 0);
         const progress = Math.min(1, elapsed / 500);
         ctx.save();
         ctx.globalAlpha = 0.6 * (1 - progress);
-        ctx.strokeStyle = skill.color;
+        ctx.strokeStyle = ability.color;
         ctx.lineWidth = 3;
-        ctx.shadowColor = skill.color;
+        ctx.shadowColor = ability.color;
         ctx.shadowBlur = 10;
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius * progress, 0, Math.PI * 2);
@@ -1077,10 +1077,10 @@ export function drawWeaponEffects() {
     }
 
     // ─── Dash Trail (5.93.0) ────────────────────────────────────────
-    // Dash promoted from a defense skill (PHASE_DASH) to a core SHIFT-key
+    // Dash promoted from a defense ability (PHASE_DASH) to a core SHIFT-key
     // movement primitive. The afterimage ghost is still rendered during
     // the active dash burst; color is hardcoded to the old PHASE_DASH
-    // tint since DEFENSE_SKILLS no longer carries the entry.
+    // tint since ABILITIES no longer carries the entry.
     if (p.isDashIFrameActive && p.isDashIFrameActive()) {
         ctx.save();
         ctx.globalAlpha = 0.4;

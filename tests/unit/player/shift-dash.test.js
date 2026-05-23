@@ -2,10 +2,10 @@
  * tests/unit/player/shift-dash.test.js — unit tests for the 5.93.0
  * SHIFT-key dash core movement primitive.
  *
- * Replaces the legacy PHASE_DASH defense skill. The dash now lives
+ * Replaces the legacy PHASE_DASH defense ability. The dash now lives
  * directly on the Player class as `_triggerDash`, with i-frames
  * exposed via `isDashIFrameActive()` and the per-frame kinematics
- * applied in `skills.updateActiveSkills` (still — the dash motion
+ * applied in `abilities.updateActiveAbilities` (still — the dash motion
  * code stayed where it was; only the trigger path moved).
  *
  * Contract pinned here:
@@ -13,7 +13,7 @@
  *     and plays the phaseDash sound.
  *   • Cooldown gate prevents re-trigger while dashCooldown > 0.
  *   • Already-dashing gate prevents overlapping dashes.
- *   • Cooldown decays each frame in updateSkillCooldowns.
+ *   • Cooldown decays each frame in updateAbilityCooldowns.
  *   • Dash kinematics produce the expected displacement over a full
  *     burst (DASH_DURATION_MS / 1000 * dashSpeed).
  *   • isDashIFrameActive mirrors isDashing during the burst window.
@@ -49,7 +49,7 @@ if (typeof globalThis.navigator === 'undefined') {
 
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { Player } from '../../../js/modules/player/player.js';
-import { updateSkillCooldowns, updateActiveSkills } from '../../../js/modules/player/skills.js';
+import { updateAbilityCooldowns, updateActiveAbilities } from '../../../js/modules/player/abilities.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -173,11 +173,11 @@ describe('Player dash kinematics + lifecycle', () => {
         audio = makeAudio();
     });
 
-    test('updateActiveSkills integrates dash velocity into position', () => {
+    test('updateActiveAbilities integrates dash velocity into position', () => {
         player._triggerDash(audio);
         const startX = player.x;
         // Advance 100ms worth of dash motion.
-        updateActiveSkills.call(player, 100);
+        updateActiveAbilities.call(player, 100);
         const expectedDelta = player.dashVelX * (100 / 1000); // px/sec × sec
         expect(player.x).toBeCloseTo(startX + expectedDelta, 3);
         expect(player.isDashing).toBe(true); // still mid-burst
@@ -192,7 +192,7 @@ describe('Player dash kinematics + lifecycle', () => {
         const startX = player.x;
         // Step through the whole burst in 1ms ticks to be precise.
         for (let i = 0; i < Player.DASH_DURATION_MS; i++) {
-            updateActiveSkills.call(player, 1);
+            updateActiveAbilities.call(player, 1);
         }
         const delta = player.x - startX;
         expect(delta).toBeCloseTo(Player.DASH_DISTANCE_PX, 1);
@@ -201,28 +201,28 @@ describe('Player dash kinematics + lifecycle', () => {
     test('dashTimer expires after DASH_DURATION_MS, isDashing becomes false', () => {
         player._triggerDash(audio);
         // Drain the timer in one big tick.
-        updateActiveSkills.call(player, Player.DASH_DURATION_MS + 10);
+        updateActiveAbilities.call(player, Player.DASH_DURATION_MS + 10);
         expect(player.isDashing).toBe(false);
         expect(player.dashTimer).toBeLessThanOrEqual(0);
     });
 
-    test('dashCooldown decays in updateSkillCooldowns', () => {
+    test('dashCooldown decays in updateAbilityCooldowns', () => {
         player._triggerDash(audio);
         expect(player.dashCooldown).toBe(Player.DASH_COOLDOWN_MS);
         // Burn half the cooldown.
-        updateSkillCooldowns.call(player, Player.DASH_COOLDOWN_MS / 2);
+        updateAbilityCooldowns.call(player, Player.DASH_COOLDOWN_MS / 2);
         expect(player.dashCooldown).toBeCloseTo(Player.DASH_COOLDOWN_MS / 2, 3);
         // Burn the rest.
-        updateSkillCooldowns.call(player, Player.DASH_COOLDOWN_MS);
+        updateAbilityCooldowns.call(player, Player.DASH_COOLDOWN_MS);
         expect(player.dashCooldown).toBe(0);
     });
 
     test('after cooldown elapses, a new dash can be triggered', () => {
         player._triggerDash(audio);
         // Skip past the dash burst.
-        updateActiveSkills.call(player, Player.DASH_DURATION_MS + 10);
+        updateActiveAbilities.call(player, Player.DASH_DURATION_MS + 10);
         // Burn the full cooldown.
-        updateSkillCooldowns.call(player, Player.DASH_COOLDOWN_MS);
+        updateAbilityCooldowns.call(player, Player.DASH_COOLDOWN_MS);
         expect(player.dashCooldown).toBe(0);
         expect(player.isDashing).toBe(false);
         // Second dash should succeed.
@@ -255,14 +255,14 @@ describe('Player.isDashIFrameActive', () => {
 
     test('returns false after dash burst ends', () => {
         player._triggerDash(makeAudio());
-        updateActiveSkills.call(player, Player.DASH_DURATION_MS + 10);
+        updateActiveAbilities.call(player, Player.DASH_DURATION_MS + 10);
         expect(player.isDashIFrameActive()).toBe(false);
     });
 
     test('returns false during cooldown (after burst)', () => {
         player._triggerDash(makeAudio());
         // Burst over, still in cooldown.
-        updateActiveSkills.call(player, Player.DASH_DURATION_MS + 1);
+        updateActiveAbilities.call(player, Player.DASH_DURATION_MS + 1);
         expect(player.isDashing).toBe(false);
         expect(player.dashCooldown).toBeGreaterThan(0);
         expect(player.isDashIFrameActive()).toBe(false);
@@ -285,8 +285,8 @@ describe('Player dash is MP-safe (5.93.0)', () => {
     });
 
     test('online mode does NOT suppress dash (PHASE_DASH off the unsafe list)', () => {
-        // Set the engine to online — the activateSkill gate would
-        // suppress a defense skill here, but _triggerDash has no gate.
+        // Set the engine to online — the activateAbility gate would
+        // suppress a defense ability here, but _triggerDash has no gate.
         globalThis.window.engineDriver = { isOnline: true };
         const result = player._triggerDash(makeAudio());
         expect(result).toBe(true);

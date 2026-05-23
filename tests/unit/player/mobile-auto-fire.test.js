@@ -52,7 +52,7 @@ function makeInput({ fireSecondary = false } = {}) {
         aimX: 1000, aimY: 1000,
         screenAimX: 0, screenAimY: 0,
         fire: false, fireSecondary,
-        activateSkill: false,
+        activateAbility: false,
         stickInput: { x: 0, y: 0, magnitude: 0 },
         updateAimForPlayerMovement: () => {},
     };

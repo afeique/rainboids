@@ -58,7 +58,7 @@ import {
 // ---------------------------------------------------------------------------
 // Minimal test fixtures — the helper only reads .x/.y on the player and
 // iterates player.activeMines looking for { active, armed, shieldRadius,
-// x, y }. No need to spin up the real player/skills systems.
+// x, y }. No need to spin up the real player/abilities systems.
 // ---------------------------------------------------------------------------
 
 function makeMine(x, y, opts = {}) {

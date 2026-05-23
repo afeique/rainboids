@@ -2,7 +2,7 @@
 // All functions are called with .call(gameEngine) — `this` is the GameEngine instance.
 import { GAME_CONFIG } from '../core/constants.js';
 import { random, collision, starCollision, triggerHapticFeedback } from '../core/utils.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, DEFENSE_SKILLS } from './weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
@@ -1966,10 +1966,10 @@ export function checkDeflectorOrbCollisions() {
 // ─── Tractor Shield (absorb enemy bullets for coins) ────────────
 export function checkTractorShieldCollisions() {
     const p = this.player;
-    if (p.activeSkillEffects && p.activeSkillEffects.has('TRACTOR_SHIELD')) {
-        const skill = DEFENSE_SKILLS.TRACTOR_SHIELD;
-        const arc = skill.shieldArc + p.getPowerupStacks('WIDE_ANGLE') * (Math.PI / 6);
-        const coinsPerBullet = skill.coinsPerBullet + p.getPowerupStacks('PROFIT') * 5;
+    if (p.activeAbilityEffects && p.activeAbilityEffects.has('TRACTOR_SHIELD')) {
+        const ability = ABILITIES.TRACTOR_SHIELD;
+        const arc = ability.shieldArc + p.getPowerupStacks('WIDE_ANGLE') * (Math.PI / 6);
+        const coinsPerBullet = ability.coinsPerBullet + p.getPowerupStacks('PROFIT') * 5;
         const redirect = p.getPowerupStacks('REDIRECTION') > 0;
 
         this.enemyBulletPool.activeObjects.forEach(bullet => {
@@ -2203,7 +2203,7 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
 
     // E3 — CORRODE amplifies ALL incoming damage (+15% per stack); CONDUCT
     // amplifies VOLT damage (+50%). Both read the enemy's status timers; the
-    // applicators live in combat-manager. Inert until a weapon/skill applies
+    // applicators live in combat-manager. Inert until a weapon/ability applies
     // them (E6 / synergies in E4).
     if (enemy.corrodeStacks > 0 && enemy.corrodeUntil > frameClock.now) {
         damage *= 1 + 0.15 * enemy.corrodeStacks;

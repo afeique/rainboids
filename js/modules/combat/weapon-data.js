@@ -1,5 +1,5 @@
-// Weapon and skill configuration data for Rainboids
-// All weapons, power weapons, and defense skills are defined here.
+// Weapon and ability configuration data for Rainboids
+// All weapons, power weapons, and defense abilities are defined here.
 
 // ─── PRIMARY WEAPONS (Left Click) ───────────────────────────────────────────
 
@@ -802,7 +802,7 @@ export const POWER_WEAPONS = {
         name: 'Arc Lightning',
         description: 'Continuous lightning tether — power weapon, fires for 3s',
         icon: 'bolt',
-        // 5.99.0 — Was #8888ff (same as EMP_PULSE skill). Shifted to vivid
+        // 5.99.0 — Was #8888ff (same as EMP_PULSE ability). Shifted to vivid
         // electric purple for distinct identity.
         color: '#a855ff',
         cooldown: 8000,
@@ -818,8 +818,8 @@ export const POWER_WEAPONS = {
     // ─── NEW POWER WEAPONS (brainstorm drop) ────────────────────────────────
     // Verbs the original powers lacked: pull→collapse, refraction, telegraph
     // payoff, freeze, and a no-projectile primary buff. Each stores its entity
-    // state on the player (see player.js init) and is updated in skills.js
-    // updateActiveSkills, collided in collision-system, drawn in
+    // state on the player (see player.js init) and is updated in abilities.js
+    // updateActiveAbilities, collided in collision-system, drawn in
     // weapon-effects-renderer. OVERDRIVE is stateless (just a timed buff).
 
     // SINGULARITY — deploy a gravity well at the cursor that pulls enemies and
@@ -1074,7 +1074,7 @@ export const POWER_UPGRADES = {
 // yields ~100k gold (drops are hard-capped at 250/kill), so the player can
 // only afford a handful of upgrades per playthrough. Two levers:
 //
-//   1. UPGRADE_COST_MULT — every weapon/power/skill upgrade's legacy cost is
+//   1. UPGRADE_COST_MULT — every weapon/power/ability upgrade's legacy cost is
 //      multiplied by this. ~10 waves of mid-game income ≈ one upgrade.
 //   2. UPGRADE_STACK_RAMP — each owned stack makes the NEXT stack of the same
 //      trait cost more (geometric ramp), so stacking deep is a real
@@ -1127,12 +1127,12 @@ function _scaleUpgradeTable(table) {
 _scaleUpgradeTable(PRIMARY_UPGRADES);
 _scaleUpgradeTable(POWER_UPGRADES);
 
-// ─── DEFENSE SKILLS (Number Keys 1-4) ───────────────────────────────────────
+// ─── DEFENSE ABILITIES (Number Keys 1-4) ───────────────────────────────────────
 
-// Phase B.S1 — canonical export renamed DEFENSE_SKILLS → SKILLS to match
-// the new 4-slot loadout model. `DEFENSE_SKILLS` is kept as a back-compat
+// Phase B.S1 — canonical export renamed ABILITIES → ABILITIES to match
+// the new 4-slot loadout model. `ABILITIES` is kept as a back-compat
 // alias (see below) so every existing import keeps resolving unchanged.
-export const SKILLS = {
+export const ABILITIES = {
     BULWARK: {
         id: 'BULWARK',
         name: 'Bulwark',
@@ -1159,11 +1159,11 @@ export const SKILLS = {
         unlockWave: 2,
         upgrades: ['POTENCY', 'EXTENDED_CARE', 'EMERGENCY_PROTOCOL'],
     },
-    // 5.93.0 — PHASE_DASH removed from DEFENSE_SKILLS. Dash is now a
+    // 5.93.0 — PHASE_DASH removed from ABILITIES. Dash is now a
     // core movement primitive on the SHIFT key (see Player._triggerDash
     // and the SHIFT keymap in `js/modules/ui/input-handler.js`). The
     // EXTENDED_PHASE / AFTERIMAGE / QUICK_PHASE upgrades were orphaned
-    // when the skill itself was removed and were deleted along with it;
+    // when the ability itself was removed and were deleted along with it;
     // any future dash upgrades will live elsewhere if added.
     DEFLECTOR_ORBS: {
         id: 'DEFLECTOR_ORBS',
@@ -1228,61 +1228,55 @@ export const SKILLS = {
     },
 };
 
-// Back-compat alias (Phase B.S1). `SKILLS` is the canonical name; this
-// keeps every existing `import { DEFENSE_SKILLS }` working unchanged. It
-// is the SAME object reference, not a copy — mutations to one are visible
-// on the other.
-export const DEFENSE_SKILLS = SKILLS;
+// ─── ABILITY UPGRADES ───────────────────────────────────────────────────────
 
-// ─── DEFENSE SKILL UPGRADES ─────────────────────────────────────────────────
-
-export const SKILL_UPGRADES = {
+export const ABILITY_UPGRADES = {
     // Bulwark
-    FORTIFY:          { id: 'FORTIFY',          name: 'Fortify',          description: '+1s duration per stack',               cost: 2, maxStacks: 2, skill: 'BULWARK', icon: 'stopwatch' },
-    IRON_WILL:        { id: 'IRON_WILL',        name: 'Iron Will',        description: 'Resistance increased to 65%',         cost: 3, maxStacks: 1, skill: 'BULWARK', icon: 'shield' },
-    RETALIATION:      { id: 'RETALIATION',      name: 'Retaliation',      description: 'Emit a damage pulse when hit',        cost: 3, maxStacks: 1, skill: 'BULWARK', icon: 'explosion' },
+    FORTIFY:          { id: 'FORTIFY',          name: 'Fortify',          description: '+1s duration per stack',               cost: 2, maxStacks: 2, ability: 'BULWARK', icon: 'stopwatch' },
+    IRON_WILL:        { id: 'IRON_WILL',        name: 'Iron Will',        description: 'Resistance increased to 65%',         cost: 3, maxStacks: 1, ability: 'BULWARK', icon: 'shield' },
+    RETALIATION:      { id: 'RETALIATION',      name: 'Retaliation',      description: 'Emit a damage pulse when hit',        cost: 3, maxStacks: 1, ability: 'BULWARK', icon: 'explosion' },
 
     // Repair Nanites
-    POTENCY:          { id: 'POTENCY',          name: 'Potency',          description: '+1 HP/s per stack',                    cost: 2, maxStacks: 2, skill: 'REPAIR_NANITES', icon: 'pill' },
-    EXTENDED_CARE:    { id: 'EXTENDED_CARE',    name: 'Extended Care',    description: '+2s duration per stack',               cost: 2, maxStacks: 2, skill: 'REPAIR_NANITES', icon: 'stopwatch' },
-    EMERGENCY_PROTOCOL:{ id:'EMERGENCY_PROTOCOL',name:'Emergency',        description: 'Auto-activates below 20% HP',         cost: 3, maxStacks: 1, skill: 'REPAIR_NANITES', icon: 'siren' },
+    POTENCY:          { id: 'POTENCY',          name: 'Potency',          description: '+1 HP/s per stack',                    cost: 2, maxStacks: 2, ability: 'REPAIR_NANITES', icon: 'pill' },
+    EXTENDED_CARE:    { id: 'EXTENDED_CARE',    name: 'Extended Care',    description: '+2s duration per stack',               cost: 2, maxStacks: 2, ability: 'REPAIR_NANITES', icon: 'stopwatch' },
+    EMERGENCY_PROTOCOL:{ id:'EMERGENCY_PROTOCOL',name:'Emergency',        description: 'Auto-activates below 20% HP',         cost: 3, maxStacks: 1, ability: 'REPAIR_NANITES', icon: 'siren' },
 
     // 5.93.0 — Phase Dash upgrades (EXTENDED_PHASE, AFTERIMAGE,
-    // QUICK_PHASE) deleted along with the PHASE_DASH defense skill.
+    // QUICK_PHASE) deleted along with the PHASE_DASH defense ability.
     // Dash is now a core SHIFT-key movement primitive with no
-    // skill-tree upgrades.
+    // ability-tree upgrades.
 
     // Deflector Orbs
-    EXTRA_ORB:        { id: 'EXTRA_ORB',        name: 'Extra Orb',        description: '+1 orbiting orb per stack',            cost: 2, maxStacks: 2, skill: 'DEFLECTOR_ORBS', icon: 'crystal-ball' },
-    HARDENED_ORBS:    { id: 'HARDENED_ORBS',    name: 'Hardened Orbs',    description: '+2 hits per orb per stack',            cost: 2, maxStacks: 2, skill: 'DEFLECTOR_ORBS', icon: 'gem' },
-    REFLECT:          { id: 'REFLECT',          name: 'Reflect',          description: 'Blocked bullets fire back at enemies', cost: 3, maxStacks: 1, skill: 'DEFLECTOR_ORBS', icon: 'loop' },
+    EXTRA_ORB:        { id: 'EXTRA_ORB',        name: 'Extra Orb',        description: '+1 orbiting orb per stack',            cost: 2, maxStacks: 2, ability: 'DEFLECTOR_ORBS', icon: 'crystal-ball' },
+    HARDENED_ORBS:    { id: 'HARDENED_ORBS',    name: 'Hardened Orbs',    description: '+2 hits per orb per stack',            cost: 2, maxStacks: 2, ability: 'DEFLECTOR_ORBS', icon: 'gem' },
+    REFLECT:          { id: 'REFLECT',          name: 'Reflect',          description: 'Blocked bullets fire back at enemies', cost: 3, maxStacks: 1, ability: 'DEFLECTOR_ORBS', icon: 'loop' },
 
     // EMP Pulse
-    WIDE_BAND:        { id: 'WIDE_BAND',        name: 'Wide Band',        description: '+60px radius per stack',               cost: 2, maxStacks: 2, skill: 'EMP_PULSE', icon: 'satellite' },
-    EMP_OVERLOAD:     { id: 'EMP_OVERLOAD',     name: 'Overload',         description: 'Stunned enemies take +20% damage',    cost: 3, maxStacks: 1, skill: 'EMP_PULSE', icon: 'bolt' },
-    CASCADE:          { id: 'CASCADE',          name: 'Cascade',          description: 'Kill a stunned enemy to stun nearby',  cost: 3, maxStacks: 1, skill: 'EMP_PULSE', icon: 'chain' },
+    WIDE_BAND:        { id: 'WIDE_BAND',        name: 'Wide Band',        description: '+60px radius per stack',               cost: 2, maxStacks: 2, ability: 'EMP_PULSE', icon: 'satellite' },
+    EMP_OVERLOAD:     { id: 'EMP_OVERLOAD',     name: 'Overload',         description: 'Stunned enemies take +20% damage',    cost: 3, maxStacks: 1, ability: 'EMP_PULSE', icon: 'bolt' },
+    CASCADE:          { id: 'CASCADE',          name: 'Cascade',          description: 'Kill a stunned enemy to stun nearby',  cost: 3, maxStacks: 1, ability: 'EMP_PULSE', icon: 'chain' },
 
     // Tractor Shield
-    WIDE_ANGLE:       { id: 'WIDE_ANGLE',       name: 'Wide Angle',       description: '+30° shield arc per stack',            cost: 2, maxStacks: 2, skill: 'TRACTOR_SHIELD', icon: 'ruler' },
-    PROFIT:           { id: 'PROFIT',           name: 'Profit',           description: '+5 coins per absorbed bullet',         cost: 2, maxStacks: 2, skill: 'TRACTOR_SHIELD', icon: 'money-bag' },
-    REDIRECTION:      { id: 'REDIRECTION',      name: 'Redirection',      description: '30% of absorbed bullets fire back',   cost: 3, maxStacks: 1, skill: 'TRACTOR_SHIELD', icon: 'undo' },
+    WIDE_ANGLE:       { id: 'WIDE_ANGLE',       name: 'Wide Angle',       description: '+30° shield arc per stack',            cost: 2, maxStacks: 2, ability: 'TRACTOR_SHIELD', icon: 'ruler' },
+    PROFIT:           { id: 'PROFIT',           name: 'Profit',           description: '+5 coins per absorbed bullet',         cost: 2, maxStacks: 2, ability: 'TRACTOR_SHIELD', icon: 'money-bag' },
+    REDIRECTION:      { id: 'REDIRECTION',      name: 'Redirection',      description: '30% of absorbed bullets fire back',   cost: 3, maxStacks: 1, ability: 'TRACTOR_SHIELD', icon: 'undo' },
 
     // Sentry Drone
-    EXTRA_DRONE:      { id: 'EXTRA_DRONE',      name: 'Extra Drone',      description: '+1 drone per stack',                  cost: 3, maxStacks: 2, skill: 'SENTRY_DRONE', icon: 'satellite' },
-    RAPID_DRONE:      { id: 'RAPID_DRONE',      name: 'Rapid Servos',     description: '-25% drone fire interval per stack',  cost: 2, maxStacks: 2, skill: 'SENTRY_DRONE', icon: 'bolt' },
-    DRONE_CALIBER:    { id: 'DRONE_CALIBER',    name: 'Heavy Caliber',    description: '+40% drone damage per stack',         cost: 2, maxStacks: 2, skill: 'SENTRY_DRONE', icon: 'circle-fill' },
+    EXTRA_DRONE:      { id: 'EXTRA_DRONE',      name: 'Extra Drone',      description: '+1 drone per stack',                  cost: 3, maxStacks: 2, ability: 'SENTRY_DRONE', icon: 'satellite' },
+    RAPID_DRONE:      { id: 'RAPID_DRONE',      name: 'Rapid Servos',     description: '-25% drone fire interval per stack',  cost: 2, maxStacks: 2, ability: 'SENTRY_DRONE', icon: 'bolt' },
+    DRONE_CALIBER:    { id: 'DRONE_CALIBER',    name: 'Heavy Caliber',    description: '+40% drone damage per stack',         cost: 2, maxStacks: 2, ability: 'SENTRY_DRONE', icon: 'circle-fill' },
 };
 
 // ─── PASSIVE UPGRADES (Phase 1 — 2026-05-19) ────────────────────────────────
 //
-// Always-on, weapon-agnostic, skill-agnostic. PASSIVE_UPGRADES is the
+// Always-on, weapon-agnostic, ability-agnostic. PASSIVE_UPGRADES is the
 // fourth category alongside PRIMARY_UPGRADES, POWER_UPGRADES, and
-// SKILL_UPGRADES. Each entry's `id` matches the existing in-game ID so
+// ABILITY_UPGRADES. Each entry's `id` matches the existing in-game ID so
 // `getPowerupStacks('THORNS')` etc. continues to resolve correctly via
 // the player's namespace-agnostic powerup map.
 //
 // Phase 1 is INTENTIONALLY additive: this new export sits alongside
-// POWERUP_TYPES (offensive drop pool) and SKILL_UPGRADES (BULWARK's
+// POWERUP_TYPES (offensive drop pool) and ABILITY_UPGRADES (BULWARK's
 // IRON_WILL) without removing entries from those buckets. The Phase 7
 // shop UI rewrite will consume this export directly when it lands.
 // Until then the live shop POWERUPS tab and the in-game drop pool
@@ -1329,9 +1323,9 @@ export function getPowerUpgrades(weaponId) {
     return Object.values(POWER_UPGRADES).filter(u => u.weapon === weaponId);
 }
 
-/** Get all upgrades for a specific defense skill */
-export function getSkillUpgrades(skillId) {
-    return Object.values(SKILL_UPGRADES).filter(u => u.skill === skillId);
+/** Get all upgrades for a specific defense ability */
+export function getAbilityUpgrades(abilityId) {
+    return Object.values(ABILITY_UPGRADES).filter(u => u.ability === abilityId);
 }
 
 /**

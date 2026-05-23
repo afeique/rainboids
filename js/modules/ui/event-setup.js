@@ -87,8 +87,8 @@ export function setupEventListeners() {
         // Keybind layout:
         //   E (hold)  — radial menu: PRIMARY weapon (mouse picks, click commits)
         //   R (hold)  — radial menu: POWER weapon
-        //   F (hold)  — radial menu: SKILL
-        //   Q         — activate equipped skill (handled in input-handler.js)
+        //   F (hold)  — radial menu: ABILITY
+        //   Q         — activate equipped ability (handled in input-handler.js)
         //   SPACE     — fire/charge POWER weapon (handled in input-handler.js)
         //   left-clk  — fire PRIMARY (or commit a radial selection while a
         //               radial menu is open)
@@ -105,21 +105,21 @@ export function setupEventListeners() {
         // 5.79.3 — keybind reshuffle (per user request):
         //   F → primary weapon radial
         //   E → power weapon radial
-        //   R → defense skill radial (6.54.0 — RE-ENABLED; defensive
-        //       skills returned in 6.35.0). Hold R to pick the equipped
-        //       skill; TAB still activates it.
-        // The radial-menu types stay 'primary' / 'power' / 'skill'; only
+        //   R → defense ability radial (6.54.0 — RE-ENABLED; defensive
+        //       abilities returned in 6.35.0). Hold R to pick the equipped
+        //       ability; TAB still activates it.
+        // The radial-menu types stay 'primary' / 'power' / 'ability'; only
         // the keys that open each are remapped.
         const radialKey =
             e.code === 'KeyF' ? 'primary' :
             e.code === 'KeyE' ? 'power'   :
-            e.code === 'KeyR' ? 'skill'   :
+            e.code === 'KeyR' ? 'ability'   :
             null;
         if (radialKey && !e.shiftKey && cycleAllowed && !e.repeat) {
             this.radialMenu.openFor(radialKey);
             hideHint();
         }
-        // TAB activates the equipped defense ability/skill (6.x; the
+        // TAB activates the equipped defense ability/ability (6.x; the
         // pulse is set in input-handler.handleKeyDown). preventDefault
         // here too so TAB never shifts browser focus off the canvas.
         if (e.code === 'Tab') {
@@ -148,7 +148,7 @@ export function setupEventListeners() {
         }
 
         // 5.64.11 — SHIFT+ cheat codes removed. They didn't fire reliably
-        // (the SHIFT key is now the skill-cycle binding so shift+letter
+        // (the SHIFT key is now the ability-cycle binding so shift+letter
         // combos are partially intercepted by the input handler's
         // shift-tap-to-cycle bookkeeping). The bracket cheats above are
         // the supported quick-test path now; full cheats live behind
@@ -164,7 +164,7 @@ export function setupEventListeners() {
         const t = this.radialMenu.type;
         if ((e.code === 'KeyF' && t === 'primary') ||
             (e.code === 'KeyE' && t === 'power')   ||
-            (e.code === 'KeyR' && t === 'skill')) {
+            (e.code === 'KeyR' && t === 'ability')) {
             // Release closes without changing; the left-click commits the
             // hovered slice (handled in the mousedown handler below).
             this.radialMenu.cancel();

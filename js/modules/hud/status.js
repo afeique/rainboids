@@ -4,7 +4,7 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '../core/utils.js';
-import { DEFENSE_SKILLS, PRIMARY_WEAPONS, SKILLS } from '../combat/weapon-data.js';
+import { ABILITIES, PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 import { xpForLevel, MAX_LEVEL } from '../core/sp-stats.js';
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
@@ -55,11 +55,11 @@ export function drawHUD() {
             this._hudButtonRects = null;
         }
 
-        // 5.101.0 — Defensive skill HUD suspended along with the
-        // defensive skill system. REFLEXES / LAST_STAND / STATIC_FIELD
+        // 5.101.0 — Defensive ability HUD suspended along with the
+        // defensive ability system. REFLEXES / LAST_STAND / STATIC_FIELD
         // are no longer offered as picks; if a save still carries
         // stacks the underlying effects still run, but no HUD chrome
-        // surfaces them. Re-enable along with the skill system if
+        // surfaces them. Re-enable along with the ability system if
         // resurrected.
         // if (this.game.state !== GAME_STATES.TITLE_SCREEN
         //     && typeof this.drawDefenseIndicators === 'function') {
@@ -130,9 +130,9 @@ export function drawHUD() {
             }
         }
 
-        // Draw skill cooldown HUD + streak buff indicator
+        // Draw ability cooldown HUD + streak buff indicator
         if (this.player && this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
-            this.drawSkillCooldownHUD();
+            this.drawAbilityCooldownHUD();
             this.drawStreakIndicator();
         }
 
@@ -444,11 +444,11 @@ export function drawWaveIntroOverlay() {
     this.ctx.restore();
 }
 
-// 5.64.11 — old 4-slot bottom-center skill bar removed. Skill HUD is
+// 5.64.11 — old 4-slot bottom-center ability bar removed. Ability HUD is
 // now a single square BELOW the PRM/PWR pair (see drawEquippedWeaponSquares
 // below). This shim is kept so existing call sites don't crash; it's a
 // no-op now that the third square is drawn alongside PRM/PWR.
-export function drawSkillCooldownHUD() { /* no-op */ }
+export function drawAbilityCooldownHUD() { /* no-op */ }
 
 // 5.85.0 — triforce geometry shared between draw + vaporize-spawn so
 // the burst lines up exactly with the triangle that just disappeared.
@@ -1144,7 +1144,7 @@ export function drawLevelUpText() {
         });
 
         // Wavy orange subtitle around the original #FFA500.
-        this.drawWavyText('Skill Point Gained!', 0, 15, {
+        this.drawWavyText('Ability Point Gained!', 0, 15, {
             fontSize: subFS,
             colors: WAVY_PALETTES.orange,
             amplitude: 3,
@@ -1544,7 +1544,7 @@ export function drawDefenseIndicators(ctx) {
     ctx.restore();
 }
 
-// Three loadout squares — Primary, Power, Skill — that sit directly
+// Three loadout squares — Primary, Power, Ability — that sit directly
 // ABOVE the healthbar in the bottom-left HUD (5.72.0; was below the
 // coins display in the top-left). Show the equipped icon in its
 // weapon color, with PRM / PWR / SKL labels underneath. The Primary
@@ -1566,14 +1566,14 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
 
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
     const powerCfg = this.player.getActivePowerConfig?.() || {};
-    const skillCfg = this.player.getActiveSkillConfig?.() || {};
+    const abilityCfg = this.player.getActiveAbilityConfig?.() || {};
 
     // Animation: brief scale + glow pulse on whichever square just
     // cycled. State lives on the game engine. anim.slot is one of
-    // 'primary' / 'power' / 'skill'.
+    // 'primary' / 'power' / 'ability'.
     let primaryScale = 1, primaryGlow = 0;
     let powerScale = 1, powerGlow = 0;
-    let skillScale = 1, skillGlow = 0;
+    let abilityScale = 1, abilityGlow = 0;
     const anim = this._weaponCycleAnim;
     if (anim && Date.now() - anim.start < anim.duration) {
         const t = (Date.now() - anim.start) / anim.duration; // 0..1
@@ -1581,8 +1581,8 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         const scale = 1 + 0.18 * pulse;
         if (anim.slot === 'power') {
             powerScale = scale; powerGlow = pulse;
-        } else if (anim.slot === 'skill') {
-            skillScale = scale; skillGlow = pulse;
+        } else if (anim.slot === 'ability') {
+            abilityScale = scale; abilityGlow = pulse;
         } else {
             primaryScale = scale; primaryGlow = pulse;
         }
@@ -1614,46 +1614,46 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         powerGlow,
     );
 
-    // ── Skill bar (B.S3) — 4 adjacent slots above the PRM/PWR row ───
-    // The skill system is a 4-slot model: player.equippedSkills[0..3]
-    // with parallel skillCooldowns / skillCooldownsMax arrays. Slots
+    // ── Ability bar (B.S3) — 4 adjacent slots above the PRM/PWR row ───
+    // The ability system is a 4-slot model: player.equippedAbilities[0..3]
+    // with parallel abilityCooldowns / abilityCooldownsMax arrays. Slots
     // are slightly smaller than the loadout squares and sit in their
     // own row directly above PRM/PWR (anchored at the same left edge),
     // each labeled with its keybind (1–4).
-    drawSkillSlotBar.call(this, ctx, groupX, groupY - 8);
+    drawAbilitySlotBar.call(this, ctx, groupX, groupY - 8);
 
-    // 5.101.0 — Defensive SKILL square suspended. Defensive skills are
+    // 5.101.0 — Defensive ABILITY square suspended. Defensive abilities are
     // retired (game is primary + power weapons only); defensive picks
     // now live in the pause-menu POWERUPS tab + survivor cards +
     // Diablo-style inventory. The square + cooldown + active-effect
-    // ring stay commented for reference if the skill system ever
+    // ring stay commented for reference if the ability system ever
     // returns.
-    // const skillRowY = groupY;
-    // const skillCx = groupX + 2 * (squareSize + gap) + squareSize / 2;
+    // const abilityRowY = groupY;
+    // const abilityCx = groupX + 2 * (squareSize + gap) + squareSize / 2;
     // drawWeaponSquare.call(
     //     this, ctx,
-    //     skillCx, skillRowY + squareSize / 2,
+    //     abilityCx, abilityRowY + squareSize / 2,
     //     squareSize, cornerRadius,
-    //     skillCfg.icon || '?',
-    //     skillCfg.color || '#ff88dd',
-    //     'SKILL',
-    //     skillScale,
-    //     skillGlow,
+    //     abilityCfg.icon || '?',
+    //     abilityCfg.color || '#ff88dd',
+    //     'ABILITY',
+    //     abilityScale,
+    //     abilityGlow,
     // );
     //
-    // const cdRemaining = this.player.activeSkillCooldown || 0;
-    // const cdTotal = skillCfg.cooldown || 1;
+    // const cdRemaining = this.player.activeAbilityCooldown || 0;
+    // const cdTotal = abilityCfg.cooldown || 1;
     // const cdRatio = cdRemaining > 0 ? cdRemaining / cdTotal : 0;
     // if (cdRatio > 0) {
     //     const half = squareSize / 2;
     //     ctx.save();
     //     ctx.beginPath();
-    //     _roundedRectPath(ctx, skillCx - half, skillRowY, squareSize, squareSize, cornerRadius);
+    //     _roundedRectPath(ctx, abilityCx - half, abilityRowY, squareSize, squareSize, cornerRadius);
     //     ctx.clip();
     //     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     //     ctx.fillRect(
-    //         skillCx - half,
-    //         skillRowY + squareSize * (1 - cdRatio),
+    //         abilityCx - half,
+    //         abilityRowY + squareSize * (1 - cdRatio),
     //         squareSize,
     //         squareSize * cdRatio,
     //     );
@@ -1663,35 +1663,35 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     //     ctx.fillStyle = '#FF8888';
     //     ctx.textAlign = 'center';
     //     ctx.textBaseline = 'bottom';
-    //     ctx.fillText(`${secs}s`, skillCx, skillRowY + squareSize - 4);
+    //     ctx.fillText(`${secs}s`, abilityCx, abilityRowY + squareSize - 4);
     // }
-    // if (this.player.activeSkillEffects && this.player.activeSkillEffects.has(this.player.activeSkill)) {
+    // if (this.player.activeAbilityEffects && this.player.activeAbilityEffects.has(this.player.activeAbility)) {
     //     const half = squareSize / 2;
     //     ctx.save();
-    //     ctx.shadowColor = skillCfg.color || '#ff88dd';
+    //     ctx.shadowColor = abilityCfg.color || '#ff88dd';
     //     ctx.shadowBlur = 14;
-    //     ctx.strokeStyle = skillCfg.color || '#ff88dd';
+    //     ctx.strokeStyle = abilityCfg.color || '#ff88dd';
     //     ctx.lineWidth = 2;
-    //     _roundedRectPath(ctx, skillCx - half, skillRowY, squareSize, squareSize, cornerRadius);
+    //     _roundedRectPath(ctx, abilityCx - half, abilityRowY, squareSize, squareSize, cornerRadius);
     //     ctx.stroke();
     //     ctx.restore();
     // }
 }
 
-// B.S3 — 4-slot skill bar. Renders player.equippedSkills[0..3] as a row
+// B.S3 — 4-slot ability bar. Renders player.equippedAbilities[0..3] as a row
 // of adjacent squares whose BOTTOM edge sits at `bottomY` (the bar grows
-// upward from there). Each slot shows the equipped skill's icon (reusing
+// upward from there). Each slot shows the equipped ability's icon (reusing
 // the same resolveIconSlug + getIconImage cached-SVG mechanism as the
 // PRM/PWR loadout squares), a keybind label (1–4) in the corner, and a
-// bottom-up cooldown fill driven by skillCooldowns / skillCooldownsMax
-// (the same dark-overlay clip the old single-skill HUD used). Empty
+// bottom-up cooldown fill driven by abilityCooldowns / abilityCooldownsMax
+// (the same dark-overlay clip the old single-ability HUD used). Empty
 // slots render a dim placeholder so the player can see all four slots.
 // Exported so the unit smoke test can drive it with a mock ctx/player.
-export function drawSkillSlotBar(ctx, leftX, bottomY) {
+export function drawAbilitySlotBar(ctx, leftX, bottomY) {
     if (!this.player) return;
-    const equipped = this.player.equippedSkills || [];
-    const cooldowns = this.player.skillCooldowns || [];
-    const cooldownsMax = this.player.skillCooldownsMax || [];
+    const equipped = this.player.equippedAbilities || [];
+    const cooldowns = this.player.abilityCooldowns || [];
+    const cooldownsMax = this.player.abilityCooldownsMax || [];
 
     const slotSize = 38;            // smaller than the 50px loadout squares
     const slotGap = 8;
@@ -1704,8 +1704,8 @@ export function drawSkillSlotBar(ctx, leftX, bottomY) {
         const cy = top + slotSize / 2;
         const half = slotSize / 2;
 
-        const skillId = equipped[slot];
-        const cfg = (skillId && SKILLS[skillId]) || null;
+        const abilityId = equipped[slot];
+        const cfg = (abilityId && ABILITIES[abilityId]) || null;
 
         ctx.save();
 
@@ -1715,7 +1715,7 @@ export function drawSkillSlotBar(ctx, leftX, bottomY) {
         ctx.fill();
 
         if (cfg) {
-            // Border in the skill's accent color.
+            // Border in the ability's accent color.
             ctx.strokeStyle = cfg.color || '#ff88dd';
             ctx.lineWidth = 2;
             _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
@@ -1736,7 +1736,7 @@ export function drawSkillSlotBar(ctx, leftX, bottomY) {
             }
 
             // Cooldown overlay — bottom-up dark fill clipped to the slot,
-            // identical visual to the retired single-skill cooldown HUD.
+            // identical visual to the retired single-ability cooldown HUD.
             const cdRemaining = cooldowns[slot] || 0;
             const cdTotal = cooldownsMax[slot] || cfg.cooldown || 1;
             const cdRatio = cdRemaining > 0 && cdTotal > 0

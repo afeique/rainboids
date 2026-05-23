@@ -90,7 +90,7 @@ export class UIManager {
             sfxTogglesContainer: document.getElementById('sfx-toggles'),
             // Powerups tab elements
             // Powerups pause-tab (lives in the tab strip alongside Music
-            // / SFX / Skills). Renders the same Offense/Drops sub-tabs +
+            // / SFX / Abilities). Renders the same Offense/Drops sub-tabs +
             // card list that the standalone overlay used to show.
             powerupsItemsList: document.getElementById('powerups-items-list'),
             powerupsSubtabs: document.querySelectorAll('.powerups-subtab'),
@@ -403,7 +403,7 @@ export class UIManager {
                         { kind: 'or' },
                         { kind: 'sprite', file: 'ARROWDOWN.png', alt: 'Down' },
                     ] },
-                    { action: 'Activate Skill', keys: [
+                    { action: 'Activate Ability', keys: [
                         { kind: 'sprite', file: 'TAB.png', alt: 'Tab' },
                     ] },
                 ],
@@ -413,7 +413,7 @@ export class UIManager {
                 accent: 'pink',
                 iconPath: 'M13 2 L4 14 H10 L9 22 L20 9 H13 Z',
                 rows: [
-                    // Hold to open the weapon/skill radial; the cursor picks
+                    // Hold to open the weapon/ability radial; the cursor picks
                     // a slice and a click equips it (event-setup.js).
                     { action: 'Primary Radial', keys: [
                         { kind: 'sprite', file: 'F.png', alt: 'F' },
@@ -1227,7 +1227,7 @@ export class UIManager {
         //   powerups, elapsed timer) stays accurate, but the FIRST
         //   paint of any tab is never empty.
         //
-        //   5.100.1 — added Skills + Timer pre-renders and the
+        //   5.100.1 — added Abilities + Timer pre-renders and the
         //   assists-tab sync so the user-reported flash on first-open
         //   is gone across ALL dynamic pause tabs.
         this.syncAssistsTab();

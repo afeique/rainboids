@@ -85,7 +85,7 @@ function _buildTutorialOverlay() {
         'Primary weapon — hold LEFT CLICK to fire continuously.',
         'Power weapon — RIGHT CLICK / SPACE (costs energy — see below).',
         'Defense ability — TAB when charged.   Dash — SHIFT.',
-        'Weapon radials — hold F (primary), E (power), R (defense skill).',
+        'Weapon radials — hold F (primary), E (power), R (defense ability).',
         'Pause — ESC.   Stats — backtick (`).',
     ]));
     // GAMEPAD section — built hidden; the engine reveals it whenever a pad
@@ -95,7 +95,7 @@ function _buildTutorialOverlay() {
         'Move — left stick.   Aim — right stick (twin-stick).',
         'Fire primary — R2.   Fire / charge power — L2.',
         'Primary radial — hold R1.   Power radial — hold L1.',
-        'Defense skill radial — hold Triangle/Y.   Activate skill — Circle/B.',
+        'Defense ability radial — hold Triangle/Y.   Activate ability — Circle/B.',
         'Dash — Cross/A.   Pause — Options / Start.',
         'Choose Gamepad vs Mouse + Keyboard / Touch in pause → GAMEPAD tab.',
     ]);
@@ -319,9 +319,9 @@ function _buildGamepadTab() {
         { control: 'L2 (left trigger)',  action: 'Fire / charge power weapon' },
         { control: 'R1 - hold',          action: 'Primary weapon radial (stick picks, release equips)' },
         { control: 'L1 - hold',          action: 'Power weapon radial (stick picks, release equips)' },
-        { control: 'Triangle / Y - hold', action: 'Defense skill radial (stick picks, release equips)' },
+        { control: 'Triangle / Y - hold', action: 'Defense ability radial (stick picks, release equips)' },
         { control: 'Cross / A',          action: 'Dash' },
-        { control: 'Circle / B',         action: 'Activate defense skill' },
+        { control: 'Circle / B',         action: 'Activate defense ability' },
         { control: 'Options / Start',    action: 'Pause / resume' },
     ];
 
@@ -691,12 +691,12 @@ function _buildShopSuggestOverlay() {
 }
 
 // ── Shop overlay ───────────────────────────────────────────────────
-// Phase 7 (2026-05-19) — Skill-tree rewrite. Replaces the list-based
+// Phase 7 (2026-05-19) — Ability-tree rewrite. Replaces the list-based
 // shop with a Diablo-style visual: 4 cluster regions (PRIMARY / POWER /
-// DEFENSE / PASSIVES), each laying out weapon/skill parent nodes with
+// DEFENSE / PASSIVES), each laying out weapon/ability parent nodes with
 // per-weapon upgrade nodes orbiting them. No tab strip — every category
 // is visible at once. The shop-tree CSS lives in css/styles.css under
-// the SHOP SKILL TREE section.
+// the SHOP ABILITY TREE section.
 //
 // Hidden compatibility shims kept for legacy test selectors:
 //   - `#shop-items-list` + `.shop-tab` nodes are kept (visually hidden)

@@ -1439,7 +1439,7 @@ export const SOUND_DEFS = {
         ],
     },
 
-    // ── Defense skill activations ───────────────────────────────────
+    // ── Defense ability activations ───────────────────────────────────
 
     // Bulwark — heavy shield deploy. Sub thump + sustained square hum.
     bulwark: {
@@ -1462,7 +1462,7 @@ export const SOUND_DEFS = {
     },
 
     // Repair Nanites — ascending healing arpeggio. Brighter than
-    // healthRegen so the skill activation feels distinct from a pickup.
+    // healthRegen so the ability activation feels distinct from a pickup.
     repairNanites: {
         layers: [
             // Ascending arp tone — sine with strong upward arp

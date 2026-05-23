@@ -2,7 +2,7 @@
 import { GAME_CONFIG, GAME_STATES, getEnemyDropProfile } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { hsl } from '../core/color-cache.js';
-import { PRIMARY_UPGRADES, POWER_UPGRADES, SKILL_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, DEFENSE_SKILLS } from './weapon-data.js';
+import { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, ABILITIES } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { createItem } from '../world/item-system.js';
@@ -307,7 +307,7 @@ export function triggerEnemyFinalExplosion(enemy) {
     this.particlePool.get(ex, ey, 'enemyShockwave', ringBase * 1.8, accentEmber);
 
     // 6.26.1 — Radial lightning crackle removed. The bolts read as
-    //   a player-skill (EMP / electric chain) rather than a generic
+    //   a player-ability (EMP / electric chain) rather than a generic
     //   death effect, and they obscured the plasma core's chromatic
     //   layering. The rings + shockwave + sparkles + embers carry
     //   the "BANG" by themselves.
@@ -1062,7 +1062,7 @@ export function showPowerupDisplay(name, color, description = '') {
 //   its data, so there's no parallel copy to keep in sync:
 //     1. POWERUP_TYPES        — offensive powerups (world/powerup.js)
 //     2. DEFENSE_CONFIGS      — defense items (combat/defense-data.js)
-//     3. weapon-data fallback — every upgrade tree (PRIMARY/POWER/SKILL)
+//     3. weapon-data fallback — every upgrade tree (PRIMARY/POWER/ABILITY)
 //   Display name uses `displayName` (POWERUP_TYPES) so the toast keeps
 //   reading "Rapid Fire" rather than the card-shorthand "Rapid".
 //   The CHARGE_SPEED / CHARGE_POWER entries that used to live in a
@@ -1096,10 +1096,10 @@ export function getPowerupConfig(type) {
             gradientColors: dcfg.gradientColors,
         };
     }
-    // 3) Weapon / skill upgrades from weapon-data.js — pass through
+    // 3) Weapon / ability upgrades from weapon-data.js — pass through
     //    the upgrade's description so the pickup blurb shows the same
     //    one-liner used in the shop.
-    const allUpgrades = { ...PRIMARY_UPGRADES, ...POWER_UPGRADES, ...SKILL_UPGRADES };
+    const allUpgrades = { ...PRIMARY_UPGRADES, ...POWER_UPGRADES, ...ABILITY_UPGRADES };
     if (allUpgrades[type]) {
         const upg = allUpgrades[type];
         return {
@@ -1219,7 +1219,7 @@ export function onEnemyKill(enemy) {
         && this.player.getPowerupStacks('CASCADE') > 0
         && this.enemyPool && typeof this.applyStun === 'function') {
         const CASCADE_RADIUS = 160;
-        const dur = (DEFENSE_SKILLS.EMP_PULSE && DEFENSE_SKILLS.EMP_PULSE.duration) || 2000;
+        const dur = (ABILITIES.EMP_PULSE && ABILITIES.EMP_PULSE.duration) || 2000;
         for (const e of this.enemyPool.activeObjects) {
             if (!e.active || e === enemy) continue;
             const dist = Math.hypot(e.x - enemy.x, e.y - enemy.y);
@@ -2060,7 +2060,7 @@ export function applyBleed(enemy, sourceDmg, durationMs = 4000, maxStacks = 6) {
 // The shield is "on" for a player mine when ALL of the following hold:
 //   • mine.active === true
 //   • mine.armed === true (post arm-timer)
-//   • mine.shieldRadius > 0 (which `skills.js` sets only when the player
+//   • mine.shieldRadius > 0 (which `abilities.js` sets only when the player
 //     has at least 1 stack of MINE_SHIELD_RADIUS)
 //
 // Function signatures kept identical to the Phase 5 helpers so the existing
