@@ -308,6 +308,10 @@ export const NORMAL_STAR_COLORS = [
 
 export const GAME_STATES = {
     TITLE_SCREEN: 'TITLE_SCREEN',
+    // Phase R2 — pre-run meta screens. NEW GAME routes TITLE → ARMORY →
+    // (LOADOUT) → run; CONTINUE resumes mid-run and skips both.
+    ARMORY: 'ARMORY',
+    LOADOUT: 'LOADOUT',
     PLAYING: 'PLAYING',
     PAUSED: 'PAUSED',
     GAME_OVER: 'GAME_OVER',

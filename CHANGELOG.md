@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.85.0] - 2026-05-23
+
+### Added — Gold economy + ARMORY pre-run flow (Phase R2.1–R2.3)
+
+- **Two gold wallets.** **Run-gold** (`game.money`) now starts at **0** every
+  run, accrues from kills, and **banks into account-gold** when the run ends
+  (death or 30-wave clear) — idempotent so a restart can't double-bank.
+  **Account-gold** is a new persistent wallet (`rainboidsMeta.accountGold`,
+  migrated from the pre-R2 `money` field) spent on permanent unlocks.
+- **ARMORY pre-run screen** (`ui/armory-overlay.js`). NEW GAME now routes
+  TITLE → **ARMORY** → run; post-run NEW GAME routes through it too so you can
+  spend freshly-banked gold. CONTINUE skips it and resumes mid-run. The screen
+  lists locked weapons/abilities with account-gold UNLOCK buttons; abilities
+  are priced higher than weapons (`shop/armory.js`).
+- New `GAME_STATES.ARMORY` + `GAME_STATES.LOADOUT` (LOADOUT reserved for R5) and
+  their state-machine transitions.
+- Pure, unit-tested economy core in `shop/armory.js` (unlock sets, banking,
+  legacy-wallet migration) — 17 tests; plus 6 state-flow tests and a 9-test QA
+  suite (`tests/qa/08-armory.spec.js`) covering the full browser flow.
+
+### Changed
+
+- Owned weapon/ability pool is now **base ∪ purchased unlocks**, resolved once
+  per run from the account meta (`applyPersistentProfile`). `_rollRandomLoadout`
+  rolls the starting active from the unlocked pool only.
+
+### Removed
+
+- **Retired `unlockWave`** wave-milestone weapon auto-unlocks (Phase R2.3).
+  Weapons/abilities are unlocked permanently in the ARMORY instead. The 4 e2e
+  tests that asserted wave-gated unlocks are skipped pending a roguelite-economy
+  rewrite (alongside R2.4 shop retirement / R3 cards).
+
 ## [6.84.0] - 2026-05-22
 
 ### Changed — Terminology: Skills → Abilities (Phase R1)

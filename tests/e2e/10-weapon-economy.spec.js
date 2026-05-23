@@ -22,7 +22,10 @@ import { GameAI } from '../helpers/game-ai.js';
 test.describe('E2E-10: Weapon economy & gameplay flow', () => {
     test.setTimeout(120_000);
 
-    test('simulated multi-wave economy analysis', async ({ page }) => {
+    // R2.3 — asserts wave-milestone auto-unlocks, retired in the roguelite
+    // restructure (weapons are now ARMORY account-gold unlocks). Re-author
+    // for the new economy alongside R2.4 (shop retirement) / R3 (cards).
+    test.skip('simulated multi-wave economy analysis', async ({ page }) => {
         const jsErrors = [];
         page.on('pageerror', err => jsErrors.push(err.message));
 
@@ -272,7 +275,10 @@ test.describe('E2E-10: Weapon economy & gameplay flow', () => {
         )).toEqual([]);
     });
 
-    test('AI combat uses multiple weapons during gameplay', async ({ page }) => {
+    // R2.3 — assumed wave-milestone auto-unlocks gave the AI ≥3 primaries.
+    // With unlocks now account-gold-gated (base = PULSE_CANNON only), this
+    // needs to seed unlocks first. Re-author with R2.4/R3.
+    test.skip('AI combat uses multiple weapons during gameplay', async ({ page }) => {
         await loadGame(page);
         await startGame(page);
         await page.waitForTimeout(500);
@@ -308,7 +314,9 @@ test.describe('E2E-10: Weapon economy & gameplay flow', () => {
         expect(weaponsUsed.size).toBeGreaterThanOrEqual(3);
     });
 
-    test('weapons are locked in shop until unlockWave', async ({ page }) => {
+    // R2.3 — `unlockWave` gating was removed entirely; weapon availability
+    // is now permanent account unlocks (no in-shop wave gate). Feature gone.
+    test.skip('weapons are locked in shop until unlockWave', async ({ page }) => {
         await loadGame(page);
         await startGame(page);
 
@@ -357,7 +365,9 @@ test.describe('E2E-10: Weapon economy & gameplay flow', () => {
         expect(lockTest.buyLocked).toBe(false);
     });
 
-    test('weapon unlock notification fires correctly', async ({ page }) => {
+    // R2.3 — the mid-run "WEAPON UNLOCKED" notification was removed with the
+    // wave-milestone auto-unlock. Unlocks now happen in the ARMORY pre-run.
+    test.skip('weapon unlock notification fires correctly', async ({ page }) => {
         await loadGame(page);
         await startGame(page);
 

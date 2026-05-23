@@ -235,22 +235,23 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         expect(costs).toContain('RAIL_DRIVER');
     });
 
-    test('weapons auto-unlock at wave milestones', async ({ page }) => {
+    test('weapons no longer auto-unlock at wave milestones (R2.3 retirement)', async ({ page }) => {
+        // Phase R2.3 — wave-milestone auto-unlock was retired. Weapons are
+        // now permanent account UNLOCKS bought with account-gold in the
+        // ARMORY, so clearing waves must NOT grow the owned pool.
         const result = await page.evaluate(() => {
             const ge = window.gameEngine;
             const p = ge.player;
-            // Simulate completing wave 3 (Storm Needles unlockWave)
+            const before = [...p.ownedPrimaries];
             ge.game.currentWave = 3;
             ge.completeWave();
-            const afterWave3 = [...p.ownedPrimaries];
-            // Simulate completing wave 5 (Scatter Gun unlockWave)
             ge.game.currentWave = 5;
             ge.completeWave();
-            const afterWave5 = [...p.ownedPrimaries];
-            return { afterWave3, afterWave5 };
+            const after = [...p.ownedPrimaries];
+            return { before, after };
         });
-        expect(result.afterWave3).toContain('STORM_NEEDLES');
-        expect(result.afterWave5).toContain('SCATTER_GUN');
+        expect(result.after.sort()).toEqual(result.before.sort());
+        expect(result.after).not.toContain('STORM_NEEDLES');
     });
 
     test('AI switches between owned weapons during gameplay', async ({ page }) => {

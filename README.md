@@ -44,7 +44,7 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 
 ## ⚙️ How It Works
 
-**🔫 Arsenal** — **11 primary** + **11 power** weapons, all free and swappable from the radial menus (auto-unlocked at wave milestones). Pour **gold** into per-weapon upgrade trees — Multishot, Rapid Fire, Piercing, Big Bullets, Explosive, Homing, Stun, Knockback, plus per-weapon capstones. `Phase Dash` is a free movement primitive on `Shift`.
+**🔫 Arsenal** — **11 primary** + **11 power** weapons, swappable from the radial menus. Weapons are **permanent account unlocks** bought with **account-gold** in the pre-run **ARMORY** (no more wave-milestone auto-unlocks). Pour in-run **gold** into per-weapon upgrade trees — Multishot, Rapid Fire, Piercing, Big Bullets, Explosive, Homing, Stun, Knockback, plus per-weapon capstones. `Phase Dash` is a free movement primitive on `Shift`.
 
 **✨ Abilities** — 6 defense abilities on a 4-slot loadout (keys `1`–`4`): Bulwark, Repair Nanites, Deflector Orbs, EMP Pulse, Tractor Shield, Sentry Drone.
 
@@ -52,11 +52,11 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 
 **💎 Loot & inventory** — 5 gear slots (cockpit/hull → HP, shielding/chassis → toughness, **nanites** → regen). Drops roll across an **8-tier rarity ladder** (Common → Rare → Exceptional → Legendary → Epic → Godlike → Divine → Transcendental) with multi-affix stats *and* per-element resist rolls. Better drops auto-equip; press `I` to review and re-equip. Everything streams into a left-edge loot feed.
 
-**🪙 Gold & shop** — destroy enemies and asteroids for gold; spend it in the gold-only **UPGRADES** panel (Primary / Power / Defense / Passive tabs).
+**🪙 Gold economy** — two wallets. **Run-gold** starts at **0** each run, accrues from kills, feeds the in-run **UPGRADES** panel (Primary / Power / Defense / Passive tabs), and **banks into account-gold** when the run ends (win or death). **Account-gold** is the persistent wallet you spend in the **ARMORY** on permanent weapon/ability unlocks (abilities cost more). Every in-run purchase is gold you don't bank — spend deep or save to grow the account.
 
 **📈 Progression** — every stage clear (waves 3, 6, … 30) deals a **survivor-card** pick (2 offense + 1 defense) plus a tailored weapon-upgrade quick-buy; boss waves add a bonus. Kills grant XP toward a **persistent account level** (cap 100); each level = 1 **SP** spent on permanent stats in the STATS screen. A **20-tier kill-streak ladder** (EMPOWERED → … → RAINBOIDS GOD) buffs damage until you take a hit.
 
-**🏁 Campaign** — a **10-stage / 30-wave speedrun** (`1-1` → `10-3`); every stage final is a boss. Time, accuracy, and damage are tallied on the Game Complete screen. **Meta persists** across runs in `localStorage` — gold, gear, upgrades, and level/SP carry over: `CONTINUE` resumes where you left off, `NEW GAME` starts a fresh run but keeps your accumulated progression. Autosaves every ~15s and on tab close.
+**🏁 Campaign** — a **10-stage / 30-wave speedrun** (`1-1` → `10-3`); every stage final is a boss. Time, accuracy, and damage are tallied on the Game Complete screen. **Meta persists** across runs in `localStorage` — account-gold, unlocks, gear, upgrades, and level/SP carry over: `NEW GAME` opens the **ARMORY** (spend account-gold) then starts a fresh run; `CONTINUE` resumes mid-run, skipping the pre-run screens. Autosaves every ~15s and on tab close.
 
 > **20+ enemy types** with distinct movement, attacks, and elemental identities — from the orbiting **Hunter** and the freeze-shattering **Wasp** swarm to the anti-meta **Warden** that adapts its resistance to whatever element you keep using, forcing you to switch.
 

@@ -4423,3 +4423,109 @@ body.mobile-portrait .shop-help-icon {
     .tutorial-section-title { font-size: 11px; }
     .tutorial-line { font-size: 9px; line-height: 1.6; }
 }
+
+/* ─── ARMORY (Phase R2 — pre-run unlock store) ───────────────────────── */
+.armory-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;            /* toggled to flex by ArmoryOverlay.open() */
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 40%, rgba(10, 16, 28, 0.97) 0%, rgba(4, 6, 12, 0.99) 100%);
+    z-index: 9500;
+    font-family: 'Press Start 2P', monospace;
+    color: #d6def0;
+}
+.armory-panel {
+    width: min(820px, 94vw);
+    max-height: 90vh;
+    background: linear-gradient(180deg, rgba(14, 20, 30, 0.98) 0%, rgba(8, 11, 18, 0.98) 100%);
+    border: 2px solid #2f6fc2;
+    box-shadow: 0 0 28px rgba(64, 150, 255, 0.28), inset 0 0 70px rgba(0, 30, 80, 0.4);
+    padding: 20px 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.armory-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(80, 140, 220, 0.35);
+}
+.armory-title {
+    font-size: 24px;
+    letter-spacing: 3px;
+    color: #8fd0ff;
+    text-shadow: 0 0 12px rgba(64, 150, 255, 0.5);
+}
+.armory-gold {
+    font-size: 16px;
+    color: #ffd75c;
+    text-shadow: 0 0 10px rgba(255, 200, 60, 0.5);
+}
+.armory-sub { font-size: 9px; line-height: 1.7; color: #7d8aa6; }
+.armory-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    padding-right: 4px;
+    flex: 1;
+}
+.armory-section-title {
+    font-size: 11px;
+    color: #8fd0ff;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+.armory-list { display: flex; flex-direction: column; gap: 5px; }
+.armory-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 10px;
+    background: rgba(20, 30, 48, 0.6);
+    border: 1px solid rgba(80, 140, 220, 0.25);
+}
+.armory-row--owned { opacity: 0.55; }
+.armory-row-name { font-size: 10px; color: #d6def0; }
+.armory-row-tag { font-size: 8px; color: #6fae6f; letter-spacing: 1px; }
+.armory-buy {
+    background: transparent;
+    color: #ffd75c;
+    border: 1px solid rgba(255, 200, 60, 0.5);
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 9px;
+    font-family: inherit;
+    white-space: nowrap;
+}
+.armory-buy:hover:not(:disabled) { background: rgba(255, 200, 60, 0.15); }
+.armory-buy:disabled { color: #5e6680; border-color: rgba(94, 102, 128, 0.4); cursor: not-allowed; }
+.armory-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(80, 140, 220, 0.3);
+}
+.armory-btn {
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    letter-spacing: 1px;
+    border: 1px solid rgba(80, 140, 220, 0.55);
+    background: transparent;
+    color: #8fd0ff;
+}
+.armory-btn--back:hover { background: rgba(64, 150, 255, 0.15); }
+.armory-btn--start {
+    color: #9affb0;
+    border-color: rgba(120, 255, 150, 0.6);
+    text-shadow: 0 0 8px rgba(120, 255, 150, 0.4);
+}
+.armory-btn--start:hover { background: rgba(120, 255, 150, 0.15); }

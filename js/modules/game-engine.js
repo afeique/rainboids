@@ -28,6 +28,7 @@ import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
+import { getUnlockedSet, bankRunGold, resolveAccountGold } from './shop/armory.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
@@ -62,6 +63,7 @@ import { isMobile, isPortrait } from './platform/platform-detect.js';
 import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './core/storage.js';
 import { StatsOverlay } from './ui/stats-overlay.js';
 import { InventoryOverlay } from './ui/inventory-overlay.js';
+import { ArmoryOverlay } from './ui/armory-overlay.js';
 import { AnalogStick } from './ui/analog-stick.js';
 
 // 5.100.0 — localStorage key for the analog-stick side preference.
@@ -416,6 +418,11 @@ export class GameEngine {
 
         // State machine — owns all game state transitions with validation + epoch guards
         this.stateMachine = new GameStateMachine(GAME_STATES.TITLE_SCREEN);
+        // Phase R2 — bank leftover run-gold into the account wallet the
+        // moment a run ends (death or 30-wave clear). Guarded by
+        // _runGoldBanked so a GAME_OVER → restart re-entry can't double-bank.
+        this.stateMachine.onEnter(GAME_STATES.GAME_OVER, () => this.bankRunGold());
+        this.stateMachine.onEnter(GAME_STATES.GAME_COMPLETE, () => this.bankRunGold());
 
         // Event bus — cross-system pub/sub for decoupled communication
         this.events = new EventBus();
@@ -571,7 +578,8 @@ export class GameEngine {
         this.stateMachine.forceState(GAME_STATES.TITLE_SCREEN);
 
         this.game = {
-            money: 0,
+            money: 0,        // run-gold: starts at 0, accrues from kills, banked at run end
+            accountGold: 0,  // persistent wallet (loaded from meta in applyPersistentProfile)
             survivalTime: 0, // Time survived in milliseconds
             survivalRecord: parseInt(localStorage.getItem('rainboidsSurvivalRecord')) || 0, // Best survival time
             gameStartTime: 0, // When the current game started
@@ -929,6 +937,7 @@ export class GameEngine {
     
     init({ writeWave1Save = true } = {}) {
         this._suppressWave1Save = !writeWave1Save;
+        this._runGoldBanked = false; // arm run-end banking for this run
         // Cancel any pending game timers from previous game
         for (let i = 0; i < this._gameTimers.length; i++) this._gameTimers[i].cancel();
         this._gameTimers.length = 0;
@@ -1335,14 +1344,27 @@ export class GameEngine {
             }
         }
         try {
+            // Phase R2 — persist the ACCOUNT wallet (account-gold), not the
+            // run-gold (game.money). Run-gold lives only in the wave-start
+            // run snapshot (serializeRunState) for CONTINUE.
             saveMeta({
                 level: p.level | 0, xp: p.xp | 0, sp: p.sp | 0,
                 spStats: p.spStats || {},
-                money: this.game.money | 0,
+                accountGold: this.game.accountGold | 0,
                 powerups,
                 equippedItems,
             });
         } catch {}
+    }
+
+    // Phase R2 — bank this run's leftover run-gold into the persistent
+    // account wallet. Idempotent within a run via _runGoldBanked so a
+    // GAME_OVER → restart can't bank twice.
+    bankRunGold() {
+        if (this._runGoldBanked) return;
+        this._runGoldBanked = true;
+        this.game.accountGold = bankRunGold(this.game.accountGold, this.game.money);
+        this.savePersistentProfile();
     }
 
     // Apply the persistent profile onto a freshly-initialized run. Called
@@ -1354,9 +1376,23 @@ export class GameEngine {
         const p = this.player;
         if (!p) return;
         const meta = loadMeta();
-        if (!meta) return;
-        if (typeof meta.money === 'number') {
-            this.game.money = Math.max(0, meta.money | 0);
+        // Phase R2 — these apply even with no meta (new account): account
+        // wallet defaults to 0 and the owned pool defaults to the base kit.
+        // Run-gold (game.money) is NOT carried over — it starts at 0 and is
+        // earned in-run.
+        this.game.accountGold = resolveAccountGold(meta);
+        // Owned weapons/abilities = base ∪ purchased unlocks. This makes the
+        // in-run radial/switch pool reflect what the account has unlocked.
+        p.ownedPrimaries = getUnlockedSet('primaries', meta);
+        p.ownedPowers    = getUnlockedSet('powers', meta);
+        p.ownedAbilities = getUnlockedSet('abilities', meta);
+        // Keep the active selection valid against the (possibly larger) pool.
+        if (!p.ownedPrimaries.has(p.activePrimary)) p.activePrimary = [...p.ownedPrimaries][0] || p.activePrimary;
+        if (!p.ownedPowers.has(p.activePower))      p.activePower   = [...p.ownedPowers][0] || p.activePower;
+        if (!p.ownedAbilities.has(p.activeAbility)) p.activeAbility = [...p.ownedAbilities][0] || p.activeAbility;
+        if (!meta) {
+            if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
+            return;
         }
         if (meta.powerups && typeof meta.powerups === 'object') {
             p.powerups = new Map();
@@ -1429,7 +1465,10 @@ export class GameEngine {
     // players were stuck on the game-over screen).
     triggerGameOverAction(id) {
         if (id === 'newGame') {
-            if (typeof this.startNewRun === 'function') this.startNewRun();
+            // Phase R2 — route post-run NEW GAME through the ARMORY so the
+            // player can spend the gold they just banked before the next run.
+            if (typeof this.openArmory === 'function') this.openArmory();
+            else if (typeof this.startNewRun === 'function') this.startNewRun();
             else this.init();
         } else if (id === 'restartWave') {
             if (typeof this.startContinueRun === 'function') {
@@ -1452,15 +1491,19 @@ export class GameEngine {
     }
 
     _rollRandomLoadout() {
-        const pickKey = (obj) => {
-            const keys = Object.keys(obj || {});
+        // Phase R2 — roll the active selection from the UNLOCKED pool only
+        // (base ∪ purchased), so the run never starts on a locked weapon.
+        // R5 replaces this with the chosen-loadout screen.
+        const meta = loadMeta();
+        const pick = (set) => {
+            const keys = [...set];
             if (keys.length === 0) return null;
             return keys[Math.floor(Math.random() * keys.length)];
         };
         return {
-            primary: pickKey(PRIMARY_WEAPONS),
-            power:   pickKey(POWER_WEAPONS),
-            ability:   pickKey(ABILITIES),
+            primary: pick(getUnlockedSet('primaries', meta)),
+            power:   pick(getUnlockedSet('powers', meta)),
+            ability: pick(getUnlockedSet('abilities', meta)),
         };
     }
 
@@ -3077,7 +3120,7 @@ export class GameEngine {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.asteroidShardPool.updateActive();
-        } else if (this.game.state === GAME_STATES.TITLE_SCREEN) {
+        } else if (this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY) {
             // Sandstorm-grade chaotic drift — multiple sine waves at
             // distinct frequencies sum into a fast, direction-shifting
             // motion. Near-depth stars rip across the field while far
@@ -3220,7 +3263,7 @@ export class GameEngine {
             // (but the deepest barely moves, giving a "much-farther-away"
             // parallax feel relative to the foreground starfield). Also
             // pipes a slow rotation so the lens flare layers tumble.
-            const onTitle = this.game.state === GAME_STATES.TITLE_SCREEN;
+            const onTitle = this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY;
             const nebDriftX = onTitle ? (this._titleNebulaDriftX || 0) : 0;
             const nebDriftY = onTitle ? (this._titleNebulaDriftY || 0) : 0;
             const nebRot    = onTitle ? (this._titleNebulaRotation || 0) : 0;
@@ -3276,9 +3319,9 @@ export class GameEngine {
             const vB = cy + visH / 2 + pad;
 
             // Entity / HUD rendering — skipped on the pre-init title screen
-            // since pools are empty and the player ship would otherwise
-            // appear at the center of the menu.
-            if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
+            // AND the ARMORY screen (both pre-run: pools are empty, player
+            // may be null, and the ship would otherwise appear under the menu).
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY) {
                 this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidShardPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 // Two-layer particle render — every bright/glowing type
@@ -3346,7 +3389,7 @@ export class GameEngine {
 
             this.ctx.restore();
 
-            if (this.game.state !== GAME_STATES.TITLE_SCREEN) {
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY) {
                 // Draw UI elements without camera transformation
                 // Sync DOM powerup HUD
                 this.syncPowerupHUD();
@@ -3847,6 +3890,26 @@ export class GameEngine {
     }
 
     isInventoryScreenOpen() { return !!(this._inventoryOverlay && this._inventoryOverlay.isOpen()); }
+
+    // Phase R2 — pre-run ARMORY screen. NEW GAME routes here first (TITLE →
+    // ARMORY → run); the screen's START RUN button calls startNewRun().
+    // Loads the persistent account-gold so the wallet shows before a run.
+    openArmory() {
+        if (!this._armoryOverlay) {
+            this._armoryOverlay = new ArmoryOverlay();
+            this._armoryOverlay.setGameEngine(this);
+        }
+        // Seed game.accountGold from meta so the screen + the upcoming run
+        // agree on the wallet (init()→applyPersistentProfile re-reads it).
+        try {
+            const meta = loadMeta();
+            this.game.accountGold = resolveAccountGold(meta);
+        } catch {}
+        this.game.state = GAME_STATES.ARMORY;
+        this._armoryOverlay.open();
+    }
+
+    isArmoryOpen() { return !!(this._armoryOverlay && this._armoryOverlay.isOpen()); }
 
     // 6.36.0 — Open the STATS screen as a wave-clear level-up step. The
     // game is already paused by the wave-clear flow; `onClose` continues

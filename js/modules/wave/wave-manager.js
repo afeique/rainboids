@@ -852,16 +852,11 @@ export function completeWave() {
     this.queueNotification(`STAGE ${getStageLabel(clearedWave)} CLEARED`,
         `+${bonusCoins} gold`, 2500);
 
-    // Auto-unlock primary weapons at wave milestones
-    for (const [id, weapon] of Object.entries(PRIMARY_WEAPONS)) {
-        if (weapon.unlockWave > 0 &&
-            this.game.currentWave >= weapon.unlockWave &&
-            !this.player.ownedPrimaries.has(id)) {
-            this.player.ownedPrimaries.add(id);
-            this.queueNotification(`NEW WEAPON UNLOCKED`,
-                `${weapon.name} — ${weapon.description}`, 4000);
-        }
-    }
+    // Phase R2.3 — wave-milestone weapon unlocks RETIRED. Weapons/abilities
+    // are now permanent account UNLOCKS bought with account-gold in the
+    // ARMORY (see shop/armory.js + game-engine.applyPersistentProfile). The
+    // owned pool is set once per run from the unlocked set, so there is no
+    // mid-run auto-unlock anymore.
 }
 
 export function queueNotification(title, subtitle, duration) {

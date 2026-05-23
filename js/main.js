@@ -155,6 +155,10 @@ class RainboidsGame {
                 try { this.audioManager.playSound(chime); } catch {}
             }
         };
+        // Phase R2 — expose the title teardown so the ARMORY's START RUN can
+        // finalize the title-screen exit (the armory opens over a still-live
+        // title so BACK can return to it).
+        this.gameEngine._finalizeTitleExit = () => consumeTitleScreen({});
 
         const launch = (mode) => {
             if (_gameStarted) return;
@@ -164,16 +168,25 @@ class RainboidsGame {
             const wantContinue = mode === 'continue' && ge.hasSavedRun?.();
             if (mode === 'continue' && !wantContinue) return; // disabled button click
 
-            // 5.79.2 chime: NEW GAME → 'powerup', CONTINUE → 'coin'.
-            consumeTitleScreen({ chime: wantContinue ? 'coin' : 'powerup' });
-            const start = wantContinue && ge.hasSavedRun?.()
-                ? () => ge.startContinueRun?.()
-                : () => ge.startNewRun?.();
-            if (typeof ge.triggerTitleStart === 'function') {
-                if (!ge.triggerTitleStart(start)) start();
-            } else {
-                start();
+            if (wantContinue) {
+                // CONTINUE resumes mid-run — full teardown + straight to the run.
+                consumeTitleScreen({ chime: 'coin' });
+                const start = () => ge.startContinueRun?.();
+                if (typeof ge.triggerTitleStart === 'function') {
+                    if (!ge.triggerTitleStart(start)) start();
+                } else {
+                    start();
+                }
+                return;
             }
+            // Phase R2 — NEW GAME opens the ARMORY first (TITLE → ARMORY →
+            // run). Init audio on this gesture but keep the title live
+            // underneath so the armory's BACK returns to it; the armory's
+            // START RUN performs the final teardown (_finalizeTitleExit).
+            try { this.gameEngine.audioManager?.initializeAudio?.(); } catch {}
+            try { this.gameEngine.uiManager?.startMusic?.(); } catch {}
+            try { this.gameEngine.audioManager?.playSound?.('powerup'); } catch {}
+            ge.openArmory?.();
         };
 
         const ge = () => this.gameEngine;
