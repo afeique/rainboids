@@ -13,7 +13,7 @@ import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStat
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades, PASSIVE_UPGRADES, PASSIVE_REWARD_IDS, PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades, PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES } from '../combat/weapon-data.js';
 import { buildDraft, isCardStage } from '../combat/card-draft.js';
 import {
     rerollCost as rerollGoldCost, canReroll as rerollCanReroll,
@@ -1536,33 +1536,23 @@ export function openWavePickOverlay() {
                 });
             }
 
-            // 6.0.0 — Boss-wave bonus: on top of the survivor card the
-            // player just picked, auto-grant ONE additional random
-            // non-maxed powerup. The pick is silent (no second overlay)
-            // so the flow stays brisk; the toast advertises the bonus.
+            // Boss-wave bonus: on top of the card just picked, grant a chunk
+            // of bonus run-gold. R7.4 — this used to auto-grant a random
+            // PASSIVE stack, but stat passives are now SP-driven ONLY (earned
+            // by leveling, spent in the STATS menu). Gold fits the new economy
+            // (spend on extra cards / repair, or bank toward unlocks).
             const justCleared = (this.game && this.game.currentWave) | 0;
             if (justCleared > 0 && isBossWave(justCleared)) {
-                // 6.30.0 — Boss bonus grants an extra random PASSIVE
-                // (same pool as the survivor cards).
-                const remaining = PASSIVE_REWARD_IDS
-                    .map(id => [id, PASSIVE_UPGRADES[id]])
-                    .filter(([id, c2]) => {
-                        if (!c2) return false;
-                        const cap2 = c2.maxStacks || 99;
-                        const stk = player.getPowerupStacks ? player.getPowerupStacks(id) : 0;
-                        return stk < cap2;
+                const bossGold = 200 + justCleared * 20;
+                this.game.money = (this.game.money | 0) + bossGold;
+                if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
+                if (this.events?.emit) {
+                    this.events.emit('ui:show-message', {
+                        title: '★ BOSS BONUS ★',
+                        subtitle: `+${bossGold} gold`,
+                        duration: 1800,
+                        position: 'top',
                     });
-                if (remaining.length > 0) {
-                    const [bonusType, bonusCfg] = remaining[(Math.random() * remaining.length) | 0];
-                    player.addPowerup(bonusType, { ...bonusCfg, duration: Infinity }, true);
-                    if (this.events?.emit) {
-                        this.events.emit('ui:show-message', {
-                            title: '★ BOSS BONUS ★',
-                            subtitle: `+1 ${bonusCfg.displayName || bonusCfg.name || bonusType}`,
-                            duration: 1800,
-                            position: 'top',
-                        });
-                    }
                 }
             }
 

@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.95.0] - 2026-05-23
+
+### Changed — Boss bonus grants gold; stat passives are SP-only (Phase R7.4)
+
+- The boss-wave bonus no longer auto-grants a random PASSIVE stat stack — stat
+  passives are now **SP-driven only** (earned by leveling, spent in the STATS
+  menu). The boss bonus grants **run-gold** instead (200 + 20×wave), which fits
+  the new economy (spend on extra cards / repair, or bank toward unlocks).
+- Removed the now-unused PASSIVE pool imports from wave-manager.
+
 ## [6.94.0] - 2026-05-23
 
 ### Added — 6th/7th card + Revive Token (Phase R4.1 / R4.3) — completes R4
