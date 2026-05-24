@@ -10,6 +10,13 @@ import { rollRarity } from '../world/item-names.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 
+// P6 — Killing Spree passive: doubles the kill-streak damage BONUS (the amount
+// over 1.0), so a tier's +X% becomes +2X%. Pure; exported for unit tests.
+export function killingSpreeMult(tierMult, hasKillingSpree) {
+    const m = (typeof tierMult === 'number' && tierMult > 0) ? tierMult : 1;
+    return hasKillingSpree ? 1 + (m - 1) * 2 : m;
+}
+
 // 6.26.1 — Explosion accent palettes. Each kill picks a palette at
 // random and stamps it on the enemy via `_explosionPalette` so the
 // frame-0 burst and the frame-6 debris burst share the same accent
@@ -1195,7 +1202,11 @@ export function onEnemyKill(enemy) {
         }
         if (tier) {
             const wasNewTier = this.player.streakTierLabel !== tier.label;
-            this.player.streakDamageMult = tier.mult;
+            // P6 — Killing Spree passive: doubles the streak damage BONUS (the
+            // "+×%" over 1.0). The "no reset on hit" half is already the game's
+            // behavior (the streak decays on a timer, not on hit).
+            const _ks = !!(this.player.hasPassive && this.player.hasPassive('KILLING_SPREE'));
+            this.player.streakDamageMult = killingSpreeMult(tier.mult, _ks);
             this.player.streakBuffEndTime = Date.now() + STREAK_BUFF_DURATION;
             this.player.streakTierLabel = tier.label;
             // Notification fires only when crossing INTO a higher tier so

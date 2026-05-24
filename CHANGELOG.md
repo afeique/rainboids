@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.130.0] - 2026-05-24
+
+### Added — Killing Spree passive (Phase P6, batch 6)
+
+**Killing Spree** doubles your kill-streak damage bonus — each streak tier's
+`+X%` becomes `+2X%` (e.g. a tier that grants +50% damage now grants +100%).
+The design's other half ("streak no longer resets on hit") is already the
+game's behavior — the streak decays on a timer rather than breaking on a hit —
+so this delivers the damage half. Pure `killingSpreeMult` helper + unit tests.
+
 ## [6.129.0] - 2026-05-24
 
 ### Added — Element passive effects (Phase P6, batch 5)
