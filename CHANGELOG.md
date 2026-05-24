@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.111.0] - 2026-05-23
+
+### Added — Radiant attunement behavior: purge / anti-armor (Phase W2, complete)
+
+Radiant hits now **cut through flat armor and the SENTINEL frontal shield** —
+the answer to armored archetypes (GUARDIAN). This also empowers the existing
+Radiant power weapons (Lance Beam, Prism) vs armored enemies. Other elements
+still respect armor. Gated to hits carrying RADIANT. 3 new unit tests; 662
+unit green.
+
+**W2 is now complete** — all six elements have a distinct identity beyond their
+base status: Pyro spread · Cryo freeze-escalation · Volt chain-fork · Toxic
+corrosion-plague · Void gravity-gather · Radiant armor-pierce.
+
 ## [6.110.0] - 2026-05-23
 
 ### Added — Void attunement behavior: gravity gather (Phase W2)

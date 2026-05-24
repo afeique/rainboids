@@ -19,8 +19,16 @@ if (typeof globalThis.navigator === 'undefined') {
 }
 
 import { describe, expect, test, beforeEach } from '@jest/globals';
-import { applyWeaponElementStatus } from '../../js/modules/combat/collision-system.js';
+import { applyWeaponElementStatus, applyDamageToEnemy } from '../../js/modules/combat/collision-system.js';
 import { frameClock } from '../../js/modules/core/frame-clock.js';
+
+function mkArmorEnemy(extra = {}) {
+    return {
+        active: true, x: 0, y: 0, health: 100, maxHealth: 100, resist: {}, armor: 0,
+        corrodeStacks: 0, corrodeUntil: 0, conductUntil: 0, frontalShield: null,
+        adaptive: false, ...extra,
+    };
+}
 
 beforeEach(() => { frameClock.now = 10000; });
 
@@ -265,5 +273,35 @@ describe('W2 Void — gravity gather', () => {
         applyWeaponElementStatus.call(ctx, a, 'VOID', 10);
         const moved = neighbors.filter((n) => n.x !== (20 + neighbors.indexOf(n)) || n.y !== 20);
         expect(moved.length).toBeLessThanOrEqual(5);
+    });
+});
+
+describe('W2 Radiant — purge (anti-armor)', () => {
+    test('Radiant bypasses flat armor', () => {
+        const base = mkArmorEnemy({ armor: 5 });
+        applyDamageToEnemy.call({}, base, 20, { element: 'KINETIC', showNumber: false });
+        expect(base.health).toBeCloseTo(85); // 20 - 5 armor
+
+        const rad = mkArmorEnemy({ armor: 5 });
+        applyDamageToEnemy.call({}, rad, 20, { elements: ['RADIANT'], showNumber: false });
+        expect(rad.health).toBeCloseTo(80); // full 20 (armor pierced)
+    });
+
+    test('Radiant bypasses the frontal shield', () => {
+        const ctx = { player: { x: 100, y: 0 } };
+        const shield = { arc: Math.PI, reduction: 0.5 };
+        const base = mkArmorEnemy({ frontalShield: shield });
+        applyDamageToEnemy.call(ctx, base, 20, { element: 'KINETIC', hitX: 100, hitY: 0, showNumber: false });
+        expect(base.health).toBeCloseTo(90); // 20 × 0.5 (shielded)
+
+        const rad = mkArmorEnemy({ frontalShield: shield });
+        applyDamageToEnemy.call(ctx, rad, 20, { elements: ['RADIANT'], hitX: 100, hitY: 0, showNumber: false });
+        expect(rad.health).toBeCloseTo(80); // full 20 (shield pierced)
+    });
+
+    test('non-Radiant elements still respect armor', () => {
+        const e = mkArmorEnemy({ armor: 5 });
+        applyDamageToEnemy.call({}, e, 20, { elements: ['PYRO', 'CRYO'], showNumber: false });
+        expect(e.health).toBeCloseTo(85); // armor still applies (no RADIANT in the set)
     });
 });

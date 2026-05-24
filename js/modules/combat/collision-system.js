@@ -2226,12 +2226,18 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     const _allyMult = allyShieldMult(enemy, frameClock.now);
     if (_allyMult !== 1) damage *= _allyMult;
 
+    // W2 (Radiant) — PURGE: Radiant hits cut through flat ARMOR and the
+    // SENTINEL frontal shield (the anti-armor element — the answer to armored
+    // archetypes). `_purge` gates both reductions below. Inert unless a hit
+    // carries RADIANT (a Radiant attunement, or Lance Beam / Prism).
+    const _purge = _els.includes('RADIANT');
+
     // E8a — flat ARMOR floor (GUARDIAN archetype): subtract a fixed amount per
     // hit, down to a 25% floor so chip damage (many small hits) is wasted while
     // big single hits punch through. Applied AFTER the resist / CORRODE /
     // CONDUCT multipliers, so a CORRODE-amplified hit overcomes armor — "melts
     // to Corrode." Inert on enemies with no armor (most).
-    if (enemy.armor > 0 && damage > 0) {
+    if (enemy.armor > 0 && damage > 0 && !_purge) {
         damage = Math.max(damage * 0.25, damage - enemy.armor);
     }
 
@@ -2241,7 +2247,7 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     // in full. Uses the hit point (opts.hitX/Y) vs the live player position, so
     // it doesn't depend on the enemy's render facing. Only the bullet path
     // passes a hit point; AoE/beam sources (no hitX) bypass the shield.
-    if (enemy.frontalShield && this.player && opts.hitX != null && damage > 0) {
+    if (enemy.frontalShield && this.player && opts.hitX != null && damage > 0 && !_purge) {
         const toPlayer = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
         const toHit = Math.atan2(opts.hitY - enemy.y, opts.hitX - enemy.x);
         let diff = Math.abs(toHit - toPlayer) % (Math.PI * 2);
