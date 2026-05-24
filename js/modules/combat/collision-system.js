@@ -709,8 +709,18 @@ export function handleCollisions() {
                 }
                 if (this.game.stats) this.game.stats.shotsHit++;
                 const enemyHpBefore = enemy.health;
+                // P6 — Predator passive: the first hit on a FULL-HP enemy always
+                // crits (an enemy is only full HP on its first hit). Local crit
+                // flag so a piercing bullet doesn't carry a forced crit onto the
+                // already-damaged targets it pierces afterward.
+                let _isCrit = !!(bullet.isCrit || bullet.isCritical);
+                if (!_isCrit && this.player && typeof this.player.hasPassive === 'function'
+                    && this.player.hasPassive('PREDATOR')
+                    && enemy.maxHealth > 0 && enemy.health >= enemy.maxHealth) {
+                    _isCrit = true;
+                }
                 const destroyed = enemy.takeDamage(damage, {
-                    isCrit: !!(bullet.isCrit || bullet.isCritical),
+                    isCrit: _isCrit,
                     isEmpowered: !!bullet.isEmpowered,
                     element: bullet.element,    // back-compat single element
                     elements: bullet.elements,  // W1 — multi-element resist split
@@ -721,6 +731,13 @@ export function handleCollisions() {
                 // heal more than we'd dealt to a full-HP target).
                 const enemyApplied = Math.max(0, enemyHpBefore - enemy.health);
                 if (typeof this.applyVampirism === 'function') this.applyVampirism(enemyApplied);
+                // P6 — Vampiric Rounds passive: crits heal 2 HP.
+                if (_isCrit && this.player && typeof this.player.hasPassive === 'function'
+                    && this.player.hasPassive('VAMPIRIC_ROUNDS')) {
+                    const _mhp = (typeof this.player.getEffectiveMaxHealth === 'function')
+                        ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
+                    this.player.health = Math.min(_mhp, this.player.health + 2);
+                }
 
                 // 6.116.0 — Power energy is no longer earned per hit; it now
                 // regenerates passively over time (see Player.update). The
@@ -755,7 +772,7 @@ export function handleCollisions() {
                     }
                 }
 
-                if (bullet.isCrit || bullet.isCritical) {
+                if (_isCrit) {
                     if (typeof this.checkMissionOnCrit === 'function') this.checkMissionOnCrit();
                 }
 
@@ -769,7 +786,7 @@ export function handleCollisions() {
                 // damage < 2  → light (pulse, needles, scatter): 2f hit / 3f crit
                 if (this.isEntityOnScreen(enemy)) {
                     const dmg = bullet.damage || 1;
-                    const isCrit = bullet.isCrit || bullet.isCritical;
+                    const isCrit = _isCrit;
                     const hitFrames = dmg >= 2 ? (isCrit ? 5 : 3) : (isCrit ? 3 : 2);
                     this.triggerHitstop(hitFrames);
                 }

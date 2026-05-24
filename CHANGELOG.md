@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.126.0] - 2026-05-24
+
+### Added — More passive effects: crit + economy (Phase P6, batch 2)
+
+- **Predator** — your first hit on a full-HP enemy always crits (it's only at
+  full HP on the first hit; a piercing shot's forced crit doesn't leak to the
+  already-damaged targets it pierces afterward).
+- **Vampiric Rounds** — critical hits heal you 2 HP.
+- **Hoarder's Greed** — +100% gold-find (folded into `getGoldFindMultiplier`),
+  with its ↯ +15% damage-taken downside applied in the damage pipeline.
+
+Tests: gold-find multiplier in `passives-player`.
+
 ## [6.125.0] - 2026-05-24
 
 ### Added — Passives go live: catalog expansion + first working effects (Phase P6, batch 1)

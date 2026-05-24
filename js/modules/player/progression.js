@@ -338,7 +338,11 @@ export function getGoldFindMultiplier() {
     const ge = this.gameEngine
         || ((typeof window !== 'undefined') ? window.gameEngine : null);
     const wave = (ge && ge.game) ? (ge.game.currentWave | 0) : 1;
-    return 1 + Math.max(0, wave - 1) * 0.10;
+    let mult = 1 + Math.max(0, wave - 1) * 0.10;
+    // P6 — Hoarder's Greed passive: +100% gold-find (the ↯ +15% damage taken
+    // downside is applied in lifecycle takeDamage).
+    if (typeof this.hasPassive === 'function' && this.hasPassive('HOARDERS_GREED')) mult *= 2;
+    return mult;
 }
 
 export function getRangeMultiplier() {

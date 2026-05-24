@@ -198,6 +198,12 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     const wave = (this.game && this.game.currentWave) ? (this.game.currentWave | 0) : 1;
     reducedDamage *= getMobileIncomingDamageMultiplier(wave);
 
+    // P6 — Hoarder's Greed downside: +15% damage taken (the +100% gold-find
+    // upside is in getGoldFindMultiplier).
+    if (this.player.hasPassive && this.player.hasPassive('HOARDERS_GREED')) {
+        reducedDamage *= 1.15;
+    }
+
     // BULWARK active-ability damage reduction (was applied inline at the
     // collision sites). IRON_WILL deepens it 50% → 65%.
     if (this.player.activeAbilityEffects && this.player.activeAbilityEffects.has('BULWARK')) {

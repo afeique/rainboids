@@ -225,3 +225,17 @@ describe('P6 — passive effect batch 1 (Glass Cannon multipliers)', () => {
         }
     });
 });
+
+describe('P6 batch 2 — Hoarder\'s Greed gold-find', () => {
+    test('getGoldFindMultiplier doubles with Hoarder\'s Greed active', () => {
+        const base = makeStub();
+        base.hasPassive = () => false;
+        base.gameEngine = null;
+        const withGreed = makeStub();
+        withGreed.hasPassive = (id) => id === 'HOARDERS_GREED';
+        withGreed.gameEngine = null;
+        const b = progression.getGoldFindMultiplier.call(base);
+        const g = progression.getGoldFindMultiplier.call(withGreed);
+        expect(g).toBeCloseTo(b * 2);
+    });
+});
