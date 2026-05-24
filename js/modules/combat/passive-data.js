@@ -27,6 +27,14 @@
 
 export const PASSIVE_STACK = { BINARY: 'binary', ADDITIVE: 'additive' };
 
+// P6 — Prismatic Soul cycles a shot's element through all six on each shot.
+export const PRISMATIC_ELEMENTS = ['PYRO', 'CRYO', 'VOLT', 'TOXIC', 'VOID', 'RADIANT'];
+/** The element for shot index `i` under Prismatic Soul (wraps, handles negatives). */
+export function prismaticElement(i) {
+    const n = PRISMATIC_ELEMENTS.length;
+    return PRISMATIC_ELEMENTS[(((i | 0) % n) + n) % n];
+}
+
 // Convenience tier constants (match RARITY_ORDER in world/item-names.js).
 export const PASSIVE_ITEM_TIER = {
     EXCEPTIONAL: 'exceptional',

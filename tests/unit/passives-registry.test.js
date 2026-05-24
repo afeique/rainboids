@@ -7,6 +7,7 @@ import {
     PASSIVES, PASSIVE_STACK, PASSIVE_ITEM_TIER,
     getPassive, getAllPassives, getSlotPassives, getItemPassives,
     MAX_PASSIVE_SLOTS, maxPassiveSlots, passiveSlotsUnlockedAfter,
+    PRISMATIC_ELEMENTS, prismaticElement,
 } from '../../js/modules/combat/passive-data.js';
 import { UNLOCK_CATEGORIES, getUnlockedSet } from '../../js/modules/shop/armory.js';
 import { RARITY_ORDER } from '../../js/modules/world/item-names.js';
@@ -161,6 +162,25 @@ describe('P3 — passive slot scaling (round-3 §11.A)', () => {
                 prev = u;
             }
             expect(passiveSlotsUnlockedAfter(N, N)).toBe(cap); // fully unlocked by run end
+        }
+    });
+});
+
+describe('P6 batch 5 — Prismatic Soul element cycle', () => {
+    test('cycles through all six elements in order, then wraps', () => {
+        expect(PRISMATIC_ELEMENTS).toEqual(['PYRO', 'CRYO', 'VOLT', 'TOXIC', 'VOID', 'RADIANT']);
+        for (let i = 0; i < PRISMATIC_ELEMENTS.length; i++) {
+            expect(prismaticElement(i)).toBe(PRISMATIC_ELEMENTS[i]);
+        }
+        expect(prismaticElement(6)).toBe('PYRO');   // wraps
+        expect(prismaticElement(7)).toBe('CRYO');
+        expect(prismaticElement(-1)).toBe('RADIANT'); // negatives wrap too
+    });
+
+    test('every cycled element is a real, non-Kinetic element id', () => {
+        for (const el of PRISMATIC_ELEMENTS) {
+            expect(typeof el).toBe('string');
+            expect(el).not.toBe('KINETIC');
         }
     });
 });

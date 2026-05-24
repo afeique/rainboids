@@ -4,6 +4,7 @@
 import { GAME_CONFIG } from '../core/constants.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity, attunementElements } from '../combat/weapon-data.js';
 import { resolveBulletElements } from '../combat/elements.js';
+import { prismaticElement } from '../combat/passive-data.js';
 import { autofireDiag } from '../autofire-diag.js';
 import { isMobile } from '../platform/platform-detect.js';
 
@@ -1036,9 +1037,16 @@ export function applyGlobalBulletUpgrades(bullet) {
     //   3. the weapon's base element (KINETIC for most)
     // `bullet.element` is kept as elements[0] for single-element consumers.
     const _baseEl = (_wcfg && _wcfg.element) || 'KINETIC';
-    const _override = (this.activeAbilityEffects
+    let _override = (this.activeAbilityEffects
         && this.activeAbilityEffects.has('ELEMENTAL_INFUSION') && this._infusedElement)
         ? this._infusedElement : null;
+    // P6 — Prismatic Soul passive: each shot auto-cycles all 6 elements (a
+    // single cycling element per bullet, overriding attunements; the active
+    // ELEMENTAL_INFUSION ability still takes precedence when up).
+    if (!_override && typeof this.hasPassive === 'function' && this.hasPassive('PRISMATIC_SOUL')) {
+        this._prismaticIdx = (this._prismaticIdx | 0) + 1;
+        _override = prismaticElement(this._prismaticIdx);
+    }
     const _attIds = (this.activeAttunements && this.activeAttunements[this.activePrimary]) || [];
     bullet.elements = resolveBulletElements(_override, attunementElements(_attIds), _baseEl);
     bullet.element = bullet.elements[0];

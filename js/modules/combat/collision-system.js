@@ -2365,9 +2365,14 @@ function _triggerStatusReactions(enemy, dealt, opts) {
     const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
     if (!pool) return;
 
+    // P6 — Catalyst passive: status reactions deal +50% and chain one extra time.
+    const _catalyst = !!(this.player && this.player.hasPassive && this.player.hasPassive('CATALYST'));
+    const _catMult = _catalyst ? 1.5 : 1;
+    const _maxDepth = MAX_SHATTER_DEPTH + (_catalyst ? 1 : 0);
+
     // SHATTER
     if (enemy.freezeUntil > now && dealt >= SHATTER_THRESHOLD
-        && (opts.shatterDepth || 0) < MAX_SHATTER_DEPTH) {
+        && (opts.shatterDepth || 0) < _maxDepth) {
         enemy.freezeUntil = 0; // consumed — it shattered
         const depth = (opts.shatterDepth || 0) + 1;
         const r2 = SHATTER_RADIUS * SHATTER_RADIUS;
@@ -2376,7 +2381,7 @@ function _triggerStatusReactions(enemy, dealt, opts) {
             if (other === enemy || !other.active) continue;
             const dx = other.x - enemy.x, dy = other.y - enemy.y;
             if (dx * dx + dy * dy > r2) continue;
-            applyDamageToEnemy.call(this, other, SHATTER_DAMAGE, {
+            applyDamageToEnemy.call(this, other, SHATTER_DAMAGE * _catMult, {
                 element: 'CRYO', showNumber: false, shatterDepth: depth,
             });
             if (typeof this.applyFreeze === 'function') this.applyFreeze(other, 800);
@@ -2394,7 +2399,7 @@ function _triggerStatusReactions(enemy, dealt, opts) {
     // OIL FLARE
     if (enemy.oilUntil > now && element === 'PYRO') {
         enemy.oilUntil = 0; // consumed — it ignited
-        const flareDmg = Math.max(2, dealt * 0.4);
+        const flareDmg = Math.max(2, dealt * 0.4) * _catMult;
         const r2 = FLARE_RADIUS * FLARE_RADIUS;
         for (const other of pool.slice()) {
             if (!other.active) continue;

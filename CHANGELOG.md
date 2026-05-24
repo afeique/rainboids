@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.129.0] - 2026-05-24
+
+### Added — Element passive effects (Phase P6, batch 5)
+
+- **Prismatic Soul** — your shots auto-cycle all six elements (each shot stamps
+  the next element in PYRO→CRYO→VOLT→TOXIC→VOID→RADIANT), overriding attunements
+  while the active Elemental Infusion ability still takes precedence. With
+  multishot, one volley spreads several elements at once.
+- **Catalyst** — status reactions (Cryo shatter, Pyro/oil flare) deal +50% and
+  shatter chains one extra time.
+
+Tests: Prismatic element cycle in `passives-registry`.
+
 ## [6.128.1] - 2026-05-24
 
 ### Removed — Two catalog passives cut (design round-3 revision)
