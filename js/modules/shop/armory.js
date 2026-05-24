@@ -38,6 +38,10 @@ export const UNLOCK_CATEGORIES = {
     mods: { metaKey: 'unlockedMods', base: [], cost: 5000 },
     // W6 — per-ability Attunements (one element per ability, element-flavored).
     abilityAttunements: { metaKey: 'unlockedAbilityAttunements', base: [], cost: 6000 },
+    // Phase P — rule-modifier Passives (gold-bought, 3 equip slots, swappable
+    // mid-run). Priced between mods and abilities (design §4.2). Two safe,
+    // no-downside modular starters are owned from the start.
+    passives: { metaKey: 'unlockedPassives', base: ['OPPORTUNIST', 'LAST_BASTION'], cost: 9000 },
 };
 
 /** Cost in account-gold to unlock one item of a category. */

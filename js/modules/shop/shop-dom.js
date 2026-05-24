@@ -29,7 +29,7 @@ import {
     getPrimaryUpgrades,
     getPowerUpgrades,
     getAbilityUpgrades,
-    getPassiveUpgrades,
+    getStats,
     getAttunementsForWeapon,
     getMechanicMods,
     getAbilityAttunements,
@@ -797,7 +797,7 @@ function _renderPassiveCluster(container, player) {
     const grid = document.createElement('div');
     grid.className = 'shop-tree-passive-grid';
 
-    for (const upg of getPassiveUpgrades({ includeHidden: false })) {
+    for (const upg of getStats({ includeHidden: false })) {
         grid.appendChild(_buildPassiveDisplayNode(upg, player));
     }
     container.appendChild(grid);

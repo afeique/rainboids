@@ -1625,11 +1625,15 @@ export const ABILITY_UPGRADES = {
     DRONE_CALIBER:    { id: 'DRONE_CALIBER',    name: 'Heavy Caliber',    description: '+40% drone damage per stack',         cost: 2, maxStacks: 2, ability: 'SENTRY_DRONE', icon: 'circle-fill' },
 };
 
-// ─── PASSIVE UPGRADES (Phase 1 — 2026-05-19) ────────────────────────────────
+// ─── STATS — stat boons (Phase 1 — 2026-05-19; renamed from PASSIVE_UPGRADES
+// in Phase P, 2026-05-24, to free the "Passives" namespace for the new
+// rule-modifier layer in combat/passive-data.js) ────────────────────────────
 //
-// Always-on, weapon-agnostic, ability-agnostic. PASSIVE_UPGRADES is the
-// fourth category alongside PRIMARY_UPGRADES, POWER_UPGRADES, and
-// ABILITY_UPGRADES. Each entry's `id` matches the existing in-game ID so
+// Always-on, weapon-agnostic, ability-agnostic numeric stat increments
+// (crit, HP, toughness, vampirism, …) — the WAVE-CLEAR reward pool. They share
+// the stat families with SP_STATS (SP allocation). "Stats" (user-facing "Stat
+// boons"); NOT the rule-changing "Passives" (PASSIVES in passive-data.js).
+// Each entry's `id` matches the existing in-game ID so
 // `getPowerupStacks('THORNS')` etc. continues to resolve correctly via
 // the player's namespace-agnostic powerup map.
 //
@@ -1652,7 +1656,7 @@ export const ABILITY_UPGRADES = {
 // which forces deliberate playstyle choices. Weapon-specific effects
 // (Rapid Fire, Multi Shot, Explosive Rounds) were dropped from this
 // pool entirely — those are now per-weapon upgrades (6.28.0).
-export const PASSIVE_UPGRADES = {
+export const STATS = {
     CRIT_CHANCE:   { id: 'CRIT_CHANCE',   name: 'Critical Chance',    description: '+7% crit chance',                      maxStacks: 6,  passive: true, icon: 'star'   },
     CRIT_DAMAGE:   { id: 'CRIT_DAMAGE',   name: 'Critical Damage',    description: '+15% crit damage',                     maxStacks: 6,  passive: true, icon: 'dagger' },
     HEALTH_BOOST:  { id: 'HEALTH_BOOST',  name: 'Health',             description: '+35 max HP, full heal',                maxStacks: 10, passive: true, icon: 'heart'  },
@@ -1664,7 +1668,8 @@ export const PASSIVE_UPGRADES = {
 };
 
 // 6.30.0 — Ordered reward pool the survivor-card pick draws from.
-export const PASSIVE_REWARD_IDS = [
+// (Phase P rename: PASSIVE_REWARD_IDS → STAT_CARD_IDS.)
+export const STAT_CARD_IDS = [
     'HEALTH_BOOST', 'SHIELD_BOOST', 'VAMPIRISM', 'THORNS',
     'CRIT_CHANCE', 'CRIT_DAMAGE', 'DODGE', 'SPEED_BOOST',
 ];
@@ -1737,11 +1742,12 @@ export function getAbilityUpgrades(abilityId) {
 }
 
 /**
- * Get all passive upgrades. Optional `{ includeHidden }` flag controls
- * whether legacy/retired entries (LONG_RANGE, SPEED_BOOST, SPARE_SHIP)
- * are surfaced. Default behavior matches the POWERUP_TYPES convention
- * (`cfg.hidden` filters them out).
+ * Get all stat boons (the wave-clear stat pool). Optional `{ includeHidden }`
+ * flag controls whether legacy/retired entries (LONG_RANGE, SPEED_BOOST,
+ * SPARE_SHIP) are surfaced. Default behavior matches the POWERUP_TYPES
+ * convention (`cfg.hidden` filters them out).
+ * (Phase P rename: getPassiveUpgrades → getStats.)
  */
-export function getPassiveUpgrades({ includeHidden = false } = {}) {
-    return Object.values(PASSIVE_UPGRADES).filter(u => includeHidden || !u.hidden);
+export function getStats({ includeHidden = false } = {}) {
+    return Object.values(STATS).filter(u => includeHidden || !u.hidden);
 }

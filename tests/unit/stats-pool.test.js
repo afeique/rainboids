@@ -1,7 +1,7 @@
 /**
- * tests/unit/passive-upgrades.test.js
+ * tests/unit/stats-pool.test.js
  *
- * Verifies the PASSIVE_UPGRADES export in weapon-data.js.
+ * Verifies the STATS export in weapon-data.js.
  *
  * 6.28.0 / 6.30.0 redesign — PASSIVE is now the WAVE-CLEAR REWARD pool
  * ONLY (no shop tab, no gold cost). Offensive traits (Rapid Fire, Multi
@@ -11,10 +11,10 @@
  * NO `hidden` flag (the old retired-but-reserved IDs are gone).
  *
  * Acceptance criteria:
- *   - PASSIVE_UPGRADES exports the 8 stat IDs
+ *   - STATS exports the 8 stat IDs
  *   - Each entry has the reward-card shape (id, name, description,
  *     maxStacks, icon, passive: true) — no cost
- *   - PASSIVE_REWARD_IDS matches the pool the survivor cards draw from
+ *   - STAT_CARD_IDS matches the pool the survivor cards draw from
  *   - Offensive traits are NOT in the passive pool
  *
  * weapon-data.js is a pure module with no browser dependencies, so no
@@ -22,22 +22,22 @@
  */
 
 import {
-    PASSIVE_UPGRADES,
-    PASSIVE_REWARD_IDS,
-    getPassiveUpgrades,
+    STATS,
+    STAT_CARD_IDS,
+    getStats,
     PRIMARY_UPGRADES,
     POWER_UPGRADES,
 } from '../../js/modules/combat/weapon-data.js';
 
 // ---------------------------------------------------------------------------
-// PASSIVE_UPGRADES export
+// STATS export
 // ---------------------------------------------------------------------------
 
-describe('PASSIVE_UPGRADES (6.30.0 — wave-reward stat pool)', () => {
+describe('STATS (6.30.0 — wave-reward stat pool)', () => {
     test('is exported as an object', () => {
-        expect(PASSIVE_UPGRADES).toBeDefined();
-        expect(typeof PASSIVE_UPGRADES).toBe('object');
-        expect(PASSIVE_UPGRADES).not.toBeNull();
+        expect(STATS).toBeDefined();
+        expect(typeof STATS).toBe('object');
+        expect(STATS).not.toBeNull();
     });
 
     // The 8 defensive / utility stats that make up the reward pool.
@@ -47,16 +47,16 @@ describe('PASSIVE_UPGRADES (6.30.0 — wave-reward stat pool)', () => {
     ];
 
     test.each(EXPECTED_PASSIVE_IDS)('contains expected ID %s', (id) => {
-        expect(PASSIVE_UPGRADES[id]).toBeDefined();
-        expect(PASSIVE_UPGRADES[id].id).toBe(id);
+        expect(STATS[id]).toBeDefined();
+        expect(STATS[id].id).toBe(id);
     });
 
     test('the pool is EXACTLY those 8 stats (no extras)', () => {
-        expect(Object.keys(PASSIVE_UPGRADES).sort()).toEqual([...EXPECTED_PASSIVE_IDS].sort());
+        expect(Object.keys(STATS).sort()).toEqual([...EXPECTED_PASSIVE_IDS].sort());
     });
 
     test('every entry has the reward-card shape (no cost — reward-only)', () => {
-        for (const [key, upg] of Object.entries(PASSIVE_UPGRADES)) {
+        for (const [key, upg] of Object.entries(STATS)) {
             expect(upg.id).toBe(key);                          // key matches id
             expect(typeof upg.name).toBe('string');
             expect(upg.name.length).toBeGreaterThan(0);
@@ -73,48 +73,48 @@ describe('PASSIVE_UPGRADES (6.30.0 — wave-reward stat pool)', () => {
     test('keeps stat IDs stable for back-compat with getPowerupStacks()', () => {
         // Guards against an accidental rename in a future refactor —
         // getPowerupStacks() keys off these IDs.
-        expect(PASSIVE_UPGRADES.THORNS.id).toBe('THORNS');
-        expect(PASSIVE_UPGRADES.HEALTH_BOOST.id).toBe('HEALTH_BOOST');
-        expect(PASSIVE_UPGRADES.VAMPIRISM.id).toBe('VAMPIRISM');
-        expect(PASSIVE_UPGRADES.DODGE.id).toBe('DODGE');
+        expect(STATS.THORNS.id).toBe('THORNS');
+        expect(STATS.HEALTH_BOOST.id).toBe('HEALTH_BOOST');
+        expect(STATS.VAMPIRISM.id).toBe('VAMPIRISM');
+        expect(STATS.DODGE.id).toBe('DODGE');
     });
 
     test('offensive traits are NOT passives anymore (per-weapon upgrades now)', () => {
         // 6.28.0 — Rapid Fire / Multi Shot / Explosive / Executioner /
         // Iron Will were removed from the passive pool.
         for (const id of ['RAPID_FIRE', 'MULTI_SHOT', 'EXPLOSIVE', 'EXECUTIONER', 'IRON_WILL']) {
-            expect(PASSIVE_UPGRADES[id]).toBeUndefined();
+            expect(STATS[id]).toBeUndefined();
         }
     });
 
     test('no passive carries a hidden flag (retired-reserved IDs are gone)', () => {
-        for (const upg of Object.values(PASSIVE_UPGRADES)) {
+        for (const upg of Object.values(STATS)) {
             expect(upg.hidden).toBeFalsy();
         }
     });
 });
 
 // ---------------------------------------------------------------------------
-// PASSIVE_REWARD_IDS — the ordered survivor-card draw pool
+// STAT_CARD_IDS — the ordered survivor-card draw pool
 // ---------------------------------------------------------------------------
 
-describe('PASSIVE_REWARD_IDS', () => {
-    test('matches the PASSIVE_UPGRADES keys (every reward is a real passive)', () => {
-        expect(Array.isArray(PASSIVE_REWARD_IDS)).toBe(true);
-        expect(PASSIVE_REWARD_IDS.length).toBe(Object.keys(PASSIVE_UPGRADES).length);
-        for (const id of PASSIVE_REWARD_IDS) {
-            expect(PASSIVE_UPGRADES[id]).toBeDefined();
+describe('STAT_CARD_IDS', () => {
+    test('matches the STATS keys (every reward is a real passive)', () => {
+        expect(Array.isArray(STAT_CARD_IDS)).toBe(true);
+        expect(STAT_CARD_IDS.length).toBe(Object.keys(STATS).length);
+        for (const id of STAT_CARD_IDS) {
+            expect(STATS[id]).toBeDefined();
         }
     });
 });
 
 // ---------------------------------------------------------------------------
-// getPassiveUpgrades() iteration
+// getStats() iteration
 // ---------------------------------------------------------------------------
 
-describe('getPassiveUpgrades() iteration', () => {
+describe('getStats() iteration', () => {
     test('returns an array of every non-hidden entry by default', () => {
-        const visible = getPassiveUpgrades();
+        const visible = getStats();
         expect(Array.isArray(visible)).toBe(true);
         expect(visible.length).toBeGreaterThan(0);
         for (const upg of visible) {
@@ -123,7 +123,7 @@ describe('getPassiveUpgrades() iteration', () => {
     });
 
     test('every returned upgrade has passive: true', () => {
-        for (const upg of getPassiveUpgrades({ includeHidden: true })) {
+        for (const upg of getStats({ includeHidden: true })) {
             expect(upg.passive).toBe(true);
         }
     });

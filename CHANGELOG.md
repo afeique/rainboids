@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.121.0] - 2026-05-24
+
+### Changed — Stat-boon rename + new PASSIVES registry foundation (Phase P1)
+
+Groundwork for the **Passives** system (build-defining rule-modifiers, distinct
+from numeric stat boons). No player-facing behavior change yet — the registry
+is inert until its consumers land (P6) and the BUILD-tree cluster lands (P4).
+
+- **Renamed** `PASSIVE_UPGRADES → STATS`, `PASSIVE_REWARD_IDS → STAT_CARD_IDS`,
+  and `getPassiveUpgrades → getStats` (in `weapon-data.js` + `shop-manager.js` +
+  `shop-dom.js`), freeing the "Passives" namespace for the rule-modifier layer.
+  `SP_STATS` keeps its name; the stat-card pool is unchanged (same 8 stats).
+- **Added** `combat/passive-data.js` — the shared `PASSIVES` registry (~28
+  entries from the design catalog) with delivery metadata: `slot` (equip),
+  `item` (gear-affix), `itemTierMin`, and `stack` (binary | additive). Harsh
+  keystones (Glass Cannon / Gunslinger / Purist) are slot-only; modular
+  passives roll on Exceptional+; keystone chase-rolls are Transcendental-gated.
+- **Added** the `passives` account-gold unlock category (`unlockedPassives`
+  meta key, two free downside-free starters: Opportunist + Last Bastion).
+- Tests: `passives-registry` (shape + delivery + category) and the renamed
+  `stats-pool` suite.
+
 ## [6.120.0] - 2026-05-24
 
 ### Added — BUILD screen: tab cycling (keyboard + gamepad), instructions, legend (Phase U3)

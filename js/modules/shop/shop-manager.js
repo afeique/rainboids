@@ -10,11 +10,10 @@ import {
     PRIMARY_WEAPONS,
     POWER_WEAPONS,
     ABILITIES,
-    PASSIVE_UPGRADES,
     getPrimaryUpgrades,
     getPowerUpgrades,
     getAbilityUpgrades,
-    getPassiveUpgrades,
+    getStats,
     UPGRADE_COST_MULT,
     buildStackCosts,
 } from '../combat/weapon-data.js';
@@ -217,7 +216,7 @@ export function _rebuildShopCache() {
 
 // Phase 7 — Builds the unified "everything in the tree" list. Walks
 // every PRIMARY / POWER / DEFENSE weapon and emits their upgrades, plus
-// the PASSIVE_UPGRADES set. Each item carries enough metadata for
+// the STATS set. Each item carries enough metadata for
 // shop-dom to render a node AND for buyShopItem to route the purchase
 // (`isWeaponUpgrade` / `isPassive` / `isAbilityUpgrade`).
 export function _buildTreeItems() {
@@ -295,7 +294,7 @@ export function _buildTreeItems() {
     }
 
     // PASSIVES (non-hidden only)
-    for (const upg of getPassiveUpgrades({ includeHidden: false })) {
+    for (const upg of getStats({ includeHidden: false })) {
         items.push({
             id: upg.id,
             name: upg.name,
@@ -341,14 +340,14 @@ export function _buildPowerupsTabItems() {
 }
 
 // Phase 1 (2026-05-19) — Builds the PASSIVE shop tab. Walks
-// PASSIVE_UPGRADES (always-on, weapon-agnostic, ability-agnostic
+// STATS (always-on, weapon-agnostic, ability-agnostic
 // upgrades) and produces a shop item per non-hidden entry. Pricing
 // uses each upgrade's static `cost` (no per-stack ramp yet — Phase 7
 // can layer that on with the UI rewrite). All items use
 // `currency: 'COINS'` so the existing buy flow handles them.
 export function _buildPassiveTabItems() {
     const items = [];
-    const upgrades = getPassiveUpgrades({ includeHidden: false });
+    const upgrades = getStats({ includeHidden: false });
     for (const upg of upgrades) {
         items.push({
             id: upg.id,
@@ -569,7 +568,7 @@ export function buyShopItem(itemId) {
             // through the same upgrade-buy path as weapon-upgrade
             // rows. `_handleUpgradeBuy` reads `id`, `cost`,
             // `maxStacks`, and resolves the powerup config via
-            // `getPowerupConfig`; PASSIVE_UPGRADES entries match that
+            // `getPowerupConfig`; STATS entries match that
             // shape.
             if (filteredItem && filteredItem.isPassive) {
                 return this._handleUpgradeBuy(filteredItem);
