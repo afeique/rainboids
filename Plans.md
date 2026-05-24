@@ -174,20 +174,19 @@ slot-unlock timing.
 
 ## Phase X — Run Configurator & Difficulty Scaling  *(2026-05-24 · PLANNED)*
 
-Source: `docs/Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md` (**round-3 §11.B**).
-Player picks **run length (stages × waves/stage), boss count (= stages), and a difficulty tier**;
-higher difficulty = tougher enemies **and** more + better loot. **Replaces hardcoded `MAX_WAVES=30`**
-with a `runConfig`. **Round-3:** stages = slider **10–100** (default 10), waves/stage = radio **3 / 6 / 9**
-(default 3), **no endless** (long but finite); within a stage the last wave is the **BOSS** and every
-other multiple-of-3 wave is an **ELITE**; **card pick every stage clear** (cards = stages). Enemy scaling
-switches from run-normalized to **absolute/unbounded** (§11.D) so long runs keep escalating.
-**Absorbs Phase W8 "Ascension"** (difficulty tiers above the first clear = Ascension).
+Source: `docs/Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md` (**round-4 §12** — supersedes the round-3 chosen-tier model).
+**MAJOR PIVOT (round-4):** difficulty is **AUTO-TUNED, not player-chosen.** The player picks only run
+**length** (stages 10–100) + **waves/stage** (3/6/9) — a *commitment-for-reward* dial. `runConfig = {stages, wavesPerStage}`
+(**no `difficulty` field**). An **Adaptive Difficulty Director** auto-tunes the challenge to the player + a
+**procedural wave composer** randomizes each wave. **Replaces hardcoded `MAX_WAVES=30`.** Within a stage:
+last wave = BOSS, other mult-of-3 = ELITE; **powerup-card pick every stage EXCEPT the last** (cards = stages−1).
 
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
-| X1 | `runConfig = {stages, wavesPerStage, difficulty}` on `game` + save; replace `MAX_WAVES` reads (`constants.js`/`wave-*`/`game-engine`) with `stages×wavesPerStage`; **boss = last wave/stage, elite = other mult-of-3, card every stage**; `isStageClear`/run-complete read config | A 10-stage/3 and a 100-stage/9 run both run start→finish; bosses = stages; elite cadence correct; CONTINUE restores config; unit tests | - | cc:TODO |
-| X2 | Difficulty multipliers wired in: enemy HP/dmg/density (`getLevelScaledEnemyStats` + spawns), **item drop rate** + **`rollRarity(bias)`** + health/money rate + gold (`dropOrbsFromEntity`), bank bonus — all on top of existing curves/caps | Higher tier visibly harder + droppier + better rarity; caps (1.0 / 0.95) still clamp; unit test the multipliers | X1 | cc:TODO |
-| X3 | Cadence/slot scaling: **card every stage clear** (cards = stages); passive slots unlock progressively up to `maxSlots = 3 + floor(stages/30)` (cap 5, §11.A); once efficacy amps cap, drafts fall back to passive/Cores cards (§11.E, ties to P7) | Card count + slot unlocks scale correctly for short/long runs; unit test | X1, P3 | cc:TODO |
-| X4 | **RUN SETUP** UI (pre-run / folded into BUILD→START): stages + waves/stage + difficulty selectors with a live modifier readout; writes `runConfig` | Player configures a run; readout matches applied scaling; START RUN proceeds; QA green | X1, X2 | cc:TODO |
-| X5 | Difficulty-tier **gating** (`maxDifficultyCleared` in meta) — clear tier N to unlock N+1 (the Ascension spine); top tiers add rising resistances / endless length | Tiers unlock on clear; gated tiers locked in UI; persists | X2, X4 | cc:TODO |
-| X6 | Balance pass: AI-survival on a short low-difficulty run + a long high-difficulty run on a meta-progressed account; co-tune with R-BAL1 | Both runs winnable-but-non-trivial at their tier; no runaway loot/HP | X2, X5 | cc:TODO |
+| X1 | `runConfig = {stages, wavesPerStage}` on `game` + save; replace `MAX_WAVES` reads (`constants.js`/`wave-*`/`game-engine`) with `stages×wavesPerStage`; **boss = last wave/stage, elite = other mult-of-3, powerup-card every stage EXCEPT last (cards = stages−1)**; `isStageClear`/run-complete read config | A 10-stage/3 and a 100-stage/9 run both run start→finish; bosses = stages; elite cadence correct; cards = stages−1; CONTINUE restores config; unit tests | - | cc:TODO |
+| X2 | **Powerup-card pool layering** (§12.2): `card-draft.js buildDraft` falls back efficacy → **passive** (shared PASSIVES registry, = the P7 keystone-card channel) → **economy** (Cores/gold) so a 99-card run never runs dry; `CARDS_PER_RUN` derived = stages−1 | A long run keeps serving meaningful cards after efficacy caps; unit test the fallback tiers | X1, P6 | cc:TODO |
+| X3 | **Reward dial** (§12.3): waves/stage reward multiplier (3→×1.0 / 6→×1.3 / 9→×1.6) on drop-rate/gold/rarity/Cores; stages → endurance curve (rarity ceiling + item level + gold rise with depth-reached). Reward keys off **achieved threat × performance**, not a chosen tier | Bigger run-shape = more/better loot; deep stages unlock top rarities; unit test the multipliers | X1 | cc:TODO |
+| X4 | **Adaptive Difficulty Director** (§12.4a): per-run controller reading signals (dmg-taken/HP%, time-to-clear, DPS/overkill, near-death) → a challenge index vs a target HP-band; rate-limited knobs (enemy HP/dmg/toughness/resist/density/aggression; speeds clamped); slow upward baseline + player-power pre-load (card count/passives/gear level). Survives §11.D absolute curve as baseline | Director ramps when dominated, eases on death-spiral; baseline trends up; a 99-card late game stays lethal; unit-test the controller math | X1 | cc:TODO |
+| X5 | **Procedural wave composer** (§12.4b): Director hands a threat budget/wave; composer spends it on a randomized roster + **wave themes** (swarm/artillery/armored/elemental-surge/ambush/mixed) + telegraphed **wave modifiers** (explode-on-death, fast-fragile, no-health-drops, shielded-anchor, bounty…); elites/bosses draw from the same budget. Replaces the static `WAVE_DATA[1..30]` loop | Waves are fresh each run, budget-tuned; themes/modifiers telegraphed; reaches wave 900 without replaying 1–30; smoke green | X4 | cc:TODO |
+| X6 | **RUN SETUP** UI (pre-run / folded into BUILD→START, = Phase U U6): stages + waves/stage selectors with a live **reward-dial** readout (NOT a difficulty number); writes `runConfig`. Optional HUD **threat meter** (§12.4 open-q). Persist `peakThreatReached` meta (replaces `maxDifficultyCleared`) | Player sets length+waves/stage; readout matches reward scaling; START proceeds; QA green | X1, X3, U3 | cc:TODO |
+| X7 | Balance pass: AI-survival on a short (10×3) and a long (100×9) run on a meta-progressed account; tune the Director's target band + baseline climb + reward curve; co-tune R-BAL1 | Both shapes winnable-but-non-trivial; Director holds the band; no runaway loot/HP | X4, X5 | cc:TODO |
