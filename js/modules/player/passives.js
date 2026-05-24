@@ -27,9 +27,15 @@ export function isKeystonePassive(id) {
 }
 
 /**
- * Recompute activePassives from the equipped slots: a slot contributes iff it
- * is within the unlocked slot count, holds a known + owned passive. Idempotent;
- * call after any change to equipped/owned/slot-count.
+ * Recompute activePassives from TWO sources (design §3 — passives are acquired
+ * via equip slots AND gear rolls):
+ *   1. equip slots — a slot contributes iff within the unlocked slot count and
+ *      holding a known + owned passive (P2–P5).
+ *   2. gear (P7) — a passive AFFIX on an equipped item contributes WITHOUT
+ *      consuming a slot. The Set unions them, so a passive present from both a
+ *      slot and gear is just ON once ("binary = no double", §10 stacking).
+ * Idempotent; call after any change to equipped slots / owned / slot-count /
+ * equipped gear.
  */
 export function _rebuildActivePassives() {
     const active = new Set();
@@ -39,6 +45,13 @@ export function _rebuildActivePassives() {
     for (let i = 0; i < n; i++) {
         const id = slots[i];
         if (id && owned.has(id) && PASSIVES[id]) active.add(id);
+    }
+    // P7 — gear-borne passives (an equipped item's `.passive` affix).
+    if (this.equippedItems && typeof this.equippedItems === 'object') {
+        for (const slot of Object.keys(this.equippedItems)) {
+            const it = this.equippedItems[slot];
+            if (it && it.passive && PASSIVES[it.passive]) active.add(it.passive);
+        }
     }
     this.activePassives = active;
     return active;

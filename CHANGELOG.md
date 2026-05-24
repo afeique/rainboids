@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.132.0] - 2026-05-24
+
+### Added — Passives can roll on gear (Phase P7) — passive system complete
+
+Top-tier gear can now carry a rule-modifier **passive** as a special roll — a
+second acquisition channel alongside the gold-bought equip slots (design §3):
+
+- **Modular** passives roll on **Exceptional+** gear; a **keystone** rolls only
+  on **Transcendental** gear (each passive's `itemTierMin` gates it; chance
+  rises with rarity). Stored as `item.passive`.
+- A gear-borne passive is **active without consuming an equip slot** — equipped
+  items' passives union into `activePassives` (and feed `getPassiveMod` /
+  `getPassiveMult`). A passive present from both gear and a slot is simply on
+  once (binary "no double", §10 stacking).
+- This **completes the Passives system**: registry → BUILD-tree equip + unlock →
+  progressive slot gating → mid-run swap → CONTINUE-restore → **gear delivery**,
+  with a curated set of 14 working effects.
+
+Tests: `passives-gear` (rarity gating + gear union + binary dedup).
+
 ## [6.131.0] - 2026-05-24
 
 ### Added — In-run PASSIVES swap menu (Phase P5b)

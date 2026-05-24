@@ -1554,6 +1554,9 @@ export class GameEngine {
                 if (meta.equippedItems[slot]) p.equippedItems[slot] = meta.equippedItems[slot];
             }
         }
+        // P7 — equipped gear is now set; rebuild activePassives so any gear-borne
+        // passive affixes (item.passive) become active without a slot.
+        if (typeof p._rebuildActivePassives === 'function') p._rebuildActivePassives();
         // Re-sync HP to the (possibly higher) effective max from restored
         // HEALTH upgrades + gear so a carried-over run starts at full HP,
         // not under-healed against the base maxHealth.

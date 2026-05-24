@@ -29,6 +29,29 @@ import {
     RARITY_TIERS, RARITY_ORDER, rollRarity,
     ITEM_AFFIX_POOL, AFFIX_SCORE_WEIGHT,
 } from './item-names.js';
+import { getItemPassives } from '../combat/passive-data.js';
+
+// P7 — passive-affix delivery on gear. Top-tier gear can carry a rule-modifier
+// PASSIVE (a discrete `item.passive` id, not a numeric affix). Modular passives
+// roll on Exceptional+; a keystone only on a Transcendental roll (each passive's
+// `itemTierMin` gates it). Eligible set is PURE (exported for tests).
+const _EXCEPTIONAL_RANK = RARITY_ORDER.indexOf('exceptional');
+export function eligibleItemPassives(rarity) {
+    const rank = RARITY_ORDER.indexOf(rarity);
+    if (rank < _EXCEPTIONAL_RANK) return [];
+    return getItemPassives().filter((p) => RARITY_ORDER.indexOf(p.itemTierMin) <= rank);
+}
+// Roll a passive id for a freshly-created item of `rarity` (or null). Chance
+// rises with rarity; Exceptional+ only.
+export function rollItemPassive(rarity) {
+    const rank = RARITY_ORDER.indexOf(rarity);
+    if (rank < _EXCEPTIONAL_RANK) return null;
+    const chance = 0.15 + 0.06 * (rank - _EXCEPTIONAL_RANK); // ~15% Exceptional → higher up top
+    if (Math.random() >= chance) return null;
+    const pool = eligibleItemPassives(rarity);
+    if (pool.length === 0) return null;
+    return pool[(Math.random() * pool.length) | 0].id;
+}
 
 export function getHpBonusForLevel(level) {
     const L = Math.max(1, level | 0);
@@ -130,7 +153,11 @@ export function createItem(slot, level, rarityKey = null) {
     const rarity = rarityKey || rollRarity();
     const tier = RARITY_TIERS[rarity] || RARITY_TIERS.common;
     const affixes = rollAffixSet(level, rarity, tier.affixCount || 1);
-    return _finalizeItem(slot, level, rarity, affixes);
+    const item = _finalizeItem(slot, level, rarity, affixes);
+    // P7 — top-tier gear may carry a rule-modifier passive.
+    const passive = rollItemPassive(rarity);
+    if (passive) item.passive = passive;
+    return item;
 }
 
 // The next rarity up the 8-tier ladder, or null if already at the top.
