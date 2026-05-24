@@ -23,6 +23,10 @@ export function collision(a, b) {
     return Math.hypot(dx, dy) < a.radius + b.radius;
 }
 
+// P6 — Scavenger passive pickup-radius bonus (px). Added to the orb collection
+// radius when equipped — "huge pickup radius" — so it dwarfs the base +15 scoop.
+export const SCAVENGER_PICKUP_BONUS = 70;
+
 // Enhanced collision detection specifically for health stars and money stars
 // Addresses issues with small, fast-moving collectibles being missed by standard collision detection
 export function starCollision(player, star) {
@@ -32,9 +36,14 @@ export function starCollision(player, star) {
     
     // Import GAME_CONFIG here to avoid circular dependencies
     const STAR_COLLECTION_BONUS = 15; // Should match GAME_CONFIG collection radius
-    
+
+    // P6 — Scavenger passive: "huge pickup radius" — orbs are scooped from much
+    // farther (completes the keystone's second clause alongside +50% drop rate).
+    const scavengerBonus = (player && typeof player.hasPassive === 'function'
+        && player.hasPassive('SCAVENGER')) ? SCAVENGER_PICKUP_BONUS : 0;
+
     // Increased collection radius for collectible stars to make them easier to collect
-    const collectionRadius = player.radius + star.radius + STAR_COLLECTION_BONUS;
+    const collectionRadius = player.radius + star.radius + STAR_COLLECTION_BONUS + scavengerBonus;
     
     // Basic circle collision check first
     if (distance < collectionRadius) {

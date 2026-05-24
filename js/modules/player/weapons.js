@@ -157,6 +157,14 @@ function _getPerWeaponPiercingStacks(player, weaponId) {
 export function getPiercingStacksForWeapon(player, weaponId) {
     return _getPerWeaponPiercingStacks(player, weaponId);
 }
+
+// P6 — Purist passive: "shots pierce". Every primary shot gains +1 piercing
+// (additive with weapon/powerup piercing), completing the keystone's second
+// clause alongside its already-wired +40% damage / no-crit. Pure so it
+// unit-tests without a full Player.
+export function puristPierceBonus(player) {
+    return (player && typeof player.hasPassive === 'function' && player.hasPassive('PURIST')) ? 1 : 0;
+}
 export function getHomingStacksForWeapon(player, weaponId) {
     return _getPerWeaponHomingStacks(player, weaponId);
 }
@@ -1127,6 +1135,8 @@ export function applyGlobalBulletUpgrades(bullet) {
     if (piercingStacks > 0) {
         bullet.piercing = (bullet.piercing || 0) + piercingStacks;
     }
+    // P6 — Purist: "shots pierce" — +1 pierce on every primary shot.
+    bullet.piercing = (bullet.piercing || 0) + puristPierceBonus(this);
 
     // Explosive
     if (explosiveStacks > 0) {

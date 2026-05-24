@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.150.0] - 2026-05-24
+
+### Added — Purist + Scavenger secondary clauses (Phase P6)
+
+- **Purist** — "shots pierce" is now wired: every primary shot gains +1 piercing
+  (additive with weapon/powerup piercing), via `puristPierceBonus` in the
+  central `applyGlobalBulletUpgrades` chokepoint. Completes the keystone
+  alongside its already-live +40% damage / no-crit.
+- **Scavenger** — "huge pickup radius" is now wired: a +70px bonus to the orb
+  collection radius (`SCAVENGER_PICKUP_BONUS` in `starCollision`), dwarfing the
+  base +15 scoop. Completes the passive alongside its already-live +50% drop
+  rate. With these two, every passive that maps onto the existing engine
+  systems — including secondary clauses — is now live.
+
+---
+
 ## [6.149.0] - 2026-05-24
 
 ### Fixed — health overflow reliably rebuilds a spare tank
