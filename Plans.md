@@ -27,6 +27,26 @@ Source design docs (in `docs/`):
 
 ---
 
+## Phase U — Pre-run BUILD & Gear-Review UI  *(2026-05-24 · ACTIVE — user priority)*
+
+The pre-run start-of-game screen where the player **reviews everything before a run**:
+gear, the weapon bubble trees (primary/power), the ability/attunement tree, passives, and
+(later, X4) run setup. Built on the existing tabbed bubble tree (`shop-dom.js` pre-run
+mode + `static-dom._buildShopOverlay`): tabs **GEAR · PRIMARY · POWER · DEFENSE · PASSIVE**,
+a pre-run footer (BACK / loadout status / START RUN), legend, and floating tooltips already
+exist. Goal: make it a polished, complete "review & confirm your loadout" experience.
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| U1 | **Pre-run chrome**: title reads "BUILD" (not "UPGRADES") in pre-run mode; clear sub/instructions; show account-gold **and** Cores in the header; legend reflects pre-run states (equipped/active vs owned/affordable) | Pre-run header/title/legend read correctly; in-run shop unchanged; QA green | - | cc:TODO |
+| U2 | **Loadout summary / readiness** in the footer: show chosen counts + names (e.g. "4/4 primary · 4/4 power · 4/4 ability"); START RUN reflects readiness; per-tab "selected" affordances | Footer shows the live loadout; selecting/deselecting updates it; START communicates readiness | U1 | cc:TODO |
+| U3 | **Tab completeness**: every tab renders + is reviewable in pre-run — GEAR (equip/salvage/reroll/tier-up), PRIMARY/POWER (parent select + attunement/mod orbit), DEFENSE (ability select + ability-attunement orbit), PASSIVE (stats today; Phase P passives later). Keyboard/gamepad tab cycling | Each tab is browsable + actionable pre-run; no dead tabs; input works | U1 | cc:TODO |
+| U4 | **Polish pass**: spacing/contrast/responsive; bubble hover/active states; tooltip content (cost/desc/state); mobile layout | Reads cleanly desktop + mobile; bubbles legible; tooltips complete | U1, U2, U3 | cc:TODO |
+| U5 | **QA tests**: rework `07-weapons` + add BUILD-tree flow specs (open → review each tab → select loadout → START RUN); pre-run seeding round-trips (attunements/mods/ability-attune) | New/updated QA specs green; covers the review→start flow | U1–U4 | cc:TODO |
+| U6 | Fold **X4 RUN SETUP** into this screen as a tab/panel (stages · waves/stage · difficulty + live readout) once Phase X1/X2 land | RUN SETUP lives in the BUILD screen; writes `runConfig`; QA green | X1, X2, U3 | cc:TODO (after X) |
+
+---
+
 ## Phase A — remaining enemy types + enabling systems
 
 ### A.E8 — remaining new enemy types (each gated on its enabling system)
@@ -109,10 +129,10 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 behaviors for all 6 elements (Pyro/Cryo/Volt/Toxic/Void/Radiant), mechanic-mod classification +
 BUILD-tree nodes, efficacy-only card draft (1 primary + 1 power + 2 ability). Remaining:
 
-### W6 — Ability attunements  (decisions locked — design doc §15)
-- [ ] `abilityAttunements` data: ONE element per ability (not stacking); element-agnostic base; per-ability element options (design §15.1) · tests
-- [ ] `player.activeAbilityAttune[abilityId] = elementId`; applied on activate (`player/abilities.js`) — element status through the ability's verb
-- [ ] BUILD tree DEFENSE cluster: ability-attunement nodes (unlock + one-active toggle), `abilityAttunements` unlock category · commit
+### W6 — Ability attunements  ✅ SHIPPED (6.116.0 data/plumbing → 6.118.0 runtime)
+- [x] `abilityAttunements` data: ONE element per ability (not stacking); element-agnostic base; per-ability element options (design §15.1) · tests
+- [x] `player.activeAbilityAttune[abilityId] = elementId` (+ cached `activeAbilityAttuneElement`); applied at each ability's verb (`abilities.js` / `lifecycle.js` / deflector reflect) — element status through the ability's verb · `ability-attunements-w6-runtime` tests
+- [x] BUILD tree DEFENSE cluster: ability-attunement nodes (unlock + one-active radio), `abilityAttunements` unlock category, `setPreRunAbilityAttune` seeding · commit
 
 ### W7 — Economy + balance + polish  🟡 PARTIAL (unlock-cost dial-up + README sweep shipped)
 - [x] **Enemy weakness telegraph** — element-colored chevron **pip** above enemies (`weaknessElement`, `resist ≤ −0.3`, distinct from body tint, gentle pulse) + **damage-number effectiveness cue** (weakness = bigger/green/"WEAK"; resisted = small/grey) · 5 unit tests · commit (6.115.0)
