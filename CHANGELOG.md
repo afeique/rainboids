@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.106.0] - 2026-05-23
+
+### Added — Pyro attunement behavior: fire spread (Phase W2)
+
+Beyond the base burn (W1), Pyro-attuned weapons now spread wildfire: a follow-up
+Pyro hit on an **already-burning** enemy jumps the burn to up to 3 nearby
+enemies (within ~95px) at half intensity. Gated to burning targets so it
+doesn't scan the enemy pool on every shot, and inert unless a Pyro attunement
+is equipped (no base weapon fires Pyro). Oil-ignition flare (W1 reaction)
+already covers the oil synergy. 3 new unit tests; 646 unit green.
+
 ## [6.105.0] - 2026-05-23
 
 ### Added — Attunements are equippable in the BUILD tree (Phase W5, partial)

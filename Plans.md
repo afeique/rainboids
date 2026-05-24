@@ -278,7 +278,7 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 - Note: behavior-preserving for current weapons (single base element). `player.activeAttunements` map init'd; populated from loadout in W5.
 
 ### W2 — Attunement behaviors (per element batch)
-- [ ] PYRO (burn trails/pools, oil ignition) + tests · commit
+- [x] PYRO (fire SPREAD — burn jumps to nearby enemies on a follow-up hit; oil ignition already live via W1 flare) + 3 tests · commit (6.106.0)
 - [ ] CRYO (chill→freeze, shatter setups) + tests · commit
 - [ ] VOLT (conduct, chain/fork) + tests · commit
 - [ ] TOXIC (corrode/bleed, gas clouds) + tests · commit

@@ -2371,11 +2371,34 @@ function _triggerStatusReactions(enemy, dealt, opts) {
 // follow-up; the new elemental PRIMARIES Pyre/Caustic/Tesla will route here.)
 const ELEM_FREEZE_HIT = 8;     // a CRYO hit this hard FREEZES instead of CHILLs
 const ELEM_SHOCK_CHANCE = 0.2; // VOLT hit chance to also STUN (shock)
+// W2 (Pyro) — fire SPREAD: a follow-up Pyro hit on an already-burning enemy
+// jumps the burn to nearby enemies (the Pyro attunement identity — wildfire).
+// Gated to already-burning targets so it doesn't scan the pool on every hit.
+const BURN_SPREAD_RADIUS = 95;
+const BURN_SPREAD_MAX = 3;
+const BURN_SPREAD_FACTOR = 0.5;
+function _spreadBurn(enemy, dealt) {
+    const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+    if (!pool || typeof this.applyBurn !== 'function') return;
+    const r2 = BURN_SPREAD_RADIUS * BURN_SPREAD_RADIUS;
+    let n = 0;
+    for (const other of pool) {
+        if (other === enemy || !other.active) continue;
+        const dx = other.x - enemy.x, dy = other.y - enemy.y;
+        if (dx * dx + dy * dy > r2) continue;
+        this.applyBurn(other, dealt * BURN_SPREAD_FACTOR);
+        if (++n >= BURN_SPREAD_MAX) break;
+    }
+}
 export function applyWeaponElementStatus(enemy, element, dealt) {
     if (!enemy || !enemy.active) return;
     switch (element) {
         case 'PYRO':
-            if (typeof this.applyBurn === 'function') this.applyBurn(enemy, dealt);
+            if (typeof this.applyBurn === 'function') {
+                const wasBurning = enemy.brnUntil > frameClock.now;
+                this.applyBurn(enemy, dealt);
+                if (wasBurning) _spreadBurn.call(this, enemy, dealt);
+            }
             break;
         case 'CRYO':
             if (dealt >= ELEM_FREEZE_HIT) {
