@@ -75,6 +75,12 @@
 :root {
     --font-header: 'Press Start 2P', monospace;
     --font-body: 'Silkscreen', monospace;
+    /* 6.158.2 — font-size scales. Every UI font-size is `calc(px * scale)`,
+       so these multipliers let the player shrink/enlarge menu text for
+       readability. Body base px were bumped for a large, readable default;
+       both scales default to 1.0 and are rewritten on :root by font-settings.js. */
+    --font-header-scale: 1;
+    --font-body-scale: 1;
 }
 
 body {
@@ -174,7 +180,7 @@ body.shop-open .ui-element:not(#shop-overlay) {
     position: absolute;
     top: 30px;
     left: 350px; /* Moved right to make room for lives display */
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     color: #FFD700;
     z-index: 10;
     display: none; /* Hidden since money is now rendered on canvas */
@@ -195,13 +201,13 @@ body.shop-open .ui-element:not(#shop-overlay) {
 }
 
 .message-title {
-    font-size: 48px;
+    font-size: calc(48px * var(--font-header-scale, 1));
     text-shadow: 0 0 15px #f0f;
     animation: pulse 1.5s ease-in-out infinite;
 }
 
 .message-subtitle {
-    font-size: 20px;
+    font-size: calc(20px * var(--font-body-scale, 1));
     margin-top: 20px;
     line-height: 1.5;
 }
@@ -289,7 +295,7 @@ button:not([disabled]),
 
 #stats-panel-header h2 {
     margin: 0;
-    font-size: 22px;
+    font-size: calc(22px * var(--font-header-scale, 1));
     color: #ffd97a;
     letter-spacing: 2px;
     text-shadow: 0 0 12px rgba(255, 200, 64, 0.5);
@@ -302,7 +308,7 @@ button:not([disabled]),
     width: 32px;
     height: 32px;
     cursor: pointer;
-    font-size: 20px;
+    font-size: calc(20px * var(--font-body-scale, 1));
     line-height: 1;
     font-family: inherit;
 }
@@ -348,12 +354,12 @@ button:not([disabled]),
     border-radius: 6px;
 }
 #stats-summary .stats-summary-label {
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     color: #b09464;
     letter-spacing: 1px;
 }
 #stats-summary .stats-summary-value {
-    font-size: 17px;
+    font-size: calc(17px * var(--font-body-scale, 1));
     color: #ffe5a0;
 }
 
@@ -369,7 +375,7 @@ button:not([disabled]),
     padding: 14px 16px 8px;
 }
 .stats-section-title {
-    font-size: 13px;
+    font-size: calc(13px * var(--font-header-scale, 1));
     color: #ffd97a;
     letter-spacing: 1.5px;
     margin-bottom: 12px;
@@ -382,7 +388,7 @@ button:not([disabled]),
     align-items: baseline;
     gap: 12px;
     padding: 9px 6px;
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     line-height: 1.5;
     cursor: help;
     border-radius: 3px;
@@ -410,7 +416,7 @@ button:not([disabled]),
     align-items: center;
     gap: 12px;
     padding: 9px 6px;
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     cursor: help;
     border-radius: 3px;
 }
@@ -435,7 +441,7 @@ button:not([disabled]),
     min-width: 0;
 }
 .sp-alloc-name  { color: #e8d7a4; font-weight: bold; letter-spacing: 0.5px; }
-.sp-alloc-value { color: #9fb4ff; font-size: 10px; line-height: 1.4; }
+.sp-alloc-value { color: #9fb4ff; font-size: calc(12px * var(--font-body-scale, 1)); line-height: 1.4; }
 .sp-alloc-points {
     flex: 0 0 auto;
     min-width: 58px;
@@ -444,12 +450,12 @@ button:not([disabled]),
     font-weight: bold;
     font-variant-numeric: tabular-nums;
 }
-.sp-alloc-points--max { color: #c79bff; font-size: 10px; }
+.sp-alloc-points--max { color: #c79bff; font-size: calc(12px * var(--font-body-scale, 1)); }
 .sp-alloc-btn {
     flex: 0 0 28px;
     width: 28px;
     height: 28px;
-    font-size: 18px;
+    font-size: calc(18px * var(--font-body-scale, 1));
     line-height: 1;
     font-weight: bold;
     color: #ffe5a0;
@@ -488,7 +494,7 @@ button:not([disabled]),
     border: 1px solid #c2992f;
     color: #f5e8b0;
     padding: 10px 12px;
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     line-height: 1.55;
     max-width: 360px;
     box-shadow: 0 0 12px rgba(255, 200, 64, 0.25);
@@ -500,7 +506,7 @@ button:not([disabled]),
 #stats-panel-footer {
     text-align: center;
     color: #8a7549;
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     padding-top: 6px;
     border-top: 1px solid rgba(194, 153, 47, 0.25);
 }
@@ -510,7 +516,7 @@ button:not([disabled]),
     border: 1px solid rgba(194, 153, 47, 0.5);
     padding: 1px 6px;
     font-family: inherit;
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
 }
 
 /* ── Inventory overlay (6.x — 'I' key) ───────────────────────────── */
@@ -542,7 +548,7 @@ button:not([disabled]),
 }
 #inventory-title {
     margin: 0;
-    font-size: 22px;
+    font-size: calc(22px * var(--font-header-scale, 1));
     color: #8fd0ff;
     letter-spacing: 2px;
     text-shadow: 0 0 12px rgba(64, 150, 255, 0.5);
@@ -553,7 +559,7 @@ button:not([disabled]),
     border: 1px solid rgba(80, 140, 220, 0.55);
     width: 32px; height: 32px;
     cursor: pointer;
-    font-size: 20px;
+    font-size: calc(20px * var(--font-body-scale, 1));
     line-height: 1;
     font-family: inherit;
 }
@@ -569,12 +575,12 @@ button:not([disabled]),
 #inventory-footer {
     text-align: center;
     color: #5e7290;
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     padding-top: 6px;
     border-top: 1px solid rgba(80, 140, 220, 0.25);
 }
 .inv-section-title {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-header-scale, 1));
     color: #9fd6ff;
     letter-spacing: 1.5px;
     border-bottom: 1px dashed rgba(80, 140, 220, 0.35);
@@ -598,11 +604,11 @@ button:not([disabled]),
 }
 .inv-slot--empty { opacity: 0.5; }
 .inv-slot-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.inv-slot-label { font-size: 9px; color: #7e93b4; letter-spacing: 1px; }
-.inv-item-name { font-size: 10px; font-weight: bold; }
-.inv-item-affix { font-size: 8px; color: #aab6ce; line-height: 1.5; }
+.inv-slot-label { font-size: calc(12px * var(--font-body-scale, 1)); color: #7e93b4; letter-spacing: 1px; }
+.inv-item-name { font-size: calc(12px * var(--font-body-scale, 1)); font-weight: bold; }
+.inv-item-affix { font-size: calc(11px * var(--font-body-scale, 1)); color: #aab6ce; line-height: 1.5; }
 .inv-drop-list { display: flex; flex-direction: column; gap: 6px; }
-.inv-drop-empty { font-size: 10px; color: #5e7290; padding: 8px 4px; }
+.inv-drop-empty { font-size: calc(12px * var(--font-body-scale, 1)); color: #5e7290; padding: 8px 4px; }
 .inv-drop-row {
     display: flex;
     align-items: center;
@@ -623,11 +629,11 @@ button:not([disabled]),
 .inv-drop-row:disabled { cursor: default; }
 .inv-drop-row--equipped { opacity: 0.7; }
 .inv-drop-info { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.inv-drop-name { font-size: 10px; font-weight: bold; }
-.inv-drop-affix { font-size: 8px; color: #aab6ce; line-height: 1.5; }
+.inv-drop-name { font-size: calc(12px * var(--font-body-scale, 1)); font-weight: bold; }
+.inv-drop-affix { font-size: calc(11px * var(--font-body-scale, 1)); color: #aab6ce; line-height: 1.5; }
 .inv-drop-tag {
     flex: 0 0 auto;
-    font-size: 8px;
+    font-size: calc(11px * var(--font-body-scale, 1));
     letter-spacing: 1px;
     padding: 3px 7px;
     border-radius: 3px;
@@ -688,7 +694,7 @@ button:not([disabled]),
 
 .pause-tab-content > h2 {
     font-family: var(--font-body);
-    font-size: 24px;
+    font-size: calc(24px * var(--font-header-scale, 1));
     letter-spacing: 5px;
     margin: 0 auto 22px;
     text-align: center;
@@ -805,7 +811,7 @@ button:not([disabled]),
 .controls-section-title {
     font-family: var(--font-body);
     /*font-family: 'Silkscreen', monospace;*/
-    font-size: 18px;
+    font-size: calc(18px * var(--font-header-scale, 1));
     font-weight: 700;
     letter-spacing: 2px;
     color: var(--accent);
@@ -909,7 +915,7 @@ button:not([disabled]),
     width: 50%;
     font-family: 'Silkscreen', monospace;
     /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
-    font-size: 18px;
+    font-size: calc(18px * var(--font-body-scale, 1));
     font-weight: 500;
     line-height: 1.35;
     letter-spacing: 0.2px;
@@ -1040,7 +1046,7 @@ button:not([disabled]),
     image-rendering: pixelated;
     font-family: 'Silkscreen', monospace;
     /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
-    font-size: 24px;
+    font-size: calc(24px * var(--font-body-scale, 1));
     font-weight: 700;
     letter-spacing: 0.4px;
     text-transform: uppercase;
@@ -1053,12 +1059,12 @@ button:not([disabled]),
 .kbd-sprite-text.kbd-sprite-wide {
     min-width: 123px;            /* Jumbo EMPTY2.png at 3× (41×3) */
     background-image: url('../sprites/keys/EMPTY2.png');
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
 }
 .kbd-sprite-text.kbd-sprite-small {
     height: 48px;
     min-width: 48px;
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
 }
 .kbd-tone-cyan   { color: #66e6ff; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 0 8px rgba(102, 230, 255, 0.45); }
 .kbd-tone-orange { color: #ffb366; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 0 8px rgba(255, 179, 102, 0.45); }
@@ -1163,7 +1169,7 @@ button:not([disabled]),
     padding: 0 12px;
     font-family: 'Silkscreen', monospace;
     /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
-    font-size: 13px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     font-weight: 700;
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -1186,7 +1192,7 @@ button:not([disabled]),
     font-family: 'Silkscreen', monospace;
     text-transform: uppercase;
     /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     font-style: italic;
     padding: 0 2px;
 }
@@ -1197,7 +1203,7 @@ button:not([disabled]),
     color: #f0f4fa;
     font-family: 'Silkscreen', monospace;
     /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
-    font-size: 15px;
+    font-size: calc(15px * var(--font-body-scale, 1));
     font-weight: 500;
     line-height: 1.45;
     letter-spacing: 0.3px;
@@ -1215,7 +1221,7 @@ button:not([disabled]),
     color: #a8b0bc;
     font-family: 'Silkscreen', monospace;
     /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
-    font-size: 20px;
+    font-size: calc(20px * var(--font-body-scale, 1));
     font-weight: 400;
     letter-spacing: 0.3px;
 }
@@ -1283,7 +1289,7 @@ button:not([disabled]),
     color: white;
     cursor: pointer;
     font-family: var(--font-body);
-    font-size: 18px;
+    font-size: calc(18px * var(--font-header-scale, 1));
     border-radius: 5px;
     transition: all 0.2s;
     text-align: center;
@@ -1349,18 +1355,18 @@ button:not([disabled]),
 .assist-row-text { flex: 1 1 auto; }
 .assist-row-title {
     font-family: var(--font-body);
-    font-size: 14px;
+    font-size: calc(14px * var(--font-header-scale, 1));
     color: #66ddcc;
     margin-bottom: 6px;
 }
 .assist-row-desc {
-    font-size: 13px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     color: #cccccc;
 }
 
 .pause-tab-content {
     display: none;
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     line-height: 2.5;
     text-align: left;
 }
@@ -1387,7 +1393,7 @@ button:not([disabled]),
     color: #9aa3b3;
     font-family: 'Silkscreen', monospace;
     /*font-family: 'Inter', 'Helvetica Neue', system-ui, -apple-system, sans-serif;*/
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     font-style: italic;
     letter-spacing: 0.4px;
     text-align: center;
@@ -1423,9 +1429,9 @@ button:not([disabled]),
 }
 .pause-equip-row:hover { border-color: rgba(190, 160, 255, 0.7); background: rgba(60, 45, 90, 0.6); }
 .pause-equip-row.equipped { border-color: #11bb88; background: rgba(20, 70, 55, 0.55); color: #d6ffe9; }
-.pause-equip-name   { grid-area: name; font-size: 12px; }
-.pause-equip-status { grid-area: status; font-size: 10px; color: #8effc0; align-self: center; }
-.pause-equip-desc   { grid-area: desc; font-size: 9px; color: #9a90b8; line-height: 1.4; }
+.pause-equip-name   { grid-area: name; font-size: calc(13px * var(--font-body-scale, 1)); }
+.pause-equip-status { grid-area: status; font-size: calc(12px * var(--font-body-scale, 1)); color: #8effc0; align-self: center; }
+.pause-equip-desc   { grid-area: desc; font-size: calc(12px * var(--font-body-scale, 1)); color: #9a90b8; line-height: 1.4; }
 
 /* ── SHOP OVERLAY ──────────────────────────────────────────────────────────
    Mirrors the pause-menu layout: full-viewport backdrop, centered column,
@@ -1468,7 +1474,7 @@ button:not([disabled]),
     color: white;
     cursor: pointer;
     font-family: var(--font-body);
-    font-size: 20px;
+    font-size: calc(20px * var(--font-body-scale, 1));
     line-height: 1;
     border-radius: 5px;
     transition: all 0.2s;
@@ -1482,7 +1488,7 @@ button:not([disabled]),
 
 .shop-title {
     color: #00ccff;
-    font-size: 32px;
+    font-size: calc(32px * var(--font-header-scale, 1));
     margin: 0;
     font-family: var(--font-body);
 }
@@ -1493,21 +1499,21 @@ button:not([disabled]),
     justify-content: center;
     align-items: center;
     font-family: var(--font-body);
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     line-height: 1;
 }
 .shop-currency { display: inline-flex; align-items: center; gap: 8px; }
 .shop-currency--coins { color: #ffd700; }
 .shop-currency--sp    { color: #6ab7ff; }
 .shop-currency--picks { color: #ff66cc; }
-.shop-currency-icon   { font-size: 18px; }
-.shop-currency-label  { color: #4a90e2; font-size: 14px; }
+.shop-currency-icon   { font-size: calc(18px * var(--font-body-scale, 1)); }
+.shop-currency-label  { color: #4a90e2; font-size: calc(14px * var(--font-body-scale, 1)); }
 .shop-currency--picks .shop-currency-label { color: #ff66cc; }
 /* 5.71.0 — big bold + sigil for the PICKS counter. Slightly oversized
    vs. other currency icons so the resource reads clearly as a "free
    pick" rather than a numeric cost. */
 .shop-picks-icon {
-    font-size: 28px;
+    font-size: calc(28px * var(--font-body-scale, 1));
     font-weight: 900;
     line-height: 1;
     color: #ff66cc;
@@ -1538,7 +1544,7 @@ button:not([disabled]),
     color: white;
     cursor: pointer;
     font-family: var(--font-body);
-    font-size: 18px;
+    font-size: calc(18px * var(--font-header-scale, 1));
     border-radius: 5px;
     transition: all 0.2s;
     text-align: center;
@@ -1639,10 +1645,10 @@ button:not([disabled]),
 .shop-item--weaponed .shop-item-icon { color: var(--item-color); }
 .shop-item--weaponed .shop-item-name { color: var(--item-color); }
 
-.shop-item-icon { font-size: 32px; text-align: center; }
+.shop-item-icon { font-size: calc(32px * var(--font-body-scale, 1)); text-align: center; }
 .shop-item-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.shop-item-name { font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.shop-item-desc { font-size: 12px; color: #cccccc; line-height: 1.4; }
+.shop-item-name { font-size: calc(16px * var(--font-body-scale, 1)); font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shop-item-desc { font-size: calc(13px * var(--font-body-scale, 1)); color: #cccccc; line-height: 1.4; }
 
 .shop-item-cost {
     display: flex;
@@ -1651,13 +1657,13 @@ button:not([disabled]),
     gap: 4px;
     min-width: 110px;
 }
-.shop-item-price { font-size: 16px; font-weight: bold; color: #ffd700; display: inline-flex; align-items: center; gap: 6px; }
+.shop-item-price { font-size: calc(16px * var(--font-body-scale, 1)); font-weight: bold; color: #ffd700; display: inline-flex; align-items: center; gap: 6px; }
 .shop-item-price--coin .shop-coin-icon { vertical-align: middle; }
 .shop-item-price--sp { color: #4a90e2; }
 .shop-item-price--picks { color: #ff66cc; }
 .shop-item-price--picks-row { display: inline-flex; align-items: center; gap: 4px; }
 .shop-item-price-pick-sigil {
-    font-size: 24px;
+    font-size: calc(24px * var(--font-body-scale, 1));
     font-weight: 900;
     line-height: 1;
     color: inherit;
@@ -1666,7 +1672,7 @@ button:not([disabled]),
 .shop-item-price--cant { color: #ff6666; }
 .shop-item-price--equipped { color: #44ddff; }
 .shop-item-price--owned { color: #44ff88; }
-.shop-item-status { font-size: 10px; color: #00ffff; }
+.shop-item-status { font-size: calc(12px * var(--font-body-scale, 1)); color: #00ffff; }
 .shop-item-status--maxed { color: #666; }
 .shop-item-status--owned { color: #44ff88; }
 /* Level 0 — item not yet purchased. Red so the player can tell at a
@@ -1692,7 +1698,7 @@ button:not([disabled]),
     border: 1px solid #cc6666;
     color: #ffffff;
     font-family: var(--font-body);
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     border-radius: 5px;
     cursor: pointer;
     align-self: center;
@@ -1734,7 +1740,7 @@ button:not([disabled]),
 }
 .shop-help-intro,
 .shop-help-footer {
-    font-size: 13px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     line-height: 1.7;
     color: #cccccc;
 }
@@ -1756,14 +1762,14 @@ button:not([disabled]),
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    font-size: 22px;
+    font-size: calc(22px * var(--font-body-scale, 1));
     font-weight: bold;
     background: rgba(0, 0, 0, 0.6);
     border: 2px solid rgba(255, 255, 255, 0.2);
 }
 .shop-help-icon--sp { color: #6ab7ff; border-color: rgba(74, 144, 226, 0.7); }
 .shop-help-icon--xp { color: #ff6e6e; border-color: rgba(220, 60, 60, 0.7); }
-.shop-help-icon--picks { color: #ff66cc; border-color: rgba(255, 102, 204, 0.7); font-size: 11px; }
+.shop-help-icon--picks { color: #ff66cc; border-color: rgba(255, 102, 204, 0.7); font-size: calc(13px * var(--font-body-scale, 1)); }
 
 /* 5.71.0 — TIMER tab: live elapsed-time readout + tier table. */
 .shop-timer-live {
@@ -1778,18 +1784,18 @@ button:not([disabled]),
     border-radius: 6px;
 }
 .shop-timer-live-label {
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     letter-spacing: 2px;
     color: #888;
 }
 .shop-timer-live-time {
-    font-size: 36px;
+    font-size: calc(36px * var(--font-body-scale, 1));
     font-weight: bold;
     font-family: 'Courier New', monospace;
     line-height: 1;
 }
 .shop-timer-live-projected {
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     letter-spacing: 1px;
     margin-top: 4px;
 }
@@ -1809,7 +1815,7 @@ button:not([disabled]),
 }
 .shop-timer-row--header {
     background: transparent;
-    font-size: 11px;
+    font-size: calc(11px * var(--font-header-scale, 1));
     letter-spacing: 2px;
     color: #888;
     padding-bottom: 4px;
@@ -1819,19 +1825,19 @@ button:not([disabled]),
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 .shop-timer-cell {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     letter-spacing: 1px;
 }
 .shop-timer-cell--tier { font-weight: bold; }
 .shop-timer-cell--time { font-family: 'Courier New', monospace; color: #d8d8d8; }
 .shop-timer-cell--mult { text-align: right; font-weight: bold; }
 .shop-help-text { display: flex; flex-direction: column; gap: 6px; }
-.shop-help-title { font-size: 16px; font-weight: bold; letter-spacing: 1px; }
+.shop-help-title { font-size: calc(16px * var(--font-header-scale, 1)); font-weight: bold; letter-spacing: 1px; }
 .shop-help-title--gold { color: #ffd700; }
 .shop-help-title--sp   { color: #6ab7ff; }
 .shop-help-title--picks { color: #ff66cc; }
 .shop-help-title--xp   { color: #ff6e6e; }
-.shop-help-body { font-size: 12px; color: #d8d8d8; line-height: 1.7; }
+.shop-help-body { font-size: calc(13px * var(--font-body-scale, 1)); color: #d8d8d8; line-height: 1.7; }
 
 .pause-menu-actions {
     /* SHOP/RESUME row sits at the very top of the pause menu. The divider
@@ -1855,10 +1861,10 @@ button:not([disabled]),
     border: 2px solid rgba(0, 200, 255, 0.6);
     color: white;
     cursor: pointer;
-    /* 6.158.1 — RESUME (and other pause action buttons) use the pixel header
+    /* 6.158.2 — RESUME (and other pause action buttons) use the pixel header
        font, not the body font, so the CTA reads as a chunky retro button. */
     font-family: var(--font-header);
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     border-radius: 5px;
     transition: all 0.3s;
     text-transform: uppercase;
@@ -1878,7 +1884,7 @@ button:not([disabled]),
 }
 
 .pause-btn-icon {
-    font-size: 26px;
+    font-size: calc(26px * var(--font-body-scale, 1));
     line-height: 1;
     position: relative;
     top: -3px; /* icon sits low in em square — nudge up */
@@ -1960,7 +1966,7 @@ body.shop-open #hud-pause-btn {
     margin: 20px auto 0;
     padding: 10px;
     font-family: var(--font-body);
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     color: white;
     background: #333;
     border: 2px solid white;
@@ -2071,12 +2077,12 @@ body.shop-open #hud-pause-btn {
 }
 
 #customization-overlay h2 { 
-    font-size: 24px; 
+    font-size: calc(24px * var(--font-header-scale, 1)); 
     margin-bottom: 15px; 
 }
 
 #customization-overlay p { 
-    font-size: 16px; 
+    font-size: calc(16px * var(--font-body-scale, 1)); 
     max-width: 80%; 
     margin-bottom: 30px; 
     line-height: 1.5; 
@@ -2097,7 +2103,7 @@ body.shop-open #hud-pause-btn {
      margin-top: 30px;
      padding: 15px 30px;
      font-family: var(--font-body);
-     font-size: 18px;
+     font-size: calc(18px * var(--font-body-scale, 1));
      color: black;
      background: white;
      border: 2px solid white;
@@ -2150,7 +2156,7 @@ body.shop-open #hud-pause-btn {
 }
 
 #loading-text {
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     color: rgba(255, 255, 255, 0.8);
     margin: 0;
 } */
@@ -2213,12 +2219,12 @@ body.shop-open #hud-pause-btn {
 }
 
 #desktop-only-block .desktop-only-icon {
-    font-size: 96px;
+    font-size: calc(96px * var(--font-body-scale, 1));
     margin-bottom: 24px;
 }
 
 #desktop-only-block h1 {
-    font-size: 28px;
+    font-size: calc(28px * var(--font-header-scale, 1));
     margin: 0 0 24px 0;
     color: goldenrod;
     letter-spacing: 2px;
@@ -2227,12 +2233,12 @@ body.shop-open #hud-pause-btn {
 #desktop-only-block p {
     max-width: 520px;
     line-height: 1.7;
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     margin: 0 0 16px 0;
 }
 
 #desktop-only-block .desktop-only-sub {
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     color: #aaa;
 }
 
@@ -2311,14 +2317,14 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     display: inline-block;
     white-space: nowrap;
     font-family: var(--font-body);
-    font-size: 18px;
+    font-size: calc(18px * var(--font-body-scale, 1));
     color: #00ff00;
     line-height: 30px;
 }
 
 #current-track-name {
     font-family: var(--font-body);
-    font-size: 18px;
+    font-size: calc(18px * var(--font-body-scale, 1));
     color: #00ff00;
     line-height: 30px;
     white-space: nowrap;
@@ -2333,7 +2339,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 
 #music-info-current-time,
 #music-info-duration {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     color: rgba(255, 255, 255, 0.8);
     min-width: 35px;
 }
@@ -2363,7 +2369,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border: 2px solid #FFD700;
     color: #FFD700;
     cursor: pointer;
-    font-size: 18px;
+    font-size: calc(18px * var(--font-body-scale, 1));
     font-weight: bold;
     transition: all 0.2s;
     z-index: 2; /* Above canvas (z-index 1) but behind shop overlay */
@@ -2437,7 +2443,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 
 #music-current-time,
 #music-duration {
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     color: rgba(255, 255, 255, 0.8);
     min-width: 45px;
 }
@@ -2474,7 +2480,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     color: white;
     padding: 10px;
     cursor: pointer;
-    font-size: 20px;
+    font-size: calc(20px * var(--font-body-scale, 1));
     border-radius: 50%;
     width: 50px;
     height: 50px;
@@ -2487,7 +2493,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 .music-control-btn.large {
     width: 60px;
     height: 60px;
-    font-size: 24px;
+    font-size: calc(24px * var(--font-body-scale, 1));
 }
 
 .music-control-btn:hover {
@@ -2517,7 +2523,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     padding: 5px 10px;
     border-radius: 4px;
     border: 1px solid rgba(0, 204, 255, 0.6);
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     font-family: inherit;
     white-space: nowrap;
     pointer-events: none;
@@ -2542,7 +2548,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 }
 
 #playlist-container h3 {
-    font-size: 16px;
+    font-size: calc(16px * var(--font-header-scale, 1));
     margin-bottom: 15px;
     color: #00ff00;
     text-align: center;
@@ -2578,7 +2584,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     padding: 0 15px;
     cursor: pointer;
     font-family: 'Silkscreen', monospace;
-    font-size: 18px;
+    font-size: calc(18px * var(--font-body-scale, 1));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2692,7 +2698,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 
 #sfx-volume-value {
     color: #00ff00;
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
 }
 
 /* Music Volume Slider */
@@ -2728,7 +2734,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 
 #music-volume-value {
     color: #0088ff;
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
 }
 
 /* Sound Effect Toggles */
@@ -2780,7 +2786,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 
 .sfx-toggle-label {
     font-family: 'Silkscreen', monospace;
-    font-size: 18px;
+    font-size: calc(18px * var(--font-body-scale, 1));
     text-transform: capitalize;
 }
 
@@ -2827,7 +2833,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border-radius: 6px;
     background: rgba(0, 200, 255, 0.2);
     color: white;
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -2880,7 +2886,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 
 .powerup-hud-countdown {
     font-family: 'Silkscreen', monospace;
-    font-size: 13px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     color: #ffffff;
     text-align: center;
     white-space: nowrap;
@@ -2900,7 +2906,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: calc(20px * var(--font-body-scale, 1));
     line-height: 1;
 }
 
@@ -2912,7 +2918,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     color: #ffffff;
     border-radius: 5px;
     padding: 1px 3px;
-    font-size: 13px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     font-family: 'Silkscreen', monospace;
     line-height: 1.3;
     white-space: nowrap;
@@ -2936,7 +2942,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 
 .powerup-hud-name {
     font-family: 'Silkscreen', monospace;
-    font-size: 13px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     color: #aaddff;
     text-align: center;
     margin-top: 5px;
@@ -2959,7 +2965,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     background: white;
     color: #00ccff;
     border-radius: 50%;
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     font-family: var(--font-body);
     display: flex;
     align-items: center;
@@ -2982,7 +2988,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border-radius: 8px;
     padding: 14px 26px;
     color: #ffffff;
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     font-family: 'Silkscreen', monospace;
     line-height: 1.5;
     pointer-events: none;
@@ -3033,7 +3039,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 }
 .shop-equipped-label {
     font-family: var(--font-body);
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     letter-spacing: 1.5px;
     color: rgba(255, 255, 255, 0.65);
     text-transform: uppercase;
@@ -3043,11 +3049,11 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     align-items: center;
     gap: 10px;
     font-family: var(--font-body);
-    font-size: 20px;
+    font-size: calc(20px * var(--font-body-scale, 1));
     font-weight: bold;
 }
 .shop-equipped-icon {
-    font-size: 24px;
+    font-size: calc(24px * var(--font-body-scale, 1));
 }
 
 /* ── Powerups pause-tab — Offense / Drops sub-tabs + card list ───── */
@@ -3066,7 +3072,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     color: #ffffff;
     cursor: pointer;
     font-family: var(--font-body);
-    font-size: 14px;
+    font-size: calc(14px * var(--font-header-scale, 1));
     border-radius: 5px;
     transition: all 0.18s;
     flex: 1;
@@ -3132,7 +3138,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     opacity: 1;
 }
 .powerup-card-icon {
-    font-size: 26px;
+    font-size: calc(26px * var(--font-body-scale, 1));
     width: 36px;
     text-align: center;
     flex-shrink: 0;
@@ -3143,17 +3149,17 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 }
 .powerup-card-name {
     font-family: var(--font-body);
-    font-size: 13px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     margin-bottom: 4px;
 }
 .powerup-card-desc {
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     color: #ccc;
     line-height: 1.35;
 }
 .powerup-card-stacks {
     font-family: var(--font-body);
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     min-width: 50px;
     text-align: right;
     color: #00ccff;
@@ -3175,7 +3181,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border-radius: 8px;
 }
 .powerups-pick-sigil {
-    font-size: 28px;
+    font-size: calc(28px * var(--font-body-scale, 1));
     font-weight: 900;
     line-height: 1;
     color: #ff66cc;
@@ -3183,12 +3189,12 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 }
 .powerups-pick-count {
     font-family: var(--font-body);
-    font-size: 22px;
+    font-size: calc(22px * var(--font-body-scale, 1));
     color: #ff66cc;
 }
 .powerups-pick-label {
     font-family: var(--font-body);
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     letter-spacing: 2px;
     color: #ff99dd;
 }
@@ -3196,7 +3202,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     margin-left: 12px;
     padding: 8px 14px;
     font-family: var(--font-body);
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     font-weight: bold;
     color: #ff66cc;
     background: rgba(255, 102, 204, 0.12);
@@ -3233,7 +3239,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     padding: 6px 12px;
     border-radius: 4px;
     border: 1px solid rgba(0, 204, 255, 0.6);
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     font-family: 'Silkscreen', monospace;
     white-space: nowrap;
     pointer-events: none;
@@ -3392,7 +3398,7 @@ body.mobile-portrait #shop-menu {
    pause-tab cells use `white-space: nowrap` (already set) so without this
    the labels would otherwise be clipped to ellipsis-or-overflow. */
 body.mobile-portrait .pause-tab {
-    font-size: 11px;
+    font-size: calc(11px * var(--font-header-scale, 1));
     padding: 10px 6px;
     letter-spacing: 0.5px;
 }
@@ -3403,14 +3409,14 @@ body.mobile-portrait .pause-tabs {
 }
 
 body.mobile-portrait .pause-action-btn {
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     padding: 8px 12px;
     letter-spacing: 0.5px;
     gap: 6px;
 }
 
 body.mobile-portrait .pause-btn-icon {
-    font-size: 20px;
+    font-size: calc(20px * var(--font-body-scale, 1));
 }
 
 body.mobile-portrait .pause-menu-actions {
@@ -3439,7 +3445,7 @@ body.mobile-portrait .controls-table {
     margin: 4px auto 0;
 }
 body.mobile-portrait .controls-section-title {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-header-scale, 1));
     letter-spacing: 1px;
 }
 body.mobile-portrait .controls-section-icon {
@@ -3451,7 +3457,7 @@ body.mobile-portrait .controls-section-cell {
     padding: 8px 2px 6px;
 }
 body.mobile-portrait .controls-action {
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     letter-spacing: 0;
     padding: 8px 4px 8px 14px;
     line-height: 1.3;
@@ -3470,13 +3476,13 @@ body.mobile-portrait .controls-keys > * {
     margin-right: 3px;
 }
 body.mobile-portrait .controls-footer {
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     margin-top: 12px;
     padding-top: 8px;
     gap: 6px;
 }
 body.mobile-portrait #controls-tab h2 {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-header-scale, 1));
     margin: 4px 0 4px;
 }
 
@@ -3508,7 +3514,7 @@ body.mobile-portrait #controls-tab h2 {
 
 .wave-pick-title {
     font-family: var(--font-body);
-    font-size: 24px;
+    font-size: calc(24px * var(--font-header-scale, 1));
     color: #ffd700;
     text-shadow: 0 0 8px rgba(255, 215, 0, 0.45);
     margin: 0 0 6px 0;
@@ -3517,7 +3523,7 @@ body.mobile-portrait #controls-tab h2 {
 
 .wave-pick-subtitle {
     font-family: var(--font-body);
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     color: #cfeaff;
     margin: 0 0 18px 0;
     letter-spacing: 1.5px;
@@ -3572,7 +3578,7 @@ body.mobile-portrait #controls-tab h2 {
 
 .wave-pick-card-name {
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     color: var(--wp-color, #ffffff);
     margin-bottom: 4px;
     white-space: nowrap;
@@ -3582,7 +3588,7 @@ body.mobile-portrait #controls-tab h2 {
 
 .wave-pick-card-desc {
     font-family: 'Silkscreen', monospace;
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     color: #b8c8e0;
     line-height: 1.25;
 }
@@ -3590,7 +3596,7 @@ body.mobile-portrait #controls-tab h2 {
 .wave-pick-card-stacks {
     flex: 0 0 auto;
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     color: #88a8d4;
     white-space: nowrap;
 }
@@ -3604,7 +3610,7 @@ body.mobile-portrait #controls-tab h2 {
 }
 .wave-pick-action-btn {
     font-family: var(--font-body);
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     padding: 9px 14px;
     cursor: pointer;
     color: #ffd75c;
@@ -3620,10 +3626,10 @@ body.mobile-portrait #wave-pick-panel {
     max-width: 100%;
 }
 body.mobile-portrait .wave-pick-title {
-    font-size: 18px;
+    font-size: calc(18px * var(--font-header-scale, 1));
 }
 body.mobile-portrait .wave-pick-subtitle {
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     margin-bottom: 12px;
 }
 body.mobile-portrait .wave-pick-card {
@@ -3636,13 +3642,13 @@ body.mobile-portrait .wave-pick-card-icon {
     flex-basis: 28px;
 }
 body.mobile-portrait .wave-pick-card-name {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
 }
 body.mobile-portrait .wave-pick-card-desc {
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
 }
 body.mobile-portrait .wave-pick-card-stacks {
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
 }
 
 /* ─── 5.101.0 — Shop-suggest overlay ────────────────────────────────
@@ -3675,7 +3681,7 @@ body.mobile-portrait .wave-pick-card-stacks {
 #shop-suggest-gold-row {
     margin: 0 0 14px 0;
     font-family: var(--font-body);
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     color: #ffe27a;
     letter-spacing: 1.5px;
     text-shadow: 0 0 8px rgba(255, 226, 122, 0.55);
@@ -3696,7 +3702,7 @@ body.mobile-portrait .wave-pick-card-stacks {
     border-radius: 10px;
     color: #ffffff;
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     letter-spacing: 2px;
     cursor: pointer;
     transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease;
@@ -3715,11 +3721,11 @@ body.mobile-portrait #shop-suggest-panel {
     max-width: 100%;
 }
 body.mobile-portrait #shop-suggest-gold-row {
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     margin-bottom: 10px;
 }
 body.mobile-portrait .shop-suggest-skip {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     padding: 10px 22px;
 }
 
@@ -3730,11 +3736,11 @@ body.mobile-portrait .shop-suggest-skip {
    the shop header doesn't dominate the screen. Same intent as the
    pause-menu / Game Over scale-downs from 5.97. */
 body.mobile-mode .shop-title {
-    font-size: 22px;
+    font-size: calc(22px * var(--font-header-scale, 1));
     margin: 8px 0 6px;
 }
 body.mobile-mode .shop-tab {
-    font-size: 10px;
+    font-size: calc(10px * var(--font-header-scale, 1));
     padding: 8px 8px;
     letter-spacing: 0.5px;
 }
@@ -3742,7 +3748,7 @@ body.mobile-mode .shop-tabs {
     gap: 6px;
 }
 body.mobile-mode .shop-currency-row {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
 }
 body.mobile-mode .shop-item {
     padding: 10px 12px;
@@ -3750,17 +3756,17 @@ body.mobile-mode .shop-item {
     grid-template-columns: 40px 1fr auto;
 }
 body.mobile-mode .shop-item-icon {
-    font-size: 22px;
+    font-size: calc(22px * var(--font-body-scale, 1));
 }
 body.mobile-mode .shop-item-name {
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
 }
 body.mobile-mode .shop-item-desc {
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     line-height: 1.3;
 }
 body.mobile-mode .shop-item-price {
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
 }
 body.mobile-mode .shop-item-cost {
     min-width: 76px;
@@ -3770,17 +3776,17 @@ body.mobile-mode .shop-item-cost {
    fit all 10 tabs at 10px without a horizontal scroll. The tab strip is
    already `flex-wrap` so we just tighten the font and let it wrap. */
 body.mobile-portrait .shop-tab {
-    font-size: 9px;
+    font-size: calc(9px * var(--font-header-scale, 1));
     padding: 6px 6px;
 }
 body.mobile-portrait .shop-title {
-    font-size: 18px;
+    font-size: calc(18px * var(--font-header-scale, 1));
 }
 body.mobile-portrait .shop-item-name {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
 }
 body.mobile-portrait .shop-item-desc {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
 }
 
 /* ─── 5.100.1 — Mobile Controls tab chips ─────────────────────────
@@ -3798,12 +3804,12 @@ body.mobile-portrait .shop-item-desc {
     border-radius: 6px;
     color: #cfeaff;
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     line-height: 1.25;
     max-width: 100%;
 }
 .controls-mobile-chip-icon {
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
@@ -3813,12 +3819,12 @@ body.mobile-portrait .shop-item-desc {
     word-break: break-word;
 }
 body.mobile-portrait .controls-mobile-chip {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     padding: 5px 8px;
     gap: 6px;
 }
 body.mobile-portrait .controls-mobile-chip-icon {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
 }
 
 /* ─── 5.100.3 — Shop HELP panel mobile scale-down ─────────────────
@@ -3832,25 +3838,25 @@ body.mobile-mode .shop-help {
 }
 body.mobile-mode .shop-help-intro,
 body.mobile-mode .shop-help-footer {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     line-height: 1.6;
 }
 body.mobile-mode .shop-help-title {
-    font-size: 12px;
+    font-size: calc(12px * var(--font-header-scale, 1));
     letter-spacing: 0.5px;
 }
 body.mobile-mode .shop-help-body {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     line-height: 1.6;
 }
 body.mobile-mode .shop-help-icon {
     /* Smaller currency badge so the gap to the text column tightens. */
     width: 32px;
     height: 32px;
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
 }
 body.mobile-mode .shop-help-icon--picks {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
 }
 
 body.mobile-portrait .shop-help {
@@ -3859,20 +3865,20 @@ body.mobile-portrait .shop-help {
 }
 body.mobile-portrait .shop-help-intro,
 body.mobile-portrait .shop-help-footer {
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     line-height: 1.5;
 }
 body.mobile-portrait .shop-help-title {
-    font-size: 10px;
+    font-size: calc(10px * var(--font-header-scale, 1));
 }
 body.mobile-portrait .shop-help-body {
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     line-height: 1.5;
 }
 body.mobile-portrait .shop-help-icon {
     width: 26px;
     height: 26px;
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
 }
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -3933,7 +3939,7 @@ body.mobile-portrait .shop-help-icon {
 
 .shop-tree-title {
     margin: 0;
-    font-size: 22px;
+    font-size: calc(22px * var(--font-header-scale, 1));
     color: #f0d090;
     letter-spacing: 4px;
     text-align: center;
@@ -3945,7 +3951,7 @@ body.mobile-portrait .shop-help-icon {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     line-height: 1;
 }
 
@@ -3955,13 +3961,13 @@ body.mobile-portrait .shop-help-icon {
 .shop-tree-wave-label,
 .shop-tree-currency-label {
     color: #888;
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     letter-spacing: 2px;
 }
 
 .shop-tree-currency-amount,
 .shop-tree-wave-amount {
-    font-size: 22px;
+    font-size: calc(22px * var(--font-body-scale, 1));
     font-weight: bold;
     text-shadow: 0 0 8px currentColor;
 }
@@ -3972,13 +3978,13 @@ body.mobile-portrait .shop-help-icon {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     line-height: 1;
     color: #6fe9d0;
 }
-.shop-tree-cores-icon { font-size: 18px; text-shadow: 0 0 8px currentColor; }
+.shop-tree-cores-icon { font-size: calc(18px * var(--font-body-scale, 1)); text-shadow: 0 0 8px currentColor; }
 .shop-tree-cores-amount {
-    font-size: 22px;
+    font-size: calc(22px * var(--font-body-scale, 1));
     font-weight: bold;
     text-shadow: 0 0 8px currentColor;
 }
@@ -3993,7 +3999,7 @@ body.mobile-portrait .shop-help-icon {
 
 .shop-tree-tab {
     font-family: var(--font-body);
-    font-size: 11px;
+    font-size: calc(11px * var(--font-header-scale, 1));
     letter-spacing: 2px;
     color: #b0a070;
     background: rgba(20, 16, 30, 0.55);
@@ -4048,13 +4054,15 @@ body.mobile-portrait .shop-help-icon {
     min-height: 0;
 }
 
-/* Weapon/ability rings (and the passive grid) laid out in 2 columns. */
+/* 6.158.3 — Weapon/ability rings laid out in a SINGLE column (one row per
+   weapon/ability with its attunement/upgrade bubbles around it). The old
+   2-column grid overlapped badly once a node had many orbiting bubbles. */
 .shop-tree-cluster-body {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     justify-items: center;
     align-items: start;
-    gap: 28px 40px;
+    gap: 44px 0;
     flex: 1;
     min-height: 0;
     padding: 28px 16px;
@@ -4103,8 +4111,10 @@ body.mobile-portrait .shop-help-icon {
  * relative to the ring's centre. */
 .shop-tree-ring {
     position: relative;
-    width: 340px;
-    height: 340px;
+    /* 6.158.3 — sized to contain the widest orbit (radius 178 + a 56px
+       bubble) so single-column rows never overlap vertically. */
+    width: 400px;
+    height: 400px;
 }
 
 .shop-tree-ring > * {
@@ -4192,7 +4202,7 @@ body.mobile-portrait .shop-help-icon {
 
 /* Cost text — small label below the icon, inside the circle. */
 .shop-node-cost {
-    font-size: 8px;
+    font-size: calc(11px * var(--font-body-scale, 1));
     color: #f8d670;
     margin-top: 2px;
     line-height: 1;
@@ -4206,7 +4216,7 @@ body.mobile-portrait .shop-help-icon {
     top: calc(100% + 6px);
     left: 50%;
     transform: translate(-50%, 0);
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     color: #c8c8c8;
     white-space: nowrap;
     max-width: 110px;
@@ -4223,7 +4233,7 @@ body.mobile-portrait .shop-help-icon {
     right: -10px;
     background: #5cc8ff;
     color: #001020;
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     font-weight: bold;
     padding: 3px 6px;
     border-radius: 10px;
@@ -4250,7 +4260,7 @@ body.mobile-portrait .shop-help-icon {
 }
 
 .shop-node--parent .shop-node-label {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     color: var(--node-color);
     text-shadow: 0 0 8px color-mix(in srgb, var(--node-color) 50%, transparent);
     letter-spacing: 1.5px;
@@ -4260,6 +4270,9 @@ body.mobile-portrait .shop-help-icon {
 .shop-node--unaffordable {
     --node-color: #555;
     filter: grayscale(0.6) brightness(0.7);
+    /* 6.158.3 — locked (not-yet-unlocked) bubbles read as non-interactive:
+       a not-allowed cursor instead of the clickable pointer they inherited. */
+    cursor: not-allowed;
 }
 .shop-node--unaffordable .shop-node-cost { color: #ff8080; }
 .shop-node--unaffordable .shop-node-icon { color: #888; filter: none; }
@@ -4286,7 +4299,7 @@ body.mobile-portrait .shop-help-icon {
     cursor: not-allowed;
     filter: grayscale(0.9) brightness(0.55);
 }
-.shop-node--locked .shop-node-cost { color: #555; font-size: 7px; }
+.shop-node--locked .shop-node-cost { color: #555; font-size: calc(11px * var(--font-body-scale, 1)); }
 
 /* Capstone (tier-2) rosette — adds an extra gold ring around the
  * node so mastery upgrades stand out before the player hovers. */
@@ -4341,7 +4354,7 @@ body.mobile-portrait .shop-help-icon {
     gap: 24px;
     padding: 10px 16px 14px;
     border-bottom: 1px solid rgba(200, 170, 100, 0.18);
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     color: #aaa;
 }
 
@@ -4349,7 +4362,7 @@ body.mobile-portrait .shop-help-icon {
 .shop-prerun-hint {
     text-align: center;
     padding: 6px 16px 8px;
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     letter-spacing: 0.03em;
     color: #9fb3c8;
     opacity: 0.85;
@@ -4397,21 +4410,21 @@ body.mobile-portrait .shop-help-icon {
 }
 
 .shop-tree-tooltip-name {
-    font-size: 13px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     color: #f0d090;
     margin-bottom: 8px;
     letter-spacing: 1px;
 }
 
 .shop-tree-tooltip-desc {
-    font-size: 10px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     color: #cccccc;
     line-height: 1.6;
     margin-bottom: 10px;
 }
 
 .shop-tree-tooltip-lock {
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     color: #ff9070;
     margin-bottom: 8px;
     line-height: 1.4;
@@ -4431,19 +4444,19 @@ body.mobile-portrait .shop-help-icon {
 }
 
 .shop-tree-tooltip-meta-label {
-    font-size: 8px;
+    font-size: calc(11px * var(--font-body-scale, 1));
     color: #888;
     letter-spacing: 1.5px;
 }
 
 .shop-tree-tooltip-meta-value {
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     color: #ffd700;
     font-weight: bold;
 }
 
 .shop-tree-tooltip-sellhint {
-    font-size: 8px;
+    font-size: calc(11px * var(--font-body-scale, 1));
     color: #888;
     letter-spacing: 1px;
     margin-top: 8px;
@@ -4452,13 +4465,11 @@ body.mobile-portrait .shop-help-icon {
 
 /* ── Responsive — narrow viewports ───────────────────────────────── */
 @media (max-width: 1100px) {
-    /* 6.27.0 — collapse the 2-column ring layout to a single column. */
-    .shop-tree-cluster-body {
-        grid-template-columns: 1fr;
-    }
+    /* 6.158.3 — single column is now the base; narrower viewports just get a
+       slightly smaller ring so it fits the panel width. */
     .shop-tree-ring {
-        width: 300px;
-        height: 300px;
+        width: 340px;
+        height: 340px;
     }
 }
 
@@ -4531,7 +4542,7 @@ body.mobile-portrait .shop-help-icon {
 
 .tutorial-title {
     margin: 0 0 20px;
-    font-size: 20px;
+    font-size: calc(20px * var(--font-header-scale, 1));
     letter-spacing: 4px;
     color: #f0d090;
     text-align: center;
@@ -4542,7 +4553,7 @@ body.mobile-portrait .shop-help-icon {
 
 .tutorial-section-title {
     margin: 0 0 10px;
-    font-size: 13px;
+    font-size: calc(13px * var(--font-header-scale, 1));
     letter-spacing: 2px;
     color: #88ccff;
     border-bottom: 1px solid rgba(120, 180, 220, 0.25);
@@ -4550,7 +4561,7 @@ body.mobile-portrait .shop-help-icon {
 }
 
 .tutorial-line {
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     line-height: 1.7;
     color: #cfcfcf;
     margin-bottom: 4px;
@@ -4594,24 +4605,24 @@ body.mobile-portrait .shop-help-icon {
     border-bottom: 1px solid rgba(80, 140, 220, 0.35);
 }
 .armory-title {
-    font-size: 24px;
+    font-size: calc(24px * var(--font-header-scale, 1));
     letter-spacing: 3px;
     color: #8fd0ff;
     text-shadow: 0 0 12px rgba(64, 150, 255, 0.5);
 }
 .armory-header > .armory-cores { margin-left: auto; }
 .armory-gold {
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     color: #ffd75c;
     text-shadow: 0 0 10px rgba(255, 200, 60, 0.5);
     margin-left: 14px;
 }
 .armory-cores {
-    font-size: 16px;
+    font-size: calc(16px * var(--font-body-scale, 1));
     color: #7fe0ff;
     text-shadow: 0 0 10px rgba(90, 200, 255, 0.5);
 }
-.armory-sub { font-size: 9px; line-height: 1.7; color: #7d8aa6; }
+.armory-sub { font-size: calc(12px * var(--font-body-scale, 1)); line-height: 1.7; color: #7d8aa6; }
 .armory-body {
     display: flex;
     flex-direction: column;
@@ -4621,7 +4632,7 @@ body.mobile-portrait .shop-help-icon {
     flex: 1;
 }
 .armory-section-title {
-    font-size: 11px;
+    font-size: calc(11px * var(--font-header-scale, 1));
     color: #8fd0ff;
     letter-spacing: 1px;
     margin-bottom: 6px;
@@ -4637,15 +4648,15 @@ body.mobile-portrait .shop-help-icon {
     border: 1px solid rgba(80, 140, 220, 0.25);
 }
 .armory-row--owned { opacity: 0.55; }
-.armory-row-name { font-size: 10px; color: #d6def0; }
-.armory-row-tag { font-size: 8px; color: #6fae6f; letter-spacing: 1px; }
+.armory-row-name { font-size: calc(12px * var(--font-body-scale, 1)); color: #d6def0; }
+.armory-row-tag { font-size: calc(11px * var(--font-body-scale, 1)); color: #6fae6f; letter-spacing: 1px; }
 .armory-buy {
     background: transparent;
     color: #ffd75c;
     border: 1px solid rgba(255, 200, 60, 0.5);
     padding: 6px 10px;
     cursor: pointer;
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     font-family: inherit;
     white-space: nowrap;
 }
@@ -4669,7 +4680,7 @@ body.mobile-portrait .shop-help-icon {
 .armory-btn {
     padding: 10px 20px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     font-family: inherit;
     letter-spacing: 1px;
     border: 1px solid rgba(80, 140, 220, 0.55);
@@ -4715,18 +4726,18 @@ body.mobile-portrait .shop-help-icon {
     border-bottom: 1px solid rgba(80, 140, 220, 0.35);
 }
 .hangar-title {
-    font-size: 24px;
+    font-size: calc(24px * var(--font-header-scale, 1));
     letter-spacing: 3px;
     color: #8fd0ff;
     text-shadow: 0 0 12px rgba(64, 150, 255, 0.5);
 }
 .hangar-skin-name {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     color: #ffd75c;
     text-shadow: 0 0 10px rgba(255, 200, 60, 0.4);
     letter-spacing: 1px;
 }
-.hangar-sub { font-size: 9px; line-height: 1.7; color: #7d8aa6; }
+.hangar-sub { font-size: calc(12px * var(--font-body-scale, 1)); line-height: 1.7; color: #7d8aa6; }
 .hangar-body {
     display: flex;
     gap: 18px;
@@ -4747,7 +4758,7 @@ body.mobile-portrait .shop-help-icon {
     box-shadow: inset 0 0 30px rgba(0, 30, 80, 0.5);
 }
 .hangar-desc {
-    font-size: 9px;
+    font-size: calc(12px * var(--font-body-scale, 1));
     line-height: 1.6;
     color: #9fb0cc;
     width: 300px;
@@ -4782,7 +4793,7 @@ body.mobile-portrait .shop-help-icon {
     box-shadow: 0 0 12px rgba(120, 255, 150, 0.25);
 }
 .hangar-thumb { background: #05070e; }
-.hangar-card-name { font-size: 7px; letter-spacing: 0.5px; text-align: center; }
+.hangar-card-name { font-size: calc(11px * var(--font-body-scale, 1)); letter-spacing: 0.5px; text-align: center; }
 .hangar-card--selected .hangar-card-name { color: #9affb0; }
 .hangar-footer {
     display: flex;
@@ -4793,7 +4804,7 @@ body.mobile-portrait .shop-help-icon {
 .hangar-btn {
     padding: 10px 20px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     font-family: inherit;
     letter-spacing: 1px;
     border: 1px solid rgba(80, 140, 220, 0.55);
@@ -4845,7 +4856,7 @@ h1, h2, h3,
     gap: 16px;
 }
 .settings-title {
-    font-size: 22px;
+    font-size: calc(22px * var(--font-header-scale, 1));
     letter-spacing: 3px;
     color: #8fd0ff;
     text-shadow: 0 0 12px rgba(64, 150, 255, 0.5);
@@ -4855,10 +4866,10 @@ h1, h2, h3,
 /* Reused both as a standalone overlay body and inside the pause DISPLAY tab. */
 .font-controls { display: flex; flex-direction: column; gap: 16px; }
 .font-field { display: flex; flex-direction: column; gap: 6px; }
-.font-field-label { font-size: 10px; letter-spacing: 1px; color: #8fd0ff; }
+.font-field-label { font-size: calc(12px * var(--font-body-scale, 1)); letter-spacing: 1px; color: #8fd0ff; }
 .font-select {
     font-family: var(--font-body);
-    font-size: 13px;
+    font-size: calc(14px * var(--font-body-scale, 1));
     color: #e6eefc;
     background: rgba(20, 30, 48, 0.85);
     border: 1px solid rgba(80, 140, 220, 0.45);
@@ -4874,8 +4885,8 @@ h1, h2, h3,
     border: 1px solid rgba(80, 140, 220, 0.35);
     line-height: 1.5;
 }
-.font-preview-header { font-family: var(--font-header); font-size: 16px; color: #ffd75c; margin-bottom: 8px; }
-.font-preview-body   { font-family: var(--font-body);   font-size: 13px; color: #c6d2e8; }
+.font-preview-header { font-family: var(--font-header); font-size: calc(16px * var(--font-header-scale, 1)); color: #ffd75c; margin-bottom: 8px; }
+.font-preview-body   { font-family: var(--font-body);   font-size: calc(14px * var(--font-body-scale, 1)); color: #c6d2e8; }
 .font-settings-footer {
     display: flex;
     justify-content: space-between;
@@ -4885,7 +4896,7 @@ h1, h2, h3,
 .font-btn {
     padding: 9px 18px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: calc(13px * var(--font-body-scale, 1));
     font-family: var(--font-body);
     letter-spacing: 1px;
     border: 1px solid rgba(80, 140, 220, 0.55);
@@ -4894,3 +4905,7 @@ h1, h2, h3,
 }
 .font-btn:hover { background: rgba(64, 150, 255, 0.15); }
 .font-btn--reset { color: #c6a0ff; border-color: rgba(170, 120, 255, 0.5); }
+/* 6.158.2 — header/body font-size sliders */
+.font-size-row { display: flex; justify-content: space-between; align-items: baseline; }
+.font-size-pct { color: #ffd75c; }
+.font-size-slider { width: 100%; margin-top: 2px; accent-color: #8fd0ff; cursor: pointer; }

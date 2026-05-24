@@ -964,7 +964,9 @@ function _buildRulePassiveNode(p) {
 
     const icon = document.createElement('span');
     icon.className = 'shop-node-icon';
-    icon.innerHTML = renderIconHTML(keystone ? 'star' : 'spiral', { size: 24, fallback: '?' });
+    // 6.158.3 — each passive carries a themed icon slug (passive-data.js);
+    // fall back to a star (keystone) / disc (modular) if one is ever missing.
+    icon.innerHTML = renderIconHTML(p.icon || (keystone ? 'star' : 'circle-fill'), { size: 24, fallback: keystone ? '★' : '●' });
     node.appendChild(icon);
 
     if (chosen) {

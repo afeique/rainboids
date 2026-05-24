@@ -50,6 +50,67 @@ test.describe('QA-16: font system + SETTINGS', () => {
         expect(vars.body).toContain('Silkscreen');
     });
 
+    test('applyFonts writes the :root size-scale variables (default 1)', async ({ page }) => {
+        const vars = await page.evaluate(async () => {
+            const m = await import('/js/modules/ui/font-settings.js');
+            m.applyFonts();
+            const cs = getComputedStyle(document.documentElement);
+            return {
+                hs: cs.getPropertyValue('--font-header-scale').trim(),
+                bs: cs.getPropertyValue('--font-body-scale').trim(),
+            };
+        });
+        expect(parseFloat(vars.hs)).toBeCloseTo(1, 5);
+        expect(parseFloat(vars.bs)).toBeCloseTo(1, 5);
+    });
+
+    test('the settings overlay has header + body size sliders', async ({ page }) => {
+        const n = await page.evaluate(() => {
+            window.gameEngine.openSettings();
+            return document.querySelectorAll('#settings-overlay .font-size-slider').length;
+        });
+        expect(n).toBe(2);
+    });
+
+    test('dragging the body-size slider persists bodyScale and rewrites --font-body-scale', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            window.gameEngine.openSettings();
+            const sliders = document.querySelectorAll('#settings-overlay .font-size-slider');
+            const body = sliders[1]; // [0] = header size, [1] = body size
+            body.value = '1.4';
+            body.dispatchEvent(new Event('input', { bubbles: true }));
+            const cs = getComputedStyle(document.documentElement);
+            const settings = JSON.parse(localStorage.getItem('rainboidsSettings') || '{}');
+            return { scale: parseFloat(cs.getPropertyValue('--font-body-scale')), saved: settings.bodyScale };
+        });
+        expect(r.scale).toBeCloseTo(1.4, 5);
+        expect(r.saved).toBeCloseTo(1.4, 5);
+    });
+
+    test('a persisted body scale is applied on boot', async ({ page }) => {
+        await page.evaluate(() => localStorage.setItem('rainboidsSettings', JSON.stringify({ bodyScale: 1.25 })));
+        await page.reload();
+        await page.waitForFunction(() => !!window.gameEngine);
+        const scale = await page.evaluate(() =>
+            parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-body-scale')));
+        expect(scale).toBeCloseTo(1.25, 5);
+    });
+
+    test('body UI text actually grows when body scale increases', async ({ page }) => {
+        const r = await page.evaluate(async () => {
+            const m = await import('/js/modules/ui/font-settings.js');
+            window.gameEngine.openSettings();
+            // Measure a body-text element (the preview body) at 1.0 vs 1.5.
+            const el = document.querySelector('#settings-overlay .font-preview-body');
+            m.setBodyScale(1.0);
+            const small = parseFloat(getComputedStyle(el).fontSize);
+            m.setBodyScale(1.5);
+            const big = parseFloat(getComputedStyle(el).fontSize);
+            return { small, big };
+        });
+        expect(r.big).toBeGreaterThan(r.small * 1.4);
+    });
+
     test('the title screen exposes a SETTINGS button', async ({ page }) => {
         await page.waitForFunction(() => window.gameEngine && window.gameEngine._titleButtonRects);
         const ok = await page.evaluate(() => {

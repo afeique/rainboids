@@ -34,6 +34,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.158.3] - 2026-05-24
+
+### Changed — BUILD tree readability + passive icons
+
+- **BUILD tree is now a single column** (one row per weapon/ability with its
+  attunement/upgrade bubbles around it). The old 2-column grid overlapped
+  badly once a node had many orbiting bubbles; rings were enlarged to fully
+  contain the widest orbit so rows never overlap.
+- **Locked (not-yet-unlocked) bubbles show a `not-allowed` cursor** on hover
+  instead of the clickable pointer they inherited — locked attunements/mods no
+  longer read as clickable.
+
+### Added
+
+- **Every passive relic now has a distinct, themed icon** in the BUILD tree's
+  PASSIVES cluster (44 passives mapped to icon slugs; 6 new icons added —
+  snowflake, droplet, crosshair, thorns, eye, hexagon). Modular passives
+  previously fell back to a broken `?` glyph.
+
+### Notes
+
+- Brainstorm doc added (`docs/Ability Attunements & New Abilities — Brainstorm`)
+  proposing attunements/upgrades to fill every Defense ability's empty BUILD
+  ring, plus new-ability ideas — for review before implementation.
+
+---
+
+## [6.158.2] - 2026-05-24
+
+### Changed — Menu font readability + adjustable sizes
+
+- **Body text is notably larger by default.** Every menu/overlay font-size is
+  now `calc(<px> * var(--font-*-scale))`; body base sizes were bumped (small
+  labels, descriptions, and rows that read too small in Silkscreen) for a large,
+  readable default. Headers/tabs keep their base sizes.
+- **Adjustable header & body font sizes.** The DISPLAY settings (pause tab +
+  title SETTINGS) now include HEADER SIZE and BODY SIZE sliders (70%–160%),
+  applied via `--font-header-scale` / `--font-body-scale` on `:root` and
+  persisted (`rainboidsSettings.headerScale` / `.bodyScale`). RESET restores the
+  readable defaults. Canvas text (title/HUD) is unaffected.
+- The pause-menu **RESUME** (and other action buttons) now use the pixel header
+  font for a chunky retro CTA instead of the body font.
+
+---
+
 ## [6.158.1] - 2026-05-24
 
 ### Changed — Asteroid HP rebalance

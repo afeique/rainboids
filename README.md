@@ -40,7 +40,7 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 
 **Assists** (pause → ASSISTS): aim-snap, auto-aim, auto-fire, laser sight. &nbsp; **Cheats:** `[` +1000 gold · `]` +5 SP · `P` spawn a powerup.
 
-**Fonts** (title **SETTINGS** or pause → DISPLAY): pick the menu typography — separate header/tab and body fonts from a roster of pixel faces (Press Start 2P, Silkscreen, Pixelify Sans, Fira Code) and modern ones (Inter, Roboto, Montserrat, Helvetica Neue, System UI). Retro pixel by default; the choice persists.
+**Fonts** (title **SETTINGS** or pause → DISPLAY): pick the menu typography — separate header/tab and body fonts from a roster of pixel faces (Press Start 2P, Silkscreen, Pixelify Sans, Fira Code) and modern ones (Inter, Roboto, Montserrat, Helvetica Neue, System UI), and **scale header/body text size** (70–160%) for readability. Retro pixel and a large, readable default; choices persist.
 
 ---
 

@@ -94,6 +94,14 @@ export const ICON_PATHS = {
 
     // Currency
     coin: 'M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 Z M9.5 9 H14 A1.5 1.5 0 0 1 14 12 H10 A1.5 1.5 0 0 0 10 15 H14.5 M12 7 V17',
+
+    // 6.158.3 — passive-relic icons (added for the BUILD-tree PASSIVES cluster).
+    snowflake: 'M12 2 V22 M3.34 7 L20.66 17 M20.66 7 L3.34 17 M12 6 L9.5 8 M12 6 L14.5 8 M12 18 L9.5 16 M12 18 L14.5 16 M6 9 L7 11.5 M18 9 L17 11.5 M6 15 L7 12.5 M18 15 L17 12.5',
+    droplet: 'M12 3 C12 3 19 11 19 16 A7 7 0 0 1 5 16 C5 11 12 3 12 3 Z',
+    crosshair: 'M12 2 V7 M12 17 V22 M2 12 H7 M17 12 H22 M12 6 A6 6 0 1 0 12 18 A6 6 0 1 0 12 6 Z M12 11 A1 1 0 1 0 12 13 A1 1 0 1 0 12 11 Z',
+    thorns: 'M12 12 L12 2 M12 12 L19 5 M12 12 L22 12 M12 12 L19 19 M12 12 L12 22 M12 12 L5 19 M12 12 L2 12 M12 12 L5 5',
+    eye: 'M2 12 C5 6 19 6 22 12 C19 18 5 18 2 12 Z M12 8.5 A3.5 3.5 0 1 0 12 15.5 A3.5 3.5 0 1 0 12 8.5 Z M12 11 A1 1 0 1 0 12 13 A1 1 0 1 0 12 11 Z',
+    hexagon: 'M12 2 L20.5 7 V17 L12 22 L3.5 17 V7 Z M12 7 L16 9.5 V14.5 L12 17 L8 14.5 V9.5 Z',
 };
 
 // Maps the legacy emoji glyphs (and a few common variants) onto the

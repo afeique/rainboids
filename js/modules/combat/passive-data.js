@@ -255,6 +255,29 @@ export const PASSIVES = {
     },
 };
 
+// 6.158.3 — Per-passive icons (slugs from js/modules/ui/icons.js), merged onto
+// each entry so the BUILD-tree PASSIVES cluster shows a distinct, themed icon
+// per relic instead of a generic fallback. A few are intentional thematic dups
+// (fire, bolt, ghost, anger) where two relics share a motif.
+const _PASSIVE_ICONS = {
+    GLASS_CANNON: 'gem', BERSERKERS_PACT: 'anger', GUNSLINGER: 'pistol', PURIST: 'dagger',
+    TWIN_CAST: 'multi-shot', PRISMATIC_SOUL: 'sparkle', OVERFLOW_CAPACITOR: 'battery',
+    KILLING_SPREE: 'skull', ONE_WITH_THE_VOID: 'ghost', SECOND_HEART: 'heart',
+    EYE_OF_THE_STORM: 'eye', DETONATOR: 'explosion', FRENZY: 'fist', GRAVITY_WELL: 'vortex',
+    FLOW_STATE: 'hourglass', FAILSAFE: 'shield', HEAT_SINK: 'fire',
+    CATALYST: 'dna', FROSTBITE: 'snowflake', HEX_TOUCH: 'crystal-ball', KINDLING: 'fire',
+    STATIC_CHARGE: 'bolt', OPPORTUNIST: 'target', PREDATOR: 'bow-arrow',
+    VAMPIRIC_ROUNDS: 'droplet', RICOCHET: 'shuffle', MOMENTUM_ROUNDS: 'rocket',
+    CHAIN_REACTION: 'bomb', KINETIC_BATTERY: 'wind', OVERFLOW_SPARK: 'bolt',
+    LAST_BASTION: 'medal', GUARDIAN_ECHO: 'thorns', SALVAGE_PROTOCOL: 'wrench',
+    SCAVENGER: 'magnet', HOARDERS_GREED: 'money-bag', OVERKILL: 'dizzy', VENDETTA: 'anger',
+    CONDUIT: 'chain', AFTERIMAGE: 'ghost', RESONANCE: 'loop', BACKLASH: 'undo',
+    HARVEST: 'cart', TRACER_LOCK: 'crosshair', SIEGE: 'chart',
+};
+for (const [id, icon] of Object.entries(_PASSIVE_ICONS)) {
+    if (PASSIVES[id]) PASSIVES[id].icon = icon;
+}
+
 /** A passive entry by id, or null. */
 export function getPassive(id) { return PASSIVES[id] || null; }
 

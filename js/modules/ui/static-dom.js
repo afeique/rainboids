@@ -316,7 +316,7 @@ function _buildDisplayTab() {
         children: [
             el('h2', { text: 'DISPLAY' }),
             el('div', {
-                style: { marginBottom: '15px', color: '#aaa', fontSize: '12px', textAlign: 'center' },
+                style: { marginBottom: '15px', color: '#aaa', fontSize: 'calc(13px * var(--font-body-scale, 1))', textAlign: 'center' },
                 text: 'Menu fonts. Headers + tabs use one font, body text another. Pixel by default; changes persist between runs.',
             }),
             controls,
@@ -394,7 +394,7 @@ function _buildGamepadTab() {
         children: [
             el('h2', { text: 'GAMEPAD' }),
             el('div', {
-                style: { marginBottom: '10px', color: '#aaa', fontSize: '12px', textAlign: 'center' },
+                style: { marginBottom: '10px', color: '#aaa', fontSize: 'calc(13px * var(--font-body-scale, 1))', textAlign: 'center' },
                 text: 'Play with:',
             }),
             schemeRow,
@@ -449,7 +449,7 @@ function _buildAssistsTab() {
         children: [
             el('h2', { text: 'ASSISTS' }),
             el('div', {
-                style: { marginBottom: '15px', color: '#aaa', fontSize: '12px', textAlign: 'center' },
+                style: { marginBottom: '15px', color: '#aaa', fontSize: 'calc(13px * var(--font-body-scale, 1))', textAlign: 'center' },
                 text: helperText,
             }),
             list,
@@ -478,7 +478,7 @@ function _buildSfxTab() {
                 id: 'sfx-volume-container',
                 style: { marginTop: '30px' },
                 children: [
-                    el('div', { style: { marginBottom: '15px', fontSize: '14px' }, text: 'Master Volume' }),
+                    el('div', { style: { marginBottom: '15px', fontSize: 'calc(14px * var(--font-body-scale, 1))' }, text: 'Master Volume' }),
                     el('div', {
                         style: { display: 'flex', alignItems: 'center', gap: '15px' },
                         children: [
@@ -492,7 +492,7 @@ function _buildSfxTab() {
                 id: 'sfx-toggles-container',
                 style: { marginTop: '30px' },
                 children: [
-                    el('div', { style: { marginBottom: '15px', fontSize: '14px' }, text: 'Individual Sounds' }),
+                    el('div', { style: { marginBottom: '15px', fontSize: 'calc(14px * var(--font-body-scale, 1))' }, text: 'Individual Sounds' }),
                     el('div', { id: 'sfx-toggles', style: { display: 'flex', flexDirection: 'column', gap: '10px' } }),
                 ],
             }),
