@@ -289,10 +289,10 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 - [x] Classification: `isMechanicMod` (pierce/explode/home/stun/knock suffixes + capstone set) + `getMechanicMods` / `getEfficacyUpgrades` per weapon. Inert groundwork; 6 tests pin the split (668 unit). · commit (6.112.0)
 - [ ] Per-weapon mod NODES in the BUILD tree (W5) + removal from the card pool (W4) consume this classification.
 
-### W4 — Efficacy Cards + recomposition
-- [ ] `EFFICACY_CARDS` pool: reclassify existing amplifiers + add new conditional/handling cards (design §6 A–F)
-- [ ] Per-weapon `cardPool` filter (curation matrix §5 — Lance Beam has no Rapid/Multishot/Homing, etc.)
-- [ ] `card-draft.js` → **1 primary + 1 power + 2 ability** with backfill; unit tests · commit
+### W4 — Efficacy Cards + recomposition  ✅ DONE (6.114.0)
+- [x] Cards are efficacy-only — mechanic mods excluded via the W3 `isMechanicMod` classification (they're upfront now); reuses the existing per-weapon upgrade tables as the amplifier pool
+- [x] `card-draft.js` → **1 primary + 1 power + 2 ability** with backfill (`primaryCards`/`powerCards` split; `weaponCards` back-compat); unit tests rewritten (670 unit) · commit (6.114.0)
+- [ ] *Deferred to W7:* new conditional/handling efficacy cards (design §6 B/C — Executioner, Point-Blank, Hot Loads…) + a tighter per-weapon `cardPool` curation matrix (Lance Beam no Rapid/Multishot). Current pool = the existing amplifier upgrades, which already curate per weapon.
 
 ### W5 — BUILD tree: attunement/mod nodes + LOADOUT toggles  ✅ DONE (6.105.0 + 6.113.0)
 - [x] Orbit nodes render **attunements** (account-gold unlock + active toggle) → `player.activeAttunements` on START RUN — element-colored bubbles, ✓ badge; in-run shop unchanged · 6.105.0

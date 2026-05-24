@@ -33,11 +33,11 @@ test.describe('QA-10: Card draft (Phase R3)', () => {
         await startGame(page);
     });
 
-    test('draft overlay opens with 1–3 cards', async ({ page }) => {
+    test('draft overlay opens with 1–4 cards (W4: 1 primary + 1 power + 2 ability)', async ({ page }) => {
         const r = await setLoadoutAndDraft(page);
         expect(r.display).toBe('flex');
         expect(r.cards.length).toBeGreaterThanOrEqual(1);
-        expect(r.cards.length).toBeLessThanOrEqual(3);
+        expect(r.cards.length).toBeLessThanOrEqual(4);
     });
 
     test('cards are relevance-filtered to the equipped loadout', async ({ page }) => {

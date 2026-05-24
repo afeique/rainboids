@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.114.0] - 2026-05-23
+
+### Changed — Card draft: efficacy-only, recomposed to 1 primary + 1 power + 2 ability (Phase W4)
+
+The in-run card draft is now **efficacy-only** and **1 primary + 1 power + 2
+ability** (was 2 weapon + 1 ability):
+
+- **Mechanic mods excluded** — pierce/explode/home/stun/knock + capstones are
+  no longer drafted (they're upfront BUILD-tree picks now, W5). Cards only
+  amplify what you brought (the W3 `isMechanicMod` classification drives the
+  filter).
+- **New composition** — `primaryCards` / `powerCards` split the weapon pool;
+  the draft pulls 1 primary + 1 power + 2 ability, with backfill from other
+  pools when one is dry (e.g. no power equipped). `weaponCards` kept as a
+  back-compat alias.
+- Renderer already iterates the pick list, so 4 cards lay out fine.
+- card-draft unit tests rewritten for the new contract; 670 unit green.
+
 ## [6.113.0] - 2026-05-23
 
 ### Added — Mechanic mods equippable in the BUILD tree (Phase W5)
