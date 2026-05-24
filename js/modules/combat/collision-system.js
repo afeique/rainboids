@@ -770,6 +770,16 @@ export function handleCollisions() {
                     for (const _be of _bels) {
                         applyWeaponElementStatus.call(this, enemy, _be, enemyApplied / _bels.length);
                     }
+                    // P6 — Static Charge passive: every 5th landed hit emits a
+                    // conduct zap on the struck enemy.
+                    if (this.player && typeof this.player.hasPassive === 'function'
+                        && this.player.hasPassive('STATIC_CHARGE')) {
+                        this.player._staticChargeHits = (this.player._staticChargeHits | 0) + 1;
+                        if (this.player._staticChargeHits >= 5) {
+                            this.player._staticChargeHits = 0;
+                            if (typeof this.applyConduct === 'function') this.applyConduct(enemy);
+                        }
+                    }
                 }
 
                 if (_isCrit) {
@@ -2529,7 +2539,11 @@ export function applyWeaponElementStatus(enemy, element, dealt) {
             // and a soft hit on an ALREADY-CHILLED enemy also freezes (the chill
             // "locked in"). Otherwise it just chills. Inert unless Cryo-attuned.
             const wasChilled = enemy.chillUntil > frameClock.now;
-            if (dealt >= ELEM_FREEZE_HIT || wasChilled) {
+            // P6 — Frostbite passive: chill/freeze builds 25% faster → a 25%
+            // lower hit threshold to escalate straight to FREEZE.
+            const _frostbite = !!(this.player && this.player.hasPassive && this.player.hasPassive('FROSTBITE'));
+            const _freezeHit = _frostbite ? ELEM_FREEZE_HIT * 0.75 : ELEM_FREEZE_HIT;
+            if (dealt >= _freezeHit || wasChilled) {
                 if (typeof this.applyFreeze === 'function') this.applyFreeze(enemy);
             } else if (typeof this.applyChill === 'function') {
                 this.applyChill(enemy);

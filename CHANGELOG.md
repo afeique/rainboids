@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.135.0] - 2026-05-24
+
+### Added — Frostbite + Static Charge passives (Phase P6, content batch)
+
+- **Frostbite** — chill/freeze builds 25% faster: a CRYO hit needs 25% less
+  damage to escalate straight to FREEZE (lower threshold in
+  `applyWeaponElementStatus`).
+- **Static Charge** — every 5th landed hit emits a conduct zap on the struck
+  enemy (per-player hit counter in the bullet-hit path).
+
+Both no-op without the passive. Tests: Frostbite freeze-threshold cases in
+`passives-frostbite`.
+
 ## [6.134.0] - 2026-05-24
 
 ### Added — Hex Touch passive (Phase P6, content batch)
