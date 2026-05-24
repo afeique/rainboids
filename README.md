@@ -121,7 +121,7 @@ js/
     core/               # constants, state machine, pools, event bus, timers, storage
     platform/           # device + viewport detection
     player/             # entity, weapons, abilities, progression, lifecycle, renderer, skins/
-    enemy/              # entity, data, movement, firing, AI, shapes, boss phases/parts/rage
+    enemy/              # entity, data, movement, firing, AI, shapes, boss phases/parts/intro/rage
     combat/             # elements, collision, weapon-data, combat-manager
     hud/ · world/ · shop/ · ui/ · wave/ · audio/ · performance/ · render/
 css/                    # styles.css

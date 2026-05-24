@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.161.0] - 2026-05-24
+
+### Added — Boss intro/death sequence runner (Phase D.B0)
+
+- **Time-gated sequence runner** (`js/modules/enemy/boss-intro.js`). A boss
+  carries a declarative list of timed **beats** that drive both the dramatic
+  **intro** (warp-in → name card → fight-start) and the multi-stage **death**
+  detonation (aspects blow out in sequence → supernova → victory beat). The
+  runner advances by elapsed time, fires each beat's `onEnter` exactly once and
+  in order (even if several short beats elapse in one frame), fires an optional
+  `onComplete` when the last beat ends, and exposes `currentBeat` /
+  `beatProgress` / `sequenceProgress` / `isSequenceComplete` for the renderer,
+  audio, and juice helpers to read. Two independent sequences (`INTRO_KEY` /
+  `DEATH_KEY`) can coexist on one boss. Unlike the HP-gated phase runner and the
+  weak-point layer, a sequence is **not** gated by active/dying/warping — an
+  intro plays *during* warp-in and a death plays *while the boss is dying*.
+- `introBlocksDamage` makes the boss invulnerable while its intro plays — the
+  time-gated sibling of `phaseBlocksDamage` / `coreBlocksDamage`. Wired
+  guarded-no-op into `enemy.update` (`updateBossIntro` + `updateBossDeath`) and
+  both damage gates (`collision-system.applyDamageToEnemy` + the enemy
+  fallback) — inert for every existing enemy (none has a sequence yet). This
+  completes the D.B0 "pure cores" trio (HP-gated phases, weak-point parts,
+  time-gated sequences); the concrete intro/death FX (canvas name-card,
+  detonation, camera/shake) wire onto these beats in D.B1. Unit tests:
+  `tests/unit/enemy/boss-intro.test.js` (9 cases — init, ordered once-each
+  onEnter, multi-beat-in-one-frame, onComplete-once, progress, the
+  not-gated-while-dying contract, the intro damage gate, intro/death
+  independence).
+
+---
+
 ## [6.160.0] - 2026-05-24
 
 ### Added — Boss weak-point sub-entities (Phase D.B0)

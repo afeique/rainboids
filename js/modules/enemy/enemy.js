@@ -11,6 +11,7 @@ import * as ai from './ai.js';
 import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
 import { updateBossPhases, phaseBlocksDamage } from './boss-phases.js';
 import { updateBossParts, coreBlocksDamage } from './boss-parts.js';
+import { updateBossIntro, updateBossDeath, introBlocksDamage } from './boss-intro.js';
 import { decayResistMap, ELEMENTS, weaknessElement } from '../combat/elements.js';
 import { runAura } from './support-aura.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
@@ -549,6 +550,10 @@ export class Enemy {
         // D.B0 — weak-point sub-entities: track part positions (no-op unless
         // this boss was given a partsScript via initBossParts).
         if (this.isBoss) updateBossParts(this, gameEngine);
+        // D.B0 — time-gated intro/death sequences (no-op unless this boss was
+        // given a sequence via initBossIntro / initBossDeath). NOT gated by
+        // dying/warping: an intro plays during warp-in, a death while dying.
+        if (this.isBoss) { updateBossIntro(this, gameEngine); updateBossDeath(this, gameEngine); }
 
         // Late-wave AI throttle: in waves 15+, run the heavy spatial scans
         // on alternating frames per enemy.
@@ -1696,6 +1701,8 @@ export class Enemy {
         if (phaseBlocksDamage(this)) return false;
         // Core invulnerable while weak-point parts live (no-op without parts).
         if (coreBlocksDamage(this)) return false;
+        // Invulnerable while the intro sequence plays (no-op without an intro).
+        if (introBlocksDamage(this)) return false;
         this.health = Math.max(0, this.health - damage);
         return this.health <= 0.001;
     }

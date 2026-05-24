@@ -6,6 +6,7 @@ import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { phaseBlocksDamage } from '../enemy/boss-phases.js';
 import { coreBlocksDamage } from '../enemy/boss-parts.js';
+import { introBlocksDamage } from '../enemy/boss-intro.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { elementalMultiplier, multiElementMultiplier, adaptResist, ELEMENTS } from './elements.js';
@@ -2356,7 +2357,7 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
     // Boss rage / phase-transition invuln window — sparkle feedback, drop hit.
-    if (enemy.isBoss && ((enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil) || phaseBlocksDamage(enemy) || coreBlocksDamage(enemy))) {
+    if (enemy.isBoss && ((enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil) || phaseBlocksDamage(enemy) || coreBlocksDamage(enemy) || introBlocksDamage(enemy))) {
         if (this.particlePool) {
             const p = this.particlePool.get(enemy.x, enemy.y, 'starSparkle');
             if (p) {
