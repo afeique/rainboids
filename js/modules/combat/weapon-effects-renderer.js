@@ -1,5 +1,10 @@
 // Weapon effects rendering: beams, mines, nova rings, lightning, missiles, ability effects
 import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
+// 6.157.1 — passive-field auras (Gravity Well) draw at the gameplay radii, so
+// import the source-of-truth constants. (weapon-effects-renderer is only
+// imported by game-engine, and collision-system never imports it back, so this
+// is a clean one-way edge — no cycle.)
+import { GRAVITY_WELL_RADIUS, GRAVITY_WELL_DEADZONE } from './collision-system.js';
 
 // 5.79.4 — Module-level scratch buffers for jagged-arc paths. Replace
 //   the per-call `path = [].push([x,y])` allocations that the perf
@@ -1088,6 +1093,65 @@ export function drawWeaponEffects() {
         ctx.beginPath();
         ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+    }
+
+    // ─── Gravity Well field (P6 passive, 6.157.1) ───────────────────
+    // The pull itself (collision-system.applyGravityWell) is otherwise
+    // invisible. Draw the field at the reticle so the player can read it:
+    // a faint dashed boundary at the pull radius, an inner "settle" ring at
+    // the dead-zone (where enemies cluster), a small core glow, and short
+    // inward streaks on the enemies currently being drawn in.
+    if (p.hasPassive && p.hasPassive('GRAVITY_WELL')) {
+        const inp = this.inputHandler && this.inputHandler.input;
+        const tx = (inp && typeof inp.aimX === 'number') ? inp.aimX : p.x;
+        const ty = (inp && typeof inp.aimY === 'number') ? inp.aimY : p.y;
+        const now = Date.now();
+        ctx.save();
+        // Outer boundary — the pull radius (very faint, slow breathing).
+        ctx.globalAlpha = 0.06 + 0.03 * Math.sin(now * 0.002);
+        ctx.strokeStyle = '#9b6cff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 14]);
+        ctx.beginPath();
+        ctx.arc(tx, ty, GRAVITY_WELL_RADIUS, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Inner settle ring — where enemies come to rest.
+        ctx.globalAlpha = 0.12 + 0.05 * Math.sin(now * 0.004);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(tx, ty, GRAVITY_WELL_DEADZONE, 0, Math.PI * 2);
+        ctx.stroke();
+        // Core glow.
+        ctx.globalAlpha = 0.18 + 0.10 * Math.sin(now * 0.005);
+        ctx.fillStyle = '#9b6cff';
+        ctx.shadowColor = '#9b6cff';
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 9 + 2 * Math.sin(now * 0.005), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        // Inward pull streaks on in-range enemies (single batched path).
+        const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+        if (pool) {
+            ctx.globalAlpha = 0.22;
+            ctx.strokeStyle = '#b79bff';
+            ctx.lineWidth = 1;
+            const r2 = GRAVITY_WELL_RADIUS * GRAVITY_WELL_RADIUS;
+            ctx.beginPath();
+            for (const e of pool) {
+                if (!e || !e.active || e.warping || e._deathFlash > 0 || e.isBoss) continue;
+                const dx = tx - e.x, dy = ty - e.y;
+                const d2 = dx * dx + dy * dy;
+                if (d2 > r2 || d2 < GRAVITY_WELL_DEADZONE * GRAVITY_WELL_DEADZONE) continue;
+                const d = Math.sqrt(d2);
+                const len = Math.min(14, d);
+                ctx.moveTo(e.x, e.y);
+                ctx.lineTo(e.x + (dx / d) * len, e.y + (dy / d) * len);
+            }
+            ctx.stroke();
+        }
         ctx.restore();
     }
 }

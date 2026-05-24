@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.157.1] - 2026-05-24
+
+### Changed — Gravity Well polish (Phase P6 passive)
+
+- **Gravity Well now reads on-screen.** The pull was invisible before; it now
+  draws a faint violet field at the reticle — a dashed boundary at the pull
+  radius, an inner "settle" ring, a pulsing core glow, and short inward streaks
+  on the enemies currently being drawn in.
+- **Pull settles enemies into a loose cluster instead of a singularity.** Added
+  an inner dead-zone (`GRAVITY_WELL_DEADZONE = 60`): enemies ease to the zone
+  edge and stop, rather than all converging onto the exact aim point where the
+  per-frame separation pass made them overlap-fight into a flickering dot. This
+  delivers the "grouping" the passive promises.
+
+---
+
 ## [6.157.0] - 2026-05-24
 
 ### Added — Ship skins + Hangar selector

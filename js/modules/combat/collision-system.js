@@ -2277,12 +2277,19 @@ export function frenzyMult(count) {
 // can't trivialize boss positioning.
 export const GRAVITY_WELL_RADIUS = 420;
 export const GRAVITY_WELL_STEP = 0.7; // px/frame — deliberately weak
+// 6.157.1 — inner settle zone: stop pulling once an enemy is this close to the
+// reticle. The separation pass (_separateEnemies) runs *before* the pull each
+// frame, so without a dead-zone every in-range enemy converges onto the exact
+// aim point and overlap-fights into a flickering singularity. Easing them to
+// the dead-zone edge instead reads as the "grouping" the passive promises — a
+// loose cluster around the cursor, not a single dot.
+export const GRAVITY_WELL_DEADZONE = 60;
 export function gravityWellPull(enemy, tx, ty, radius = GRAVITY_WELL_RADIUS, step = GRAVITY_WELL_STEP) {
     if (!enemy) return false;
     const dx = tx - enemy.x, dy = ty - enemy.y;
     const d = Math.hypot(dx, dy);
-    if (d > radius || d < 1) return false;       // out of range / already on target
-    const move = Math.min(step, d);              // never overshoot the target
+    if (d > radius || d < GRAVITY_WELL_DEADZONE) return false; // out of range / inside settle zone
+    const move = Math.min(step, d - GRAVITY_WELL_DEADZONE);    // ease to the zone edge, never past it
     enemy.x += (dx / d) * move;
     enemy.y += (dy / d) * move;
     return true;

@@ -7,6 +7,7 @@ import {
     gravityWellPull,
     GRAVITY_WELL_RADIUS,
     GRAVITY_WELL_STEP,
+    GRAVITY_WELL_DEADZONE,
 } from '../../js/modules/combat/collision-system.js';
 
 const enemy = (x, y) => ({ x, y });
@@ -21,10 +22,10 @@ describe('Gravity Well — pull toward target', () => {
     });
 
     test('pull direction is along the enemy→target vector (diagonal)', () => {
-        const e = enemy(30, 40); // distance 50, unit (−0.6,−0.8) toward origin
+        const e = enemy(60, 80); // distance 100, unit (−0.6,−0.8) toward origin
         gravityWellPull(e, 0, 0);
-        expect(e.x).toBeCloseTo(30 - 0.6 * GRAVITY_WELL_STEP, 5);
-        expect(e.y).toBeCloseTo(40 - 0.8 * GRAVITY_WELL_STEP, 5);
+        expect(e.x).toBeCloseTo(60 - 0.6 * GRAVITY_WELL_STEP, 5);
+        expect(e.y).toBeCloseTo(80 - 0.8 * GRAVITY_WELL_STEP, 5);
     });
 
     test('out-of-range enemies are not pulled', () => {
@@ -33,12 +34,18 @@ describe('Gravity Well — pull toward target', () => {
         expect(e.x).toBe(GRAVITY_WELL_RADIUS + 10);
     });
 
-    test('never overshoots the target (move capped at the distance)', () => {
-        const e = enemy(GRAVITY_WELL_STEP * 0.5, 0); // closer than one step
+    test('enemies inside the dead-zone are left to settle (not pulled)', () => {
+        const e = enemy(GRAVITY_WELL_DEADZONE - 10, 0);
+        expect(gravityWellPull(e, 0, 0)).toBe(false);
+        expect(e.x).toBe(GRAVITY_WELL_DEADZONE - 10);
+    });
+
+    test('eases to the dead-zone edge without overshooting into it', () => {
+        // Half a step outside the dead-zone → should land exactly on the edge.
+        const e = enemy(GRAVITY_WELL_DEADZONE + GRAVITY_WELL_STEP * 0.5, 0);
         gravityWellPull(e, 0, 0);
-        // moved at most to the target, not past it
-        expect(e.x).toBeGreaterThanOrEqual(0);
-        expect(e.x).toBeLessThanOrEqual(GRAVITY_WELL_STEP * 0.5);
+        expect(e.x).toBeGreaterThanOrEqual(GRAVITY_WELL_DEADZONE);
+        expect(e.x).toBeLessThanOrEqual(GRAVITY_WELL_DEADZONE + GRAVITY_WELL_STEP * 0.5);
     });
 
     test('an enemy already on the target is left alone (no NaN)', () => {
