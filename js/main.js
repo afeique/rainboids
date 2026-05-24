@@ -7,6 +7,7 @@ import { GAME_STATES } from './modules/core/constants.js';
 import { VERSION } from './modules/core/version.js';
 import { isMobile as _isMobilePlatform } from './modules/platform/platform-detect.js';
 import { buildStaticDom } from './modules/ui/static-dom.js';
+import { applyFonts } from './modules/ui/font-settings.js';
 
 // 5.91.0 — Rainboids now supports a full mobile-mode overhaul (auto-
 // pilot + tap-to-shoot + long-press weapon radial). The desktop-only
@@ -69,6 +70,8 @@ class RainboidsGame {
         // null. See js/modules/ui/static-dom.js for the markup
         // builders that own this previously-static content.
         buildStaticDom();
+        // 6.158.0 — apply the saved menu fonts to :root before any UI shows.
+        applyFonts();
 
         this.setupCanvas();
         await this.setupAudio();
@@ -203,6 +206,7 @@ class RainboidsGame {
             if (rects.continue && hit(rects.continue) && !rects.continue.disabled) return 'continue';
             if (rects.tutorial && hit(rects.tutorial)) return 'tutorial';
             if (rects.hangar   && hit(rects.hangar))   return 'hangar';
+            if (rects.settings && hit(rects.settings)) return 'settings';
             return null;
         };
 
@@ -262,6 +266,12 @@ class RainboidsGame {
             if (id === 'hangar') {
                 try { this.audioManager.playSound?.('coin'); } catch {}
                 ge().openHangar?.();
+                return;
+            }
+            // 6.158.0 — SETTINGS button opens the fonts/display settings.
+            if (id === 'settings') {
+                try { this.audioManager.playSound?.('coin'); } catch {}
+                ge().openSettings?.();
                 return;
             }
             launch(id === 'newGame' ? 'new' : 'continue');

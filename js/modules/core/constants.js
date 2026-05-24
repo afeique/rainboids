@@ -314,6 +314,8 @@ export const GAME_STATES = {
     LOADOUT: 'LOADOUT',
     // 6.157.0 — cosmetic ship-skin selector, opened from the title screen.
     HANGAR: 'HANGAR',
+    // 6.158.0 — settings (fonts/display), opened from the title screen.
+    SETTINGS: 'SETTINGS',
     PLAYING: 'PLAYING',
     PAUSED: 'PAUSED',
     GAME_OVER: 'GAME_OVER',

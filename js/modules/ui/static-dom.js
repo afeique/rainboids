@@ -21,6 +21,7 @@
 // aren't an issue and the structure is auditable.
 
 import { isMobile } from '../platform/platform-detect.js';
+import { buildFontControls } from './font-settings.js';
 
 /**
  * Public entry point. Walks the document and populates every empty
@@ -263,6 +264,7 @@ function _buildPauseMenu() {
         { key: 'power',    label: 'POWER' },
         { key: 'passives', label: 'PASSIVES' },
         { key: 'assists',  label: 'ASSISTS' },
+        { key: 'display',  label: 'DISPLAY' },
         { key: 'timer',    label: 'TIMER' },
         { key: 'music',    label: 'MUSIC' },
         { key: 'sfx',      label: 'SFX' },
@@ -296,9 +298,30 @@ function _buildPauseMenu() {
     // mobile-with-gamepad case); the tab button's visibility is what gates
     // access on mobile.
     menu.appendChild(_buildAssistsTab());
+    menu.appendChild(_buildDisplayTab());
     menu.appendChild(_buildTimerTab());
     menu.appendChild(_buildMusicTab());
     menu.appendChild(_buildSfxTab());
+}
+
+// DISPLAY tab — font (typography) settings. Reuses the shared font-picker
+// controls (also used by the title-screen SETTINGS overlay). Built once;
+// the controls read current settings and persist + apply on change.
+function _buildDisplayTab() {
+    const controls = el('div');
+    buildFontControls(controls);
+    return el('div', {
+        id: 'display-tab',
+        className: 'pause-tab-content',
+        children: [
+            el('h2', { text: 'DISPLAY' }),
+            el('div', {
+                style: { marginBottom: '15px', color: '#aaa', fontSize: '12px', textAlign: 'center' },
+                text: 'Menu fonts. Headers + tabs use one font, body text another. Pixel by default; changes persist between runs.',
+            }),
+            controls,
+        ],
+    });
 }
 
 function _pauseActionBtn(id, icon, label) {

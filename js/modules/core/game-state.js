@@ -16,10 +16,12 @@ import { GAME_STATES } from './constants.js';
 
 // Valid state transitions — keys are source states, values are allowed targets
 const TRANSITION_TABLE = {
-    [GAME_STATES.TITLE_SCREEN]:    [GAME_STATES.PLAYING, GAME_STATES.WAVE_TRANSITION, GAME_STATES.ARMORY, GAME_STATES.HANGAR],
+    [GAME_STATES.TITLE_SCREEN]:    [GAME_STATES.PLAYING, GAME_STATES.WAVE_TRANSITION, GAME_STATES.ARMORY, GAME_STATES.HANGAR, GAME_STATES.SETTINGS],
     // 6.157.0 — HANGAR is the cosmetic ship-skin selector, reached from the
     // title screen and returning to it (purely a menu detour, no run impact).
     [GAME_STATES.HANGAR]:          [GAME_STATES.TITLE_SCREEN],
+    // 6.158.0 — SETTINGS (fonts/display), same title-detour shape as HANGAR.
+    [GAME_STATES.SETTINGS]:        [GAME_STATES.TITLE_SCREEN],
     // Phase R2 — pre-run meta screens. NEW GAME: TITLE → ARMORY → LOADOUT
     // → WAVE_TRANSITION (run). Back-nav returns to the prior screen. ARMORY
     // → WAVE_TRANSITION is allowed too so the run can start before the

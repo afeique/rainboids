@@ -11,6 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.158.0] - 2026-05-24
+
+### Added — Menu font switcher (DISPLAY settings)
+
+- **Font system** — every menu/overlay font is now driven by two CSS
+  variables, `--font-header` (titles + tabs) and `--font-body` (everything
+  else), defaulting to the retro pixel pairing **Press Start 2P** / **Silkscreen**.
+  `js/modules/ui/font-settings.js` owns the roster, persistence
+  (`rainboidsSettings.headerFont` / `.bodyFont`), and `applyFonts()`, which
+  rewrites the `:root` variables on boot and on every change.
+- **Font roster** (9): pixel/retro — Press Start 2P, Silkscreen, Pixelify Sans,
+  Fira Code; modern/readable — Inter, Roboto, Montserrat, Helvetica Neue, System
+  UI. The three new families (Inter, Roboto, Montserrat) are bundled locally as
+  woff2 latin subsets in `css/fonts/`, keeping the build fully offline.
+- **DISPLAY settings** — a new **DISPLAY** tab in the pause menu and a new
+  **SETTINGS** button on the title screen (new `SETTINGS` game state + overlay)
+  both expose header-font + body-font pickers with a live preview and a
+  reset-to-pixel button. The choice persists across runs.
+
+### Changed
+
+- All ~48 hardcoded `Press Start 2P` rules in `styles.css` now resolve through
+  the `--font-header` / `--font-body` variables (titles + tabs → header; the
+  rest → body). Canvas-drawn text (the RAINBOIDS title, HUD, target labels) is
+  intentionally NOT switched — it stays Press Start 2P.
+- Title screen now has a five-button layout (NEW GAME / CONTINUE / TUTORIAL /
+  HANGAR / SETTINGS) in both portrait and landscape.
+
+---
+
+## [6.157.5] - 2026-05-24
+
+### Changed
+
+- **Asteroid HP retuned** for more variety across the 1–4 band (the field was a
+  glut of low-HP rocks): big asteroids now roll **3–4** HP, medium **2–3**, and
+  small **1–2** (was big 2–3, medium 1–2, small always 1). Level scaling on top
+  is unchanged.
+
+---
+
 ## [6.157.4] - 2026-05-24
 
 ### Changed — Twin Cast polish (Phase P6 keystone)

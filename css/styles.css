@@ -40,6 +40,42 @@
     font-display: swap;
     src: url('fonts/pixelify-sans-latin.woff2') format('woff2');
 }
+/* 6.158.0 — modern UI fonts for the font-switcher. Bundled locally (woff2
+   latin subsets) to keep the build offline, matching the pixel fonts above.
+   Each is a variable-font binary covering 400-700, so both weights share one
+   file (same pattern as Pixelify Sans). */
+@font-face {
+    font-family: 'Roboto';
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url('fonts/roboto-latin.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Montserrat';
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url('fonts/montserrat-latin.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url('fonts/inter-latin.woff2') format('woff2');
+}
+
+/* 6.158.0 — Font system. Two CSS variables drive every menu/overlay font:
+   `--font-header` for titles + tabs, `--font-body` for everything else.
+   Defaults are the retro pixel pairing (Press Start 2P / Silkscreen); the
+   DISPLAY settings (pause menu + title SETTINGS button) rewrite these on
+   :root via js/modules/ui/font-settings.js. Canvas-drawn text (title/HUD)
+   is intentionally NOT switched — it stays Press Start 2P. */
+:root {
+    --font-header: 'Press Start 2P', monospace;
+    --font-body: 'Silkscreen', monospace;
+}
 
 body {
     margin: 0;
@@ -47,7 +83,7 @@ body {
     background-color: #000;
     color: #fff;
     overflow: hidden;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -223,7 +259,7 @@ button:not([disabled]),
 #stats-overlay {
     background-color: rgba(0, 0, 0, 0.45);
     z-index: 9000;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     color: #e8e4d4;
 }
 
@@ -481,7 +517,7 @@ button:not([disabled]),
 #inventory-overlay {
     background-color: rgba(0, 0, 0, 0.5);
     z-index: 9000;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     color: #d6def0;
 }
 #inventory-panel {
@@ -651,7 +687,7 @@ button:not([disabled]),
    visually cohesive. */
 
 .pause-tab-content > h2 {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 24px;
     letter-spacing: 5px;
     margin: 0 auto 22px;
@@ -767,7 +803,7 @@ button:not([disabled]),
    render path in ui-manager. */
 
 .controls-section-title {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     /*font-family: 'Silkscreen', monospace;*/
     font-size: 18px;
     font-weight: 700;
@@ -1246,7 +1282,7 @@ button:not([disabled]),
     border: 2px solid color-mix(in srgb, var(--tab-color) 55%, transparent);
     color: white;
     cursor: pointer;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 18px;
     border-radius: 5px;
     transition: all 0.2s;
@@ -1312,7 +1348,7 @@ button:not([disabled]),
 }
 .assist-row-text { flex: 1 1 auto; }
 .assist-row-title {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 14px;
     color: #66ddcc;
     margin-bottom: 6px;
@@ -1382,7 +1418,7 @@ button:not([disabled]),
     background: rgba(40, 30, 60, 0.5);
     color: #cfc4e8;
     cursor: pointer;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     transition: border-color 0.15s, background 0.15s;
 }
 .pause-equip-row:hover { border-color: rgba(190, 160, 255, 0.7); background: rgba(60, 45, 90, 0.6); }
@@ -1431,7 +1467,7 @@ button:not([disabled]),
     border: 2px solid #993333;
     color: white;
     cursor: pointer;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 20px;
     line-height: 1;
     border-radius: 5px;
@@ -1448,7 +1484,7 @@ button:not([disabled]),
     color: #00ccff;
     font-size: 32px;
     margin: 0;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
 }
 
 .shop-currency-row {
@@ -1456,7 +1492,7 @@ button:not([disabled]),
     gap: 36px;
     justify-content: center;
     align-items: center;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 16px;
     line-height: 1;
 }
@@ -1501,7 +1537,7 @@ button:not([disabled]),
     border: 2px solid color-mix(in srgb, var(--tab-color) 55%, transparent);
     color: white;
     cursor: pointer;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 18px;
     border-radius: 5px;
     transition: all 0.2s;
@@ -1566,7 +1602,7 @@ button:not([disabled]),
     border: 2px solid #00ff00;
     border-radius: 8px;
     color: white;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
     text-align: left;
@@ -1655,7 +1691,7 @@ button:not([disabled]),
     background: rgba(170, 45, 45, 0.92);
     border: 1px solid #cc6666;
     color: #ffffff;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 9px;
     border-radius: 5px;
     cursor: pointer;
@@ -1694,7 +1730,7 @@ button:not([disabled]),
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 10px;
     color: #e6e6e6;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
 }
 .shop-help-intro,
 .shop-help-footer {
@@ -1819,7 +1855,9 @@ button:not([disabled]),
     border: 2px solid rgba(0, 200, 255, 0.6);
     color: white;
     cursor: pointer;
-    font-family: 'Press Start 2P', monospace;
+    /* 6.158.1 — RESUME (and other pause action buttons) use the pixel header
+       font, not the body font, so the CTA reads as a chunky retro button. */
+    font-family: var(--font-header);
     font-size: 14px;
     border-radius: 5px;
     transition: all 0.3s;
@@ -1921,7 +1959,7 @@ body.shop-open #hud-pause-btn {
     display: block;
     margin: 20px auto 0;
     padding: 10px;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 16px;
     color: white;
     background: #333;
@@ -2058,7 +2096,7 @@ body.shop-open #hud-pause-btn {
 #save-layout-button {
      margin-top: 30px;
      padding: 15px 30px;
-     font-family: 'Press Start 2P',  monospace;
+     font-family: var(--font-body);
      font-size: 18px;
      color: black;
      background: white;
@@ -2077,7 +2115,7 @@ body.shop-open #hud-pause-btn {
     justify-content: center;
     align-items: center;
     color: white;
-    font-family: 'Press Start 2P',  monospace;
+    font-family: var(--font-body);
 } */
 
 /* #loading-screen h1 {
@@ -2169,7 +2207,7 @@ body.shop-open #hud-pause-btn {
     justify-content: center;
     align-items: center;
     text-align: center;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     padding: 24px;
     box-sizing: border-box;
 }
@@ -2235,7 +2273,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     position: absolute;
     top: 0;
     left: 0;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 1.1em;
     font-weight: bold;
     color: #00ff00;
@@ -2272,14 +2310,14 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 #track-name-text {
     display: inline-block;
     white-space: nowrap;
-    font-family: 'Silkscreen', 'Press Start 2P', 'Courier New', monospace;
+    font-family: var(--font-body);
     font-size: 18px;
     color: #00ff00;
     line-height: 30px;
 }
 
 #current-track-name {
-    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-family: var(--font-body);
     font-size: 18px;
     color: #00ff00;
     line-height: 30px;
@@ -2922,7 +2960,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     color: #00ccff;
     border-radius: 50%;
     font-size: 11px;
-    font-family: 'Silkscreen', 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2994,7 +3032,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     text-align: center;
 }
 .shop-equipped-label {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 11px;
     letter-spacing: 1.5px;
     color: rgba(255, 255, 255, 0.65);
@@ -3004,7 +3042,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 20px;
     font-weight: bold;
 }
@@ -3027,7 +3065,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     border: 2px solid rgba(0, 204, 255, 0.4);
     color: #ffffff;
     cursor: pointer;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 14px;
     border-radius: 5px;
     transition: all 0.18s;
@@ -3104,7 +3142,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     min-width: 0;
 }
 .powerup-card-name {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 13px;
     margin-bottom: 4px;
 }
@@ -3114,7 +3152,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     line-height: 1.35;
 }
 .powerup-card-stacks {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 16px;
     min-width: 50px;
     text-align: right;
@@ -3144,12 +3182,12 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
     text-shadow: 0 0 8px rgba(255, 102, 204, 0.6);
 }
 .powerups-pick-count {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 22px;
     color: #ff66cc;
 }
 .powerups-pick-label {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 11px;
     letter-spacing: 2px;
     color: #ff99dd;
@@ -3157,7 +3195,7 @@ body.desktop-only-blocked > *:not(#desktop-only-block) {
 .powerup-card-buy {
     margin-left: 12px;
     padding: 8px 14px;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 14px;
     font-weight: bold;
     color: #ff66cc;
@@ -3469,7 +3507,7 @@ body.mobile-portrait #controls-tab h2 {
 }
 
 .wave-pick-title {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 24px;
     color: #ffd700;
     text-shadow: 0 0 8px rgba(255, 215, 0, 0.45);
@@ -3478,7 +3516,7 @@ body.mobile-portrait #controls-tab h2 {
 }
 
 .wave-pick-subtitle {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 11px;
     color: #cfeaff;
     margin: 0 0 18px 0;
@@ -3533,7 +3571,7 @@ body.mobile-portrait #controls-tab h2 {
 }
 
 .wave-pick-card-name {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 12px;
     color: var(--wp-color, #ffffff);
     margin-bottom: 4px;
@@ -3551,7 +3589,7 @@ body.mobile-portrait #controls-tab h2 {
 
 .wave-pick-card-stacks {
     flex: 0 0 auto;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 10px;
     color: #88a8d4;
     white-space: nowrap;
@@ -3565,7 +3603,7 @@ body.mobile-portrait #controls-tab h2 {
     margin-top: 14px;
 }
 .wave-pick-action-btn {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 10px;
     padding: 9px 14px;
     cursor: pointer;
@@ -3636,7 +3674,7 @@ body.mobile-portrait .wave-pick-card-stacks {
 
 #shop-suggest-gold-row {
     margin: 0 0 14px 0;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 14px;
     color: #ffe27a;
     letter-spacing: 1.5px;
@@ -3657,7 +3695,7 @@ body.mobile-portrait .wave-pick-card-stacks {
     border: 2px solid rgba(140, 220, 255, 0.7);
     border-radius: 10px;
     color: #ffffff;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 12px;
     letter-spacing: 2px;
     cursor: pointer;
@@ -3759,7 +3797,7 @@ body.mobile-portrait .shop-item-desc {
     border: 1px solid rgba(140, 200, 255, 0.45);
     border-radius: 6px;
     color: #cfeaff;
-    font-family: 'Silkscreen', 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 12px;
     line-height: 1.25;
     max-width: 100%;
@@ -3868,7 +3906,7 @@ body.mobile-portrait .shop-help-icon {
     flex-direction: column;
     align-items: stretch;
     gap: 18px;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     color: #e6e6e6;
 }
 
@@ -3954,7 +3992,7 @@ body.mobile-portrait .shop-help-icon {
 }
 
 .shop-tree-tab {
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     font-size: 11px;
     letter-spacing: 2px;
     color: #b0a070;
@@ -4137,7 +4175,7 @@ body.mobile-portrait .shop-help-icon {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
     box-shadow:
         0 0 0 2px rgba(0, 0, 0, 0.6),
@@ -4354,7 +4392,7 @@ body.mobile-portrait .shop-help-icon {
         0 6px 24px rgba(0, 0, 0, 0.7),
         0 0 18px rgba(200, 170, 100, 0.18);
     pointer-events: none;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     color: #e6e6e6;
 }
 
@@ -4486,7 +4524,7 @@ body.mobile-portrait .shop-help-icon {
     border-radius: 12px;
     padding: 28px 32px 32px;
     box-sizing: border-box;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     color: #e6e6e6;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 8px 40px rgba(0, 0, 0, 0.7);
 }
@@ -4534,7 +4572,7 @@ body.mobile-portrait .shop-help-icon {
     justify-content: center;
     background: radial-gradient(circle at 50% 40%, rgba(10, 16, 28, 0.97) 0%, rgba(4, 6, 12, 0.99) 100%);
     z-index: 9500;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     color: #d6def0;
 }
 .armory-panel {
@@ -4655,7 +4693,7 @@ body.mobile-portrait .shop-help-icon {
     justify-content: center;
     background: radial-gradient(circle at 50% 40%, rgba(10, 16, 28, 0.97) 0%, rgba(4, 6, 12, 0.99) 100%);
     z-index: 9500;
-    font-family: 'Press Start 2P', monospace;
+    font-family: var(--font-body);
     color: #d6def0;
 }
 .hangar-panel {
@@ -4767,3 +4805,92 @@ body.mobile-portrait .shop-help-icon {
     .hangar-body { flex-direction: column; overflow-y: auto; }
     .hangar-desc { width: auto; }
 }
+
+/* ── Font system (6.158.0) ─────────────────────────────────────────────
+   Header override: titles + tabs use --font-header; everything else
+   inherits --font-body from <body>. Placed last so it wins source-order
+   ties against the per-component rules above. */
+h1, h2, h3,
+.pause-tab, .shop-tab, .shop-tree-tab, .powerups-subtab,
+.controls-section-title,
+.shop-title, .wave-pick-title,
+.armory-title, .armory-section-title,
+.hangar-title,
+.settings-title, .settings-section-title {
+    font-family: var(--font-header);
+}
+
+/* ── SETTINGS overlay + DISPLAY (font) controls ───────────────────────── */
+.settings-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;            /* toggled to flex by SettingsOverlay.open() */
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 40%, rgba(10, 16, 28, 0.97) 0%, rgba(4, 6, 12, 0.99) 100%);
+    z-index: 9500;
+    font-family: var(--font-body);
+    color: #d6def0;
+}
+.settings-panel {
+    width: min(560px, 94vw);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: linear-gradient(180deg, rgba(14, 20, 30, 0.98) 0%, rgba(8, 11, 18, 0.98) 100%);
+    border: 2px solid #2f6fc2;
+    box-shadow: 0 0 28px rgba(64, 150, 255, 0.28), inset 0 0 70px rgba(0, 30, 80, 0.4);
+    padding: 22px 26px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.settings-title {
+    font-size: 22px;
+    letter-spacing: 3px;
+    color: #8fd0ff;
+    text-shadow: 0 0 12px rgba(64, 150, 255, 0.5);
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(80, 140, 220, 0.35);
+}
+/* Reused both as a standalone overlay body and inside the pause DISPLAY tab. */
+.font-controls { display: flex; flex-direction: column; gap: 16px; }
+.font-field { display: flex; flex-direction: column; gap: 6px; }
+.font-field-label { font-size: 10px; letter-spacing: 1px; color: #8fd0ff; }
+.font-select {
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: #e6eefc;
+    background: rgba(20, 30, 48, 0.85);
+    border: 1px solid rgba(80, 140, 220, 0.45);
+    padding: 9px 10px;
+    cursor: pointer;
+    width: 100%;
+}
+.font-select:focus { outline: none; border-color: rgba(140, 220, 255, 0.8); }
+.font-preview {
+    margin-top: 2px;
+    padding: 14px 16px;
+    background: #05070e;
+    border: 1px solid rgba(80, 140, 220, 0.35);
+    line-height: 1.5;
+}
+.font-preview-header { font-family: var(--font-header); font-size: 16px; color: #ffd75c; margin-bottom: 8px; }
+.font-preview-body   { font-family: var(--font-body);   font-size: 13px; color: #c6d2e8; }
+.font-settings-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 6px;
+}
+.font-btn {
+    padding: 9px 18px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--font-body);
+    letter-spacing: 1px;
+    border: 1px solid rgba(80, 140, 220, 0.55);
+    background: transparent;
+    color: #8fd0ff;
+}
+.font-btn:hover { background: rgba(64, 150, 255, 0.15); }
+.font-btn--reset { color: #c6a0ff; border-color: rgba(170, 120, 255, 0.5); }

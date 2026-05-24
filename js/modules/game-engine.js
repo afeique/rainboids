@@ -67,6 +67,7 @@ import { StatsOverlay } from './ui/stats-overlay.js';
 import { InventoryOverlay } from './ui/inventory-overlay.js';
 import { ArmoryOverlay } from './ui/armory-overlay.js';
 import { HangarOverlay } from './ui/hangar-overlay.js';
+import { SettingsOverlay } from './ui/settings-overlay.js';
 import { LoadoutOverlay } from './ui/loadout-overlay.js';
 import { AnalogStick } from './ui/analog-stick.js';
 
@@ -3287,7 +3288,7 @@ export class GameEngine {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.asteroidShardPool.updateActive();
-        } else if (this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT || this.game.state === GAME_STATES.HANGAR) {
+        } else if (this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT || this.game.state === GAME_STATES.HANGAR || this.game.state === GAME_STATES.SETTINGS) {
             // Sandstorm-grade chaotic drift — multiple sine waves at
             // distinct frequencies sum into a fast, direction-shifting
             // motion. Near-depth stars rip across the field while far
@@ -3430,7 +3431,7 @@ export class GameEngine {
             // (but the deepest barely moves, giving a "much-farther-away"
             // parallax feel relative to the foreground starfield). Also
             // pipes a slow rotation so the lens flare layers tumble.
-            const onTitle = this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT || this.game.state === GAME_STATES.HANGAR;
+            const onTitle = this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT || this.game.state === GAME_STATES.HANGAR || this.game.state === GAME_STATES.SETTINGS;
             const nebDriftX = onTitle ? (this._titleNebulaDriftX || 0) : 0;
             const nebDriftY = onTitle ? (this._titleNebulaDriftY || 0) : 0;
             const nebRot    = onTitle ? (this._titleNebulaRotation || 0) : 0;
@@ -3488,7 +3489,7 @@ export class GameEngine {
             // Entity / HUD rendering — skipped on the pre-init title screen
             // AND the ARMORY/LOADOUT screens (all pre-run: pools are empty,
             // player may be null, and the ship would otherwise show under the menu).
-            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT && this.game.state !== GAME_STATES.HANGAR) {
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT && this.game.state !== GAME_STATES.HANGAR && this.game.state !== GAME_STATES.SETTINGS) {
                 this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidShardPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 // Two-layer particle render — every bright/glowing type
@@ -3556,7 +3557,7 @@ export class GameEngine {
 
             this.ctx.restore();
 
-            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT && this.game.state !== GAME_STATES.HANGAR) {
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT && this.game.state !== GAME_STATES.HANGAR && this.game.state !== GAME_STATES.SETTINGS) {
                 // Draw UI elements without camera transformation
                 // Sync DOM powerup HUD
                 this.syncPowerupHUD();
@@ -4112,6 +4113,21 @@ export class GameEngine {
 
     isHangarOpen() {
         return !!(this._hangarOverlay && this._hangarOverlay.isOpen());
+    }
+
+    // 6.158.0 — open the SETTINGS screen (fonts/display) from the title.
+    // Full-screen DOM overlay; its BACK button returns to the title.
+    openSettings() {
+        if (!this._settingsOverlay) {
+            this._settingsOverlay = new SettingsOverlay();
+            this._settingsOverlay.setGameEngine(this);
+        }
+        this.game.state = GAME_STATES.SETTINGS;
+        this._settingsOverlay.open();
+    }
+
+    isSettingsOpen() {
+        return !!(this._settingsOverlay && this._settingsOverlay.isOpen());
     }
 
     // True while the pre-run BUILD tree (or the legacy flat list) is up.

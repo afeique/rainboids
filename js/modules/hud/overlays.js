@@ -269,11 +269,11 @@ export function drawTitleScreen() {
         const mpRows = 1;
         let buttonsBlockH;
         if (mobilePortrait) {
-            // Vertical stack: NEW GAME + CONTINUE + TUTORIAL + HANGAR.
-            buttonsBlockH = buttonH * (3 + mpRows) + buttonGap * (2 + mpRows);
+            // Vertical stack: NEW GAME + CONTINUE + TUTORIAL + HANGAR + SETTINGS.
+            buttonsBlockH = buttonH * (4 + mpRows) + buttonGap * (3 + mpRows);
         } else {
-            // Side-by-side primary row + TUTORIAL row + HANGAR row below.
-            buttonsBlockH = buttonH * (2 + mpRows) + (mpRows ? 18 + 18 : 0);
+            // Side-by-side primary row + TUTORIAL + HANGAR + SETTINGS rows below.
+            buttonsBlockH = buttonH * (3 + mpRows) + (mpRows ? 18 * 3 : 0);
         }
         // 5.99.1 — recordH shrinks on mobile to match the smaller record
         // font (10/12 px) so the layout block computes the correct
@@ -374,6 +374,14 @@ export function drawTitleScreen() {
                     h: buttonH,
                     disabled: false,
                 };
+                rects.settings = {
+                    id: 'settings',
+                    x: x0,
+                    y: yTop + 4 * (buttonH + buttonGap),
+                    w: buttonW,
+                    h: buttonH,
+                    disabled: false,
+                };
             } else {
                 // Landscape / desktop — side-by-side NEW GAME + CONTINUE
                 // with optional MULTIPLAYER row beneath. This is the
@@ -398,6 +406,14 @@ export function drawTitleScreen() {
                     id: 'hangar',
                     x: x0,
                     y: tutY + buttonH + 18,
+                    w: totalW,
+                    h: buttonH,
+                    disabled: false,
+                };
+                rects.settings = {
+                    id: 'settings',
+                    x: x0,
+                    y: tutY + 2 * (buttonH + 18),
                     w: totalW,
                     h: buttonH,
                     disabled: false,
@@ -474,6 +490,9 @@ export function drawTitleScreen() {
             }
             if (rects.hangar) {
                 drawButton(rects.hangar, 'HANGAR');
+            }
+            if (rects.settings) {
+                drawButton(rects.settings, 'SETTINGS');
             }
 
             if (this.game.survivalRecord > 0) {
