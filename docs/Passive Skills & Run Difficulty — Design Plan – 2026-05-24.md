@@ -8,7 +8,7 @@
 
 ## 1. Goals
 
-- **Passives** = build-defining *gameplay modifiers* (not stat increments). 3 slots, bought with account-gold like weapons/abilities, slot-gated over the run, **swappable mid-run from the menu**. They should *drastically change how the run plays* and **stack synergistically** in deliberate clusters.
+- **Passives** = build-defining *gameplay modifiers* (not stat increments). Equip slots (3 baseline, scaling up to 5 by run length — §11.A), bought with account-gold like weapons/abilities, slot-gated over the run, **swappable mid-run from the menu**, and **also rollable on gear** (shared registry). They should *drastically change how the run plays* and **stack synergistically** in deliberate clusters.
 - **Run Configurator** = player picks how long the run is (stages → waves), how many bosses, and a **difficulty tier**. Higher difficulty = tougher enemies **and** more drops + better item rarity (risk → reward).
 - **Reconcile, don't duplicate.** Both features must fold cleanly into the already-shipped systems (account-gold unlocks, BUILD tree, 4-slot abilities, the element/status engine, the energy meter, the loot/rarity ladder, kill-streaks, SP stats) and into the still-unbuilt backlog (item traits C.I3, keystones C.I4, W8 Ascension).
 
@@ -46,7 +46,7 @@ The planned **C.I3 traits** and **C.I4 keystones** were always meant to be "a sh
             │   tags (offense/defense/element/econ/…)   │
             └───────────────┬───────────────┬──────────┘
        equip slot (NEW)     │   keystone card (C.I4)   │   top-tier item roll (C.I3)
-   gold-bought, 3 slots,    │   stage-clear pick       │   Legendary+ / Transcendental
+   gold-bought, 3–5 slots,  │   stage-clear pick       │   Legendary+ / Transcendental
    swappable mid-run        │   (later)                │   (later)
 ```
 
@@ -67,10 +67,9 @@ The planned **C.I3 traits** and **C.I4 keystones** were always meant to be "a sh
 ## 4. Passive Skills — system design
 
 ### 4.1 Slots & unlock-over-time
-- **3 total slots.** Slot 1 available from run start. Slot 2 and Slot 3 unlock **during** the run.
-- Default cadence (standard 10-stage run): **Slot 2 after clearing Stage 3, Slot 3 after clearing Stage 6.**
-- **Generalized for variable run length** (see §6): unlock Slot 2 at stage `ceil(stages × 0.3)` and Slot 3 at stage `ceil(stages × 0.6)` → exactly 3 & 6 in a 10-stage run, and sensible for short/long runs.
-  - *Fork:* absolute stages (3/6 always) vs. fractional (scales). **Recommend fractional** so short custom runs still grant all 3 slots.
+> **Superseded by §11.A** (round-3): slot *count* now scales with run length (3 at 10–29 stages → 5 at 60–100, soft cap **5**), with a **keystone budget of 2**, and gear adds *modular* passives on top. The original fixed-3 model is kept below for context.
+- **Slot 1 from run start;** further slots unlock **progressively during the run**, up to `maxSlots(stages)` (§11.A) — evenly spaced across the stages so each unlock feels like a power beat.
+- *(Original round-1 model, now folded into §11.A: 3 fixed slots, slot 2 & 3 at `ceil(stages × 0.3 / 0.6)` → stages 3 & 6 in a 10-stage run.)*
 
 ### 4.2 Acquisition (mirror abilities/weapons)
 - New unlock category in `armory.js` `UNLOCK_CATEGORIES`:
@@ -180,14 +179,16 @@ Set at run start (in the BUILD → RUN SETUP flow), stored on `this.game.runConf
 
 ```
 runConfig = {
-  stages:        10,   // 3..20 (default 10) — also the BOSS count (1 boss / stage final)
-  wavesPerStage: 3,    // 2..5  (default 3)
-  difficulty:    1,     // tier index, 1 = baseline
+  stages:        10,   // slider 10..100 (default 10) — also the BOSS count (1 boss / stage)
+  wavesPerStage: 3,    // radio 3 | 6 | 9 (default 3)
+  difficulty:    1,    // tier index, 1 = baseline (separate axis; §11.C)
 }
-// derived: totalWaves = stages × wavesPerStage; bossWaves = every wavesPerStage-th wave
+// derived: totalWaves = stages × wavesPerStage (30..900)
+//   within a stage (local wave 1..W): last wave = BOSS; other multiples of 3 = ELITE; rest = normal
+//   CARD pick after every stage (boss) clear  →  cards = stages
 ```
 
-This **replaces the hardcoded `MAX_WAVES = 30`** with `runConfig.stages × runConfig.wavesPerStage`. Because the enemy-scaling curves already normalize on `t = (w-1)/(totalWaves-1)`, they **auto-stretch**: a 60-wave run ramps gently, a 15-wave run ramps steeply — no per-wave retuning needed. `BOSS_WAVES`, `isCardStage`, `isStageClear`, and the run-complete check (`currentWave >= totalWaves`) all read the config.
+This **replaces the hardcoded `MAX_WAVES = 30`** with `runConfig.stages × runConfig.wavesPerStage`. Enemy scaling switches from run-normalized to **absolute** (§11.D) so longer runs keep escalating instead of plateauing. `isBossWave`, the new **elite** schedule, the **card-every-stage** cadence, passive-slot unlocks, and the run-complete check (`currentWave >= totalWaves`) all read the config.
 
 ### 6.2 What difficulty scales
 Difficulty tier `D` (1 = baseline) applies multipliers **on top of** the existing wave curve and the existing bonuses (boss bias, LUCKY_DROPS, kill-streak gold), respecting current caps:
@@ -204,16 +205,17 @@ Difficulty tier `D` (1 = baseline) applies multipliers **on top of** the existin
 
 Net: **higher difficulty = harder enemies but markedly more + better loot and gold** — exactly the risk/reward you asked for. All numbers are starting points for a balance pass.
 
-### 6.3 Cadence & slot-unlock scaling (must adapt to variable length)
-- **Card draft** stays "every 2nd stage clear" → auto-scales (10 stages → 5 cards; 20 → 10; 6 → 3).
-- **Passive slot unlocks** at stage `ceil(stages·0.3)` and `ceil(stages·0.6)` (§4.1).
-- **XP/level** (meta) accrues per wave-clear as today — more waves = more meta XP, naturally.
+### 6.3 Cadence & slot-unlock scaling
+- **Card draft: every stage clear** (= every boss) → cards = stages (10–100). Once efficacy amplifiers cap, drafts fall back to passive / Cores cards (§11.E).
+- **Elite (miniboss): every 3rd wave** that isn't the stage boss (§11.B).
+- **Passive slot unlocks:** progressive across the run, up to `maxSlots(stages)` (§11.A).
+- **XP/level** (meta) accrues per wave-clear — more waves = more meta XP, naturally.
 
 ### 6.4 RUN SETUP UI
 A small pre-run screen (or a panel folded into the BUILD → START flow): **Stages** slider, **Waves/stage** slider, **Difficulty** tier selector, and a **live readout** of the resulting modifiers ("Enemies +48% · Drops +40% · Rarity bias +0.24 · Gold +40%"). `START RUN` writes `runConfig` and proceeds.
 
 ### 6.5 Reconciliation
-- **Absorbs W8 "Ascension."** W8 described "escalating endless difficulty after first clear: enemy HP/dmg/density + rising resistances; higher item-level gear + more gold." That **is** this difficulty system. Recommend: difficulty tiers above your first clear *are* Ascension; mark W8's Ascension bullet as folded into this phase. (Endless/marathon length + rising resistances can be the top difficulty tiers.)
+- **Absorbs W8 "Ascension."** W8 described "escalating endless difficulty after first clear: enemy HP/dmg/density + rising resistances; higher item-level gear + more gold." That **is** this difficulty system. Recommend: difficulty tiers above your first clear *are* Ascension; mark W8's Ascension bullet as folded into this phase. (Marathon length — up to 100 stages — + rising resistances at the top tiers carry the Ascension fantasy without a separate endless mode.)
 - **Mobile scaling** already multiplies wave configs separately — keep it as an independent platform factor layered under `difficulty`.
 - **Gating:** optionally lock higher difficulty tiers behind clearing lower ones (classic ascension unlock), stored in `rainboidsMeta.maxDifficultyCleared`. *(Fork: gate tiers vs. all-open. Recommend gating — gives a progression spine.)*
 
@@ -223,8 +225,8 @@ A small pre-run screen (or a panel folded into the BUILD → START flow): **Stag
 
 **Phase P — Passive Skills**
 1. **P1** Registry + reconciliation: rename `PASSIVE_UPGRADES→STAT_UPGRADES`; new `PASSIVES` registry (`passive-data.js`) with hook metadata; `passives` unlock category + meta key; fold C.I3/C.I4 plan into this pool.
-2. **P2** Player state + apply pipeline: `equippedPassives[3]`, `ownedPassives`, `activePassives` Set, `hasPassive`, `getPassiveMod`; slot-unlock state.
-3. **P3** Slot gating: unlock slots 2 & 3 at the stage thresholds (wave-clear hook).
+2. **P2** Player state + apply pipeline: `equippedPassives[]` (length = `maxSlots`, up to 5), `ownedPassives`, `activePassives` Set, `hasPassive`, `getPassiveMod`, keystone-budget enforcement (≤2); slot-unlock state.
+3. **P3** Slot gating: `maxSlots = 3 + floor(stages/30)` (cap 5); unlock slots progressively at stage milestones (wave-clear hook).
 4. **P4** BUILD-tree PASSIVES cluster (unlock + the run's chosen pool) + loadout carry.
 5. **P5** In-run swap menu (pause panel) + ramp-reset-on-swap.
 6. **P6** Catalog batch 1 (~10–12 passives, one per archetype) — each with a live consumer + unit test.
@@ -258,9 +260,11 @@ Confirmed by product owner:
 1. **Naming — stats are "Stats," full stop.** Rename `PASSIVE_UPGRADES → STATS` and `PASSIVE_REWARD_IDS → STAT_CARD_IDS` (drop *both* "passive" and "upgrade"; SP_STATS keeps its name as the SP-allocation defs — the two reference the same stat families). User-facing label: **STATS**. "Passives" now exclusively means the rule-modifier layer.
 2. **Shared registry across items AND passive slots — confirmed.** One `PASSIVES` registry; an entry declares where it can live (slot / item / both). Players can **roll items that carry passive skills** (a passive-affix on higher-tier gear). See §10 for the expanded catalog + delivery/stacking rules.
 3. **Mid-run swap — confirmed** (free swap, ramp-reset on swap).
-4. **Slots scale with run length** + **Endless** allowed — design in §11.A/B.
+4. **Slots scale with run length** (capped — §11.A) — *no endless*; stages 10–100 with a definite end (§11.B).
 5. **Difficulty tiers gated, reward-feeling** — design in §11.C.
-6. **Waves/stage default 10**, longer runs available — pacing + scaling in §11.D/E; **mid-run loadout access** in §11.F.
+6. **Waves/stage = radio 3/6/9 (default 3)**, stages = slider 10–100; elite every 3rd wave, boss + card every stage (§11.B); scaling §11.D; long-run reconciliations §11.E; **mid-run loadout access** §11.F.
+
+> **Round-3 (2026-05-24):** §10.1 adds 8 keystones + 10 modular passives; §11.A answers the "max passives" question (slots cap **5** + keystone budget **2**, gear adds modular); §11.B finalizes the run structure (no endless). These supersede the round-1 §8 forks and the round-2 notes above where they differ.
 
 ---
 
@@ -316,24 +320,80 @@ Confirmed by product owner:
 
 Modular passives are the natural **item-affix** pool (they're additive and don't rewrite rules), so rolling them on gear feels like loot, not like accidentally bricking a build. Keystones stay slot-only (or a Transcendental "build-enabling" chase roll) so you never roll *"can't crit"* on a helmet by accident.
 
+### 10.1 More passives — round 3 (self-reviewed for "interesting, not cheap")
+
+Filtered hard: every entry below either creates a new *decision*, a new *playstyle*, or a new *synergy axis*. No stat-sticks (those are Stats), no "+X% damage" filler.
+
+**New keystones (slot-only — build-defining):**
+| Passive | Effect | ↯ Downside | Synergy / why it's interesting |
+|---|---|---|---|
+| **Eye of the Storm** | While **stationary**, nearby enemies + their projectiles slow 40% (a "plant & delete" stance); moving cancels it | you're a sitting target | Rail Driver / Lance / charge, **Siege**; the anti-thesis of movement builds — a whole different way to play |
+| **Detonator** | Killing a status-afflicted enemy **detonates its statuses as an AoE** (burn→fire nova, freeze→frost nova, corrode→acid pool) | — | Catalyst, Kindling, attunements, Prismatic Soul — turns kills into chain reactions; the cornerstone of a status build |
+| **Frenzy** | +8% damage per nearby enemy (cap +80%) | +30% damage taken | AoE, lifesteal, dodge — rewards diving *into* crowds instead of kiting |
+| **Singular Focus** | If you equip **exactly one** ability (3 ability slots empty): that ability's cooldown −50% and effect +50% | gives up 3 abilities | tall-vs-wide build choice that uses the 4-slot ability model itself |
+| **Gravity Well** | A constant weak pull draws enemies toward your **reticle**, grouping them | pulls danger toward you | VOID, Nova/AoE, Detonator — you *reshape the battlefield* into a kill-box |
+| **Flow State** | Each kill cuts **all ability cooldowns** by 3% | — | low-cooldown abilities, fast clears — enables an ability-spam playstyle |
+| **Failsafe** | No single hit can remove more than **50% of max HP** | −15% max HP | the anti-one-shot pick for high difficulty; pairs with Glass Cannon to cap its fragility spikes |
+| **Heat Sink** *(feel-test; cut if fiddly)* | Primaries ignore their fire-rate cap and **ramp continuously while held, building HEAT**; at max heat you VENT (brief lockout + AoE burst) | lockout if you over-hold | explosive/crowd builds; converts "hold to win" into a burst-rhythm minigame |
+
+**New modular passives (item + slot — additive, loot-safe):**
+| Passive | Effect | Synergy / why it's interesting |
+|---|---|---|
+| **Overkill** | Excess damage from a kill **splashes to the nearest enemy** | burst/crit + single-target weapons; rewards over-killing |
+| **Vendetta** | The last enemy to damage you takes **+30% from you until it dies** (a rival mark) | adds a target-priority decision; Mark/VOID |
+| **Conduit** | Your statuses tick **25% faster but expire 25% sooner** (front-loaded) | Hex Touch, Detonator, fast clears — changes status *pacing* |
+| **Trailblazer** | Your **engine trail damages** enemies you fly past (uses the new ship thruster) | movement builds, Slipstream; thematic with the ship redesign |
+| **Afterimage** | Dashing leaves a **clone that fires your primary once** | dash abilities, Phase Walker |
+| **Resonance** | **Every 3rd power-weapon use costs no energy** | power builds, Overflow Capacitor, Twin Cast — energy economy |
+| **Backlash** | When you **dodge** (evasion proc), fire a retaliating shot at the attacker | DODGE SP, Last Bastion, One With The Void — makes dodge offensive |
+| **Harvest** | Enemies killed by **status damage** (not direct) drop bonus energy + gold | status/element builds, Detonator — rewards a *kill style* |
+| **Tracer Lock** | Repeated hits on the **same target** ramp damage to it (resets on swap) | Rail/Lance, focus-fire — focus-vs-spread decision |
+| **Siege** | Standing **still** ramps damage (stacks, decays on move) | the stationary twin of Slipstream/Trailblazer; pairs with **Eye of the Storm** for a turret build |
+
+That's **+8 keystones and +10 modular** on top of §10, so the shared registry is ~40 passives — plenty to curate a strong launch batch from (build *one* per archetype first; the rest are content drops).
+
 ---
 
-## 11. Run length, slots, difficulty & loadout — proposals (pending sign-off)
+## 11. Run length, slots, difficulty & loadout
 
-### A. Passive slots scale with run length
-- **Formula (proposal):** `slots = 3 + floor(max(0, stages − 10) / 5)`, **soft cap 8**. → 10 stages = 3, 15 = 4, 20 = 5, 25 = 6, 30 = 7, 45+ = 8.
-  *(If you want exactly 6 at 30, use `/7` instead of `/5` — smoother but slower. Recommend `/5`.)*
-- Slots unlock **progressively**: slot 1 at start; the rest spread evenly across stages (e.g. slot k opens at stage `round((k−1)/(slots−1) × lastStage)`), so every run *feels* like a power ramp.
-- **The balance hinge — why this isn't just "long = easy":** today's enemy scaling normalizes over the run (`t=(w−1)/(N−1)`), so a 100-wave run just *spreads the same curve* and late waves aren't harder than a 30-wave run's finale. **We replace that with absolute, unbounded ramping** (§D): each wave is strictly harder than the last. So the extra slots are *earned power that matches earned threat* — they let you keep pace, but the threat keeps climbing past your power, which is exactly what makes a long/endless run a "how far can you get" test rather than a free win.
+### A. How many passives? (slot cap + gear) — the estimation question
 
-### B. Stage cap & Endless
-- **Custom runs: 3–30 stages** (the "campaign" band; 30 = the long marathon).
-- **Endless mode (toggle):** uncapped waves, **slot cap stays 8**, enemy power climbs without bound → you die eventually; we track **best wave reached** (leaderboard fantasy).
-- **Gauntlet preset:** a fixed **100-wave** marathon *with a finish line* + a completion reward — a beatable ultra-run for players who want a goal, not just survival.
-- **Recommendation:** ship custom 3–30 **plus** an Endless toggle **and** the 100-wave Gauntlet preset. Endless answers "how far can I get"; Gauntlet answers "can I actually beat the big one." Both reuse the same scaling.
+Passives come from **two sources**, so "max passives" is really "how many *equipped slots*, given gear *also* grants passives?"
+
+**Recommendation — equipped slots cap at 5; gear rolls modular passives only; a keystone budget of 2.**
+
+- **Max equipped slots scales with run length** — `maxSlots = 3 + floor(stages / 30)`, capped at **5**:
+
+  | stages | 10–29 | 30–59 | 60–100 |
+  |---|---|---|---|
+  | **max slots** | 3 | 4 | 5 |
+
+  Slots unlock **progressively** across the run (slot 1 at start; the rest at evenly-spaced stage milestones), so "more stages → more passives" holds and a long run *feels* like a power ramp — but it tops out at 5.
+- **Keystone budget = 2.** At most 2 equipped slots may hold **keystones** (build-rewriting); the rest take **modular** passives. Start conservative — loosening this after playtest is trivial; clawing back an OP launch is not.
+- **Gear rolls MODULAR passives only** (Exceptional+ rolls one; Transcendental may *rarely* roll a keystone as a chase payoff that doesn't count against the budget). Across 5 gear slots that's up to ~5 more modular passives — realistically 2–3.
+- **Net maximum simultaneous: ~5 slots + ~5 gear ≈ up to ~10 passives, but only ~2 keystones** (plus a rare Transcendental keystone). Rich and layered, with no degenerate "all-keystones" state.
+
+**Why this is *lower* than the 6–8 we floated earlier:** now that **gear also supplies passives**, the slot cap must come down to keep the *total* in check — the "more passives" fantasy is delivered partly by loot, not slots alone. And you're right that passives are unproven: shipping **tight (5 slots / 2 keystones)** and loosening from playtest data is the safe path. The backstop that keeps even a maxed build honest is the **unbounded enemy scaling** (§D) — the longer/harder the run, the more the threat outpaces your stacked passives.
+
+### B. Run length & structure (no endless — long, but it ends)
+
+- **Stages: a slider, 10 → 100** (default **10**). **No endless mode.** The longest run is 100 stages and has a definite finish + completion payoff — "a lot of waves, but there's an end."
+- **Waves per stage: a radio — 3 / 6 / 9** (multiples of three; default **3**).
+- **Intra-stage rhythm** — within a stage of `W` waves, the **last wave is the BOSS**, and every *other* multiple-of-3 wave is a guaranteed **ELITE (miniboss)**:
+
+  | waves/stage | layout |
+  |---|---|
+  | **3** | normal · normal · **BOSS** *(no elite)* |
+  | **6** | n · n · **ELITE** · n · n · **BOSS** |
+  | **9** | n · n · **ELITE** · n · n · **ELITE** · n · n · **BOSS** |
+
+- **Every stage ends with a boss, and every stage clear grants a CARD pick** — that's what gives stage completion a concrete meaning. So **cards = number of stages (10–100)**, bosses = stages, elites = `stages × (W/3 − 1)`.
+- **Total waves = stages × W → 30 (10×3) up to 900 (100×9).** Length is itself a difficulty axis (the absolute scaling in §D climbs the whole way), layered *on top of* the chosen difficulty tier (§C). A 100-stage / 9-wave run at a high tier is the ultimate gauntlet — brutal, multi-hour, but beatable and finite.
+
+This supersedes the old "card every 2nd stage" cadence (§6.3 → now **card every stage**) and the old "elite at mid-stage" idea (old §E → now **elite every 3rd wave**).
 
 ### C. Difficulty gating (reward-feeling, low-friction)
-- **Unlock tier D+1 by reaching a milestone at tier D — not a full clear.** Proposal: *clear any run of ≥ 5 stages at tier D* (or *survive to wave 25 at tier D* in Endless). Easy enough to reach in a session, but you must prove you can sustain that tier. New tiers feel earned, not grindy.
+- **Unlock tier D+1 by reaching a milestone at tier D — not a full clear.** Proposal: *clear at least 5 stages at tier D in a single run* (even in a longer run — you don't have to finish it). Easy enough to reach in a session, but you must prove you can sustain that tier. New tiers feel earned, not grindy.
 - **Tougher tiers pay out better — the loot-system change:** each tier raises a **rarity ceiling** (low tiers literally *cannot* roll Divine/Transcendental; the top tiers are the only place the best gear exists), plus higher **item level** (affix magnitude), **drop rate**, and **gold**. This makes climbing difficulty the *only* path to best-in-slot gear — a strong, self-reinforcing pull. (Implementation: `rollRarity` gains a `rarityCeiling`/`floor` from the tier, alongside the existing bias; `createItem` level term scales with tier.)
 - Stored in `rainboidsMeta.maxDifficultyCleared`; locked tiers shown greyed with their unlock condition.
 
@@ -346,11 +406,12 @@ Modular passives are the natural **item-affix** pool (they're additive and don't
   `1 + a·w + b·w^1.5` shape with `w` = absolute wave, no `/N` normalization). density/count grows on a
   gentler curve. **Speeds are capped** (bullet/enemy speed clamps) so escalation comes from HP / count /
   damage / *new behaviors*, never from making projectiles physically undodgeable.
-- **High-tier "rising resistance"** (top difficulty tiers / deep Endless): enemies globally adapt resistance to your most-used element (a Warden-like meta pressure), nudging multi-element / coverage builds — this is the §15.4 Ascension idea, folded in.
+- **High-tier "rising resistance"** (top difficulty tiers / deep into a long run): enemies globally adapt resistance to your most-used element (a Warden-like meta pressure), nudging multi-element / coverage builds — this is the §15.4 Ascension idea, folded in.
 
-### E. Stage size & pacing (waves/stage = 10)
-- Stage = **10 waves** with a **mid-stage ELITE wave at wave 5** → an intensity/loot beat every 5 waves (elite @ +5, boss @ +10). Card / Stat / passive-slot **checkpoints fire at boss (stage) clears**; elites give a smaller loot bump.
-- This keeps a tight rhythm even in a 100-wave gauntlet (10 stages → 10 bosses + 10 elites). *(Alternative: waves/stage = 5 with more stages keeps bosses every 5 waves without elites — simpler, but you wanted bigger stages. Recommend the 10+elite layout.)*
+### E. Long-run reconciliations (boss variety + card stacking)
+*(Stage size & pacing is now defined in §B — waves/stage 3/6/9, elite every 3rd wave, boss + card every stage. The open problems a 100-stage run creates:)*
+- **Boss variety.** A max run has up to **100 bosses** but only ~10 unique are planned (Phase D). Reuse the 10 **cyclically with escalating scale**, and at higher difficulty tiers **"elite-ify"** them (extra phase / affix / rising resist) so repeats stay fresh. **Elites (minibosses)** are cheap variety — elite-ified versions of normal enemy types (buffed HP + one affix), no new art needed.
+- **Card stacking → passive cards.** Up to **100 card drafts**, but efficacy amplifiers have `maxStacks` caps and plateau. Once a player's relevant amplifiers are maxed, the per-stage draft should **fall back to PASSIVE cards** (keystone/modular from the shared registry — this *is* the C.I4 "keystone card" channel, P7) and/or **Cores/gold**. So the card-every-stage cadence naturally becomes a **passive-delivery channel** in long runs — a clean tie between the card system and the passive registry.
 
 ### F. Mid-run loadout access (the key call)
 - **Recommendation — tiered commitment, auto-scaling with run length:**

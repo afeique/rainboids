@@ -214,6 +214,13 @@
   },
   "active": "0dc9aa6f29b57b07",
   "lastOpenFiles": [
+    "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.f5ac7ecd9239",
+    "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.6e37e0def7c0",
+    "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.924bf916b85b",
+    "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.e24737692355",
+    "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.54d96db35a26",
+    "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.1299f49e135b",
+    "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.ae2150ac0cc5",
     "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md",
     "Weapon Element Identity & Meta-Progression — Design Plan – 2026-05-23.md",
     "Weapon Element Identity & Meta-Progression — Design Plan – 2026-05-23.md.tmp.40521.d8a14d4b962a",
@@ -233,12 +240,6 @@
     "Dead Skills & Upgrades – 2026-05-20.md",
     "Solo Bug Fix Plan – 2026-05-18.md",
     "Rust + Bevy Port Plan – 2026-05-20.md",
-    "Rust + Bevy Port Plan – 2026-05-20.md.tmp.89504.7cb5285f57f6",
-    "Native Port — Language & Engine Comparison – 2026-05-19.md.tmp.89504.d936b3eff790",
-    "Native Desktop Port Plan – 2026-05-19.md.tmp.89504.fb0f6f4ce164",
-    "Native Desktop Port Plan – 2026-05-19.md.tmp.89504.6bdda2444bd3",
-    "Native Desktop Port Plan – 2026-05-19.md.tmp.89504.5e794e67f8fc",
-    "Native Desktop Port Plan – 2026-05-19.md.tmp.89504.de18d7fe7860",
     "Native Desktop Port Plan – 2026-05-19.md",
     "Skill Tree & Combat Overhaul Plan – 2026-05-19.md",
     "Codebase Improvement Report – 2026-05-18.md",
@@ -248,7 +249,6 @@
     "Enemy Asteroid Permutations – 2026-03-07.md",
     "Gameplay Enhancement Plan – 2026-03-22.md",
     "PERF_BOTTLENECKS_5.79.3.md",
-    "PERF_RUNTIME_5.79.16.md",
-    "XP_BALANCE_REWORK_5.79.md"
+    "PERF_RUNTIME_5.79.16.md"
   ]
 }
