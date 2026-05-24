@@ -2172,6 +2172,16 @@ export function destroyAsteroid(ast) {
 // (warp / deathFlash / boss rage) are checked in exactly one place.
 // Returns `{ blocked, destroyed }`. Callers that want the legacy boolean
 // can read `result.destroyed`.
+// P6 — true if the enemy carries any active elemental/CC status (used by the
+// Opportunist passive: +damage vs status-afflicted enemies).
+function _enemyHasStatus(e) {
+    if (!e) return false;
+    const t = frameClock.now;
+    return (e.brnUntil > t) || (e.chillUntil > t) || (e.corrodeUntil > t)
+        || (e.conductUntil > t) || (e.markUntil > t) || (e.stunUntil > t)
+        || (e.corrodeStacks > 0);
+}
+
 export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
@@ -2193,6 +2203,20 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
         && this.player && this.player.getPowerupStacks
         && this.player.getPowerupStacks('EMP_OVERLOAD') > 0) {
         damage *= 1.2;
+    }
+
+    // P6 — rule-modifier PASSIVES on the universal damage path:
+    //   • global outgoing-damage multiplier (Glass Cannon +60%, …)
+    //   • Opportunist: +15% vs status-afflicted enemies
+    if (this.player) {
+        if (typeof this.player.getPassiveDamageMult === 'function') {
+            const pm = this.player.getPassiveDamageMult();
+            if (pm !== 1) damage *= pm;
+        }
+        if (typeof this.player.hasPassive === 'function' && this.player.hasPassive('OPPORTUNIST')
+            && _enemyHasStatus(enemy)) {
+            damage *= 1.15;
+        }
     }
 
     // E2 (Element & Resistance) — scale by the target's resistance to the

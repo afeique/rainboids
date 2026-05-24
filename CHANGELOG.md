@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.125.0] - 2026-05-24
+
+### Added — Passives go live: catalog expansion + first working effects (Phase P6, batch 1)
+
+The rule-modifier Passives stop being inert — the first batch now changes how a
+run plays, and the catalog grew to the full ~46-entry design set.
+
+- **Catalog +18** (design §10.1): keystones *Eye of the Storm, Detonator,
+  Frenzy, Singular Focus, Gravity Well, Flow State, Failsafe, Heat Sink* and
+  modular *Overkill, Vendetta, Conduit, Trailblazer, Afterimage, Resonance,
+  Backlash, Harvest, Tracer Lock, Siege* (data; effects roll out in later
+  batches).
+- **First live effects:**
+  - **Glass Cannon** — +60% outgoing damage (a player `getPassiveDamageMult()`
+    aggregator applied on the universal `applyDamageToEnemy` path) and −50% max
+    HP (a `getPassiveMaxHpMult()` folded into `getEffectiveMaxHealth`).
+  - **Opportunist** — +15% damage vs status-afflicted enemies (burn / chill /
+    corrode / conduct / mark / stun).
+  - **Last Bastion** — +20% dodge chance while below 30% max HP.
+- Data-driven multiplier fields (`damageMult` / `maxHpMult`) on passive entries
+  aggregate cleanly (product across active passives). Tests: aggregators +
+  Glass Cannon max-HP fold in `passives-player`.
+
 ## [6.124.1] - 2026-05-24
 
 ### Fixed — CONTINUE now restores equipped passives (Phase P5, part 1)

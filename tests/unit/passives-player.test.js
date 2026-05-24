@@ -183,3 +183,45 @@ describe('P2 — getPassiveMod folds into getEffective* getters', () => {
         expect(progression.getEffectiveCritChance.call(s)).toBe(15); // 10 base + 5 passive
     });
 });
+
+describe('P6 — passive effect batch 1 (Glass Cannon multipliers)', () => {
+    test('getPassiveDamageMult / getPassiveMaxHpMult default to 1, then reflect Glass Cannon', () => {
+        const s = makeStub();
+        own(s, ['GLASS_CANNON']);
+        // owned but not equipped → no effect
+        expect(passives.getPassiveDamageMult.call(s)).toBe(1);
+        expect(passives.getPassiveMaxHpMult.call(s)).toBe(1);
+        equip(s, 0, 'GLASS_CANNON');
+        expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.6);
+        expect(passives.getPassiveMaxHpMult.call(s)).toBe(0.5);
+    });
+
+    test('getEffectiveMaxHealth halves with Glass Cannon equipped', () => {
+        const s = makeStub({
+            maxHealth: 200,
+            getPowerupStacks: () => 0,
+            getItemAffixTotal: () => 0,
+            spStats: {},
+        });
+        s.getPassiveMod = (k) => passives.getPassiveMod.call(s, k);
+        s.getPassiveMaxHpMult = () => passives.getPassiveMaxHpMult.call(s);
+        own(s, ['GLASS_CANNON']);
+        expect(progression.getEffectiveMaxHealth.call(s)).toBe(200); // not equipped
+        equip(s, 0, 'GLASS_CANNON');
+        expect(progression.getEffectiveMaxHealth.call(s)).toBe(100); // ×0.5
+    });
+
+    test('multipliers compound across active passives', () => {
+        // Inject a second damageMult passive temporarily to prove the product.
+        PASSIVES.OPPORTUNIST.damageMult = 1.5;
+        try {
+            const s = makeStub({ passiveSlotsUnlocked: 2 });
+            own(s, ['GLASS_CANNON', 'OPPORTUNIST']);
+            equip(s, 0, 'GLASS_CANNON');
+            equip(s, 1, 'OPPORTUNIST');
+            expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.6 * 1.5);
+        } finally {
+            delete PASSIVES.OPPORTUNIST.damageMult;
+        }
+    });
+});

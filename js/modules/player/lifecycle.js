@@ -144,7 +144,14 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     const dodgeStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('DODGE') : 0;
     const itemDodge = this.player.getItemAffixTotal ? this.player.getItemAffixTotal('dodge') : 0;
     const spDodge = this.player.getSpStatValue ? this.player.getSpStatValue('DODGE') : 0;
-    const dodgeChance = Math.min(0.5, dodgeStacks * 0.05 + (itemDodge + spDodge) / 100);
+    // P6 — Last Bastion passive: +20% dodge while below 30% max HP.
+    let passiveDodge = 0;
+    if (this.player.hasPassive && this.player.hasPassive('LAST_BASTION')) {
+        const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
+            ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
+        if (maxHp > 0 && this.player.health <= maxHp * 0.30) passiveDodge = 0.20;
+    }
+    const dodgeChance = Math.min(0.5, dodgeStacks * 0.05 + (itemDodge + spDodge) / 100 + passiveDodge);
     if (dodgeChance > 0 && Math.random() < dodgeChance) {
         if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
         return;

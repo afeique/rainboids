@@ -66,6 +66,24 @@ export function getPassiveMod(key) {
     return total;
 }
 
+// P6 — product of a static multiplier field (e.g. `damageMult`, `maxHpMult`)
+// across the active passives. Defaults to 1 (no active contributor).
+export function getPassiveMult(field) {
+    if (!this.activePassives || this.activePassives.size === 0) return 1;
+    let mult = 1;
+    for (const id of this.activePassives) {
+        const v = PASSIVES[id] && PASSIVES[id][field];
+        if (typeof v === 'number') mult *= v;
+    }
+    return mult;
+}
+
+/** Global outgoing-damage multiplier from active passives (Glass Cannon, …). */
+export function getPassiveDamageMult() { return getPassiveMult.call(this, 'damageMult'); }
+
+/** Max-HP multiplier from active passives (Glass Cannon −50%, Failsafe −15%, …). */
+export function getPassiveMaxHpMult() { return getPassiveMult.call(this, 'maxHpMult'); }
+
 /**
  * Equip `id` (or null to clear) into `slot` (0..2). Rejects locked slots and
  * un-owned / non-slot-deliverable ids. A passive can't occupy two slots — if

@@ -1125,6 +1125,9 @@ export class Player {
     _rebuildActivePassives() { return passives._rebuildActivePassives.call(this); }
     hasPassive(id) { return passives.hasPassive.call(this, id); }
     getPassiveMod(key) { return passives.getPassiveMod.call(this, key); }
+    getPassiveMult(field) { return passives.getPassiveMult.call(this, field); }
+    getPassiveDamageMult() { return passives.getPassiveDamageMult.call(this); }
+    getPassiveMaxHpMult() { return passives.getPassiveMaxHpMult.call(this); }
     equipPassive(slot, id) { return passives.equipPassive.call(this, slot, id); }
     setOwnedPassives(ids) { return passives.setOwnedPassives.call(this, ids); }
     setPassiveSlotsUnlocked(n) { return passives.setPassiveSlotsUnlocked.call(this, n); }

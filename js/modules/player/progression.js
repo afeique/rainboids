@@ -408,7 +408,10 @@ export function getEffectiveMaxHealth() {
     // 6.35.0 — + SP HEALTH allocation.
     const itemBonus = this.getItemAffixTotal('hp') + _spVal(this, 'HEALTH');
 
-    const totalMaxHealth = baseMaxHealth + healthBoostAmount + itemBonus + _passiveMod(this, 'maxHp');
+    // P6 — passive max-HP multipliers (Glass Cannon ×0.5, Failsafe ×0.85, …)
+    // apply AFTER the additive bonuses, so "−50% max HP" halves the whole pool.
+    const hpMult = (typeof this.getPassiveMaxHpMult === 'function') ? this.getPassiveMaxHpMult() : 1;
+    const totalMaxHealth = (baseMaxHealth + healthBoostAmount + itemBonus + _passiveMod(this, 'maxHp')) * hpMult;
     // Cap raised to 600 to accommodate the higher per-stack value while
     // still preventing infinite scaling.
     return Math.min(600, totalMaxHealth);

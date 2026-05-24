@@ -47,6 +47,8 @@ export const PASSIVES = {
         id: 'GLASS_CANNON', name: 'Glass Cannon', desc: '+60% damage; −50% max HP',
         hooks: ['damage', 'maxHp'], tags: ['keystone', 'offense'],
         slot: true, item: false, stack: B, downside: '−50% max HP',
+        // P6 — static multiplier contributions (aggregated by the player).
+        damageMult: 1.6, maxHpMult: 0.5,
     },
     BERSERKERS_PACT: {
         id: 'BERSERKERS_PACT', name: "Berserker's Pact", desc: 'Damage ramps as HP falls (up to +80% near death)',
@@ -168,6 +170,88 @@ export const PASSIVES = {
         id: 'HOARDERS_GREED', name: "Hoarder's Greed", desc: '+100% gold-find; gold orbs heal 1 HP',
         hooks: ['gold', 'drop', 'damageTaken'], tags: ['econ'], slot: true, item: false, stack: B,
         downside: '+15% damage taken',
+    },
+
+    // ── Round-3 §10.1 — additional keystones (slot-only, build-defining, binary) ──
+    EYE_OF_THE_STORM: {
+        id: 'EYE_OF_THE_STORM', name: 'Eye of the Storm', desc: 'While stationary, nearby enemies + their projectiles slow 40%',
+        hooks: ['stationary', 'enemySlow'], tags: ['keystone', 'tempo', 'defense'],
+        slot: true, item: false, stack: B, downside: "You're a sitting target while it's up",
+    },
+    DETONATOR: {
+        id: 'DETONATOR', name: 'Detonator', desc: 'Killing a status-afflicted enemy detonates its statuses as an AoE (fire/frost/acid)',
+        hooks: ['onKill', 'status'], tags: ['keystone', 'element'], slot: true, item: false, stack: B,
+    },
+    FRENZY: {
+        id: 'FRENZY', name: 'Frenzy', desc: '+8% damage per nearby enemy (cap +80%)',
+        hooks: ['damage', 'proximity'], tags: ['keystone', 'offense'], slot: true, item: false, stack: B,
+        downside: '+30% damage taken',
+    },
+    SINGULAR_FOCUS: {
+        id: 'SINGULAR_FOCUS', name: 'Singular Focus', desc: 'With exactly one ability equipped: that ability gets −50% cooldown & +50% effect',
+        hooks: ['abilityCast', 'abilityCooldown'], tags: ['keystone', 'tempo'], slot: true, item: false, stack: B,
+        downside: 'You give up your other 3 ability slots',
+    },
+    GRAVITY_WELL: {
+        id: 'GRAVITY_WELL', name: 'Gravity Well', desc: 'A constant weak pull draws enemies toward your reticle, grouping them',
+        hooks: ['update', 'enemyPull'], tags: ['keystone', 'element'], slot: true, item: false, stack: B,
+        downside: 'Pulls danger toward you too',
+    },
+    FLOW_STATE: {
+        id: 'FLOW_STATE', name: 'Flow State', desc: 'Each kill cuts all ability cooldowns by 3%',
+        hooks: ['onKill', 'abilityCooldown'], tags: ['keystone', 'tempo'], slot: true, item: false, stack: B,
+    },
+    FAILSAFE: {
+        id: 'FAILSAFE', name: 'Failsafe', desc: 'No single hit can remove more than 50% of your max HP',
+        hooks: ['damageTaken'], tags: ['keystone', 'defense'], slot: true, item: false, stack: B,
+        downside: '−15% max HP',
+    },
+    HEAT_SINK: {
+        id: 'HEAT_SINK', name: 'Heat Sink', desc: 'Primaries ignore their fire-rate cap and ramp while held, building HEAT; max heat VENTs (brief lockout + AoE burst)',
+        hooks: ['fireRate', 'fire'], tags: ['keystone', 'offense'], slot: true, item: false, stack: B,
+        downside: 'Over-holding triggers a vent lockout',
+    },
+
+    // ── Round-3 §10.1 — additional modular passives (item + slot, loot-safe) ──
+    OVERKILL: {
+        id: 'OVERKILL', name: 'Overkill', desc: 'Excess damage from a kill splashes to the nearest enemy',
+        hooks: ['onKill', 'damage'], tags: ['offense'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
+    VENDETTA: {
+        id: 'VENDETTA', name: 'Vendetta', desc: 'The last enemy to damage you takes +30% from you until it dies',
+        hooks: ['damageTaken', 'damage'], tags: ['offense'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
+    CONDUIT: {
+        id: 'CONDUIT', name: 'Conduit', desc: 'Your statuses tick 25% faster but expire 25% sooner',
+        hooks: ['statusTick'], tags: ['element'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
+    TRAILBLAZER: {
+        id: 'TRAILBLAZER', name: 'Trailblazer', desc: 'Your engine trail damages enemies you fly past',
+        hooks: ['update', 'trail'], tags: ['offense', 'tempo'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
+    AFTERIMAGE: {
+        id: 'AFTERIMAGE', name: 'Afterimage', desc: 'Dashing leaves a clone that fires your primary once',
+        hooks: ['dash'], tags: ['tempo', 'offense'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
+    RESONANCE: {
+        id: 'RESONANCE', name: 'Resonance', desc: 'Every 3rd power-weapon use costs no energy',
+        hooks: ['powerFire', 'energy'], tags: ['energy'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
+    BACKLASH: {
+        id: 'BACKLASH', name: 'Backlash', desc: 'When you dodge, fire a retaliating shot at the attacker',
+        hooks: ['dodge'], tags: ['defense', 'offense'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
+    HARVEST: {
+        id: 'HARVEST', name: 'Harvest', desc: 'Enemies killed by status damage drop bonus energy + gold',
+        hooks: ['onKill', 'drop'], tags: ['econ', 'element'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
+    TRACER_LOCK: {
+        id: 'TRACER_LOCK', name: 'Tracer Lock', desc: 'Repeated hits on the same target ramp your damage to it (resets on swap)',
+        hooks: ['onHit', 'damage'], tags: ['offense'], slot: true, item: true, itemTierMin: EXC, stack: A,
+    },
+    SIEGE: {
+        id: 'SIEGE', name: 'Siege', desc: 'Standing still ramps your damage (stacks, decays on the move)',
+        hooks: ['stationary', 'damage'], tags: ['offense', 'tempo'], slot: true, item: true, itemTierMin: EXC, stack: A,
     },
 };
 
