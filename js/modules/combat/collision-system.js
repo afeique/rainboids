@@ -2422,6 +2422,23 @@ function _forkVolt(enemy, dealt) {
         }
     }
 }
+
+// W2 (Toxic) — corrosion plague: seep CORRODE into a few nearby enemies.
+const CORRODE_SPREAD_RADIUS = 95;
+const CORRODE_SPREAD_MAX = 3;
+function _spreadCorrode(enemy) {
+    const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+    if (!pool || typeof this.applyCorrode !== 'function') return;
+    const r2 = CORRODE_SPREAD_RADIUS * CORRODE_SPREAD_RADIUS;
+    let n = 0;
+    for (const other of pool) {
+        if (other === enemy || !other.active) continue;
+        const dx = other.x - enemy.x, dy = other.y - enemy.y;
+        if (dx * dx + dy * dy > r2) continue;
+        this.applyCorrode(other);
+        if (++n >= CORRODE_SPREAD_MAX) break;
+    }
+}
 export function applyWeaponElementStatus(enemy, element, dealt) {
     if (!enemy || !enemy.active) return;
     switch (element) {
@@ -2455,10 +2472,17 @@ export function applyWeaponElementStatus(enemy, element, dealt) {
             // not the bullet-hit status loop). Inert unless Volt-attuned.
             _forkVolt.call(this, enemy, dealt);
             break;
-        case 'TOXIC':
+        case 'TOXIC': {
+            // W2 (Toxic) — corrosion SPREADS: a follow-up Toxic hit on an
+            // already-corroded enemy seeps corrode into nearby enemies (a
+            // plague). Gated to corroded targets (no per-shot scan). Inert
+            // unless Toxic-attuned.
+            const wasCorroded = enemy.corrodeUntil > frameClock.now;
             if (typeof this.applyCorrode === 'function') this.applyCorrode(enemy);
             if (typeof this.applyBleed === 'function') this.applyBleed(enemy, dealt);
+            if (wasCorroded) _spreadCorrode.call(this, enemy);
             break;
+        }
         case 'VOID':
             if (typeof this.applyMark === 'function') this.applyMark(enemy);
             break;

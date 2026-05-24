@@ -65,6 +65,17 @@ function mkVoltEnemy(x, y, forks, kills = false) {
     };
 }
 
+// Toxic ctx — records corrode/bleed and sets the corrode timer.
+function mkToxicCtx(pool) {
+    const corroded = [], bled = [];
+    return {
+        corroded, bled,
+        enemyPool: { activeObjects: pool },
+        applyCorrode(e) { corroded.push(e); e.corrodeUntil = frameClock.now + 4000; },
+        applyBleed(e, d) { bled.push({ e, d }); },
+    };
+}
+
 describe('W2 Pyro — fire spread', () => {
     test('the igniting hit burns only the target (no spread scan)', () => {
         const a = mkEnemy(0, 0);
@@ -177,5 +188,40 @@ describe('W2 Volt — chain fork', () => {
         applyWeaponElementStatus.call(ctx, a, 'VOLT', 10);
         expect(looted).toBe(true);
         expect(debris).toBe(true);
+    });
+});
+
+describe('W2 Toxic — corrosion plague', () => {
+    test('a fresh Toxic hit corrodes + bleeds the target only (no spread)', () => {
+        const a = mkEnemy(0, 0);
+        const b = mkEnemy(20, 0); // adjacent, should not catch on first hit
+        const ctx = mkToxicCtx([a, b]);
+        applyWeaponElementStatus.call(ctx, a, 'TOXIC', 10);
+        expect(ctx.corroded).toEqual([a]);
+        expect(ctx.bled.map((x) => x.e)).toEqual([a]);
+    });
+
+    test('a follow-up hit on a corroded enemy spreads corrode to nearby', () => {
+        const a = mkEnemy(0, 0, { corrodeUntil: frameClock.now + 1000 });
+        const b = mkEnemy(40, 0);
+        const c = mkEnemy(0, 50);
+        const far = mkEnemy(400, 0);
+        const ctx = mkToxicCtx([a, b, c, far]);
+        applyWeaponElementStatus.call(ctx, a, 'TOXIC', 10);
+        expect(ctx.corroded).toContain(a);
+        expect(ctx.corroded).toContain(b);
+        expect(ctx.corroded).toContain(c);
+        expect(ctx.corroded).not.toContain(far);
+    });
+
+    test('spread is capped', () => {
+        const a = mkEnemy(0, 0, { corrodeUntil: frameClock.now + 1000 });
+        const neighbors = [];
+        for (let i = 0; i < 8; i++) neighbors.push(mkEnemy(5 + i, 5));
+        const ctx = mkToxicCtx([a, ...neighbors]);
+        applyWeaponElementStatus.call(ctx, a, 'TOXIC', 10);
+        // 1 (target) + at most 3 spreads.
+        expect(ctx.corroded.length).toBeLessThanOrEqual(1 + 3);
+        expect(ctx.corroded.length).toBeGreaterThan(1);
     });
 });

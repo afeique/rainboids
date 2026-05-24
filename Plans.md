@@ -281,7 +281,7 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 - [x] PYRO (fire SPREAD — burn jumps to nearby enemies on a follow-up hit; oil ignition already live via W1 flare) + 3 tests · commit (6.106.0)
 - [x] CRYO (sustained cold — a soft hit on an already-chilled enemy escalates to FREEZE; hard hit freezes outright; shatter via existing reaction) + 3 tests · commit (6.107.0)
 - [x] VOLT (chain FORK — every hit arcs reduced Volt damage + conduct to the nearest enemy; lethal fork runs the full kill pipeline; one hop) + 4 tests · commit (6.108.0)
-- [ ] TOXIC (corrode/bleed, gas clouds) + tests · commit
+- [x] TOXIC (corrosion PLAGUE — a follow-up hit on a corroded enemy spreads corrode to nearby; base corrode+bleed via W1) + 3 tests · commit (6.109.0)
 - [ ] VOID (mark, pull/gather) + tests · commit
 - [ ] RADIANT (purge/anti-armor) + tests · commit
 

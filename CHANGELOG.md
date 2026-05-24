@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.109.0] - 2026-05-23
+
+### Added — Toxic attunement behavior: corrosion plague (Phase W2)
+
+Toxic-attuned weapons now spread corrosion: a follow-up Toxic hit on an
+already-corroded enemy seeps corrode into up to 3 nearby enemies (~95px) — a
+plague that softens crowds for everything else. Base corrode + bleed (W1)
+still apply to the target. Gated to corroded targets (no per-shot scan); inert
+unless Toxic-attuned. 3 new unit tests; 656 unit green.
+
 ## [6.108.0] - 2026-05-23
 
 ### Added — Volt attunement behavior: chain fork (Phase W2)
