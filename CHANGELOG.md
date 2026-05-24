@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.158.1] - 2026-05-24
+
+### Changed — Asteroid HP rebalance
+
+- Asteroid base HP now rolls across a **1–4 band with a 50/50 spread inside
+  each size tier** instead of the old 1–3 band: SMALL rocks roll 1–2, MEDIUM
+  2–3, LARGE 3–4. Keeps the field from being a monoculture of one HP value
+  while staying readable. HP still scales up with asteroid level (no cap).
+
+---
+
 ## [6.158.0] - 2026-05-24
 
 ### Added — Menu font switcher (DISPLAY settings)

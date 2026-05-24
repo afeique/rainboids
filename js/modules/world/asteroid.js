@@ -89,16 +89,14 @@ export class Asteroid {
         const sizeRef = this.baseRadius || this.radius;
 
         // Asteroids are candy to unwrap, not chores. Base HP is ROLLED by
-        // size tier with size-driven variance: SMALL rocks are reliably weak
-        // (always 1 HP), MEDIUM rocks are usually 1 with an occasional 2, and
-        // LARGE rocks are usually 2 but have a real chance to roll a tough 3.
-        // This keeps the opening field firmly in the 1-3 band while letting
-        // the odd big rock surprise you. HP then SCALES UP with asteroid level
-        // (no hard cap) so late-game rocks are tougher. Tune the roll chances
-        // and ASTEROID_HP_PER_LEVEL to taste.
-        if (sizeRef >= 40)      baseHealth = 2 + (Math.random() < 0.40 ? 1 : 0); // big: 2, 40% → 3
-        else if (sizeRef >= 20) baseHealth = 1 + (Math.random() < 0.35 ? 1 : 0); // medium: 1, 35% → 2
-        else                    baseHealth = 1;                                  // small: always 1
+        // size tier across a 1-4 band with a healthy 50/50 spread inside each
+        // tier (so the field isn't a monoculture of 2-HP rocks): SMALL rocks
+        // roll 1-2, MEDIUM roll 2-3, and LARGE roll 3-4. HP then SCALES UP
+        // with asteroid level (no hard cap) so late-game rocks are tougher.
+        // Tune the roll chances and ASTEROID_HP_PER_LEVEL to taste.
+        if (sizeRef >= 40)      baseHealth = 3 + (Math.random() < 0.5 ? 1 : 0); // big: 3-4
+        else if (sizeRef >= 20) baseHealth = 2 + (Math.random() < 0.5 ? 1 : 0); // medium: 2-3
+        else                    baseHealth = 1 + (Math.random() < 0.5 ? 1 : 0); // small: 1-2
 
         // Gentle linear ramp with asteroid level (this.level). +25%/level.
         const levelMultiplier = 1 + (this.level - 1) * ASTEROID_HP_PER_LEVEL;
