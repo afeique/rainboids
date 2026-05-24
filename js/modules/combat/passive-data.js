@@ -64,6 +64,7 @@ export const PASSIVES = {
         id: 'PURIST', name: 'Purist', desc: '+40% flat damage; shots pierce',
         hooks: ['damage', 'bullet', 'crit'], tags: ['keystone', 'offense'],
         slot: true, item: false, stack: B, downside: 'Cannot crit',
+        damageMult: 1.4, // +40% all damage (the no-crit downside is in getEffectiveCritChance)
     },
     TWIN_CAST: {
         id: 'TWIN_CAST', name: 'Twin Cast', desc: 'Power weapons fire twice (2nd at 50%); abilities +1 charge',

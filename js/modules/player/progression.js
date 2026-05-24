@@ -422,6 +422,8 @@ export function getEffectiveMaxHealth() {
 }
 
 export function getEffectiveCritChance() {
+    // P6 — Purist passive: you can't crit (the trade for +40% flat damage).
+    if (typeof this.hasPassive === 'function' && this.hasPassive('PURIST')) return 0;
     const baseCritChance = this.baseCritChance;
     const critChanceStacks = this.getPowerupStacks('CRIT_CHANCE');
     const critChanceBonus = critChanceStacks * 7; // +7% per stack (was +5%)

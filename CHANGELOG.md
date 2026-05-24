@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.128.0] - 2026-05-24
+
+### Added — Economy + anti-crit passive effects (Phase P6, batch 4)
+
+- **Scavenger** — +50% gear (item) drop rate.
+- **Purist** — +40% all damage, but you **can't crit** (`getEffectiveCritChance`
+  returns 0). The "+40% flat damage" rides the same `damageMult` aggregator as
+  Glass Cannon. *(Its "shots pierce" sub-effect is a follow-up.)*
+
+Tests: Purist crit-disable + damage multiplier in `passives-player`.
+
 ## [6.127.0] - 2026-05-24
 
 ### Added — Energy + defense passive effects (Phase P6, batch 3)

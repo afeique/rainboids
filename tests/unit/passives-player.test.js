@@ -257,6 +257,26 @@ describe('P6 batch 3 — Failsafe maxHP + Overflow Spark', () => {
     });
 });
 
+describe('P6 batch 4 — Purist (no crit, +40% damage)', () => {
+    test('getEffectiveCritChance is 0 with Purist, even with crit stacks', () => {
+        const s = makeStub({
+            hasPassive: (id) => id === 'PURIST',
+            baseCritChance: 10,
+            getPowerupStacks: () => 5,
+            getItemAffixTotal: () => 0,
+            spStats: {},
+        });
+        expect(progression.getEffectiveCritChance.call(s)).toBe(0);
+    });
+
+    test('Purist contributes a 1.4 damage multiplier', () => {
+        const s = makeStub();
+        own(s, ['PURIST']);
+        equip(s, 0, 'PURIST');
+        expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.4);
+    });
+});
+
 describe('P6 batch 2 — Hoarder\'s Greed gold-find', () => {
     test('getGoldFindMultiplier doubles with Hoarder\'s Greed active', () => {
         const base = makeStub();

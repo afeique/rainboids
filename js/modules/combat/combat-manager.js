@@ -975,9 +975,11 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     // upgrades) so the 'I' inventory can re-equip a past one.
     if (isEnemy && player && typeof player.registerItemDrop === 'function') {
         const boss = !!(entity && entity.isBoss);
-        const hpRate     = boss ? 0.085 : 0.025;
-        const toughRate  = boss ? 0.075 : 0.020;
-        const trinkRate  = boss ? 0.060 : 0.015;
+        // P6 — Scavenger passive: +50% item (gear) drop rate.
+        const dropMult = (player.hasPassive && player.hasPassive('SCAVENGER')) ? 1.5 : 1;
+        const hpRate     = (boss ? 0.085 : 0.025) * dropMult;
+        const toughRate  = (boss ? 0.075 : 0.020) * dropMult;
+        const trinkRate  = (boss ? 0.060 : 0.015) * dropMult;
         const bonusRare  = boss ? 0.10  : 0;
         const bonusEpic  = boss ? 0.08  : 0;
 
