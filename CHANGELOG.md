@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.160.0] - 2026-05-24
+
+### Added — Boss weak-point sub-entities (Phase D.B0)
+
+- **Weak-point sub-entity layer** (`js/modules/enemy/boss-parts.js`). A boss can
+  own a handful of destructible child parts — turrets, plates, egg-sacs,
+  bolt-heads, a rotating elemental facet — each with its own HP, collider, and
+  position (static offset, rotate-with-boss, or a timed orbit). The headline
+  mechanic is **"core invulnerable while parts live"**: `coreBlocksDamage` keeps
+  the boss core unhittable until every *shielding* part is destroyed (decorative
+  / bonus parts that don't gate the core are supported too). Pure, engine-agnostic
+  logic with part hit-testing (`bossPartAt`), damage (`damageBossPart`, fires
+  `onDestroy` exactly once), and `livingParts` / `getBossPart` helpers —
+  element/resist ride along as metadata for the renderer + caller (resolved by
+  the damage pipeline, not here).
+- Wired into `enemy.update` (per-frame `updateBossParts` tracks part positions)
+  and both damage paths (`coreBlocksDamage` OR'd into the boss invuln gate in
+  `collision-system.applyDamageToEnemy` + the enemy fallback) — a **guarded
+  no-op** for every existing enemy (none has a `partsScript` yet), so current
+  play is unchanged. This is the second piece of the D.B0 boss chassis (after the
+  6.159.0 phase-script runner); the bullet→part hit routing and the scripted
+  bosses that use it land in D.B1. Unit tests: `tests/unit/enemy/boss-parts.test.js`
+  (13 cases — init/defaults, core gating, damage + onDestroy-once,
+  offset/rotate/orbit positioning, hit-testing, full clear).
+
+---
+
 ## [6.159.0] - 2026-05-24
 
 ### Added — Boss phase-script runner (Phase D.B0 foundation)

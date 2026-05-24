@@ -10,6 +10,7 @@ import * as shapes from './shapes.js';
 import * as ai from './ai.js';
 import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
 import { updateBossPhases, phaseBlocksDamage } from './boss-phases.js';
+import { updateBossParts, coreBlocksDamage } from './boss-parts.js';
 import { decayResistMap, ELEMENTS, weaknessElement } from '../combat/elements.js';
 import { runAura } from './support-aura.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
@@ -545,6 +546,9 @@ export class Enemy {
         // D.B0 — declarative phase-script runner (no-op unless this boss was
         // given a phaseScript via initBossPhases).
         if (this.isBoss) updateBossPhases(this, gameEngine);
+        // D.B0 — weak-point sub-entities: track part positions (no-op unless
+        // this boss was given a partsScript via initBossParts).
+        if (this.isBoss) updateBossParts(this, gameEngine);
 
         // Late-wave AI throttle: in waves 15+, run the heavy spatial scans
         // on alternating frames per enemy.
@@ -1690,6 +1694,8 @@ export class Enemy {
         if (this.warping || this._deathFlash > 0) return false;
         if (bossRageBlocksDamage(this)) return false;
         if (phaseBlocksDamage(this)) return false;
+        // Core invulnerable while weak-point parts live (no-op without parts).
+        if (coreBlocksDamage(this)) return false;
         this.health = Math.max(0, this.health - damage);
         return this.health <= 0.001;
     }
