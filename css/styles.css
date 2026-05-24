@@ -4645,3 +4645,125 @@ body.mobile-portrait .shop-help-icon {
     text-shadow: 0 0 8px rgba(120, 255, 150, 0.4);
 }
 .armory-btn--start:hover { background: rgba(120, 255, 150, 0.15); }
+
+/* ── HANGAR — cosmetic ship-skin selector (6.157.0) ────────────────── */
+.hangar-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;            /* toggled to flex by HangarOverlay.open() */
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 40%, rgba(10, 16, 28, 0.97) 0%, rgba(4, 6, 12, 0.99) 100%);
+    z-index: 9500;
+    font-family: 'Press Start 2P', monospace;
+    color: #d6def0;
+}
+.hangar-panel {
+    width: min(900px, 95vw);
+    max-height: 92vh;
+    background: linear-gradient(180deg, rgba(14, 20, 30, 0.98) 0%, rgba(8, 11, 18, 0.98) 100%);
+    border: 2px solid #2f6fc2;
+    box-shadow: 0 0 28px rgba(64, 150, 255, 0.28), inset 0 0 70px rgba(0, 30, 80, 0.4);
+    padding: 20px 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.hangar-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(80, 140, 220, 0.35);
+}
+.hangar-title {
+    font-size: 24px;
+    letter-spacing: 3px;
+    color: #8fd0ff;
+    text-shadow: 0 0 12px rgba(64, 150, 255, 0.5);
+}
+.hangar-skin-name {
+    font-size: 14px;
+    color: #ffd75c;
+    text-shadow: 0 0 10px rgba(255, 200, 60, 0.4);
+    letter-spacing: 1px;
+}
+.hangar-sub { font-size: 9px; line-height: 1.7; color: #7d8aa6; }
+.hangar-body {
+    display: flex;
+    gap: 18px;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+}
+.hangar-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+.hangar-preview-canvas {
+    border: 1px solid rgba(80, 140, 220, 0.4);
+    background: #05070e;
+    box-shadow: inset 0 0 30px rgba(0, 30, 80, 0.5);
+}
+.hangar-desc {
+    font-size: 9px;
+    line-height: 1.6;
+    color: #9fb0cc;
+    width: 300px;
+    text-align: center;
+}
+.hangar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 10px;
+    overflow-y: auto;
+    align-content: start;
+    flex: 1;
+    padding-right: 4px;
+}
+.hangar-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 4px;
+    background: rgba(20, 30, 48, 0.6);
+    border: 1px solid rgba(80, 140, 220, 0.25);
+    cursor: pointer;
+    font-family: inherit;
+    color: #c6d2e8;
+    transition: border-color 0.12s, background 0.12s;
+}
+.hangar-card:hover { border-color: rgba(140, 220, 255, 0.7); background: rgba(30, 50, 80, 0.6); }
+.hangar-card--selected {
+    border-color: rgba(120, 255, 150, 0.8);
+    background: rgba(40, 80, 60, 0.45);
+    box-shadow: 0 0 12px rgba(120, 255, 150, 0.25);
+}
+.hangar-thumb { background: #05070e; }
+.hangar-card-name { font-size: 7px; letter-spacing: 0.5px; text-align: center; }
+.hangar-card--selected .hangar-card-name { color: #9affb0; }
+.hangar-footer {
+    display: flex;
+    justify-content: flex-start;
+    padding-top: 10px;
+    border-top: 1px solid rgba(80, 140, 220, 0.3);
+}
+.hangar-btn {
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    letter-spacing: 1px;
+    border: 1px solid rgba(80, 140, 220, 0.55);
+    background: transparent;
+    color: #8fd0ff;
+}
+.hangar-btn--back:hover { background: rgba(64, 150, 255, 0.15); }
+@media (max-width: 720px) {
+    .hangar-body { flex-direction: column; overflow-y: auto; }
+    .hangar-desc { width: auto; }
+}

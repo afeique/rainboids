@@ -11,6 +11,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.157.0] - 2026-05-24
+
+### Added — Ship skins + Hangar selector
+
+- **Ship-skin system** — the player ship's hull is now drawn by a swappable
+  skin module (`js/modules/player/skins/`), selected per-player via `skinId`
+  and persisted across runs (`rainboidsSettings.selectedSkin`). Skins are
+  **purely cosmetic**: every hull shares the same fixed collision radius, so
+  the choice never affects gameplay. `renderer.js` keeps all the shared
+  feedback FX (muzzle flash, hit flash, energy charge glow, level-up aura,
+  ship-tip cooldown orb) and dispatches only the hull to the active skin.
+- **12 ship skins**, each drawn to the same on-screen frame with live animated
+  detail:
+  - **Aurora** — the current articulated spectral interceptor (default).
+  - **Vanguard** — the classic blue swept-wing fighter from earlier versions, restored.
+  - **Apex** — flagship: counter-rotating nose intake, pulsing energy spine, vectoring quad nozzles, flaring split tail-fins.
+  - **Smuggler** — forked-prow saucer freighter with a spinning sensor dish, blinking rim lights, and a rear engine glow-band.
+  - **Skylark** — four-wing strike fighter whose S-foils split into an attack-X under thrust.
+  - **Valkyrie** — missile frigate with wing pod banks whose launch tubes light in a cycling ripple.
+  - **Wraith** — cloaking fighter with downturned wings and a rippling cloak shimmer.
+  - **Battlecruiser** — armored capital ship whose nose Yamato glow spools up with the live energy meter.
+  - **Interceptor** — ball-cockpit fighter with twin hex solar panels and ion engines.
+  - **Arwing** — upswept-wing fighter with laser pods and a big blue engine cone.
+  - **Viper** — stubby colonial interceptor with triple thrusters and wingtip strobes.
+  - **Aeon** — crystalline psi-flyer with orbiting energy crystals and an anti-grav hover (no engines).
+- **HANGAR screen** — a new title-screen button opens a cosmetic selector
+  (new `HANGAR` game state + DOM overlay) with a live rotating, animated preview
+  of the highlighted ship and a grid of thumbnail cards. Picking a skin equips
+  it immediately and persists the choice.
+
+### Changed
+
+- Player rendering refactored: `renderer.js` no longer hard-codes the hull —
+  the per-frame transform (translate/rotate, invincibility blink, engine-startup
+  shudder, airframe bank-lean) and the shared feedback FX live there, while the
+  hull moved into per-skin modules under `js/modules/player/skins/`. Aurora is a
+  faithful extraction of the previous hull, so the default ship is unchanged.
+- Title screen now has a four-button layout (NEW GAME / CONTINUE / TUTORIAL /
+  HANGAR) in both portrait and landscape.
+
+---
+
 ## [6.156.0] - 2026-05-24
 
 ### Added — Twin Cast passive (Phase P6, keystone) — passive catalog complete

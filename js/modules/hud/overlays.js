@@ -269,11 +269,11 @@ export function drawTitleScreen() {
         const mpRows = 1;
         let buttonsBlockH;
         if (mobilePortrait) {
-            // Vertical stack: NEW GAME + CONTINUE + TUTORIAL.
-            buttonsBlockH = buttonH * (2 + mpRows) + buttonGap * (1 + mpRows);
+            // Vertical stack: NEW GAME + CONTINUE + TUTORIAL + HANGAR.
+            buttonsBlockH = buttonH * (3 + mpRows) + buttonGap * (2 + mpRows);
         } else {
-            // Side-by-side primary row + TUTORIAL row below.
-            buttonsBlockH = buttonH * (1 + mpRows) + (mpRows ? 18 : 0);
+            // Side-by-side primary row + TUTORIAL row + HANGAR row below.
+            buttonsBlockH = buttonH * (2 + mpRows) + (mpRows ? 18 + 18 : 0);
         }
         // 5.99.1 — recordH shrinks on mobile to match the smaller record
         // font (10/12 px) so the layout block computes the correct
@@ -366,6 +366,14 @@ export function drawTitleScreen() {
                     h: buttonH,
                     disabled: false,
                 };
+                rects.hangar = {
+                    id: 'hangar',
+                    x: x0,
+                    y: yTop + 3 * (buttonH + buttonGap),
+                    w: buttonW,
+                    h: buttonH,
+                    disabled: false,
+                };
             } else {
                 // Landscape / desktop — side-by-side NEW GAME + CONTINUE
                 // with optional MULTIPLAYER row beneath. This is the
@@ -382,6 +390,14 @@ export function drawTitleScreen() {
                     id: 'tutorial',
                     x: x0,
                     y: tutY,
+                    w: totalW,
+                    h: buttonH,
+                    disabled: false,
+                };
+                rects.hangar = {
+                    id: 'hangar',
+                    x: x0,
+                    y: tutY + buttonH + 18,
                     w: totalW,
                     h: buttonH,
                     disabled: false,
@@ -455,6 +471,9 @@ export function drawTitleScreen() {
             drawButton(rects.continue, labels[1]);
             if (rects.tutorial) {
                 drawButton(rects.tutorial, 'TUTORIAL');
+            }
+            if (rects.hangar) {
+                drawButton(rects.hangar, 'HANGAR');
             }
 
             if (this.game.survivalRecord > 0) {

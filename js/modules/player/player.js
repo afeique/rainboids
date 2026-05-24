@@ -6,6 +6,8 @@ import * as abilities from './abilities.js';
 import * as progression from './progression.js';
 import * as passives from './passives.js';
 import * as playerRenderer from './renderer.js';
+import { loadSettings } from '../core/storage.js';
+import { DEFAULT_SKIN_ID } from './skins/index.js';
 import { scoreItem } from '../world/item-system.js';
 // Mobile auto-fire (5.92.0): when running in mobile mode the player
 // has no spare hand to tap a power-weapon button — the spec auto-
@@ -83,6 +85,15 @@ export class Player {
         this.flapOpen = 0;            // 0 closed → 1 S-foils fanned open
         this.glidePhase = 0;          // ever-advancing idle "breathing" phase
         this._prevAimAngle = -Math.PI / 2;
+
+        // 6.157.0 — Cosmetic ship skin (drawn by js/modules/player/skins/).
+        // Loaded from settings so the chosen skin persists across runs.
+        // PURELY visual: every skin shares the same fixed collision radius,
+        // so the choice never affects gameplay.
+        this.skinId = (() => {
+            try { return loadSettings().selectedSkin || DEFAULT_SKIN_ID; }
+            catch { return DEFAULT_SKIN_ID; }
+        })();
         
         // Auto-firing system
         this.autoFireTimer = 0;

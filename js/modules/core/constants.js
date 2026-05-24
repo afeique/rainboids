@@ -312,6 +312,8 @@ export const GAME_STATES = {
     // (LOADOUT) → run; CONTINUE resumes mid-run and skips both.
     ARMORY: 'ARMORY',
     LOADOUT: 'LOADOUT',
+    // 6.157.0 — cosmetic ship-skin selector, opened from the title screen.
+    HANGAR: 'HANGAR',
     PLAYING: 'PLAYING',
     PAUSED: 'PAUSED',
     GAME_OVER: 'GAME_OVER',

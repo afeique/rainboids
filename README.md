@@ -62,6 +62,8 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 
 **🏁 Campaign** — a **10-stage / 30-wave speedrun** (`1-1` → `10-3`); every stage final is a boss. Time, accuracy, and damage are tallied on the Game Complete screen. **Meta persists** across runs in `localStorage` — account-gold, unlocks, gear, upgrades, and level/SP carry over: `NEW GAME` opens the **BUILD** screen — a tabbed **bubble tree** (GEAR · PRIMARY · POWER · DEFENSE · PASSIVES · STATS) where you review/manage gear, unlock weapons/abilities/passives with account-gold, pick your **4 primary + 4 power + 4 ability** loadout, and equip **Passives** (see below) — then `START RUN`; `CONTINUE` resumes mid-run, skipping the pre-run screen. Autosaves every ~15s and on tab close.
 
+**🚀 Ship skins** — a cosmetic-only **HANGAR** (opened from the title screen) lets you pick from **12 ship hulls** with a live animated preview: the default spectral interceptor, the restored classic fighter, a detailed flagship, and homages to genre favorites (a forked-prow saucer, a split-S-foil strike fighter, a Yamato-charging capital ship, and more). Every hull shares the same fixed collision size, so the choice is **purely visual** and never affects gameplay.
+
 > **20+ enemy types** with distinct movement, attacks, and elemental identities — from the orbiting **Hunter** and the freeze-shattering **Wasp** swarm to the anti-meta **Warden** that adapts its resistance to whatever element you keep using, forcing you to switch.
 
 ---
@@ -116,7 +118,7 @@ js/
     game-engine.js      # Game loop orchestrator
     core/               # constants, state machine, pools, event bus, timers, storage
     platform/           # device + viewport detection
-    player/             # entity, weapons, abilities, progression, lifecycle, renderer
+    player/             # entity, weapons, abilities, progression, lifecycle, renderer, skins/
     enemy/              # entity, data, movement, firing, AI, shapes
     combat/             # elements, collision, weapon-data, combat-manager
     hud/ · world/ · shop/ · ui/ · wave/ · audio/ · performance/ · render/

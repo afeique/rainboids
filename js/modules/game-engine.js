@@ -66,6 +66,7 @@ import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './c
 import { StatsOverlay } from './ui/stats-overlay.js';
 import { InventoryOverlay } from './ui/inventory-overlay.js';
 import { ArmoryOverlay } from './ui/armory-overlay.js';
+import { HangarOverlay } from './ui/hangar-overlay.js';
 import { LoadoutOverlay } from './ui/loadout-overlay.js';
 import { AnalogStick } from './ui/analog-stick.js';
 
@@ -3286,7 +3287,7 @@ export class GameEngine {
             this.particlePool.updateActive();
             this.lineDebrisPool.updateActive();
             this.asteroidShardPool.updateActive();
-        } else if (this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT) {
+        } else if (this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT || this.game.state === GAME_STATES.HANGAR) {
             // Sandstorm-grade chaotic drift — multiple sine waves at
             // distinct frequencies sum into a fast, direction-shifting
             // motion. Near-depth stars rip across the field while far
@@ -3429,7 +3430,7 @@ export class GameEngine {
             // (but the deepest barely moves, giving a "much-farther-away"
             // parallax feel relative to the foreground starfield). Also
             // pipes a slow rotation so the lens flare layers tumble.
-            const onTitle = this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT;
+            const onTitle = this.game.state === GAME_STATES.TITLE_SCREEN || this.game.state === GAME_STATES.ARMORY || this.game.state === GAME_STATES.LOADOUT || this.game.state === GAME_STATES.HANGAR;
             const nebDriftX = onTitle ? (this._titleNebulaDriftX || 0) : 0;
             const nebDriftY = onTitle ? (this._titleNebulaDriftY || 0) : 0;
             const nebRot    = onTitle ? (this._titleNebulaRotation || 0) : 0;
@@ -3487,7 +3488,7 @@ export class GameEngine {
             // Entity / HUD rendering — skipped on the pre-init title screen
             // AND the ARMORY/LOADOUT screens (all pre-run: pools are empty,
             // player may be null, and the ship would otherwise show under the menu).
-            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT) {
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT && this.game.state !== GAME_STATES.HANGAR) {
                 this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidShardPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 // Two-layer particle render — every bright/glowing type
@@ -3555,7 +3556,7 @@ export class GameEngine {
 
             this.ctx.restore();
 
-            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT) {
+            if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT && this.game.state !== GAME_STATES.HANGAR) {
                 // Draw UI elements without camera transformation
                 // Sync DOM powerup HUD
                 this.syncPowerupHUD();
@@ -4096,6 +4097,21 @@ export class GameEngine {
         shopDom.setPreRunPassives((meta.loadout && meta.loadout.passives) || []);
         this._preRunTreeOpen = true;
         shopDom.showShopDom(true);
+    }
+
+    // 6.157.0 — open the HANGAR cosmetic ship-skin selector (from the title
+    // screen). Full-screen DOM overlay; its BACK button returns to the title.
+    openHangar() {
+        if (!this._hangarOverlay) {
+            this._hangarOverlay = new HangarOverlay();
+            this._hangarOverlay.setGameEngine(this);
+        }
+        this.game.state = GAME_STATES.HANGAR;
+        this._hangarOverlay.open();
+    }
+
+    isHangarOpen() {
+        return !!(this._hangarOverlay && this._hangarOverlay.isOpen());
     }
 
     // True while the pre-run BUILD tree (or the legacy flat list) is up.
