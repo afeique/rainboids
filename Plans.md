@@ -1,6 +1,6 @@
 # Rainboids — Combat-Depth Expansion Plans.md
 
-作成日: 2026-05-22 · 最終整理: 2026-05-22 (synced to 6.83.0 — shipped work moved to the ledger below)
+作成日: 2026-05-22 · 最終整理: 2026-05-24 (completed/shipped work removed — see `CHANGELOG.md` for shipped history; this file now tracks the **open backlog** only)
 
 Source design docs (in `docs/`):
 - `Arsenal & Combat-Depth Expansion — Brainstorm – 2026-05-22.md` (what/why)
@@ -8,45 +8,22 @@ Source design docs (in `docs/`):
 - `Unified Skills (4-Slot) — Implementation Plan – 2026-05-22.md` (Plan B)
 - `Item Tiers, Resistances & Traits — Implementation Plan – 2026-05-22.md` (Plan C)
 - `Enemy & Boss Revamp — Design Plan – 2026-05-22.md` (Plan D — enemy batches + 10 unique bosses)
-- `Run-Meta Overhaul — Loadout, Leveling, Inventory & Cores — Implementation Plan – 2026-05-22.md` (Plans E–I — roguelite meta-progression)
+- `Run-Meta Overhaul — Loadout, Leveling, Inventory & Cores — Implementation Plan – 2026-05-22.md` (Plans E–I, folded into Phase R)
 - `Enemy Uniqueness & Enabling Systems — Plan – 2026-05-22.md` (Phase A.E9 enabling systems + A.E10 uniqueness)
+- `Weapon Element Identity & Meta-Progression — Design Plan – 2026-05-23.md` (Phase W — active)
+- `Roguelite Restructure — Phase R progress report – 2026-05-23.md` (Phase R shipped detail)
 
-> **⚠️ Pending re-plan:** new plans that SUPERSEDE parts of the below are being
-> integrated. Phases D / E–I / R and the remaining item & ability work may be
-> replaced. Treat the **Shipped ledger** as authoritative for what exists today;
-> treat the task tables as the pre-supersession backlog until the new plans land.
+> **Shipped history lives in `CHANGELOG.md`.** The following are **done** and have been
+> removed from this backlog: Phase A core (element taxonomy/resistances/status engine/
+> synergy reactions, 6.57.0–6.66.0), the 20-enemy roster (6.67.0–6.83.0), Phase B 4-slot
+> abilities + HUD (6.59.0–6.61.0), Phase C tier ladder C.I1 (6.60.0), the entire **Phase R**
+> roguelite restructure (gold economy · ARMORY · cards · loadout · 4-slot abilities incl.
+> the R6.3 ability batch, 6.84.0–6.93.0), and Phase **W0–W5** (BUILD tree + attunement data
+> & behaviors for all 6 elements + mechanic-mod nodes + efficacy-only cards, 6.103.0–6.114.1).
 
----
-
-## ✅ Shipped ledger (6.57.0 – 6.83.0) — done, not re-plannable
-
-**Element & Resistance foundation (Phase A core):**
-- A.E1 (6.57.0) element taxonomy + `combat/elements.js` + element/resist on all weapons/enemies/bullets
-- A.E2 (6.58.0) player→enemy resistance in `applyDamageToEnemy` + damage cues
-- A.E3 (6.62.0) enemy status engine: CORRODE / CHILL / FREEZE+brittle / CONDUCT / OIL / MARK / BLEED
-- A.E4 (6.63.0) synergy reactions: FREEZE→SHATTER, OIL+Pyro flare, CONDUCT/CORRODE amps
-- A.E5 (6.64.0) enemy→player resistance + enemy bullets carry element
-- A.E6 (6.66.0) weapon element identity — primary on-hit status dispatcher
-- A.E7 (6.65.0) item resistance affixes in `ITEM_AFFIX_POOL`
-- A.E8a (6.67.0–6.70.0) 10-enemy retrofit + GUARDIAN armor floor + SENTINEL frontal shield + WASP swarm-flock
-
-**Enabling systems (Phase A.E9):**
-- A.E9-S1 (6.75.0–6.76.0) **player-side statuses** — CHILL/CORRODE/BURN (lethal-safe via extracted `_resolvePlayerLethal`); `player/player-status.js`
-- A.E9-S2 (6.78.0) **persistent hazards** — `world/hazard-field.js` HazardField + `spawnHazard()`
-- A.E9-S3 (6.80.0) **mid-fight spawning** — `requestEnemySpawn` + `canSpawn` (concurrent cap 40)
-- A.E9-S7 (6.83.0) **ally support auras** — `enemy/support-aura.js` runAura (shield/heal) + allyShieldMult
-
-**Enemy roster — 20 types (10 original + 10 new):**
-- A.E10-U1 (6.77.0) distinct silhouettes for the new types + fixed the default-triangle render bug
-- New: Cinder + Glacier (6.71.0), Frost Lance + Ashen Detonator death-flare (6.72.0), Tesla Wraith + Plaguebearer (6.73.0; Plaguebearer **acid-trails** 6.79.0), Warden adaptive-resist (6.74.0), Hydra split-on-death (6.81.0), Spore Carrier drone-spawner (6.82.0), Lumen Drone ally-shield (6.83.0)
-- Elemental flourishes auto-live: Cinder ignite / Plaguebearer corrode / Frost chill (via S1)
-
-**Skills (Phase B):**
-- B.S1 (6.59.0) 4-slot model (`equippedSkills[4]`, `skillCooldowns[4]`, `activateSkill(slot)`)
-- B.S2 (6.61.0) keys 1–4 + retired TAB/Q · B.S3 (6.61.0) 4-slot HUD bar
-
-**Items (Phase C):**
-- C.I1 (6.60.0) 8-tier rarity ladder (Common…Transcendental) + affix/resist counts by tier
+> **⚠️ Pending re-plan:** Phase W supersedes the weapon-card parts of the old R2.4 / R3 / R4.
+> Phases A / B / C / D below are the pre-supersession backlog — some may still be replaced as
+> new plans land. Treat `CHANGELOG.md` as authoritative for what exists today.
 
 ---
 
@@ -91,10 +68,8 @@ Source design docs (in `docs/`):
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
 | C.I2 | Resist roll display + tier-gated resist counts | Resist rolls appear on Exceptional+ and scale with tier | - | cc:TODO |
-| C.I3a | Self-contained traits: Glass Cannon, Bullet Bloom, Echo, Orb Magnet, Hoarder's Greed, Momentum, Executioner's Edge, Second Heart, Reactive Plating (NEW `item-traits.js`) | Transcendental visibly stacks 5 traits; each has a live consumer | - | cc:TODO |
-| C.I3b | Element traits: Hex Touch, Frostbite, Conductor, Elemental Overflow, Prismatic Soul | Each applies its status via the A.E3 helpers | C.I3a | cc:TODO |
-| C.I3c | Skill traits: Twin Cast, Adrenaline Junkie, Overcharged | Each affects the 4-slot skill model | C.I3a | cc:TODO |
-| C.I4 | Keystone reconcile: shared `ITEM_TRAITS` pool, two delivery channels (drop + stage-clear keystone card) | A rule-change acquirable via Legendary+ drop OR keystone card | C.I3a | cc:TODO |
+| ~~C.I3a/b/c~~ | **FOLDED into Phase P** — self-contained / element / skill traits are now entries in the unified PASSIVES rule-modifier pool (built once, in P6) | superseded | → Phase P | folded |
+| ~~C.I4~~ | **FOLDED into Phase P** — keystone delivery (drop + stage-clear card) becomes alternate delivery channels for the PASSIVES pool (P7) | superseded | → Phase P | folded |
 
 ## Phase D — Bosses (10 unique, multi-phase) — may be superseded
 
@@ -111,204 +86,36 @@ D.B0 is the shared chassis; every boss pair depends on it. Reuses `boss-rage.js`
 
 ---
 
-## Phase R — Roguelite Restructure (Gold, Cards, Loadout & Abilities)
+## Phase R — Roguelite Restructure — SHIPPED (6.84.0–6.93.0); remaining items only
 
-**This section is authoritative and self-contained.** It supersedes and absorbs the former
-exploratory Phases E–I (rename / progression / inventory / Cores) and Phase H (loadout) — those
-are now folded in as R1/R7/R8/R5. Full rationale: `docs/Roguelite Restructure — Gold Economy,
-Cards & Abilities — Design Plan – 2026-05-22.md` (+ the Run-Meta doc for inventory/Cores detail).
-Builds on **shipped** B.S1–S3 (4-slot ability model, Digit1-4 input, HUD bar) + Plan A (elements)
-+ Plan C (item tiers, C.I1 shipped).
-
-**MODEL (read once before starting any task):**
-- A **run** = one finite **30-wave** attempt (boss every 3rd wave → 10 stages; Plan D). Ends in
-  `GAME_COMPLETE` or death. **No mastery** — weapons/abilities are flat, always-viable tools.
-- **Four non-overlapping progression lanes:** ① **Gold** — run-gold starts at 0, accrues from
-  kills, **banks to account-gold at run end**; account-gold buys permanent **unlocks**; optionally
-  spent in-run (opportunity cost). ② **Account level → SP → Stats** (separate system) — permanent
-  character stats. ③ **Items + Cores** — persistent gear stash + salvage/craft. ④ **Cards** —
-  5/run, relevance-filtered weapon/ability **powerups**.
-- **Pre-run flow:** `NEW GAME → ARMORY (buy unlocks w/ gold · equip gear · salvage/craft Cores) →
-  LOADOUT (pick 4 primary + 4 power + 4 ability from the unlocked pool) → run`. `CONTINUE` resumes
-  mid-run, skipping the screens.
-- **Wave clear:** `(card draft, if a card stage) → (Stats menu, if leveled) → next wave`. In-run
-  gold spending happens at the card moment.
-
-**FILE MAP:** cards/wave-clear `wave/wave-manager.js` (`openWaveClearPowerupsMenu`,
-`openWavePickOverlay`, `#wave-pick-overlay`); new-game/loadout `game-engine.js` (`startNewRun`,
-`_rollRandomLoadout`), states `core/constants.js` `GAME_STATES`; loadout/weapons `player.js`
-(`activePrimary`/`activePower`/`equippedAbilities`), tabs `ui/ui-manager.js`
-(`updatePrimaryTab`/`updatePowerTab`); abilities `combat/weapon-data.js`
-(`SKILLS`/`SKILL_UPGRADES`), `player/skills.js`, `ui/radial-menu.js`; shop `shop/shop-manager.js`
-(`openShop`,`buyShopItem`,`UPGRADE_COST_MULT`); gold `game.money`, drops
-`combat/combat-manager.js` `dropOrbsFromEntity`, `world/gold-*.js`; items `world/item-system.js`
-(`createItem`,`scoreItem`,`isUpgrade`), `world/item-names.js` (`RARITY_TIERS`,`ITEM_AFFIX_POOL`),
-`player.js` (`equippedItems`,`registerItemDrop`), `ui/inventory-overlay.js`,
-`player/progression.js` (`getItemAffixTotal`,`getEffective*`); leveling `player.js`
-(`level`/`experience`, inert since 6.0.0).
-
-**EXECUTION ORDER:** R1 → R2 → R8 → R6 → R5 → R3 → R4 → R7 (R6/R7 parallelizable). Follow each
-task's Depends. **Versioning:** these are code changes — bump VERSION + CHANGELOG.md per task/phase.
-
-> **✅ Phase R — SHIPPED 6.84.0 → 6.93.0** (full detail + concerns in
-> `docs/Roguelite Restructure — Phase R progress report – 2026-05-23.md`):
-> - **R1** rename (6.84.0) · **R2.1–3** gold economy + ARMORY + unlocks (6.85.0) ·
->   **R8.1–8** stash + Cores salvage/reroll/tier-up + no-auto-equip + equip screen
->   (6.86–6.88.0) · **R6.1/2** Field Medic + base kit, Tractor cut (6.89.0) ·
->   **R5** LOADOUT screen + chosen 4+4+4 (6.90.0) · **R3.1–3** card draft (6.91.0) ·
->   **R4** card-moment gold sinks — reroll/repair/6th-7th card/Revive (6.92.0+6.94.0) ·
->   **R7.1–3** leveling→SP→Stats validated + auto-open fixed (6.93.0) ·
->   post-card shop retired (6.92.0).
-> - The full loop is playable: TITLE → ARMORY → LOADOUT → run (cards + sinks) →
->   bank gold + loot. 593 unit + QA 08–11 green. **R1–R8 essentially complete.**
-> - **DEFERRED / remaining:** **R6.3** (~14 new abilities — biggest chunk) ·
->   **R2.4-full** mid-wave gold UPGRADES shop removal + **R7.4** gold PASSIVE tab
->   removal (would churn 07-weapons shop tests) · **R8.7/R8.9** blocked on Phase C
->   (C.I2 / C.I3) · **R-BAL** balance pass + AI-survival run on a meta account.
-
-### R1 — Terminology: Skills → Abilities  *(do first; ~15 files)*
+The full Phase R loop shipped 6.84.0–6.93.0 (gold economy · ARMORY · cards · loadout · 4-slot
+abilities incl. the R6.3 ability batch). Detail: `CHANGELOG.md` + `docs/Roguelite Restructure —
+Phase R progress report – 2026-05-23.md`. Still open:
 
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
-| R1.1 | Data + exports (`combat/weapon-data.js`, `defense-data.js`): `SKILLS`→`ABILITIES`, retire `DEFENSE_SKILLS` alias; `SKILL_UPGRADES`→`ABILITY_UPGRADES` | Build green; new exports used; old aliases removed | - | cc:TODO |
-| R1.2 | Player props/functions (`player.js`, `player/skills.js`→`abilities.js`): `equippedSkills`→`equippedAbilities`, `skillCooldowns(Max)`→`abilityCooldowns(Max)`, `activeSkillEffects`→`activeAbilityEffects`, `activeSkill`→`activeAbility`, `equip/activate/cycleSkill`→`…Ability` | No dangling `skill` refs in player/combat; unit + QA green | R1.1 | cc:TODO |
-| R1.3 | UI/labels/CSS: radial (`ui/radial-menu.js`) `type:'skill'`→`'ability'`; tutorial/control labels (`ui/static-dom.js`); CSS `[data-tab="skills"]`/`[data-tab="SKILLS"]`; gamepad comments; shop-tree labels | Every visible string says "Ability/Abilities"; QA text assertions updated | R1.1 | cc:TODO |
-| R1.4 | Sweep: test selectors, README arsenal section, memory note | Full suite green; README uses "Abilities"; no "defense skill" in player-facing text | R1.2, R1.3 | cc:TODO |
-
-### R2 — Gold economy + pre-run flow
-
-| Task | 内容 | DoD | Depends | Status |
-|------|------|-----|---------|--------|
-| R2.1 | Pre-run meta-flow scaffold: add `GAME_STATES` `ARMORY` + `LOADOUT` (`core/constants.js`); route NEW GAME (`main.js` `launch('new')` / `game-engine.js` `startNewRun`) → Armory → Loadout → run; CONTINUE skips to the resumed run | NEW GAME enters Armory then Loadout before wave 1; CONTINUE resumes mid-run; back/confirm nav works | R1.2 | cc:TODO |
-| R2.2 | Two gold pools: run-gold (starts 0, accrues from kills — `game.money`) + persistent **account-gold** (localStorage); run end banks run-gold → account-gold (default: no death forfeit); HUD shows both | Run starts 0 gold; kills add run-gold; run end banks it; account-gold persists + survives reload | R2.1 | cc:TODO |
-| R2.3 | Armory unlock store: spend account-gold on permanent weapon/ability **unlocks**; abilities price-gated higher than weapons; **retire `unlockWave`** | Unlocks bought w/ account-gold + persist; abilities cost more; unlockWave gating removed | R2.2 | cc:TODO |
-| R2.4 | Retire the gold-purchased **upgrade-tree shop** (`shop/shop-manager.js`) — upgrades become cards (R3); repurpose/remove the Phase-7 skill-tree UI | No in-run purchase of upgrade-tree stacks; old shop UI removed/repurposed; tests updated | R3.1 | cc:TODO |
-
-### R3 — Cards (relevance-filtered powerup draft)
-
-| Task | 内容 | DoD | Depends | Status |
-|------|------|-----|---------|--------|
-| R3.1 | Repurpose card overlay (`wave/wave-manager.js` `openWavePickOverlay`, `#wave-pick-overlay`) → per-run powerup draft; build pool from weapon upgrade types (MULTI/RAPID/PIERCING/BIG/EXPLODE/HOMING/STUN/KNOCK + per-weapon capstones) + ability upgrade pools | Draft offers powerups from a defined pool; selection applies for the run; pool-build unit test | - | cc:TODO |
-| R3.2 | Cadence: **5 cards/run**, one every 2 stages (of 10) | Exactly 5 draft moments per full 30-wave run at the right stages; none on the others | R3.1 | cc:TODO |
-| R3.3 | Relevance filter + composition: each draft = **2 weapon + 1 ability** card, all filtered to equipped weapons/abilities; never offer an inapplicable card; ability card only if an ability is equipped | Every offered card applies to a loadout item; 2:1 composition; filter unit test | R3.1, R5.1 | cc:TODO |
-| R3.4 | Coexist with the SP Stats menu (R7.3) at wave clear: sequence card draft (card stages) then Stats menu (if leveled); no menu stacking / double-open | Both can occur at a stage clear in order; resume works | R3.2, R7.3 | cc:TODO |
-
-### R4 — In-run gold sinks (optional spend)
-
-| Task | 内容 | DoD | Depends | Status |
-|------|------|-----|---------|--------|
-| R4.1 | **6th/7th card** purchase at the card moment: steeply escalating cost, hard cap 7; spend reduces run-gold (→ less banked) | Extra cards buyable at escalating cost; cap 7; spent gold not banked; cost-curve unit test | R3.3, R2.2 | cc:TODO |
-| R4.2 | **Paid reroll/banish** of a card offer (modest cost, once per offer) | Reroll/banish consumes run-gold once per offer; new offer respects filter + 2:1 | R3.3 | cc:TODO |
-| R4.3 | **Emergency consumables**: Repair Kit (heal, escalating per stage) + Revive Token (very steep, 1/run) | Both buyable with run-gold; revive capped 1/run; costs scale; spent not banked | R2.2 | cc:TODO |
-
-### R5 — Loadout & unlocks  *(folds in former Phase H)*
-
-| Task | 内容 | DoD | Depends | Status |
-|------|------|-----|---------|--------|
-| R5.1 | Chosen loadout model: 4 primary + 4 power + 4 ability picked at run start from the **unlocked** pool, locked for the run; replace `_rollRandomLoadout` + single `activePrimary`/`activePower`; reuse shipped B.S1 4-slot model for abilities | Carries chosen 4+4+4; locked once run starts; fire paths read active selection per category | R2.3 | cc:TODO |
-| R5.2 | Loadout selection screen (pre-run LOADOUT state) from unlocked pool only; **base ability kit** (Phase Dash + Field Medic + Bulwark) available from run one | Player fills 3×4 from unlocked items; base kit present at start; can't pick locked; confirm locks run | R2.1, R5.1, R6.2 | cc:TODO |
-| R5.3 | In-run switching among the 4 of each: abilities Digit 1-4 (shipped B.S2); primaries/powers cycle (`[`/`]` or Q/E); gamepad mirror; HUD shows loadout + active (extends shipped B.S3) | Switch active primary/power mid-run; abilities fire per-slot; HUD reflects; gamepad parity; no auto-repeat | R5.1 | cc:TODO |
-
-### R6 — Abilities: unique-verb rule + roster
-
-| Task | 内容 | DoD | Depends | Status |
-|------|------|-----|---------|--------|
-| R6.1 | Adopt the **"non-redundant verb"** design rule (an ability must do what no card/stat/gear can); audit existing: cut/rework **Tractor Shield**; consolidate the two heals into **Field Medic** (burst heal + status cleanse) | No ability duplicates a card/stat/gear effect; Tractor cut/reworked; single heal ability; tests updated | R1.2 | cc:TODO |
-| R6.2 | Base kit: **Phase Dash** (dash+i-frames), **Field Medic** (burst heal + cleanse), **Bulwark** (on-demand invuln window) — all unique verbs, available run one | All three work as unique verbs; present from start | R6.1 | cc:TODO |
-| R6.3 | First purchasable ability batch (unique verbs only): Blink, Bullet Time, Stasis Field, Gravity Snare, EMP Pulse, Sentry Drone, Decoy Beacon, Deflector Orbs, Second Wind, Elemental Infusion, Cryo Field, Storm Cell/Pyre Aura, Catalyst, Designator. **Cut as redundant:** Hunter's Mark (homing), Focus Fire (crit), Bloodlust (lifesteal), Last Stand (dmg), Afterburner (speed), Overdrive, Repulsor Nova, Magnetize, Prism Surge | Each kept ability is a non-redundant verb w/ a live consumer; buyable via R2.3; element abilities use Plan A status helpers | R6.1 | cc:TODO |
-
-### R7 — Leveling → SP → Stats  *(separate retained system; folds in former Phase F.P2–P4)*
-
-> Old F.P1 (comment out cards) is **dropped** — cards are kept (R3). Old F.P5/P6 (passive-migration / upgrade-tree reset) are **superseded** by R2/R3 (no gold upgrade trees exist). Passive STATS still live in the SP tree (R7.4).
-
-| Task | 内容 | DoD | Depends | Status |
-|------|------|-----|---------|--------|
-| R7.1 | Meta account level + XP + SP: reactivate `player.level`/`experience` as a **persistent** system (localStorage); curve so a 30-wave run yields ~2–3 levels (≈ wave 10/20/30); each level = +N SP | XP accrues on wave clear; ~2–3 level-ups per run; level + SP persist; waves→levels unit test | - | cc:TODO |
-| R7.2 | Stats allocation menu: SP buys permanent HP/DEF/critChance/critDamage/dodge/speed/regen/vampirism/thorns (via `progression.js` `getEffective*`); pauses while open | Spending SP raises the stat; persists; no overspend; per-stat caps respected | R7.1 | cc:TODO |
-| R7.3 | Auto-open Stats menu at wave clear when SP is unspent (sequenced with cards per R3.4) | Leveling → Stats menu auto-pops at that wave's clear; close → next; no double-open | R7.2 | cc:TODO |
-| R7.4 | Stat passives are SP-driven only (CRIT, HEALTH/SHIELD, VAMPIRISM, THORNS, DODGE, SPEED) — no gold purchase (gold buys unlocks) | Passives raised only via SP; no gold path; no orphaned refs | R7.2 | cc:TODO |
-
-### R8 — Inventory as meta + Cores  *(folds in former Phases G + I)*
-
-| Task | 内容 | DoD | Depends | Status |
-|------|------|-----|---------|--------|
-| R8.1 | Persistent item stash (localStorage), separate from in-run state; run-end commits the run's loot to the stash | Items from run N present in stash at start of run N+1; survives reload | R2.1 | cc:TODO |
-| R8.2 | Remove auto-equip (`player.js` `registerItemDrop`/`isUpgrade`): in-run loot just accrues (HUD feed = collected-this-run ticker) | Pickup never changes equipped gear mid-run; feed shows collection only | - | cc:TODO |
-| R8.3 | Inventory screen (in the Armory): equip ≤1 item per gear slot (5 slots) with live stat deltas; locked at run start | Up to 5 stash items equipped; gear drives `getItemAffixTotal`/`getEffective*`; frozen once run begins | R2.1, R8.1 | cc:TODO |
-| R8.4 | Run-end reconciliation: death/clear commits collected loot to stash; GAME_OVER/COMPLETE → title/Armory; no loot lost on death | Loot from a finished run in stash at next NEW GAME, win or lose | R8.1, R8.2 | cc:TODO |
-| R8.5 | Cores currency + salvage (`world/item-system.js`): add `cores` to meta save; salvage → Cores scaled by rarity × level × affix/trait count; bulk "salvage all below equipped" | Salvage grants Cores by formula; bulk works; Cores persist; formula unit test | C.I1, R8.3 | cc:TODO |
-| R8.6 | Reroll affixes within tier bounds for Cores (`ITEM_AFFIX_POOL`) | Reroll consumes Cores, produces in-bounds affixes; cost + bound unit test | R8.5 | cc:TODO |
-| R8.7 | Resist targeting: add/swap an elemental resist (A.E7 / C.I2) for Cores; tier caps respected | Chosen resist appears/changes; tier-gated count enforced | R8.5, C.I2 | cc:TODO |
-| R8.8 | Tier-up one rarity tier (8-tier ladder C.I1) for Cores, rolling the added slot; cost scales w/ target tier | Tier-up raises rarity + adds the tier's slot; cost-curve unit test | R8.5, C.I1 | cc:TODO |
-| R8.9 | Trait reroll (C.I3*) + traited-item salvage value for Cores | Trait reroll works; traited items yield Cores per defined rule; consistent w/ C.I4 | R8.5, C.I3a | cc:TODO |
-
-### R-BAL — Balance (cross-cutting, ongoing)
-
-| Task | 内容 | DoD | Depends | Status |
-|------|------|-----|---------|--------|
-| R.BAL1 | Tune difficulty around permanent meta power (SP stats + gear + unlocks) since weapons are flat (no mastery); co-tune enemy/boss scaling with Plan A.E8*/Plan D | Early runs non-trivial, late runs winnable; AI survival run green on a meta-progressed account | R5, R6, R7, R8 | cc:TODO |
+| R2.4-full | Remove the mid-wave gold **UPGRADES shop** entirely (`shop/shop-manager.js`) — upgrades are cards now | No in-run gold upgrade purchases; 07-weapons shop tests reworked | - | cc:TODO |
+| R7.4 | Stat passives SP-only — remove the gold **PASSIVE tab** path (CRIT/HEALTH/SHIELD/VAMP/THORNS/DODGE/SPEED) | Passives raised only via SP; no gold path; no orphaned refs | - | cc:TODO |
+| R8.7 | Resist targeting: add/swap an elemental resist for Cores; tier caps respected | Chosen resist appears/changes; tier-gated count enforced | C.I2 | cc:TODO (blocked on C.I2) |
+| R8.9 | Trait reroll (C.I3*) + traited-item salvage value for Cores | Trait reroll works; traited items yield Cores per rule; consistent w/ C.I4 | C.I3a | cc:TODO (blocked on C.I3) |
+| R-BAL1 | Tune difficulty around permanent meta power (SP stats + gear + unlocks); co-tune enemy/boss scaling | Early runs non-trivial, late runs winnable; AI-survival green on a meta account | A.E8*, D, W | cc:TODO |
 
 ---
 
 ## Phase W — Weapon Attunements, Mechanic Mods & Efficacy Cards  *(2026-05-23 · ACTIVE)*
 
 Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 2026-05-23.md`.
-**Supersedes** the weapon-card parts of R2.4 / R3 / R4 (card composition becomes 1 primary + 1 power + 2 ability; per-weapon upgrades split into upfront **Attunements** + **Mechanic Mods** vs in-run **Efficacy Cards**).
-
-**Vocabulary (locked):** **Attunements** = per-weapon element upgrades (stackable; *damage divides evenly per active element* — focus vs coverage). **Mechanic Mods** = element-agnostic behavior upgrades (pierce/explode/home/stun/knock + weapon capstones). **Efficacy Cards** = in-run draftable amplifiers (no elements, no new mechanics). **Cores** = untouched gear-salvage currency. Base weapons are element-agnostic (KINETIC); everything build-defining is chosen UPFRONT; all unlocks permanent (account-gold, dialed up).
-
-### W0 — Unified pre-run BUILD screen (tabbed bubble UI)
-- [x] Route `openArmory()` → bubble tree in pre-run BUILD mode (flat `ArmoryOverlay` open commented out, code kept)
-- [x] Parent weapon/ability bubbles = EQUIP toggles (≤4/cat, ✓ badge, locked dimming); BUILD footer (BACK · status · START RUN); account-gold header
-- [x] **GEAR tab** in the tree: review + manage gear (equip/unequip, salvage, reroll, tier-up) by factoring `ArmoryOverlay` gear panels into `renderGearInto(container)`
-- [x] GEAR tab visible only in BUILD mode; hidden in the in-run shop
-- [x] Locked parent bubble click → unlock with account-gold (`unlockPreRunItem`) + auto-equip (closes the unlock-access gap; partial W5)
-- [x] CSS polish: selected/locked node states, GEAR layout, footer, tabs
-- [x] Update QA `08-armory`, `09-loadout`, `12-abilities` (+ `02-start`, `07-weapons`) to the new BUILD-tree flow — full unit (625) + QA suites green
-- [x] VERSION (6.103.0) + CHANGELOG + README (pre-run flow now `NEW GAME → BUILD tree → run`) · commit
-
-**W0 DONE (6.103.0).** Pre-run is a tabbed bubble BUILD screen (gear + weapon/ability selection + unlock). Next: W1 (Attunement data model).
-
-### W1 — Attunement data model  ✅ DONE (6.104.0)
-- [x] `ATTUNEMENTS` table (`{id,name,element,weapon,description,behavior,cost}`) + per-weapon lists (design §5/§7) — ~93 attunements; `getAttunementsForWeapon`, `attunementElements`
-- [x] Multi-element bullet stamping: `bullet.elements[]` (KINETIC when empty); `bullet.element` = `elements[0]`
-- [x] Damage-split: averaged resist multiplier (`multiElementMultiplier`) applied once in `applyDamageToEnemy`; each active element applies its signature status (scaled by share)
-- [x] Override priority (`weapons.js`): ELEMENTAL_INFUSION / Overdrive > equipped attunements > base element (KINETIC) — via `resolveBulletElements`
-- [x] Unit tests (18): split math, element priority, table integrity, damage split through `applyDamageToEnemy` — 643 unit green · commit
-- Note: behavior-preserving for current weapons (single base element). `player.activeAttunements` map init'd; populated from loadout in W5.
-
-### W2 — Attunement behaviors (per element batch)  ✅ DONE (6.106.0–6.111.0)
-- [x] PYRO (fire SPREAD — burn jumps to nearby enemies on a follow-up hit; oil ignition already live via W1 flare) + 3 tests · commit (6.106.0)
-- [x] CRYO (sustained cold — a soft hit on an already-chilled enemy escalates to FREEZE; hard hit freezes outright; shatter via existing reaction) + 3 tests · commit (6.107.0)
-- [x] VOLT (chain FORK — every hit arcs reduced Volt damage + conduct to the nearest enemy; lethal fork runs the full kill pipeline; one hop) + 4 tests · commit (6.108.0)
-- [x] TOXIC (corrosion PLAGUE — a follow-up hit on a corroded enemy spreads corrode to nearby; base corrode+bleed via W1) + 3 tests · commit (6.109.0)
-- [x] VOID (gravity GATHER — a follow-up hit on a marked enemy tugs nearby enemies toward it; base mark via W1; also deepens Gravity Lance) + 3 tests · commit (6.110.0)
-- [x] RADIANT (PURGE — hits bypass flat armor + SENTINEL frontal shield; empowers Lance/Prism vs armor) + 3 tests · commit (6.111.0)
-
-### W3 — Mechanic Mods (reclassify + per-weapon)  ✅ DONE (6.112.0)
-- [x] Classification: `isMechanicMod` (pierce/explode/home/stun/knock suffixes + capstone set) + `getMechanicMods` / `getEfficacyUpgrades` per weapon. Inert groundwork; 6 tests pin the split (668 unit). · commit (6.112.0)
-- [ ] Per-weapon mod NODES in the BUILD tree (W5) + removal from the card pool (W4) consume this classification.
-
-### W4 — Efficacy Cards + recomposition  ✅ DONE (6.114.0)
-- [x] Cards are efficacy-only — mechanic mods excluded via the W3 `isMechanicMod` classification (they're upfront now); reuses the existing per-weapon upgrade tables as the amplifier pool
-- [x] `card-draft.js` → **1 primary + 1 power + 2 ability** with backfill (`primaryCards`/`powerCards` split; `weaponCards` back-compat); unit tests rewritten (670 unit) · commit (6.114.0)
-- [ ] *Deferred to W7:* new conditional/handling efficacy cards (design §6 B/C — Executioner, Point-Blank, Hot Loads…) + a tighter per-weapon `cardPool` curation matrix (Lance Beam no Rapid/Multishot). Current pool = the existing amplifier upgrades, which already curate per weapon.
-
-### W5 — BUILD tree: attunement/mod nodes + LOADOUT toggles  ✅ DONE (6.105.0 + 6.113.0)
-- [x] Orbit nodes render **attunements** (account-gold unlock + active toggle) → `player.activeAttunements` on START RUN — element-colored bubbles, ✓ badge; in-run shop unchanged · 6.105.0
-- [x] Orbit nodes render **mechanic mods** (account-gold unlock + active toggle) → granted as powerup stacks at run start via `player.addPowerup`; `mods` unlock category; ring radius scales for the combined ring · 6.113.0
-- [x] Selection/toggle happens directly in the BUILD tree (no separate LOADOUT screen needed); `beginPreRunFromTree` carries `loadout.attunements` + `loadout.mods`, both validated vs owned/known
-- Note: finer ring layout (two rings / grouping) is a W7 polish item.
+**W0–W5 shipped (6.103.0–6.114.1)**: unified pre-run BUILD tree, attunement data model +
+behaviors for all 6 elements (Pyro/Cryo/Volt/Toxic/Void/Radiant), mechanic-mod classification +
+BUILD-tree nodes, efficacy-only card draft (1 primary + 1 power + 2 ability). Remaining:
 
 ### W6 — Ability attunements  (decisions locked — design doc §15)
 - [ ] `abilityAttunements` data: ONE element per ability (not stacking); element-agnostic base; per-ability element options (design §15.1) · tests
 - [ ] `player.activeAbilityAttune[abilityId] = elementId`; applied on activate (`player/abilities.js`) — element status through the ability's verb
 - [ ] BUILD tree DEFENSE cluster: ability-attunement nodes (unlock + one-active toggle), `abilityAttunements` unlock category · commit
 
-### W7 — Economy + balance + polish  🟡 PARTIAL
-- [x] Dial up unlock costs: primary 8k / power 10k / ability 12k / attunement 7k / mod 5k · commit (6.114.1)
-- [x] README sweep — attunement/mod/efficacy-card system documented · commit (docs)
-- [ ] **Enemy weakness telegraph** — element-colored **pip** above enemies with `resist ≤ −0.3` (distinct from body tint) + **damage-number effectiveness cue** (weakness = big/bright/element-colored + spark; resisted = small/grey)
+### W7 — Economy + balance + polish  🟡 PARTIAL (unlock-cost dial-up + README sweep shipped)
+- [x] **Enemy weakness telegraph** — element-colored chevron **pip** above enemies (`weaknessElement`, `resist ≤ −0.3`, distinct from body tint, gentle pulse) + **damage-number effectiveness cue** (weakness = bigger/green/"WEAK"; resisted = small/grey) · 5 unit tests · commit (6.115.0)
 - [ ] **Global efficacy cards (5th draft slot)** — §6 group B (conditional dmg) + C (handling/tradeoff) as GLOBAL powerups; `card-draft.js` → **1 primary + 1 power + 1 global + 2 ability**; damage-path consumers (Executioner already wired) · tests
 - [ ] **Per-item unlock cost** refactor (flat, no signature/exotic; lets outliers like Spectrum Split price higher)
 - [ ] Per-attunement VFX + tooltips
@@ -316,10 +123,48 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 
 ### W8 — Endgame: Mastery + Ascension treadmill  (design doc §15.4)
 - [ ] **Mastery tracks** — infinite per-item (weapon/attunement/mod/ability/ability-attunement) levels, exorbitant+exponential gold cost, small diminishing power; focused mastery = build identity
-- [ ] **Ascension** — escalating endless difficulty after first clear: enemy HP/dmg/density + rising resistances; higher item-level gear drops + more gold
+- [ ] ~~**Ascension**~~ — **FOLDED into Phase X** (Run Configurator & Difficulty). Player-chosen difficulty tiers above the first clear *are* Ascension: enemy HP/dmg/density + rising resistances scaling, higher item-level gear + more gold.
 - [ ] **gold → Cores** sink + crafting costs scaling with rarity × item level (heavy top-end sink)
 - [ ] Balance: ascension slightly outpaces *affordable* mastery (synergy/coverage/gear > brute grind); the weakness telegraph becomes the endgame skill layer
 
 ### Resolved (design doc §15)
 - Draft = 1 primary + 1 power + 1 global + 2 ability · Ability attunements one-at-a-time · Flat per-item cost · Telegraph = pip + hit cue
 - OQ-A slot budget: damage-split + cost are the limiters (no hard cap for now); OQ-B: even `dmg/N` (chosen)
+
+---
+
+## Phase P — Passive Skills (rule-modifier layer)  *(2026-05-24 · PLANNED)*
+
+Source: `docs/Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md`.
+**3 gold-bought, slot-gated, mid-run-swappable gameplay-modifier passives** (rule-changers, not stat
+increments). **Absorbs the unbuilt C.I3 traits + C.I4 keystones** into one unified `PASSIVES` registry
+with multiple delivery channels (equip slot now; keystone card + top-tier item roll later).
+**Open forks (see design doc §8) need sign-off before P1** — naming, trait-merge, swap rules,
+slot-unlock timing.
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| P1 | Registry + reconciliation: rename `PASSIVE_UPGRADES`→`STAT_UPGRADES` (frees the "passive" namespace); new `PASSIVES` registry (`passive-data.js`) w/ hook metadata + tags; add `passives` unlock category (`armory.js`) + `unlockedPassives` meta key | New registry + unlock category build green; stat-card rename has no behavior change; unit tests pin the split | - | cc:TODO |
+| P2 | Player state + apply pipeline: `equippedPassives[3]`, `ownedPassives` Set, `activePassives` Set rebuilt on change, `hasPassive(id)`, `getPassiveMod(key)` folded into `getEffective*` getters | Equipping a passive flips its flag/modifier; getters read it like SP/items; unit test | P1 | cc:TODO |
+| P3 | Slot gating: slot 1 from start; slots 2 & 3 unlock at stage `ceil(stages·0.3)` / `ceil(stages·0.6)` (default 3 & 6) via the wave-clear hook (`wave-manager.js`) | Nth slot opens at the right stage clear; persists across the run; unit test the threshold | P2, X1 | cc:TODO |
+| P4 | Pre-run BUILD-tree **PASSIVES cluster** (account-gold unlock + pick into this run's chosen pool) + loadout carry (`loadout.passives` → `game-engine` init) | Buy/own passives; chosen pool carried into the run; QA BUILD-tree flow green | P1, P2 | cc:TODO |
+| P5 | In-run **swap menu** (pause panel, reuses loadout rows): assign any owned passive to any *unlocked* slot at any time; ramping passives reset accrued state on swap (anti-cheese) | Mid-run swap works from pause; ramps reset on swap; QA green | P2, P4 | cc:TODO |
+| P6 | Catalog **batch 1** (~10–12, one per archetype: Glass Cannon, Berserker's Pact, Executioner, Overflow Capacitor, Discharge, Catalyst, Prismatic Soul, Slipstream, Killing Spree, Reactive Plating, Second Heart, Hoarder's Greed, Twin Cast…) — each w/ a live consumer at its hook + unit test | Each shipped passive measurably changes play; at least 3 synergy clusters demonstrably stack; unit tests | P2 | cc:TODO |
+| P7 | Later delivery channels (folds C.I3/C.I4): keystone **card** pick + **top-tier item** roll draw from the same `PASSIVES` pool | A passive acquirable via Legendary+ item OR stage-clear keystone card, sharing P6 consumers | P6, C.I2 | cc:TODO |
+
+## Phase X — Run Configurator & Difficulty Scaling  *(2026-05-24 · PLANNED)*
+
+Source: `docs/Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md`.
+Player picks **run length (stages × waves/stage), boss count (= stages), and a difficulty tier**;
+higher difficulty = tougher enemies **and** more + better loot. **Replaces hardcoded `MAX_WAVES=30`**
+with a `runConfig`; enemy-scaling curves auto-stretch (already normalized on `t=(w-1)/(N-1)`).
+**Absorbs Phase W8 "Ascension"** (difficulty tiers above the first clear = Ascension).
+
+| Task | 内容 | DoD | Depends | Status |
+|------|------|-----|---------|--------|
+| X1 | `runConfig = {stages, wavesPerStage, difficulty}` on `game` + save; replace `MAX_WAVES` reads (`constants.js`/`wave-*`/`game-engine`) with `stages×wavesPerStage`; boss schedule, `isCardStage`, `isStageClear`, run-complete read config | A 5-stage and a 20-stage run both run start→finish; bosses = stages; CONTINUE restores config; unit tests | - | cc:TODO |
+| X2 | Difficulty multipliers wired in: enemy HP/dmg/density (`getLevelScaledEnemyStats` + spawns), **item drop rate** + **`rollRarity(bias)`** + health/money rate + gold (`dropOrbsFromEntity`), bank bonus — all on top of existing curves/caps | Higher tier visibly harder + droppier + better rarity; caps (1.0 / 0.95) still clamp; unit test the multipliers | X1 | cc:TODO |
+| X3 | Cadence/slot scaling: card draft stays "every 2nd stage clear" (auto-scales); passive slots 2/3 at `ceil(stages·0.3/0.6)` | Card count + slot unlocks scale correctly for short/standard/long runs; unit test | X1, P3 | cc:TODO |
+| X4 | **RUN SETUP** UI (pre-run / folded into BUILD→START): stages + waves/stage + difficulty selectors with a live modifier readout; writes `runConfig` | Player configures a run; readout matches applied scaling; START RUN proceeds; QA green | X1, X2 | cc:TODO |
+| X5 | Difficulty-tier **gating** (`maxDifficultyCleared` in meta) — clear tier N to unlock N+1 (the Ascension spine); top tiers add rising resistances / endless length | Tiers unlock on clear; gated tiers locked in UI; persists | X2, X4 | cc:TODO |
+| X6 | Balance pass: AI-survival on a short low-difficulty run + a long high-difficulty run on a meta-progressed account; co-tune with R-BAL1 | Both runs winnable-but-non-trivial at their tier; no runaway loot/HP | X2, X5 | cc:TODO |
