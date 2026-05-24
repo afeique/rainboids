@@ -144,6 +144,79 @@ test.describe('QA-08: BUILD screen + gold economy', () => {
     });
 });
 
+test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (Phase U)', () => {
+    test.beforeEach(async ({ page }) => {
+        page._jsErrors = [];
+        page.on('pageerror', (err) => page._jsErrors.push(err.message));
+        await loadGame(page);
+        await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
+    });
+
+    test('pre-run header shows the Cores readout + BUILD title', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 42 }));
+            window.gameEngine.openArmory();
+            const box = document.getElementById('shop-tree-cores');
+            const amt = document.getElementById('shop-cores-amount');
+            const title = document.querySelector('.shop-tree-title');
+            return {
+                vis: box && getComputedStyle(box).visibility,
+                cores: amt && amt.textContent,
+                title: title && title.textContent,
+            };
+        });
+        expect(r.vis).toBe('visible');
+        expect(r.cores).toBe('42');
+        expect(r.title).toBe('BUILD YOUR LOADOUT');
+    });
+
+    test('the Cores readout is hidden in the in-run shop', async ({ page }) => {
+        await startGame(page);
+        const r = await page.evaluate(() => {
+            window.gameEngine.openShop();
+            const box = document.getElementById('shop-tree-cores');
+            const title = document.querySelector('.shop-tree-title');
+            return { vis: box && getComputedStyle(box).visibility, title: title && title.textContent };
+        });
+        expect(r.vis).toBe('hidden');
+        expect(r.title).toBe('UPGRADES');
+    });
+
+    test('START is enabled with a default loadout (has a primary)', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            window.gameEngine.openArmory();
+            const btn = document.getElementById('shop-prerun-start');
+            return { disabled: btn.disabled, text: btn.textContent };
+        });
+        expect(r.disabled).toBe(false);
+        expect(r.text).toContain('START RUN');
+    });
+
+    test('deselecting every primary disables START with a SELECT-A-PRIMARY cue', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            window.gameEngine.openArmory();
+            // Click each equipped primary parent to toggle it off (the tree
+            // re-renders on each click, so re-query in a loop).
+            let guard = 0, node;
+            while ((node = document.querySelector('#shop-tree-primary .shop-node--parent.shop-node--owned')) && guard++ < 12) {
+                node.click();
+            }
+            const btn = document.getElementById('shop-prerun-start');
+            const status = document.getElementById('shop-prerun-status');
+            return {
+                disabled: btn.disabled,
+                text: btn.textContent,
+                status: status.textContent,
+                warn: status.classList.contains('shop-prerun-status--warn'),
+            };
+        });
+        expect(r.disabled).toBe(true);
+        expect(r.text).toBe('SELECT A PRIMARY');
+        expect(r.warn).toBe(true);
+        expect(r.status).toContain('PRIMARY 0/');
+    });
+});
+
 test.describe('QA-08b: Stash + Cores salvage (Phase R8)', () => {
     test.beforeEach(async ({ page }) => {
         page._jsErrors = [];

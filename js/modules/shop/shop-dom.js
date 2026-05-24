@@ -198,6 +198,9 @@ export function initShopDom(gameEngine) {
         overlay:        $('shop-overlay'),
         menu:           $('shop-menu'),
         coinsAmt:       $('shop-coins-amount'),
+        coresBox:       $('shop-tree-cores'),
+        coresAmt:       $('shop-cores-amount'),
+        startBtn:       $('shop-prerun-start'),
         tree:           $('shop-tree'),
         tabs:           $('shop-tree-tabs'),
         clusterPrimary: $('shop-tree-primary'),
@@ -432,6 +435,15 @@ export function updateShopCurrencyDom() {
             : (_engine.game ? _engine.game.money : 0);
         _elements.coinsAmt.textContent = `${Math.floor(amt)}`;
     }
+    // Cores (✦) — only meaningful pre-run (they fund GEAR salvage/reroll/
+    // tier-up). Read game.cores with a meta fallback (BUILD can open before a
+    // run exists).
+    if (_elements.coresAmt) {
+        let cores = 0;
+        if (_engine.game && typeof _engine.game.cores === 'number') cores = _engine.game.cores | 0;
+        else { const m = loadMeta(); if (m && typeof m.cores === 'number') cores = m.cores | 0; }
+        _elements.coresAmt.textContent = `${Math.max(0, cores)}`;
+    }
 }
 
 // Toggle BUILD-mode chrome: show/hide the pre-run footer, swap the title,
@@ -442,6 +454,8 @@ function _applyPreRunChrome() {
     if (_elements.closeBtn) _elements.closeBtn.style.display = _preRun ? 'none' : '';
     const title = _elements.menu ? _elements.menu.querySelector('.shop-tree-title') : null;
     if (title) title.textContent = _preRun ? 'BUILD YOUR LOADOUT' : 'UPGRADES';
+    // Cores readout is BUILD-only; hidden (but keeps its grid column) in-run.
+    if (_elements.coresBox) _elements.coresBox.style.visibility = _preRun ? 'visible' : 'hidden';
     // The GEAR tab is BUILD-only — hide it for the in-run shop, and bounce
     // the active tab off GEAR if we're leaving BUILD mode.
     const gearTabBtn = _elements.tabs
@@ -451,14 +465,40 @@ function _applyPreRunChrome() {
     if (_preRun) _updatePreRunStatus();
 }
 
-// Refresh the "PRIMARY n/4 · POWER n/4 · ABILITY n/4" status line.
+// Pure readiness summary for a pre-run selection. A run is startable once at
+// least one PRIMARY is equipped (powers/abilities are optional); `complete`
+// means every category has at least one pick. Exported for unit tests.
+export function loadoutReadiness(sel, slots = LOADOUT_SLOTS) {
+    const n = (k) => (Array.isArray(sel && sel[k]) ? sel[k].length : 0);
+    const primaries = n('primaries');
+    const powers = n('powers');
+    const abilities = n('abilities');
+    return {
+        primaries, powers, abilities, slots,
+        ready: primaries >= 1,
+        complete: primaries >= 1 && powers >= 1 && abilities >= 1,
+    };
+}
+
+// Refresh the "PRIMARY n/4 · POWER n/4 · ABILITY n/4" status line + the START
+// button's enabled/label state (can't start a run with no primary weapon).
 function _updatePreRunStatus() {
     const status = $('shop-prerun-status');
-    if (!status) return;
-    const p = (_preRunSel.primaries || []).length;
-    const w = (_preRunSel.powers || []).length;
-    const a = (_preRunSel.abilities || []).length;
-    status.textContent = `PRIMARY ${p}/${LOADOUT_SLOTS}   ·   POWER ${w}/${LOADOUT_SLOTS}   ·   ABILITY ${a}/${LOADOUT_SLOTS}`;
+    const r = loadoutReadiness(_preRunSel);
+    if (status) {
+        let text = `PRIMARY ${r.primaries}/${r.slots}   ·   POWER ${r.powers}/${r.slots}   ·   ABILITY ${r.abilities}/${r.slots}`;
+        if (!r.ready) text += '   ·   ⚠ SELECT A PRIMARY';
+        else if (r.complete) text += '   ·   ✓ READY';
+        status.textContent = text;
+        status.classList.toggle('shop-prerun-status--warn', !r.ready);
+        status.classList.toggle('shop-prerun-status--ready', r.complete);
+    }
+    const startBtn = _elements && _elements.startBtn;
+    if (startBtn) {
+        startBtn.disabled = !r.ready;
+        startBtn.classList.toggle('armory-btn--disabled', !r.ready);
+        startBtn.textContent = r.ready ? 'START RUN →' : 'SELECT A PRIMARY';
+    }
 }
 
 // 6.27.0 — Reflect `_activeTab` into the DOM: set the tree's

@@ -3906,6 +3906,23 @@ body.mobile-portrait .shop-help-icon {
     text-shadow: 0 0 8px currentColor;
 }
 
+/* Cores readout (right column, BUILD-only) — mirrors the gold currency. */
+.shop-tree-cores {
+    justify-self: end;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    line-height: 1;
+    color: #6fe9d0;
+}
+.shop-tree-cores-icon { font-size: 18px; text-shadow: 0 0 8px currentColor; }
+.shop-tree-cores-amount {
+    font-size: 22px;
+    font-weight: bold;
+    text-shadow: 0 0 8px currentColor;
+}
+
 /* ── Tab strip (6.27.0) ───────────────────────────────────────────── */
 .shop-tree-tabs {
     display: flex;
@@ -3996,6 +4013,17 @@ body.mobile-portrait .shop-help-icon {
     color: #bfe9ff;
     font-size: 0.85em;
     letter-spacing: 0.04em;
+    transition: color 0.2s ease;
+}
+/* Readiness cues on the BUILD footer status line. */
+.shop-prerun-status--warn  { color: #ffb454; text-shadow: 0 0 8px rgba(255, 180, 84, 0.4); }
+.shop-prerun-status--ready { color: #8effa8; text-shadow: 0 0 8px rgba(142, 255, 168, 0.4); }
+/* Disabled START (no primary equipped). */
+.armory-btn--disabled,
+.armory-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
 }
 .shop-node--parent.shop-node--owned .shop-node-badge {
     background: #11bb88;

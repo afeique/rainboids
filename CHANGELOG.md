@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.119.0] - 2026-05-24
+
+### Added — Pre-run BUILD screen: Cores readout + loadout readiness (Phase U1/U2)
+
+Polished the start-of-run BUILD screen so you can review your loadout at a glance:
+
+- **Cores (✦) readout** in the BUILD header (right of the title), so you can see
+  your crafting currency while you salvage/reroll/tier-up gear on the GEAR tab.
+  It's BUILD-only — hidden in the in-run shop.
+- **Loadout readiness** on the footer status line: it now flags `⚠ SELECT A
+  PRIMARY` when no primary is equipped and `✓ READY` once all three categories
+  are filled, with matching colors.
+- **START RUN gating**: you can no longer start a run with zero primary weapons
+  — START is disabled and reads `SELECT A PRIMARY` until you equip one.
+
 ## [6.118.0] - 2026-05-24
 
 ### Added — Ability attunements now apply their element at runtime (Phase W6 complete)

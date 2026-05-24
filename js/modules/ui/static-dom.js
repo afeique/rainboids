@@ -743,7 +743,17 @@ function _buildShopOverlay() {
         ],
     }));
     header.appendChild(el('h2', { className: 'shop-tree-title', text: 'UPGRADES' }));
-    header.appendChild(el('div', { className: 'shop-tree-header-spacer' }));
+    // Right column: Cores (✦) readout. BUILD-only — shop-dom shows it in
+    // pre-run (Cores fund GEAR salvage/reroll/tier-up) and hides it in-run, so
+    // it otherwise just balances the grid against the gold column.
+    header.appendChild(el('div', {
+        id: 'shop-tree-cores',
+        className: 'shop-tree-cores',
+        children: [
+            el('span', { className: 'shop-tree-cores-icon', text: '✦' }),
+            el('span', { id: 'shop-cores-amount', className: 'shop-tree-cores-amount', text: '0' }),
+        ],
+    }));
     menu.appendChild(header);
 
     // ── Legend ────────────────────────────────────────────────────
