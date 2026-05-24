@@ -248,3 +248,115 @@ A small pre-run screen (or a panel folded into the BUILD → START flow): **Stag
 4. **Slot-unlock timing** — **fractional (`ceil(stages·0.3/0.6)`)** *(recommended)* vs. absolute stages 3 & 6.
 5. **Difficulty tiers** — **gated (clear-to-unlock, = Ascension)** *(recommended)* vs. all-open from the start.
 6. **Run-length bounds & default** — proposed stages 3–20 (default 10), waves/stage 2–5 (default 3); confirm or adjust.
+
+---
+
+## 9. Round-2 decisions (2026-05-24)
+
+Confirmed by product owner:
+
+1. **Naming — stats are "Stats," full stop.** Rename `PASSIVE_UPGRADES → STATS` and `PASSIVE_REWARD_IDS → STAT_CARD_IDS` (drop *both* "passive" and "upgrade"; SP_STATS keeps its name as the SP-allocation defs — the two reference the same stat families). User-facing label: **STATS**. "Passives" now exclusively means the rule-modifier layer.
+2. **Shared registry across items AND passive slots — confirmed.** One `PASSIVES` registry; an entry declares where it can live (slot / item / both). Players can **roll items that carry passive skills** (a passive-affix on higher-tier gear). See §10 for the expanded catalog + delivery/stacking rules.
+3. **Mid-run swap — confirmed** (free swap, ramp-reset on swap).
+4. **Slots scale with run length** + **Endless** allowed — design in §11.A/B.
+5. **Difficulty tiers gated, reward-feeling** — design in §11.C.
+6. **Waves/stage default 10**, longer runs available — pacing + scaling in §11.D/E; **mid-run loadout access** in §11.F.
+
+---
+
+## 10. Expanded passive catalog — shared item + slot registry
+
+**Registry entry gains delivery metadata:**
+```
+{ id, name, desc, hooks, tags,
+  slot:  true|false,        // can be equipped in a passive slot
+  item:  true|false,        // can roll as a passive-affix on gear
+  itemTierMin: 'exceptional'|'legendary'|'transcendental',  // gear rarity gate
+  stack: 'binary'|'additive',  // how it behaves if present from >1 source
+  downside?: '…' }
+```
+
+**Stacking rule:** `binary` passives (rule rewrites) are simply *on* if present from any source — slotting + an item roll gives no double benefit (but frees a slot). `additive` passives sum their magnitude across sources, each with its own soft cap. Build-defining keystones are `slot`-only or gated to **Transcendental** gear as a chase roll; small modular passives roll on Exceptional+.
+
+### Keystones — slot-only (or Transcendental chase roll). Binary, build-defining.
+| Passive | Effect | ↯ Downside | Synergy |
+|---|---|---|---|
+| **Glass Cannon** | +60% damage | −50% max HP | dodge/shield passives, lifesteal, Second Heart |
+| **Berserker's Pact** | damage ramps as HP falls (→ +80%) | — (you must stay low) | Glass Cannon, vampirism, desperation drops |
+| **Gunslinger** | +50% primary dmg, +30% fire rate | no power weapons / abilities | primary builds, Hair Trigger |
+| **Purist** | +40% flat damage, shots pierce | cannot crit | anti-crit identity, Opportunist |
+| **Twin Cast** | powers fire twice (2nd @50%), abilities +1 charge | energy cost +30% | Overflow Capacitor, Discharge |
+| **Prismatic Soul** | shots auto-cycle all 6 elements | — | Catalyst, reaction builds, attunements |
+| **Overflow Capacitor** | 2× energy regen, +50% max energy | powers cost ×1.5 | Discharge, Twin Cast, power attunements |
+| **Killing Spree** | streak never resets on hit (slow decay), ×2 streak dmg | — | Slipstream, Adrenaline, tanky/dodgy builds |
+| **One With The Void** | 5s no-hit → +40% dodge (phased) | breaks on hit | dodge, hit-and-run, movement |
+| **Second Heart** | survive lethal once per stage @30% HP + i-frames | — | Glass Cannon, Berserker |
+
+### Modular passives — item + slot. Mostly additive, safe to stack.
+| Passive | Effect | Deliver | Synergy |
+|---|---|---|---|
+| **Catalyst** | status reactions +50%/source & spread +1 | both | Prismatic Soul, attunements |
+| **Frostbite** | chill/freeze builds 25% faster | both (Exc+) | CRYO, Cryoclasm |
+| **Hex Touch** | +20% status-tick damage (burn/corrode/bleed) | both (Exc+) | Pyromania, Toxic |
+| **Kindling** | burn/corrode spreads to +1 enemy | both | PYRO/TOXIC, crowds |
+| **Static Charge** | every 5th hit emits a small conduct zap | both | VOLT, Conductor |
+| **Opportunist** | +15% damage vs status-afflicted enemies | both | any element build |
+| **Predator** | first hit on a full-HP enemy always crits | both | crit builds, burst |
+| **Vampiric Rounds** | crits heal 2 HP | both (Exc+) | crit, Leech Field |
+| **Ricochet** | killing a foe bounces the shot to a new target | both | crowds, fast clears |
+| **Momentum Rounds** | bullets gain damage the farther they fly | both | LONG_RANGE mod, Rail Driver |
+| **Chain Reaction** | explosive kills +50% radius | both | EXPLOSIVE mod, crowds |
+| **Kinetic Battery** | dashing refunds energy | both | dash abilities, power builds |
+| **Overflow Spark** | at full energy, primaries +25% damage | both | energy management, Overflow Capacitor |
+| **Last Bastion** | below 30% HP, +20% dodge | both | Berserker, Glass Cannon |
+| **Guardian Echo** | lethal-threshold hit emits a knockback nova (no death-save) | both | defense, crowds |
+| **Salvage Protocol** | +1 Core per salvage; +tier-up chance on drops | item-only (econ) | gear/Cores builds |
+| **Scavenger** | +50% item drop rate, huge pickup radius | slot (econ) | high difficulty loot |
+| **Hoarder's Greed** | +100% gold-find; gold orbs heal 1 HP | slot | +15% dmg taken ↯; kill-streak gold |
+
+Modular passives are the natural **item-affix** pool (they're additive and don't rewrite rules), so rolling them on gear feels like loot, not like accidentally bricking a build. Keystones stay slot-only (or a Transcendental "build-enabling" chase roll) so you never roll *"can't crit"* on a helmet by accident.
+
+---
+
+## 11. Run length, slots, difficulty & loadout — proposals (pending sign-off)
+
+### A. Passive slots scale with run length
+- **Formula (proposal):** `slots = 3 + floor(max(0, stages − 10) / 5)`, **soft cap 8**. → 10 stages = 3, 15 = 4, 20 = 5, 25 = 6, 30 = 7, 45+ = 8.
+  *(If you want exactly 6 at 30, use `/7` instead of `/5` — smoother but slower. Recommend `/5`.)*
+- Slots unlock **progressively**: slot 1 at start; the rest spread evenly across stages (e.g. slot k opens at stage `round((k−1)/(slots−1) × lastStage)`), so every run *feels* like a power ramp.
+- **The balance hinge — why this isn't just "long = easy":** today's enemy scaling normalizes over the run (`t=(w−1)/(N−1)`), so a 100-wave run just *spreads the same curve* and late waves aren't harder than a 30-wave run's finale. **We replace that with absolute, unbounded ramping** (§D): each wave is strictly harder than the last. So the extra slots are *earned power that matches earned threat* — they let you keep pace, but the threat keeps climbing past your power, which is exactly what makes a long/endless run a "how far can you get" test rather than a free win.
+
+### B. Stage cap & Endless
+- **Custom runs: 3–30 stages** (the "campaign" band; 30 = the long marathon).
+- **Endless mode (toggle):** uncapped waves, **slot cap stays 8**, enemy power climbs without bound → you die eventually; we track **best wave reached** (leaderboard fantasy).
+- **Gauntlet preset:** a fixed **100-wave** marathon *with a finish line* + a completion reward — a beatable ultra-run for players who want a goal, not just survival.
+- **Recommendation:** ship custom 3–30 **plus** an Endless toggle **and** the 100-wave Gauntlet preset. Endless answers "how far can I get"; Gauntlet answers "can I actually beat the big one." Both reuse the same scaling.
+
+### C. Difficulty gating (reward-feeling, low-friction)
+- **Unlock tier D+1 by reaching a milestone at tier D — not a full clear.** Proposal: *clear any run of ≥ 5 stages at tier D* (or *survive to wave 25 at tier D* in Endless). Easy enough to reach in a session, but you must prove you can sustain that tier. New tiers feel earned, not grindy.
+- **Tougher tiers pay out better — the loot-system change:** each tier raises a **rarity ceiling** (low tiers literally *cannot* roll Divine/Transcendental; the top tiers are the only place the best gear exists), plus higher **item level** (affix magnitude), **drop rate**, and **gold**. This makes climbing difficulty the *only* path to best-in-slot gear — a strong, self-reinforcing pull. (Implementation: `rollRarity` gains a `rarityCeiling`/`floor` from the tier, alongside the existing bias; `createItem` level term scales with tier.)
+- Stored in `rainboidsMeta.maxDifficultyCleared`; locked tiers shown greyed with their unlock condition.
+
+### D. Enemy scaling (difficulty × absolute progress)
+- **Switch from run-normalized to absolute wave growth** so long runs genuinely escalate. Today's
+  curve normalizes on `t=(w−1)/(N−1)` (≈15× HP at the wave-30 finale, but *plateaus* — a 100-wave run
+  is no harder at the end). Replace with a monotonic absolute curve:
+  `enemyHpDmgMult(wave, D) = base(wave) × (1 + (D−1) × 0.12)`, where `base(wave)` is **tuned so wave ≈30
+  matches today's finale (~15×), then keeps climbing unbounded** (e.g. continue the existing
+  `1 + a·w + b·w^1.5` shape with `w` = absolute wave, no `/N` normalization). density/count grows on a
+  gentler curve. **Speeds are capped** (bullet/enemy speed clamps) so escalation comes from HP / count /
+  damage / *new behaviors*, never from making projectiles physically undodgeable.
+- **High-tier "rising resistance"** (top difficulty tiers / deep Endless): enemies globally adapt resistance to your most-used element (a Warden-like meta pressure), nudging multi-element / coverage builds — this is the §15.4 Ascension idea, folded in.
+
+### E. Stage size & pacing (waves/stage = 10)
+- Stage = **10 waves** with a **mid-stage ELITE wave at wave 5** → an intensity/loot beat every 5 waves (elite @ +5, boss @ +10). Card / Stat / passive-slot **checkpoints fire at boss (stage) clears**; elites give a smaller loot bump.
+- This keeps a tight rhythm even in a 100-wave gauntlet (10 stages → 10 bosses + 10 elites). *(Alternative: waves/stage = 5 with more stages keeps bosses every 5 waves without elites — simpler, but you wanted bigger stages. Recommend the 10+elite layout.)*
+
+### F. Mid-run loadout access (the key call)
+- **Recommendation — tiered commitment, auto-scaling with run length:**
+  - **Passives:** swap **anytime** (already decided).
+  - **Gear / inventory (items):** re-equip **anytime** — it's defensive/stat, low cheese risk, and lets collected loot matter immediately.
+  - **Weapons / abilities / attunements:** re-build only at **stage-boss "Refit" checkpoints** (the screen that already pauses at stage clear). Within a stage you're committed.
+- **Why this beats both extremes:** fully-free anytime swapping lets you hard-counter every single wave (swap to the perfect element/weapon each fight), which erases build identity and the roguelite tension. Locking everything for a 100-wave run feels awful because you collect mountains of loot you can't use. **Checkpoint-refit threads it:** you adapt to what you've earned between stages, but commit within a stage.
+- **It auto-answers "when to allow vs. lock"** with no special rule: a **short punishing run has few checkpoints** (you're mostly stuck with your build — the punishment you asked for), while a **long gauntlet has many** (you naturally re-tool as you go). Difficulty + length *is* the commitment dial.
+- *If you'd rather minimize friction:* the fallback is "gear + passives anytime, weapons/abilities/attunements also anytime" — fully free. Viable, but I'd hold the line at checkpoint-refit for offense to keep builds meaningful.
