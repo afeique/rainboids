@@ -246,6 +246,11 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     if (this.player.hasPassive && this.player.hasPassive('HOARDERS_GREED')) {
         reducedDamage *= 1.15;
     }
+    // P6 — Frenzy downside: +30% damage taken (the +8%/nearby-enemy outgoing
+    // upside is in applyDamageToEnemy).
+    if (this.player.hasPassive && this.player.hasPassive('FRENZY')) {
+        reducedDamage *= 1.30;
+    }
 
     // BULWARK active-ability damage reduction (was applied inline at the
     // collision sites). IRON_WILL deepens it 50% → 65%.

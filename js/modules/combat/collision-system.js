@@ -2246,6 +2246,29 @@ export function vendettaMult(player, enemy) {
         ? VENDETTA_MULT : 1;
 }
 
+// P6 — Frenzy passive: +8% outgoing damage per enemy near the PLAYER, capped at
+// +80% (10 enemies). The downside (+30% damage taken) lives in lifecycle
+// takeDamage. Pure split — `frenzyNearbyCount` is the (capped) proximity count
+// and `frenzyMult` is the count→multiplier curve — so both unit-test cleanly;
+// the count is computed ON-DEMAND at the damage hook (no per-frame system).
+export const FRENZY_PER_ENEMY = 0.08;
+export const FRENZY_MAX_ENEMIES = 10;
+export const FRENZY_RADIUS = 260;
+export function frenzyNearbyCount(enemies, px, py, radius = FRENZY_RADIUS) {
+    if (!Array.isArray(enemies)) return 0;
+    const r2 = radius * radius;
+    let n = 0;
+    for (const e of enemies) {
+        if (!e || !e.active || e._deathFlash > 0 || e.warping) continue;
+        const dx = e.x - px, dy = e.y - py;
+        if (dx * dx + dy * dy <= r2 && ++n >= FRENZY_MAX_ENEMIES) break;
+    }
+    return n;
+}
+export function frenzyMult(count) {
+    return 1 + Math.min(FRENZY_MAX_ENEMIES, Math.max(0, count | 0)) * FRENZY_PER_ENEMY;
+}
+
 export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
@@ -2291,6 +2314,15 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
         // P6 — Vendetta: the last enemy to damage you takes +30% until it dies.
         const _vm = vendettaMult(this.player, enemy);
         if (_vm !== 1) damage *= _vm;
+        // P6 — Frenzy: +8% damage per enemy near the player (cap +80%). Downside
+        // (+30% damage taken) is in lifecycle takeDamage.
+        if (typeof this.player.hasPassive === 'function' && this.player.hasPassive('FRENZY')) {
+            const _fc = frenzyNearbyCount(
+                this.enemyPool && this.enemyPool.activeObjects,
+                this.player.x, this.player.y);
+            const _fm = frenzyMult(_fc);
+            if (_fm !== 1) damage *= _fm;
+        }
     }
 
     // E2 (Element & Resistance) — scale by the target's resistance to the

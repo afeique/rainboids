@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.151.0] - 2026-05-24
+
+### Added — Frenzy passive (Phase P6, keystone)
+
+- **Frenzy** — +8% outgoing damage per enemy near you (capped at +80% / 10
+  enemies), with a +30% damage-taken downside: a high-risk berserker keystone
+  that pays off in dense fights. The proximity count is computed on-demand at
+  the universal `applyDamageToEnemy` hook (pure `frenzyNearbyCount` + `frenzyMult`
+  curve) — no per-frame system; the downside mirrors the Hoarder's Greed
+  damage-taken pattern in `takeDamage`. Guarded no-op without the passive.
+
+---
+
 ## [6.150.0] - 2026-05-24
 
 ### Added — Purist + Scavenger secondary clauses (Phase P6)
