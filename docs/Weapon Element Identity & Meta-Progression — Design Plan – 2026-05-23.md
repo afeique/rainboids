@@ -413,3 +413,79 @@ Goal: one new weapon + one attunement ≈ several runs of saving; a full collect
 - **OQ-E — Borderline cards** (Double Tap, Warm Barrel, Salvage, Battery, Recovery): **deferred** per request — revisit as efficacy vs mechanic later.
 - **OQ-F — Cost numbers** (§11): agree on the *shape* before fine-tuning.
 - **OQ-G — Migration.** New keys default to "none owned." Owned weapons stay owned; nothing else to grandfather.
+
+---
+
+## 15. Addendum — W6/W7 decisions, ability attunements & endgame sink (2026-05-24)
+
+Locked decisions from review (supersede the matching open questions above):
+
+- **Card draft is now 5 cards: `1 primary + 1 power + 1 GLOBAL mod + 2 ability`.** The new
+  global slot draws from a **global efficacy pool** (the §6 group B/C cards — conditional
+  damage + handling/tradeoff — that apply to *any* weapon).
+- **Ability attunements are ONE element at a time** (strategic commit, like a single weapon
+  attunement — they do NOT stack). Bought upfront, toggled per run.
+- **Flat attunement/mod cost** — no signature/exotic distinction. The economy refactor just
+  makes the unlock path read a **per-item `cost`** (so individual outliers like Prism's
+  all-element Spectrum Split can be priced higher), defaulting to the flat category cost.
+- **Enemy weakness telegraph = pip + hit cue** (both): a small element-colored **weakness pip**
+  above enemies with a notable weakness (`resist ≤ −0.3`), distinct from the body tint; plus
+  **damage-number effectiveness cues** (weakness = big bright element-colored + spark; resisted
+  = small grey).
+
+### 15.1 Ability attunements (one element each; element-agnostic base)
+
+Already-elemental abilities (Cryo/Stasis/Storm/Pyre fields, Elemental Infusion) need none.
+The rest each pick ONE element to flavor their verb:
+
+- **EMP Pulse** — Ion Burst (Volt: stunned also conduct) · Cryo Pulse (also freezes) ·
+  Overload (Pyro: burns) · Null Pulse (Void: marks the group).
+- **Sentry Drone** — elemental rounds: Pyro (ignite) · Volt (chain-fork) · Cryo (chill) ·
+  Toxic (corrode) · Void (mark) · Radiant (armor-pierce).
+- **Bulwark** — element on the retaliation/contact: Searing (Pyro) · Static (Volt) ·
+  Frostguard (Cryo) · Null (Void).
+- **Deflector Orbs** — orbs apply an element on contact + reflected bullets inherit it:
+  Volt / Pyro / Cryo.
+- **Gravity Snare** — Singularity (Void: mark + implode) · Glacial (Cryo: freeze the clump) ·
+  Pyre (Pyro: burn) · Caustic (Toxic: corrode).
+- **Blink** — exit-point burst: Flash Step (Pyro nova) · Storm Step (Volt) · Void Step
+  (gravity gather) · Frost Step (freeze).
+- **Designator** — the mark also applies an element status to painted targets (Toxic/Pyro/Cryo).
+- **Field Medic** — the heal-flash also hits nearby enemies (Radiant purge/blind, or Pyro nova).
+- **Second Wind** — the survival trigger emits an element nova (Pyro/Volt/Cryo) to buy space.
+
+Runtime: a `player.activeAbilityAttune[abilityId] = elementId` map (one element), applied when
+the ability activates (`player/abilities.js`). Bought via a new `abilityAttunements` unlock
+category; toggled in the BUILD tree's DEFENSE cluster (parallels weapon attunements).
+
+### 15.2 Global efficacy cards (the 5th "mod" slot)
+
+Group B (conditional damage) + C (handling/tradeoff) from §6, as GLOBAL powerups (apply to the
+active weapon regardless of type), read in the damage path via `getPowerupStacks`:
+- B: Point-Blank, Marksman, Giant Slayer, Cull the Weak, Momentum, Adrenaline, Cold Blood,
+  Opening Strike. (Executioner already wired.)
+- C: Trigger Discipline, Steady Aim, Stabilizers, Light Frame, Heavy Frame, Hot Loads, Hair Trigger.
+`card-draft.js` adds a `globalCards` pool + `composeDraft` → 1 primary + 1 power + 1 global + 2 ability.
+
+### 15.3 Endgame gold sink (post-full-unlock) — design options
+
+Problem: account-gold buys permanent unlocks; once everything's owned it has no sink. The
+in-run RUN-gold sinks (R4: reroll / repair / +card / revive) already exist — this is about
+ACCOUNT-gold after the collection is complete. Candidates, ranked:
+
+1. **Per-run "loadout blessings" (TRULY perpetual, no permanent creep)** — at the BUILD screen,
+   spend account-gold on ONE-RUN-ONLY boosts that don't persist: Warchest (+starting run-gold),
+   Pre-charged (power weapon ready at start), Veteran Start (begin a few waves in for a
+   score/gold-rate bonus), Extra Draft (+1 card on the first draft), Insurance (a free revive).
+   Consumed each run → continuous sink, zero balance creep. **Lead recommendation.**
+2. **Gold → Cores exchange (bridge; reuses the gear treadmill)** — let account-gold buy Cores so
+   it always feeds gear reroll/tier-up. Long sink (until near-perfect gear across 5 slots), low
+   effort, no new content. Bounded by the 8-tier rarity cap per item, so finite-but-deep.
+3. **Cosmetics (ideal; needs art)** — ship skins / engine trails / bullet colors / UI themes for
+   account-gold. Infinite, zero balance impact. The classic endgame sink — gated on cosmetic assets.
+4. **Mastery / prestige (powerful; creep risk)** — infinite, steeply-diminishing per-weapon or
+   account levels, or a prestige reset for a small permanent multiplier + badge. Use only with a
+   hard cap + exponential cost; otherwise power creep. Lowest priority.
+
+Recommendation: ship **(1) per-run blessings** as the perpetual sink + **(2) gold→Cores** as the
+immediate bridge; add **(3) cosmetics** when art bandwidth exists; avoid (4)'s creep.

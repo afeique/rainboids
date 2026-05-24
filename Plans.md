@@ -300,17 +300,20 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 - [x] Selection/toggle happens directly in the BUILD tree (no separate LOADOUT screen needed); `beginPreRunFromTree` carries `loadout.attunements` + `loadout.mods`, both validated vs owned/known
 - Note: finer ring layout (two rings / grouping) is a W7 polish item.
 
-### W6 — Ability behavior/element upgrades
-- [ ] Ability equivalent of attunements (upfront element-flavored behavior; e.g. EMP "Ion Burst" → CONDUCT) + tests · commit
+### W6 — Ability attunements  (decisions locked — design doc §15)
+- [ ] `abilityAttunements` data: ONE element per ability (not stacking); element-agnostic base; per-ability element options (design §15.1) · tests
+- [ ] `player.activeAbilityAttune[abilityId] = elementId`; applied on activate (`player/abilities.js`) — element status through the ability's verb
+- [ ] BUILD tree DEFENSE cluster: ability-attunement nodes (unlock + one-active toggle), `abilityAttunements` unlock category · commit
 
 ### W7 — Economy + balance + polish  🟡 PARTIAL
-- [x] Dial up unlock costs: primary 8k / power 10k / ability 12k / attunement 7k / mod 5k (hierarchy preserved; tests updated) · commit (6.114.1)
+- [x] Dial up unlock costs: primary 8k / power 10k / ability 12k / attunement 7k / mod 5k · commit (6.114.1)
 - [x] README sweep — attunement/mod/efficacy-card system documented · commit (docs)
-- [ ] KINETIC viability; resist/weakness telegraph (enemy tint/icon); per-attunement VFX + tooltips
-- [ ] New §6 conditional/handling efficacy cards (Executioner, Point-Blank, Hot Loads…) as global powerups + per-weapon card-curation matrix
-- [ ] Per-attunement signature-vs-exotic pricing
+- [ ] **Enemy weakness telegraph** — element-colored **pip** above enemies with `resist ≤ −0.3` (distinct from body tint) + **damage-number effectiveness cue** (weakness = big/bright/element-colored + spark; resisted = small/grey)
+- [ ] **Global efficacy cards (5th draft slot)** — §6 group B (conditional dmg) + C (handling/tradeoff) as GLOBAL powerups; `card-draft.js` → **1 primary + 1 power + 1 global + 2 ability**; damage-path consumers (Executioner already wired) · tests
+- [ ] **Per-item unlock cost** refactor (flat, no signature/exotic; lets outliers like Spectrum Split price higher)
+- [ ] Per-attunement VFX + tooltips
+- [ ] **Endgame gold sink** (design §15.3) — per-run "loadout blessings" (perpetual, no creep) + gold→Cores bridge; cosmetics later
 
-### Open questions (resolve as phases reach them)
-- OQ-A: per-weapon active-slot budget (cap on active attunements/mods)? — proposed soft cap
-- OQ-B: damage-split math — even `dmg/N` (chosen) vs gentler curve
-- Prism Spectrum Split = all-element opt-in attunement w/ the damage-split drawback (no separate exception)
+### Resolved (design doc §15)
+- Draft = 1 primary + 1 power + 1 global + 2 ability · Ability attunements one-at-a-time · Flat per-item cost · Telegraph = pip + hit cue
+- OQ-A slot budget: damage-split + cost are the limiters (no hard cap for now); OQ-B: even `dmg/N` (chosen)
