@@ -2,7 +2,7 @@
 // the BUILD footer status line + START-RUN gating: a run is startable once at
 // least one PRIMARY is equipped; `complete` means all three categories are set.
 import { describe, expect, test } from '@jest/globals';
-import { loadoutReadiness } from '../../../js/modules/shop/shop-dom.js';
+import { loadoutReadiness, nextTab } from '../../../js/modules/shop/shop-dom.js';
 import { LOADOUT_SLOTS } from '../../../js/modules/shop/armory.js';
 
 describe('loadoutReadiness', () => {
@@ -54,5 +54,34 @@ describe('loadoutReadiness', () => {
         expect(loadoutReadiness(null).ready).toBe(false);
         expect(loadoutReadiness(undefined).primaries).toBe(0);
         expect(loadoutReadiness({ primaries: 'nope' }).primaries).toBe(0);
+    });
+});
+
+describe('nextTab (U3 keyboard tab cycling)', () => {
+    const PRERUN = ['gear', 'primary', 'power', 'defense', 'passive'];
+    const INRUN = ['primary', 'power', 'defense', 'passive'];
+
+    test('steps forward and wraps at the end', () => {
+        expect(nextTab(PRERUN, 'gear', 1)).toBe('primary');
+        expect(nextTab(PRERUN, 'passive', 1)).toBe('gear');
+    });
+
+    test('steps backward and wraps at the start', () => {
+        expect(nextTab(PRERUN, 'primary', -1)).toBe('gear');
+        expect(nextTab(PRERUN, 'gear', -1)).toBe('passive');
+    });
+
+    test('in-run list excludes GEAR (4 tabs)', () => {
+        expect(nextTab(INRUN, 'passive', 1)).toBe('primary');
+        expect(nextTab(INRUN, 'primary', -1)).toBe('passive');
+    });
+
+    test('a current tab not in the list falls back to stepping from index 0', () => {
+        expect(nextTab(INRUN, 'gear', 1)).toBe('power'); // treated as index 0 → +1
+    });
+
+    test('empty/garbage tab lists are returned unchanged', () => {
+        expect(nextTab([], 'primary', 1)).toBe('primary');
+        expect(nextTab(null, 'primary', 1)).toBe('primary');
     });
 });

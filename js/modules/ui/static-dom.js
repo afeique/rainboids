@@ -802,6 +802,13 @@ function _buildShopOverlay() {
     }
     menu.appendChild(tabs);
 
+    // ── Pre-run instructions hint (BUILD-only) ────────────────────
+    // A one-line "how to review your build" hint, shown only in pre-run mode
+    // (shop-dom toggles + fills it in _applyPreRunChrome). Hidden in-run.
+    const prerunHint = el('div', { id: 'shop-prerun-hint', className: 'shop-prerun-hint' });
+    prerunHint.style.display = 'none';
+    menu.appendChild(prerunHint);
+
     // ── Tree body ─────────────────────────────────────────────────
     // 4 cluster regions; only the active tab's cluster is shown (CSS
     // gates visibility off `#shop-tree[data-active-tab]`). shop-dom

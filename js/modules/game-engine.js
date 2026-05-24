@@ -4050,6 +4050,10 @@ export class GameEngine {
         return !!this._preRunTreeOpen || !!(this._armoryOverlay && this._armoryOverlay.isOpen());
     }
 
+    // U3 — cycle the BUILD/shop tab (gamepad D-pad). No-op unless the tree
+    // overlay is visible, so the gamepad handler can call it unconditionally.
+    cycleShopTab(dir) { return shopDom.cycleShopTabIfVisible(dir); }
+
     // START RUN from the BUILD tree — mirrors LoadoutOverlay.begin(): persist
     // the chosen loadout, finalize the title exit, and start the run.
     beginPreRunFromTree(sel) {

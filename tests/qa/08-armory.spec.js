@@ -192,6 +192,36 @@ test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (
         expect(r.text).toContain('START RUN');
     });
 
+    test('keyboard cycles BUILD tabs (◂ ▸ / Tab) + shows the pre-run hint & relabeled legend', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            window.gameEngine.openArmory();
+            const tree = document.getElementById('shop-tree');
+            const fire = (code, shift = false) => document.dispatchEvent(
+                new KeyboardEvent('keydown', { code, shiftKey: shift, bubbles: true, cancelable: true }));
+            const start = tree.dataset.activeTab;
+            fire('ArrowRight'); const afterRight = tree.dataset.activeTab;
+            fire('ArrowLeft');  const afterLeft = tree.dataset.activeTab;
+            fire('Tab');        const afterTab = tree.dataset.activeTab;        // power
+            fire('ArrowLeft'); fire('ArrowLeft'); const wrapped = tree.dataset.activeTab; // power→primary→gear
+            const hint = document.getElementById('shop-prerun-hint');
+            const firstLegend = document.querySelector('.shop-tree-legend-label');
+            return {
+                start, afterRight, afterLeft, afterTab, wrapped,
+                hintShown: hint && hint.style.display !== 'none',
+                hintLen: hint ? hint.textContent.length : 0,
+                legend0: firstLegend && firstLegend.textContent,
+            };
+        });
+        expect(r.start).toBe('primary');
+        expect(r.afterRight).toBe('power');
+        expect(r.afterLeft).toBe('primary');
+        expect(r.afterTab).toBe('power');
+        expect(r.wrapped).toBe('gear');
+        expect(r.hintShown).toBe(true);
+        expect(r.hintLen).toBeGreaterThan(10);
+        expect(r.legend0).toBe('Locked'); // pre-run legend relabel (was "Too expensive")
+    });
+
     test('deselecting every primary disables START with a SELECT-A-PRIMARY cue', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();

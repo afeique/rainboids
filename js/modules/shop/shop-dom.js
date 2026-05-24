@@ -200,6 +200,7 @@ export function initShopDom(gameEngine) {
         coinsAmt:       $('shop-coins-amount'),
         coresBox:       $('shop-tree-cores'),
         coresAmt:       $('shop-cores-amount'),
+        prerunHint:     $('shop-prerun-hint'),
         startBtn:       $('shop-prerun-start'),
         tree:           $('shop-tree'),
         tabs:           $('shop-tree-tabs'),
@@ -263,6 +264,21 @@ export function initShopDom(gameEngine) {
             _hideTooltip();
         });
     }
+
+    // U3 — keyboard tab cycling while the tree overlay is up: ◂ ▸ arrows,
+    // Q/E, and Tab / Shift+Tab. Guarded on overlay visibility so it never
+    // intercepts gameplay keys (the overlay is only 'flex' in BUILD / shop,
+    // never during PLAYING, so this can't clash with the F/E/R radials).
+    document.addEventListener('keydown', (e) => {
+        if (!_elements || !_elements.overlay || _elements.overlay.style.display !== 'flex') return;
+        let dir = 0;
+        if (e.code === 'ArrowRight' || e.code === 'KeyE') dir = 1;
+        else if (e.code === 'ArrowLeft' || e.code === 'KeyQ') dir = -1;
+        else if (e.code === 'Tab') dir = e.shiftKey ? -1 : 1;
+        else return;
+        e.preventDefault();
+        _cycleTab(dir);
+    });
 
     // Replace the header coin glyph with the same SVG used by the HUD.
     const headerIcon = _elements.menu?.querySelector('.shop-tree-currency-icon');
@@ -446,6 +462,18 @@ export function updateShopCurrencyDom() {
     }
 }
 
+// Legend labels: the same four node states read differently pre-run (loadout
+// selection) vs in-run (gold shop). Order matches the static-dom legend:
+// unaffordable · affordable · owned · maxed.
+const _LEGEND_LABELS_INRUN = ['Too expensive', 'Affordable', 'Owned', 'Maxed'];
+const _LEGEND_LABELS_PRERUN = ['Locked', 'Available', 'Equipped', 'Active'];
+function _relabelLegend(preRun) {
+    if (!_elements || !_elements.menu) return;
+    const labels = preRun ? _LEGEND_LABELS_PRERUN : _LEGEND_LABELS_INRUN;
+    const spans = _elements.menu.querySelectorAll('.shop-tree-legend-label');
+    spans.forEach((span, i) => { if (labels[i] != null) span.textContent = labels[i]; });
+}
+
 // Toggle BUILD-mode chrome: show/hide the pre-run footer, swap the title,
 // and hide the in-run close 'x' (BACK button replaces it in BUILD mode).
 function _applyPreRunChrome() {
@@ -456,6 +484,17 @@ function _applyPreRunChrome() {
     if (title) title.textContent = _preRun ? 'BUILD YOUR LOADOUT' : 'UPGRADES';
     // Cores readout is BUILD-only; hidden (but keeps its grid column) in-run.
     if (_elements.coresBox) _elements.coresBox.style.visibility = _preRun ? 'visible' : 'hidden';
+    // Pre-run instructions hint (BUILD-only).
+    if (_elements.prerunHint) {
+        _elements.prerunHint.style.display = _preRun ? '' : 'none';
+        if (_preRun) {
+            _elements.prerunHint.textContent =
+                'Click a weapon or ability to equip it · click its orbiting bubbles to attune & mod · ◂ ▸ / Q E / Tab switch tabs · review GEAR, then START RUN';
+        }
+    }
+    // Legend labels read differently pre-run (the same node states mean
+    // locked / equip-able / equipped / active rather than shop costs).
+    _relabelLegend(_preRun);
     // The GEAR tab is BUILD-only — hide it for the in-run shop, and bounce
     // the active tab off GEAR if we're leaving BUILD mode.
     const gearTabBtn = _elements.tabs
@@ -499,6 +538,43 @@ function _updatePreRunStatus() {
         startBtn.classList.toggle('armory-btn--disabled', !r.ready);
         startBtn.textContent = r.ready ? 'START RUN →' : 'SELECT A PRIMARY';
     }
+}
+
+// U3 — the ordered, currently-VISIBLE tabs. GEAR is BUILD-only (hidden in the
+// in-run shop), so it's only in the cycle pre-run.
+function _visibleTabs() {
+    return _preRun
+        ? ['gear', 'primary', 'power', 'defense', 'passive']
+        : ['primary', 'power', 'defense', 'passive'];
+}
+
+// U3 — pure tab stepper: given an ordered tab list, the current tab, and a
+// direction (+1 next / −1 prev), return the next tab id (wrapping). A current
+// tab not in the list falls back to the first. Exported for unit tests.
+export function nextTab(tabs, current, dir) {
+    if (!Array.isArray(tabs) || tabs.length === 0) return current;
+    let i = tabs.indexOf(current);
+    if (i < 0) i = 0;
+    const len = tabs.length;
+    const step = (dir | 0) || 1;
+    return tabs[(((i + step) % len) + len) % len];
+}
+
+// U3 — cycle the active BUILD/shop tab by `dir` (keyboard ◂ ▸ / Q-E / Tab).
+function _cycleTab(dir) {
+    _activeTab = nextTab(_visibleTabs(), _activeTab, dir);
+    _syncActiveTab();
+    _hideTooltip();
+}
+
+// U3 — public tab cycle for the gamepad (D-pad), routed via game-engine. A
+// no-op unless the tree overlay is actually visible, so the gamepad handler
+// can call it on every D-pad edge without state-checking. Returns whether it
+// acted.
+export function cycleShopTabIfVisible(dir) {
+    if (!_elements || !_elements.overlay || _elements.overlay.style.display !== 'flex') return false;
+    _cycleTab(dir);
+    return true;
 }
 
 // 6.27.0 — Reflect `_activeTab` into the DOM: set the tree's

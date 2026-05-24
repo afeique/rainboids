@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.120.0] - 2026-05-24
+
+### Added — BUILD screen: tab cycling (keyboard + gamepad), instructions, legend (Phase U3)
+
+Made the tabbed BUILD/shop tree faster to review without the mouse:
+
+- **Keyboard tab cycling** while the tree is open: `◂`/`▸` arrows, `Q`/`E`, and
+  `Tab` / `Shift+Tab` step through the tabs (wrapping). GEAR is only in the
+  cycle pre-run (it's BUILD-only).
+- **Gamepad tab cycling**: the D-pad `◂`/`▸` step tabs on the rising edge (no
+  auto-repeat), routed through `engine.cycleShopTab` — a no-op unless the tree
+  overlay is visible, so it never clashes with D-pad movement.
+- **Pre-run instructions hint** under the tab strip explaining how to equip
+  weapons/abilities, attune & mod via the orbiting bubbles, switch tabs, and
+  START — shown only on the BUILD screen.
+- **Legend relabel** in pre-run: the four node states now read
+  Locked / Available / Equipped / Active (loadout language) instead of the
+  in-run gold-shop labels.
+
 ## [6.119.0] - 2026-05-24
 
 ### Added — Pre-run BUILD screen: Cores readout + loadout readiness (Phase U1/U2)

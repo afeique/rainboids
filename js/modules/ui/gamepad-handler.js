@@ -64,6 +64,9 @@ export class GamepadHandler {
         this._prevDash = false;
         this._prevAbility = false;
         this._prevPause = false;
+        // U3 — D-pad tab cycling while the BUILD/shop tree is open.
+        this._prevTabPrev = false;
+        this._prevTabNext = false;
         // Which radial type (if any) the gamepad currently has open.
         this._heldRadial = null;
         this._onConnect = this._onConnect.bind(this);
@@ -163,6 +166,19 @@ export class GamepadHandler {
         }
         this._prevPause = pause;
 
+        // U3 — D-pad ◂ ▸ cycles the BUILD/shop tabs (rising edge). cycleShopTab
+        // is a no-op unless the tree overlay is visible, so this never clashes
+        // with D-pad movement (that's read in the gameplay `poll`, when the
+        // overlay is closed).
+        if (typeof this.engine.cycleShopTab === 'function') {
+            const tPrev = this._pressed(gp, BTN_DPAD_LEFT);
+            const tNext = this._pressed(gp, BTN_DPAD_RIGHT);
+            if (tPrev && !this._prevTabPrev) this.engine.cycleShopTab(-1);
+            if (tNext && !this._prevTabNext) this.engine.cycleShopTab(1);
+            this._prevTabPrev = tPrev;
+            this._prevTabNext = tNext;
+        }
+
         // Weapon radials — hold a bumper / Triangle to open, sticks pick the
         // slice, release commits (or cancels in the dead zone).
         const radial = this.engine.radialMenu;
@@ -219,6 +235,8 @@ export class GamepadHandler {
 
     _resetFrameState() {
         this._prevPause = false;
+        this._prevTabPrev = false;
+        this._prevTabNext = false;
         // If a gamepad-opened radial is still up when we lose the scheme/pad,
         // close it cleanly so it doesn't strand the frozen gameplay loop.
         if (this._heldRadial && this.engine && this.engine.radialMenu && this.engine.radialMenu.isOpen()) {

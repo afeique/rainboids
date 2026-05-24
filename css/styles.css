@@ -4284,6 +4284,16 @@ body.mobile-portrait .shop-help-icon {
     color: #aaa;
 }
 
+/* Pre-run BUILD instructions (one-line hint under the tab strip). */
+.shop-prerun-hint {
+    text-align: center;
+    padding: 6px 16px 8px;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    color: #9fb3c8;
+    opacity: 0.85;
+}
+
 .shop-tree-legend-entry {
     display: inline-flex;
     align-items: center;
