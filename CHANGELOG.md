@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.152.0] - 2026-05-24
+
+### Added — Siege passive (Phase P6)
+
+- **Siege** — standing still ramps your outgoing damage (to +60% over ~2s) and
+  the ramp decays quickly (~0.6s) once you move: a positioning/zoning reward.
+  The ramp (`_siegeRamp`) advances each frame in `player.update()` from the
+  ship's speed; the multiplier is applied at `applyDamageToEnemy` via a new
+  `getSiegeDamageMult()` (mirroring `getPassiveDamageMult`). Pure
+  `siegeRampStep` / `siegeMult` helpers; only ticks while equipped. Guarded
+  no-op without the passive.
+
+---
+
 ## [6.151.0] - 2026-05-24
 
 ### Added — Frenzy passive (Phase P6, keystone)

@@ -20,6 +20,24 @@ import { initPlayerStatus } from './player-status.js';
 // energy (gated by the dash cooldown, so it can't be spammed for free energy).
 export const KINETIC_BATTERY_REFUND = 20;
 
+// P6 — Siege passive: damage ramps while standing still and decays on the move.
+// `_siegeRamp` ∈ [0,1] is advanced each frame in update() from player speed;
+// the outgoing mult is applied in applyDamageToEnemy via getSiegeDamageMult().
+// Pure helpers so the ramp curve + multiplier unit-test cleanly.
+export const SIEGE_BUILD_MS = 2000;   // stationary → full ramp in ~2s
+export const SIEGE_DECAY_MS = 600;    // moving → ramp gone in ~0.6s
+export const SIEGE_MAX_BONUS = 0.6;   // +60% damage at a full ramp
+export const SIEGE_MOVE_SPEED = 0.5;  // speed above which the player counts as moving
+export function siegeRampStep(prevRamp, isMoving, dtMs) {
+    const p = Math.max(0, Math.min(1, prevRamp || 0));
+    const d = Math.max(0, dtMs || 0);
+    const next = isMoving ? p - d / SIEGE_DECAY_MS : p + d / SIEGE_BUILD_MS;
+    return Math.max(0, Math.min(1, next));
+}
+export function siegeMult(ramp) {
+    return 1 + Math.max(0, Math.min(1, ramp || 0)) * SIEGE_MAX_BONUS;
+}
+
 export class Player {
     constructor() {
         // One-time setup properties
@@ -1015,6 +1033,16 @@ export class Player {
                 const maxE = this.maxEnergy || 100;
                 this.energy = Math.min(maxE, (this.energy || 0) + maxE * dtMs / ENERGY_FILL_MS);
             }
+
+            // P6 — Siege passive: ramp damage while ~stationary, decay it while
+            // moving. Reuses the energy block's clamped real-time delta (dtMs).
+            // Only ticks when equipped so non-Siege players keep _siegeRamp = 0.
+            if (typeof this.hasPassive === 'function' && this.hasPassive('SIEGE')) {
+                const _spd = Math.hypot(this.vel?.x || 0, this.vel?.y || 0);
+                this._siegeRamp = siegeRampStep(this._siegeRamp, _spd > SIEGE_MOVE_SPEED, dtMs);
+            } else if (this._siegeRamp) {
+                this._siegeRamp = 0;
+            }
         }
 
         // Charging shot system - charge when holding left-click, fire on release
@@ -1417,6 +1445,14 @@ export class Player {
     }
     addEnergy(amount) {
         this.energy = Math.max(0, Math.min(this.maxEnergy, (this.energy || 0) + amount));
+    }
+
+    // P6 — Siege passive: outgoing damage multiplier from the current standing-
+    // still ramp (1 when not equipped or the ramp is empty). applyDamageToEnemy
+    // reads this alongside getPassiveDamageMult.
+    getSiegeDamageMult() {
+        if (typeof this.hasPassive !== 'function' || !this.hasPassive('SIEGE')) return 1;
+        return siegeMult(this._siegeRamp);
     }
 
     // 6.149.0 — canonical heal entry point. Adds `amount` HP, clamps to the

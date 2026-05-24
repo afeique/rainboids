@@ -2323,6 +2323,12 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
             const _fm = frenzyMult(_fc);
             if (_fm !== 1) damage *= _fm;
         }
+        // P6 — Siege: outgoing damage ramps while standing still (player owns the
+        // ramp + per-equip gate; getSiegeDamageMult returns 1 when inactive).
+        if (typeof this.player.getSiegeDamageMult === 'function') {
+            const _sm = this.player.getSiegeDamageMult();
+            if (_sm !== 1) damage *= _sm;
+        }
     }
 
     // E2 (Element & Resistance) — scale by the target's resistance to the
