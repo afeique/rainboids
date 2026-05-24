@@ -489,3 +489,36 @@ ACCOUNT-gold after the collection is complete. Candidates, ranked:
 
 Recommendation: ship **(1) per-run blessings** as the perpetual sink + **(2) gold→Cores** as the
 immediate bridge; add **(3) cosmetics** when art bandwidth exists; avoid (4)'s creep.
+
+### 15.4 Endgame — Mastery + Ascension treadmill (the chosen gold sink)
+
+Decision: the endgame is an ARPG-style **build-craft vs escalating-horde treadmill**. Power
+(mastery + gear) and difficulty (ascension) scale **in lockstep**, so mastery is NOT power creep
+— it keeps pace with rising difficulty rather than trivializing it. Gold has two perpetual sinks.
+
+**Mastery** — every OWNED weapon / attunement / mechanic-mod / ability / ability-attunement gets
+an **infinite mastery track**:
+- Each level = a small boost fitting the thing (weapon → +% damage; attunement → +element
+  potency / status duration / spread radius; mod → +proc chance / +pierce; ability → +effect /
+  −cooldown).
+- Cost is **exorbitant + exponential** (`base × ramp^level`) → you can only deeply master a
+  FOCUSED set; mastery choice = build identity. No hard cap (affordability is the ceiling).
+- Power-per-level small + diminishing → keeps pace with ascension, never outruns it.
+
+**Ascension** — escalating endless difficulty unlocked after the first campaign clear. Each tier:
+- ramps enemy HP / damage / spawn density, and **raises resistances** (adaptive-resist enemies
+  become common) → the weakness telegraph + element coverage become the **endgame skill layer**;
+- drops higher **item levels** (affixes scale with level → gear power isn't hard-capped though
+  rarity tops at the 8-tier ladder) + more gold.
+
+**Gold sinks (perpetual):**
+1. **Mastery** (exorbitant, exponential, infinite).
+2. **Gold → Cores** exchange feeding gear crafting; **reroll/tier-up cost scales with rarity ×
+   item level**, so a perfect high-tier item is a deep core (→ gold) sink.
+
+**Why it works:** power & difficulty scale together (never trivial, never a wall); gold never
+dies; the attunement/resist system becomes the skill layer (build smart vs the right enemies),
+not just a grind. Guardrail: tune ascension to slightly outpace *affordable* mastery so synergy
++ coverage + gear beat brute grinding.
+
+**Phasing:** Phase W8, after W6 (ability attunements) + W7 (telegraph, global cards, gold→Cores).

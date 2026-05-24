@@ -312,7 +312,13 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 - [ ] **Global efficacy cards (5th draft slot)** — §6 group B (conditional dmg) + C (handling/tradeoff) as GLOBAL powerups; `card-draft.js` → **1 primary + 1 power + 1 global + 2 ability**; damage-path consumers (Executioner already wired) · tests
 - [ ] **Per-item unlock cost** refactor (flat, no signature/exotic; lets outliers like Spectrum Split price higher)
 - [ ] Per-attunement VFX + tooltips
-- [ ] **Endgame gold sink** (design §15.3) — per-run "loadout blessings" (perpetual, no creep) + gold→Cores bridge; cosmetics later
+- [ ] **gold → Cores exchange** (W8 bridge sink; reroll/tier-up cost already scales with rarity × level)
+
+### W8 — Endgame: Mastery + Ascension treadmill  (design doc §15.4)
+- [ ] **Mastery tracks** — infinite per-item (weapon/attunement/mod/ability/ability-attunement) levels, exorbitant+exponential gold cost, small diminishing power; focused mastery = build identity
+- [ ] **Ascension** — escalating endless difficulty after first clear: enemy HP/dmg/density + rising resistances; higher item-level gear drops + more gold
+- [ ] **gold → Cores** sink + crafting costs scaling with rarity × item level (heavy top-end sink)
+- [ ] Balance: ascension slightly outpaces *affordable* mastery (synergy/coverage/gear > brute grind); the weakness telegraph becomes the endgame skill layer
 
 ### Resolved (design doc §15)
 - Draft = 1 primary + 1 power + 1 global + 2 ability · Ability attunements one-at-a-time · Flat per-item cost · Telegraph = pip + hit cue
