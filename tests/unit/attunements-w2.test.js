@@ -76,6 +76,16 @@ function mkToxicCtx(pool) {
     };
 }
 
+// Void ctx — records mark + sets the mark timer; gather nudges enemy x/y.
+function mkVoidCtx(pool) {
+    const marked = [];
+    return {
+        marked,
+        enemyPool: { activeObjects: pool },
+        applyMark(e) { marked.push(e); e.markUntil = frameClock.now + 6000; },
+    };
+}
+
 describe('W2 Pyro — fire spread', () => {
     test('the igniting hit burns only the target (no spread scan)', () => {
         const a = mkEnemy(0, 0);
@@ -223,5 +233,37 @@ describe('W2 Toxic — corrosion plague', () => {
         // 1 (target) + at most 3 spreads.
         expect(ctx.corroded.length).toBeLessThanOrEqual(1 + 3);
         expect(ctx.corroded.length).toBeGreaterThan(1);
+    });
+});
+
+describe('W2 Void — gravity gather', () => {
+    test('a fresh Void hit marks the target only (no pull)', () => {
+        const a = mkEnemy(0, 0);
+        const b = mkEnemy(80, 0);
+        const ctx = mkVoidCtx([a, b]);
+        applyWeaponElementStatus.call(ctx, a, 'VOID', 10);
+        expect(ctx.marked).toEqual([a]);
+        expect(b.x).toBe(80); // unmoved on the first (marking) hit
+    });
+
+    test('a follow-up hit on a marked enemy pulls nearby enemies toward it', () => {
+        const a = mkEnemy(0, 0, { markUntil: frameClock.now + 1000 });
+        const b = mkEnemy(100, 0);   // within pull radius
+        const far = mkEnemy(400, 0); // outside
+        const ctx = mkVoidCtx([a, b, far]);
+        applyWeaponElementStatus.call(ctx, a, 'VOID', 10);
+        expect(b.x).toBeLessThan(100);  // tugged toward a (at x=0)
+        expect(b.x).toBeGreaterThan(0); // but not teleported
+        expect(far.x).toBe(400);        // out of range, unmoved
+    });
+
+    test('pull is capped', () => {
+        const a = mkEnemy(0, 0, { markUntil: frameClock.now + 1000 });
+        const neighbors = [];
+        for (let i = 0; i < 9; i++) neighbors.push(mkEnemy(20 + i, 20));
+        const ctx = mkVoidCtx([a, ...neighbors]);
+        applyWeaponElementStatus.call(ctx, a, 'VOID', 10);
+        const moved = neighbors.filter((n) => n.x !== (20 + neighbors.indexOf(n)) || n.y !== 20);
+        expect(moved.length).toBeLessThanOrEqual(5);
     });
 });

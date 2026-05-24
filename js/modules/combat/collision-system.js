@@ -2439,6 +2439,28 @@ function _spreadCorrode(enemy) {
         if (++n >= CORRODE_SPREAD_MAX) break;
     }
 }
+
+// W2 (Void) — gravity gather: nudge nearby enemies a small step toward the
+// marked enemy (same position-shove primitive the knockback proc uses).
+const VOID_PULL_RADIUS = 135;
+const VOID_PULL_STEP = 7;
+const VOID_PULL_MAX = 5;
+function _voidGather(enemy) {
+    const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+    if (!pool) return;
+    const r2 = VOID_PULL_RADIUS * VOID_PULL_RADIUS;
+    let n = 0;
+    for (const other of pool) {
+        if (other === enemy || !other.active) continue;
+        const dx = enemy.x - other.x, dy = enemy.y - other.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2 || d2 < 1) continue;
+        const d = Math.sqrt(d2);
+        other.x += (dx / d) * VOID_PULL_STEP;
+        other.y += (dy / d) * VOID_PULL_STEP;
+        if (++n >= VOID_PULL_MAX) break;
+    }
+}
 export function applyWeaponElementStatus(enemy, element, dealt) {
     if (!enemy || !enemy.active) return;
     switch (element) {
@@ -2483,9 +2505,16 @@ export function applyWeaponElementStatus(enemy, element, dealt) {
             if (wasCorroded) _spreadCorrode.call(this, enemy);
             break;
         }
-        case 'VOID':
+        case 'VOID': {
+            // W2 (Void) — gravity GATHER: a follow-up Void hit on an already-
+            // marked enemy tugs nearby enemies a small step toward it, clumping
+            // them for AoE follow-up. Gated to marked targets; inert unless
+            // Void-attuned.
+            const wasMarked = enemy.markUntil > frameClock.now;
             if (typeof this.applyMark === 'function') this.applyMark(enemy);
+            if (wasMarked) _voidGather.call(this, enemy);
             break;
+        }
         // KINETIC / RADIANT — no on-hit status here.
     }
 }

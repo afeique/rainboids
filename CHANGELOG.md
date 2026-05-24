@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.110.0] - 2026-05-23
+
+### Added — Void attunement behavior: gravity gather (Phase W2)
+
+Void-attuned weapons now clump crowds: a follow-up Void hit on an already-
+marked enemy tugs up to 5 nearby enemies (~135px) a small step toward it,
+grouping them for AoE follow-up. Base mark (W1) still applies. Also deepens
+the Gravity Lance (a Void-base primary). Gated to marked targets; inert for
+other elements. 3 new unit tests; 659 unit green.
+
 ## [6.109.0] - 2026-05-23
 
 ### Added — Toxic attunement behavior: corrosion plague (Phase W2)
