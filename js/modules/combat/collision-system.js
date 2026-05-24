@@ -2301,6 +2301,42 @@ export function applyGravityWell() {
     }
 }
 
+// P6 — Eye of the Storm passive: while the player is ~stationary, nearby enemies
+// and their projectiles slow 40% (downside: you're a sitting target). Runs each
+// frame (engine-context). Enemies use the refresh-style applySlow (re-applied
+// every frame, so it lapses ~EYE_SLOW_MS after you move); enemy bullets get a
+// ONE-TIME ×0.6 velocity damp flagged on `_eyeSlowed` (cleared on bullet spawn
+// in EnemyBullet.reset, so a recycled bullet can be damped again).
+export const EYE_RADIUS = 300;
+export const EYE_SLOW_FACTOR = 0.6;  // 40% slow
+export const EYE_STILL_SPEED = 0.5;  // speed at/below which the player is "stationary"
+export const EYE_SLOW_MS = 200;      // short window, refreshed each frame while held
+export function applyEyeOfTheStorm() {
+    const p = this.player;
+    if (!p || typeof p.hasPassive !== 'function' || !p.hasPassive('EYE_OF_THE_STORM')) return;
+    const spd = Math.hypot((p.vel && p.vel.x) || 0, (p.vel && p.vel.y) || 0);
+    if (spd > EYE_STILL_SPEED) return; // only while ~stationary
+    const r2 = EYE_RADIUS * EYE_RADIUS;
+    const enemies = (this.enemyPool && this.enemyPool.activeObjects) || [];
+    for (const e of enemies) {
+        if (!e || !e.active || e.warping || e._deathFlash > 0) continue;
+        const dx = e.x - p.x, dy = e.y - p.y;
+        if (dx * dx + dy * dy <= r2 && typeof this.applySlow === 'function') {
+            this.applySlow(e, EYE_SLOW_MS, EYE_SLOW_FACTOR);
+        }
+    }
+    const ebs = (this.enemyBulletPool && this.enemyBulletPool.activeObjects) || [];
+    for (const b of ebs) {
+        if (!b || !b.active || b._eyeSlowed || !b.vel) continue;
+        const dx = b.x - p.x, dy = b.y - p.y;
+        if (dx * dx + dy * dy <= r2) {
+            b._eyeSlowed = true;
+            b.vel.x *= EYE_SLOW_FACTOR;
+            b.vel.y *= EYE_SLOW_FACTOR;
+        }
+    }
+}
+
 export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };

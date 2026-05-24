@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.154.0] - 2026-05-24
+
+### Added — Eye of the Storm passive (Phase P6, keystone)
+
+- **Eye of the Storm** — while you hold still, nearby enemies (within 300px) and
+  their incoming projectiles are slowed 40%, turning a stationary stand into a
+  defensive bubble (downside: you're a sitting target while it's up). Enemies use
+  the refresh-style `applySlow` (lapses ~200ms after you move); enemy bullets get
+  a one-time ×0.6 velocity damp on entering the radius (`_eyeSlowed`, cleared on
+  bullet spawn so recycled bullets re-slow). Runs each frame via guarded
+  `applyEyeOfTheStorm`. Second of the new-runtime passives.
+
+---
+
 ## [6.153.0] - 2026-05-24
 
 ### Added — Gravity Well passive (Phase P6, keystone)

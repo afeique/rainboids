@@ -2902,6 +2902,7 @@ export class GameEngine {
     }
     
     applyGravityWell() { return col.applyGravityWell.call(this); }
+    applyEyeOfTheStorm() { return col.applyEyeOfTheStorm.call(this); }
     handleCollisions() { return col.handleCollisions.call(this); }
     handleWeaponEffectCollisions() { return col.handleWeaponEffectCollisions.call(this); }
     checkLanceBeamCollisions() { return col.checkLanceBeamCollisions.call(this); }
@@ -3146,6 +3147,9 @@ export class GameEngine {
             // P6 — Gravity Well passive: weak per-frame pull of enemies toward
             // the reticle (guarded no-op unless equipped).
             this.applyGravityWell();
+            // P6 — Eye of the Storm: while ~stationary, slow nearby enemies +
+            // their projectiles (guarded no-op unless equipped).
+            this.applyEyeOfTheStorm();
             // Inject gameEngine ref for enemy bullets (needed for particle effects on death)
             for (const eb of this.enemyBulletPool.activeObjects) eb.gameEngine = this;
             this.enemyBulletPool.updateActive();

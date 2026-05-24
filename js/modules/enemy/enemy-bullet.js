@@ -31,6 +31,9 @@ export class EnemyBullet {
         this.color = color;
         this.explosive = explosive;
         this.active = true;
+        // P6 — Eye of the Storm: cleared each spawn so a recycled bullet can be
+        // damped again (the one-time ×0.6 velocity slow flags this true).
+        this._eyeSlowed = false;
         // E5/E8a — element of this enemy shot (drives player elemental
         // resistance in lifecycle.takeDamage). The firing enemy stamps its
         // element on the engine before shooting (firing.js), mirroring the
