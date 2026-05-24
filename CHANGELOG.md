@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.136.0] - 2026-05-24
+
+### Added — Overkill + Ricochet passives (Phase P6, content batch)
+
+- **Overkill** — the wasted excess from a killing blow (bullet damage beyond the
+  victim's remaining HP) splashes to the nearest other enemy within 170px.
+- **Ricochet** — a kill bounces 50% of the shot's damage to the nearest other
+  enemy within 170px.
+- Both route through the chained target's `takeDamage` exactly once: a chained
+  kill runs the full death pipeline (debris, loot, kill hooks) but never
+  re-enters the splash, so there are no infinite kill chains. Effects stack
+  (excess + 50% shot) when both passives are equipped. Dying/warping enemies are
+  skipped when picking the nearest target.
+
+---
+
 ## [6.135.0] - 2026-05-24
 
 ### Added — Frostbite + Static Charge passives (Phase P6, content batch)

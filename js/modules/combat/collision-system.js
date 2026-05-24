@@ -873,6 +873,10 @@ export function handleCollisions() {
                     // Drop health and money orbs
                     this.dropOrbsFromEntity(enemy.x, enemy.y, enemy);
 
+                    // P6 — Overkill / Ricochet: splash the wasted excess + a
+                    // shot fraction to the nearest other enemy (one hop).
+                    _passiveKillSplash.call(this, enemy, damage, enemyHpBefore);
+
                     // Mitosis Rounds — fragment on the killing blow. Primaries
                     // (splitOnImpact) and chaining shards (splitOnKill) both
                     // fire here; mitosisSplit no-ops when no generations remain.
@@ -2483,6 +2487,44 @@ function _forkVolt(enemy, dealt) {
             if (typeof this.dropOrbsFromEntity === 'function') this.dropOrbsFromEntity(nearest.x, nearest.y, nearest);
             if (typeof this.onEnemyKill === 'function') this.onEnemyKill(nearest);
         }
+    }
+}
+
+// P6 — Overkill + Ricochet passives. On a killing blow, splash damage to the
+// nearest other enemy: Overkill forwards the wasted excess (bullet damage
+// beyond the victim's HP); Ricochet bounces a flat fraction of the shot. Both
+// route through takeDamage so a chained KILL runs the full death pipeline, but
+// neither re-enters this splash (terminates after one hop — no infinite chains).
+const PASSIVE_SPLASH_RADIUS = 170;
+const RICOCHET_FACTOR = 0.5;
+export function _passiveKillSplash(enemy, damage, enemyHpBefore) {
+    const p = this.player;
+    if (!p || typeof p.hasPassive !== 'function') return;
+    const hasOverkill = p.hasPassive('OVERKILL');
+    const hasRicochet = p.hasPassive('RICOCHET');
+    if (!hasOverkill && !hasRicochet) return;
+    let splash = 0;
+    if (hasOverkill) splash += Math.max(0, damage - Math.max(0, enemyHpBefore));
+    if (hasRicochet) splash += damage * RICOCHET_FACTOR;
+    if (splash <= 0) return;
+    const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+    if (!pool) return;
+    let nearest = null;
+    let bestD2 = PASSIVE_SPLASH_RADIUS * PASSIVE_SPLASH_RADIUS;
+    for (const other of pool) {
+        if (other === enemy || !other.active) continue;
+        if (other._deathFlash > 0 || other.warping) continue;
+        const dx = other.x - enemy.x, dy = other.y - enemy.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; nearest = other; }
+    }
+    if (!nearest || typeof nearest.takeDamage !== 'function') return;
+    const destroyed = nearest.takeDamage(splash, { showNumber: true });
+    if (destroyed) {
+        nearest._deathFlash = 8; nearest._deathFlashMax = 8;
+        if (typeof this.createEnemyDebris === 'function') this.createEnemyDebris(nearest);
+        if (typeof this.dropOrbsFromEntity === 'function') this.dropOrbsFromEntity(nearest.x, nearest.y, nearest);
+        if (typeof this.onEnemyKill === 'function') this.onEnemyKill(nearest);
     }
 }
 
