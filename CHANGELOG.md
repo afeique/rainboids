@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.139.0] - 2026-05-24
+
+### Added — Guardian Echo passive (Phase P6, content batch)
+
+- **Guardian Echo** — a hit that drops you into the danger zone (≤25% max HP)
+  emits a knockback nova, shoving every enemy within 200px directly away (70px)
+  to buy recovery space. Fires only on the hit that *crosses* the threshold (no
+  re-trigger while you stay low) and does NOT prevent death — it is purely
+  breathing room, even on a lethal blow. Guarded no-op without the passive.
+
+---
+
 ## [6.138.0] - 2026-05-24
 
 ### Added — Harvest passive (Phase P6, content batch)

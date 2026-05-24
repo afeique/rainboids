@@ -115,6 +115,29 @@ function _resolvePlayerLethal(finalDamage) {
     return finalDamage;
 }
 
+// P6 — Guardian Echo knockback nova: shove every enemy within radius directly
+// away from the player. Pure geometry (no engine refs) so it unit-tests
+// cleanly; the takeDamage call site owns the trigger threshold + the ring FX.
+// A degenerate (overlapping) enemy is shoved straight right so it never sticks.
+export const GUARDIAN_ECHO_RADIUS = 200;
+export const GUARDIAN_ECHO_SHOVE = 70;
+export function guardianEchoNova(player, enemies) {
+    if (!player || !enemies) return 0;
+    let shoved = 0;
+    for (const e of enemies) {
+        if (!e || !e.active) continue;
+        const dx = e.x - player.x, dy = e.y - player.y;
+        const d = Math.hypot(dx, dy);
+        if (d > GUARDIAN_ECHO_RADIUS) continue;
+        const ux = d > 0.0001 ? dx / d : 1;
+        const uy = d > 0.0001 ? dy / d : 0;
+        e.x += ux * GUARDIAN_ECHO_SHOVE;
+        e.y += uy * GUARDIAN_ECHO_SHOVE;
+        shoved++;
+    }
+    return shoved;
+}
+
 export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     if (this.player.invincible) return 0;
 
@@ -253,6 +276,7 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     // Round to an integer so HP, damage numbers, and stats stay clean
     // (the collision sites used to round; the generic path didn't).
     const finalDamage = Math.round(reducedDamage);
+    const hpBeforeHit = this.player.health;
     this.player.health = Math.max(0, this.player.health - finalDamage);
 
     if (finalDamage > 0) {
@@ -292,6 +316,23 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     if (finalDamage > 0 && typeof this.checkMissionOnDamage === 'function') {
         if (this.game.mission) this.game.mission.damaged = true;
         this.checkMissionOnDamage();
+    }
+
+    // P6 — Guardian Echo passive: a hit that drops you INTO the danger zone
+    // (≤25% max HP) emits a one-time knockback nova, shoving nearby enemies
+    // away to buy recovery space. Fires only on the hit that CROSSES the
+    // threshold (so it doesn't re-trigger every hit while low) and does NOT
+    // prevent death — purely breathing room, even on a lethal blow.
+    if (finalDamage > 0 && this.player.hasPassive && this.player.hasPassive('GUARDIAN_ECHO')) {
+        const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
+            ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
+        const thresh = maxHp * 0.25;
+        if (hpBeforeHit > thresh && this.player.health <= thresh) {
+            guardianEchoNova(this.player, (this.enemyPool && this.enemyPool.activeObjects) || []);
+            if (this.particlePool) {
+                this.particlePool.get(this.player.x, this.player.y, 'explosionRingColored', GUARDIAN_ECHO_RADIUS, '#ffcc44');
+            }
+        }
     }
 
     // A.E9-S1b — death resolution extracted into `_resolvePlayerLethal` so the
