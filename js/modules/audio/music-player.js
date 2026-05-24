@@ -1,6 +1,13 @@
 // Music Player System with playlist management and controls
 import { PLAYLIST_DATA } from '../../playlist-data.js';
 
+// 6.158.4 — Web build streams music from the rainboids.com CDN rather than a
+// path relative to wherever the game is embedded (claude.ai/code, itch, a
+// mirror, …), so the tracks resolve from one canonical host. The desktop
+// (Electron) build keeps its `music://rainboids/` protocol, whose main-process
+// handler does its own CDN fetch + disk caching.
+const MUSIC_CDN_BASE = 'https://rainboids.com/';
+
 export class MusicPlayer {
     constructor() {
         this.playlist = [];
@@ -36,9 +43,10 @@ export class MusicPlayer {
         // original relative paths.
         const isDesktop = typeof window !== 'undefined' && window.rainboids?.isDesktop === true;
         this.playlist = PLAYLIST_DATA.map(track => {
+            const rel = track.path.replace(/^\//, '');
             const path = isDesktop
                 ? 'music://rainboids/' + track.path.replace(/^music\//, '')
-                : track.path;
+                : MUSIC_CDN_BASE + rel;
             return { ...track, path, duration: 0 };
         });
         // Snapshot the canonical (un-shuffled) order so toggling shuffle

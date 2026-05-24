@@ -34,6 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.158.4] - 2026-05-24
+
+### Changed
+
+- **Music now streams from the `https://rainboids.com/` CDN** on the web build
+  (was a path relative to wherever the game is embedded), so tracks resolve
+  from one canonical host. The desktop (Electron) build keeps its
+  `music://rainboids/` protocol handler.
+
+---
+
 ## [6.158.3] - 2026-05-24
 
 ### Changed — BUILD tree readability + passive icons
