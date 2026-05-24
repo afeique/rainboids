@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.108.0] - 2026-05-23
+
+### Added — Volt attunement behavior: chain fork (Phase W2)
+
+Volt-attuned weapons now chain: every Volt hit forks an arc to the nearest
+other enemy within ~150px, dealing 40% of the hit as Volt damage + applying
+conduct to it. The fork routes through the normal `takeDamage` path, so a
+lethal fork runs the full kill pipeline (debris + loot + kill hooks); it does
+not re-fork (one hop). Inert unless a Volt attunement is equipped. 4 new unit
+tests; 653 unit green.
+
 ## [6.107.0] - 2026-05-23
 
 ### Added — Cryo attunement behavior: sustained cold freezes (Phase W2)

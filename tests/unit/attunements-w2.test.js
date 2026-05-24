@@ -47,6 +47,24 @@ function mkCryoCtx() {
     };
 }
 
+// Volt ctx — records conduct + (via each enemy's takeDamage) the fork hits.
+function mkVoltCtx(pool, forks) {
+    return {
+        conducts: [],
+        enemyPool: { activeObjects: pool },
+        applyConduct(e) { this.conducts.push(e); },
+        // Kill-pipeline stubs (only invoked if a fork is lethal).
+        createEnemyDebris() {}, dropOrbsFromEntity() {}, onEnemyKill() {},
+        forks,
+    };
+}
+function mkVoltEnemy(x, y, forks, kills = false) {
+    return {
+        active: true, x, y,
+        takeDamage(dmg, opts) { forks.push({ e: this, dmg, opts }); return kills; },
+    };
+}
+
 describe('W2 Pyro — fire spread', () => {
     test('the igniting hit burns only the target (no spread scan)', () => {
         const a = mkEnemy(0, 0);
@@ -109,5 +127,55 @@ describe('W2 Cryo — sustained cold escalates to freeze', () => {
         applyWeaponElementStatus.call(ctx, e, 'CRYO', 3); // soft, but already chilled
         expect(ctx.frozen).toContain(e);
         expect(ctx.chilled).not.toContain(e);
+    });
+});
+
+describe('W2 Volt — chain fork', () => {
+    test('a Volt hit forks reduced damage + conduct to the nearest enemy', () => {
+        const forks = [];
+        const a = mkVoltEnemy(0, 0, forks);
+        const b = mkVoltEnemy(40, 0, forks);    // nearest, in radius
+        const far = mkVoltEnemy(400, 0, forks);  // out of radius
+        const ctx = mkVoltCtx([a, b, far], forks);
+        applyWeaponElementStatus.call(ctx, a, 'VOLT', 10);
+        expect(ctx.conducts).toContain(a);              // primary target
+        expect(forks).toHaveLength(1);
+        expect(forks[0].e).toBe(b);                     // forked to nearest
+        expect(forks[0].dmg).toBeCloseTo(4);            // 10 × 0.4
+        expect(forks[0].opts.element).toBe('VOLT');
+        expect(ctx.conducts).toContain(b);              // fork also conducts
+    });
+
+    test('no fork when no other enemy is in range', () => {
+        const forks = [];
+        const a = mkVoltEnemy(0, 0, forks);
+        const far = mkVoltEnemy(500, 0, forks);
+        const ctx = mkVoltCtx([a, far], forks);
+        applyWeaponElementStatus.call(ctx, a, 'VOLT', 10);
+        expect(forks).toHaveLength(0);
+        expect(ctx.conducts).toEqual([a]);
+    });
+
+    test('the fork picks the nearest candidate', () => {
+        const forks = [];
+        const a = mkVoltEnemy(0, 0, forks);
+        const near = mkVoltEnemy(30, 0, forks);
+        const mid = mkVoltEnemy(100, 0, forks);
+        const ctx = mkVoltCtx([a, mid, near], forks);
+        applyWeaponElementStatus.call(ctx, a, 'VOLT', 10);
+        expect(forks[0].e).toBe(near);
+    });
+
+    test('a lethal fork runs the kill pipeline (loot + debris)', () => {
+        const forks = [];
+        const a = mkVoltEnemy(0, 0, forks);
+        const b = mkVoltEnemy(40, 0, forks, true); // fork kills it
+        let looted = false, debris = false;
+        const ctx = mkVoltCtx([a, b], forks);
+        ctx.dropOrbsFromEntity = () => { looted = true; };
+        ctx.createEnemyDebris = () => { debris = true; };
+        applyWeaponElementStatus.call(ctx, a, 'VOLT', 10);
+        expect(looted).toBe(true);
+        expect(debris).toBe(true);
     });
 });

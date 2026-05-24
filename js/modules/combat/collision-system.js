@@ -2390,6 +2390,38 @@ function _spreadBurn(enemy, dealt) {
         if (++n >= BURN_SPREAD_MAX) break;
     }
 }
+
+// W2 (Volt) — fork a chain-arc to the NEAREST other enemy: reduced Volt damage
+// + conduct. Routes through applyDamageToEnemy (resist/reactions apply) but not
+// the bullet-hit status loop, so it never re-forks (terminates after one hop).
+const VOLT_FORK_RADIUS = 150;
+const VOLT_FORK_FACTOR = 0.4;
+function _forkVolt(enemy, dealt) {
+    const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+    if (!pool) return;
+    let nearest = null;
+    let bestD2 = VOLT_FORK_RADIUS * VOLT_FORK_RADIUS;
+    for (const other of pool) {
+        if (other === enemy || !other.active) continue;
+        const dx = other.x - enemy.x, dy = other.y - enemy.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; nearest = other; }
+    }
+    if (!nearest) return;
+    if (typeof this.applyConduct === 'function') this.applyConduct(nearest);
+    // Route through takeDamage so a forked KILL runs the full death pipeline
+    // (debris + loot + kill hooks) — same as the beam path. No re-fork (this
+    // doesn't go through the bullet-hit status loop).
+    if (typeof nearest.takeDamage === 'function') {
+        const destroyed = nearest.takeDamage(dealt * VOLT_FORK_FACTOR, { element: 'VOLT', showNumber: false });
+        if (destroyed) {
+            nearest._deathFlash = 8; nearest._deathFlashMax = 8;
+            if (typeof this.createEnemyDebris === 'function') this.createEnemyDebris(nearest);
+            if (typeof this.dropOrbsFromEntity === 'function') this.dropOrbsFromEntity(nearest.x, nearest.y, nearest);
+            if (typeof this.onEnemyKill === 'function') this.onEnemyKill(nearest);
+        }
+    }
+}
 export function applyWeaponElementStatus(enemy, element, dealt) {
     if (!enemy || !enemy.active) return;
     switch (element) {
@@ -2417,6 +2449,11 @@ export function applyWeaponElementStatus(enemy, element, dealt) {
             if (Math.random() < ELEM_SHOCK_CHANCE && typeof this.applyStun === 'function') {
                 this.applyStun(enemy, 600);
             }
+            // W2 (Volt) — the arc FORKS: a fraction of the hit jumps to the
+            // nearest other enemy (conduct + reduced Volt damage). One fork per
+            // hit (no recursion — the fork routes through applyDamageToEnemy,
+            // not the bullet-hit status loop). Inert unless Volt-attuned.
+            _forkVolt.call(this, enemy, dealt);
             break;
         case 'TOXIC':
             if (typeof this.applyCorrode === 'function') this.applyCorrode(enemy);
