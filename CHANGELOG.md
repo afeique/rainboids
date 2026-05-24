@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.140.0] - 2026-05-24
+
+### Added — Tracer Lock passive (Phase P6, content batch)
+
+- **Tracer Lock** — repeated hits on the same enemy ramp your damage to it (+8%
+  per stack, capped at 5 stacks → +40%); switching targets resets the ramp. Pure
+  `tracerLockStep` ramp curve in collision-system, threaded through the player's
+  `_tracerTarget`/`_tracerStacks` on the universal `applyDamageToEnemy` path.
+  Guarded no-op without the passive.
+
+---
+
 ## [6.139.0] - 2026-05-24
 
 ### Added — Guardian Echo passive (Phase P6, content batch)

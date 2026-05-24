@@ -2217,6 +2217,24 @@ function _enemyHasStatus(e) {
         || (e.corrodeStacks > 0);
 }
 
+// P6 — Tracer Lock passive: repeated hits on the SAME target ramp your damage
+// to it; swapping targets resets the ramp. Pure step so the ramp curve is unit
+// tested in isolation — the applyDamageToEnemy call site owns the player state.
+// Returns the multiplier for THIS hit plus the next {target, stacks} to store.
+// First hit on a target = +0 (stacks 0); each subsequent same-target hit adds
+// one stack up to TRACER_LOCK_MAX, worth TRACER_LOCK_PER each.
+export const TRACER_LOCK_PER = 0.08;
+export const TRACER_LOCK_MAX = 5;
+export function tracerLockStep(prevTarget, prevStacks, enemy) {
+    let stacks;
+    if (prevTarget === enemy) {
+        stacks = Math.min(TRACER_LOCK_MAX, (prevStacks | 0) + 1);
+    } else {
+        stacks = 0;
+    }
+    return { mult: 1 + stacks * TRACER_LOCK_PER, target: enemy, stacks };
+}
+
 export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
@@ -2251,6 +2269,13 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
         if (typeof this.player.hasPassive === 'function' && this.player.hasPassive('OPPORTUNIST')
             && _enemyHasStatus(enemy)) {
             damage *= 1.15;
+        }
+        // P6 — Tracer Lock: ramp damage on repeated hits to the same target.
+        if (typeof this.player.hasPassive === 'function' && this.player.hasPassive('TRACER_LOCK')) {
+            const tl = tracerLockStep(this.player._tracerTarget, this.player._tracerStacks, enemy);
+            this.player._tracerTarget = tl.target;
+            this.player._tracerStacks = tl.stacks;
+            if (tl.mult !== 1) damage *= tl.mult;
         }
     }
 
