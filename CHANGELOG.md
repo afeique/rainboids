@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.138.0] - 2026-05-24
+
+### Added — Harvest passive (Phase P6, content batch)
+
+- **Harvest** — enemies killed by status damage (burn / bleed / poison ticks)
+  drop bonus power energy and a gold orb. Wired at the DoT-death finalize branch
+  in `Enemy.update()` — the canonical status-kill path — via a new
+  `harvestBonus` engine helper, so it fires precisely on status kills and never
+  on direct-hit kills. Guarded no-op without the passive.
+
+---
+
 ## [6.137.0] - 2026-05-24
 
 ### Added — Detonator passive (Phase P6, content batch)

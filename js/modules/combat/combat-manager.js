@@ -769,6 +769,23 @@ export function createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false
     return shape;
 }
 
+// P6 — Harvest passive: enemies killed by status DoT yield bonus power energy
+// plus a gold orb. Called ONLY from the DoT-death finalize branch in
+// Enemy.update(), which is the status-kill path (burn / bleed / poison ticks),
+// so this is implicitly gated to status kills — no extra status check needed.
+const HARVEST_ENERGY = 8;
+const HARVEST_GOLD = 6;
+export function harvestBonus(enemy) {
+    const p = this.player;
+    if (!p || typeof p.hasPassive !== 'function' || !p.hasPassive('HARVEST')) return;
+    if (typeof p.addEnergy === 'function') p.addEnergy(HARVEST_ENERGY);
+    if (typeof this.createMoneyOrb === 'function') {
+        const x = enemy ? enemy.x : (p.x || 0);
+        const y = enemy ? enemy.y : (p.y || 0);
+        this.createMoneyOrb(x, y, HARVEST_GOLD, false);
+    }
+}
+
 // 6.16.1 — Drop split rebalanced: fewer chunky shapes, more pixel
 //   pieces, and pixels now CARRY VALUE instead of being pure cosmetic.
 //   The prior 1-3 shapes layout meant late-game drops (where gold-find

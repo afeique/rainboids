@@ -696,6 +696,11 @@ export class Enemy {
                 if (typeof ge.dropOrbsFromEntity === 'function') {
                     try { ge.dropOrbsFromEntity(this.x, this.y, this); } catch (_) { /* keep dying */ }
                 }
+                // P6 — Harvest passive: this branch is the status-DoT kill path,
+                // so a Harvest player reaps bonus energy + a gold orb here.
+                if (typeof ge.harvestBonus === 'function') {
+                    try { ge.harvestBonus(this); } catch (_) { /* keep dying */ }
+                }
             } else {
                 // No engine reference (unit tests / off-engine) — recycle.
                 this.active = false;

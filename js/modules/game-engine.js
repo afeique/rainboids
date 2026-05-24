@@ -2831,7 +2831,8 @@ export class GameEngine {
     createMoneyOrb(x, y, moneyAmountOverride = null, isPixel = false) { return combat.createMoneyOrb.call(this, x, y, moneyAmountOverride, isPixel); }
     dropStarsFromEntity(x, y) { return combat.dropStarsFromEntity.call(this, x, y); }
     dropOrbsFromEntity(x, y, entity = null) { return combat.dropOrbsFromEntity.call(this, x, y, entity); }
-    
+    harvestBonus(enemy) { return combat.harvestBonus.call(this, enemy); }
+
     dropPowerup(x, y, type = null) { return combat.dropPowerup.call(this, x, y, type); }
     collectPowerup(powerup) { return combat.collectPowerup.call(this, powerup); }
     showPowerupDisplay(name, color, description) { return combat.showPowerupDisplay.call(this, name, color, description); }
