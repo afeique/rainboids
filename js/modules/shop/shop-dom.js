@@ -30,11 +30,19 @@ import {
     getPowerUpgrades,
     getAbilityUpgrades,
     getPassiveUpgrades,
+    getAttunementsForWeapon,
 } from '../combat/weapon-data.js';
+import { ELEMENTS } from '../combat/elements.js';
 // 2026-05-23 — pre-run BUILD mode reuses the loadout-selection helpers so the
 // tree can act as the start-of-run weapon/ability picker (see _preRun below).
 import { toggleSelection, getUnlockedSet, unlockCost, LOADOUT_SLOTS } from './armory.js';
 import { loadMeta } from '../core/storage.js';
+
+// Per-element icon for attunement bubbles (falls back to 'spiral').
+const _ELEM_ICON = {
+    PYRO: 'fire', CRYO: 'snowflake', VOLT: 'bolt', TOXIC: 'skull',
+    VOID: 'vortex', RADIANT: 'sparkle', KINETIC: 'circle-fill',
+};
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -76,6 +84,11 @@ let _lastBuyAt = 0;
 let _preRun = false;
 let _preRunSel = { primaries: [], powers: [], abilities: [] };
 let _unlockedSets = null;
+// W5 — per-weapon ACTIVE attunement ids chosen for the run: { weaponId: [id…] }.
+// Seeded from meta.loadout.attunements; flows into player.activeAttunements on
+// START RUN. `_unlockedAttune` caches owned attunement ids for node states.
+let _preRunAttune = {};
+let _unlockedAttune = null;
 
 /** Seed the pre-run loadout selection (called by game-engine before show). */
 export function setPreRunSelection(sel) {
@@ -84,6 +97,34 @@ export function setPreRunSelection(sel) {
         powers:    (sel && Array.isArray(sel.powers))    ? sel.powers.slice()    : [],
         abilities: (sel && Array.isArray(sel.abilities)) ? sel.abilities.slice() : [],
     };
+}
+
+/** Seed the pre-run active-attunement map (called by game-engine before show). */
+export function setPreRunAttunements(map) {
+    _preRunAttune = {};
+    if (map && typeof map === 'object') {
+        for (const [wid, ids] of Object.entries(map)) {
+            if (Array.isArray(ids)) _preRunAttune[wid] = ids.slice();
+        }
+    }
+}
+
+/** The current pre-run active-attunement map (read by START RUN). */
+export function getPreRunAttunements() {
+    const out = {};
+    for (const [wid, ids] of Object.entries(_preRunAttune)) {
+        if (ids && ids.length) out[wid] = ids.slice();
+    }
+    return out;
+}
+
+// Toggle (or force) an attunement id active for a weapon in the pre-run set.
+function _toggleAttune(weaponId, attId, forceOn) {
+    const cur = _preRunAttune[weaponId] || [];
+    const at = cur.indexOf(attId);
+    if (at !== -1 && !forceOn) cur.splice(at, 1);
+    else if (at === -1) cur.push(attId);
+    _preRunAttune[weaponId] = cur;
 }
 
 function $(id) { return document.getElementById(id); }
@@ -126,7 +167,7 @@ export function initShopDom(gameEngine) {
     if (startBtn) {
         startBtn.addEventListener('click', () => {
             if (_engine && typeof _engine.beginPreRunFromTree === 'function') {
-                _engine.beginPreRunFromTree(_preRunSel);
+                _engine.beginPreRunFromTree({ ..._preRunSel, attunements: getPreRunAttunements() });
             }
         });
     }
@@ -173,6 +214,22 @@ export function initShopDom(gameEngine) {
             // attunements with account-gold is a later step. No in-run
             // buying happens here.
             if (_preRun) {
+                // Attunement orbit node: locked → unlock (account-gold) +
+                // activate; owned → toggle active for this run.
+                if (node.dataset.kind === 'attunement') {
+                    const wid = node.dataset.weapon;
+                    const owned = !!(_unlockedAttune && _unlockedAttune.has(id));
+                    if (!owned) {
+                        if (_engine && typeof _engine.unlockPreRunItem === 'function'
+                            && _engine.unlockPreRunItem('attunements', id)) {
+                            _toggleAttune(wid, id, true);
+                        }
+                    } else {
+                        _toggleAttune(wid, id);
+                    }
+                    renderShopDom();
+                    return;
+                }
                 if (node.classList.contains('shop-node--parent')) {
                     const cat = node.dataset.category;
                     if (cat && _preRunSel[cat]) {
@@ -339,8 +396,10 @@ export function renderShopDom() {
             powers:    getUnlockedSet('powers', meta),
             abilities: getUnlockedSet('abilities', meta),
         };
+        _unlockedAttune = getUnlockedSet('attunements', meta);
     } else {
         _unlockedSets = null;
+        _unlockedAttune = null;
     }
 
     // 6.30.0 — Weapon/ability clusters are buyable; the PASSIVE cluster is
@@ -365,6 +424,16 @@ export function renderShopDom() {
 
 // ── Cluster builders ───────────────────────────────────────────────
 
+// W5 — pre-run: a weapon's orbit nodes are its ATTUNEMENTS (the upfront element
+// picks). In-run keeps the stackable upgrade nodes (until W4 moves them to cards).
+function _attuneNodes(weaponId) {
+    return getAttunementsForWeapon(weaponId).map((a) => ({
+        id: a.id, name: a.name, element: a.element, weaponId,
+        description: a.description || '', cost: a.cost,
+        icon: _ELEM_ICON[a.element] || 'spiral', kind: 'attunement',
+    }));
+}
+
 // Each "group" describes one weapon/ability node + its orbiting upgrade
 // nodes. Shape:
 //   { parent: { id, name, icon, color },
@@ -374,7 +443,7 @@ function _collectPrimaryGroups() {
     for (const w of Object.values(PRIMARY_WEAPONS)) {
         groups.push({
             parent: { id: w.id, name: w.name, icon: w.icon, color: w.color, description: w.description },
-            upgrades: getPrimaryUpgrades(w.id).map(u => ({
+            upgrades: _preRun ? _attuneNodes(w.id) : getPrimaryUpgrades(w.id).map(u => ({
                 id: u.id,
                 name: u.name,
                 icon: u.icon,
@@ -397,7 +466,7 @@ function _collectPowerGroups() {
     for (const w of Object.values(POWER_WEAPONS)) {
         groups.push({
             parent: { id: w.id, name: w.name, icon: w.icon, color: w.color, description: w.description },
-            upgrades: getPowerUpgrades(w.id).map(u => ({
+            upgrades: _preRun ? _attuneNodes(w.id) : getPowerUpgrades(w.id).map(u => ({
                 id: u.id,
                 name: u.name,
                 icon: u.icon,
@@ -468,7 +537,8 @@ function _renderWeaponCluster(container, groups, player, category) {
             const angleRad = (angleDeg * Math.PI) / 180;
             const tx = Math.cos(angleRad) * RADIUS;
             const ty = Math.sin(angleRad) * RADIUS;
-            const node = _buildUpgradeNode(upg, player);
+            const node = (upg.kind === 'attunement')
+                ? _buildAttunementNode(upg) : _buildUpgradeNode(upg, player);
             node.style.transform = `translate(-50%, -50%) translate(${tx}px, ${ty}px)`;
             ring.appendChild(node);
         }
@@ -536,6 +606,44 @@ function _buildPassiveDisplayNode(upg, player) {
 }
 
 // ── Node builders ──────────────────────────────────────────────────
+
+// W5 — pre-run attunement orbit node. States reuse the shared node classes:
+// active (owned) = lit blue + ✓; owned-not-active = gold (click to activate);
+// locked = grey + unlock cost. Click handling lives in the tree click listener.
+function _buildAttunementNode(att) {
+    const node = document.createElement('div');
+    node.className = 'shop-node shop-node--upgrade shop-node--attune';
+    node.dataset.id = att.id;
+    node.dataset.kind = 'attunement';
+    node.dataset.weapon = att.weaponId;
+    const elColor = (ELEMENTS[att.element] && ELEMENTS[att.element].color) || null;
+    if (elColor) node.style.setProperty('--node-color', elColor);
+
+    const owned = !!(_unlockedAttune && _unlockedAttune.has(att.id));
+    const active = (_preRunAttune[att.weaponId] || []).includes(att.id);
+    const state = active ? 'owned' : (owned ? 'affordable' : 'unaffordable');
+    node.dataset.state = state;
+    node.classList.add(`shop-node--${state}`);
+
+    node.dataset.tooltipKind = 'upgrade';
+    node.dataset.tooltipName = `${att.name} · ${att.element}`;
+    node.dataset.tooltipDesc = att.description || '';
+    node.dataset.tooltipState = active ? 'ACTIVE'
+        : (owned ? 'Click to activate' : `LOCKED · ${att.cost} ⬢`);
+
+    const icon = document.createElement('span');
+    icon.className = 'shop-node-icon';
+    icon.innerHTML = renderIconHTML(att.icon, { size: 24, fallback: '?' });
+    node.appendChild(icon);
+
+    if (active) {
+        const badge = document.createElement('span');
+        badge.className = 'shop-node-badge';
+        badge.textContent = '✓';
+        node.appendChild(badge);
+    }
+    return node;
+}
 
 function _buildParentNode(parent, category) {
     const node = document.createElement('div');

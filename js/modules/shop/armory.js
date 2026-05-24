@@ -26,6 +26,9 @@ export const UNLOCK_CATEGORIES = {
     primaries: { metaKey: 'unlockedPrimaries', base: BASE_LOADOUT.primaries, cost: 1200 },
     powers:    { metaKey: 'unlockedPowers',    base: BASE_LOADOUT.powers,    cost: 2000 },
     abilities: { metaKey: 'unlockedAbilities', base: BASE_LOADOUT.abilities, cost: 3500 },
+    // W5 — per-weapon Attunements (element upgrades). Flat cost for now; W7
+    // will tune per-attunement (signature vs exotic). Nothing is owned by base.
+    attunements: { metaKey: 'unlockedAttunements', base: [], cost: 6000 },
 };
 
 /** Cost in account-gold to unlock one item of a category. */

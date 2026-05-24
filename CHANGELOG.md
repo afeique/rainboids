@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.105.0] - 2026-05-23
+
+### Added — Attunements are equippable in the BUILD tree (Phase W5, partial)
+
+Brings the W1 attunement system to life — you can now pick a weapon's element(s)
+in the pre-run BUILD screen and fire them in the run.
+
+- **Attunement orbit bubbles** — in BUILD mode each weapon's orbiting nodes are
+  its attunements (per-element, colored by element). Locked → click unlocks
+  with **account-gold** (then auto-activates); owned → click toggles active for
+  the run (✓ badge). The in-run shop is unchanged (still shows stackable
+  upgrade nodes — those move to cards in W4).
+- **`attunements` unlock category** (`armory.js`) — permanent account-gold
+  unlocks persisted in `meta.unlockedAttunements`.
+- **Loadout carries attunements** — START RUN feeds the active per-weapon set
+  (validated against owned + known ids; stale/locked ids dropped) through
+  `beginPreRunFromTree` → `meta.loadout.attunements` → `player.activeAttunements`,
+  so the weapon's bullets carry those elements (multi-element split from W1).
+- 6 new QA tests (node render, unlock economy, active-set application, drop of
+  non-owned, end-to-end element stamping, no-fatals); 643 unit + QA green.
+
 ## [6.104.0] - 2026-05-23
 
 ### Added — Weapon Attunements: data model + multi-element damage (Phase W1)

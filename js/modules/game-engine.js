@@ -27,7 +27,7 @@ import { LineDebris } from './world/line-debris.js';
 import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
-import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
+import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS } from './combat/weapon-data.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout } from './shop/armory.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
@@ -1014,6 +1014,16 @@ export class GameEngine {
             if (loadout.ability && ABILITIES[loadout.ability]) {
                 this.player.activeAbility = loadout.ability;
                 this.player.ownedAbilities = new Set([loadout.ability]);
+            }
+        }
+        // W5 — apply the chosen per-weapon attunements (validated against the
+        // known table) so bullets carry their elements this run.
+        this.player.activeAttunements = {};
+        if (loadout && loadout.attunements && typeof loadout.attunements === 'object') {
+            for (const [wid, ids] of Object.entries(loadout.attunements)) {
+                if (!Array.isArray(ids)) continue;
+                const valid = ids.filter((id) => ATTUNEMENTS[id] && ATTUNEMENTS[id].weapon === wid);
+                if (valid.length) this.player.activeAttunements[wid] = valid;
             }
         }
         // 5.88.3 — energy tanks unified with the triforce. healthTanks is
@@ -3992,6 +4002,7 @@ export class GameEngine {
         }
         const meta = loadMeta() || {};
         shopDom.setPreRunSelection(normalizeLoadout(meta.loadout || {}, meta));
+        shopDom.setPreRunAttunements((meta.loadout && meta.loadout.attunements) || {});
         this._preRunTreeOpen = true;
         shopDom.showShopDom(true);
     }
@@ -4006,6 +4017,17 @@ export class GameEngine {
     beginPreRunFromTree(sel) {
         const meta = loadMeta() || {};
         const loadout = normalizeLoadout(sel || {}, meta);
+        // W5 — carry the chosen per-weapon attunements, validated against owned
+        // (unlocked) + known ids, so a stale/locked id can't leak into the run.
+        const ownedAtt = getUnlockedSet('attunements', meta);
+        const att = {};
+        const rawAtt = (sel && sel.attunements) || {};
+        for (const [wid, ids] of Object.entries(rawAtt)) {
+            if (!Array.isArray(ids)) continue;
+            const keep = ids.filter((id) => ATTUNEMENTS[id] && ATTUNEMENTS[id].weapon === wid && ownedAtt.has(id));
+            if (keep.length) att[wid] = keep;
+        }
+        loadout.attunements = att;
         try { saveMeta({ loadout }); } catch {}
         this._preRunTreeOpen = false;
         shopDom.hideShopDom();

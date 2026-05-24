@@ -294,9 +294,11 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 - [ ] Per-weapon `cardPool` filter (curation matrix §5 — Lance Beam has no Rapid/Multishot/Homing, etc.)
 - [ ] `card-draft.js` → **1 primary + 1 power + 2 ability** with backfill; unit tests · commit
 
-### W5 — BUILD tree: attunement/mod nodes + LOADOUT toggles
-- [ ] Orbit nodes render attunements + mods (account-gold permanent unlock), buyable in BUILD
-- [ ] LOADOUT: per-equipped-weapon toggles for active owned attunements/mods + tests · commit
+### W5 — BUILD tree: attunement/mod nodes + LOADOUT toggles  🟡 PARTIAL (6.105.0)
+- [x] Orbit nodes render **attunements** (account-gold permanent unlock + active toggle) in BUILD; flow into `player.activeAttunements` on START RUN — element-colored bubbles, ✓ active badge; in-run shop unchanged
+- [x] `attunements` unlock category (`meta.unlockedAttunements`); `beginPreRunFromTree` carries `loadout.attunements` (validated vs owned/known); 6 QA tests + 643 unit green · commit (6.105.0)
+- [ ] Mechanic-mod nodes in the tree (needs W3) — deferred to after W3
+- [ ] Per-element attunement *behaviors* are the W2 work; W5 already makes the element identity (status + resist) live
 
 ### W6 — Ability behavior/element upgrades
 - [ ] Ability equivalent of attunements (upfront element-flavored behavior; e.g. EMP "Ion Burst" → CONDUCT) + tests · commit
