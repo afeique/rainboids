@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.137.0] - 2026-05-24
+
+### Added — Detonator passive (Phase P6, content batch)
+
+- **Detonator** — killing a status-afflicted enemy detonates its statuses as an
+  AoE: every enemy within 110px takes a 6-damage burst and inherits whichever
+  statuses the victim carried (burn / corrode / chill). Each hit routes through
+  `takeDamage` once; a chained kill runs the full death pipeline but never
+  re-detonates, so there are no chain explosions. Guarded no-op without the
+  passive, and skips firing when the victim had no active status.
+
+---
+
 ## [6.136.0] - 2026-05-24
 
 ### Added — Overkill + Ricochet passives (Phase P6, content batch)

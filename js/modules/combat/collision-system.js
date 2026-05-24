@@ -877,6 +877,10 @@ export function handleCollisions() {
                     // shot fraction to the nearest other enemy (one hop).
                     _passiveKillSplash.call(this, enemy, damage, enemyHpBefore);
 
+                    // P6 — Detonator: a status-afflicted victim detonates its
+                    // statuses as an AoE burst over nearby enemies.
+                    _detonateStatuses.call(this, enemy);
+
                     // Mitosis Rounds — fragment on the killing blow. Primaries
                     // (splitOnImpact) and chaining shards (splitOnKill) both
                     // fire here; mitosisSplit no-ops when no generations remain.
@@ -2525,6 +2529,44 @@ export function _passiveKillSplash(enemy, damage, enemyHpBefore) {
         if (typeof this.createEnemyDebris === 'function') this.createEnemyDebris(nearest);
         if (typeof this.dropOrbsFromEntity === 'function') this.dropOrbsFromEntity(nearest.x, nearest.y, nearest);
         if (typeof this.onEnemyKill === 'function') this.onEnemyKill(nearest);
+    }
+}
+
+// P6 — Detonator passive. Killing a status-afflicted enemy detonates its
+// statuses as an AoE: every enemy within radius takes a burst and inherits the
+// victim's active statuses (burn / corrode / chill). Routes each hit through
+// takeDamage once; a chained kill runs the death pipeline but does NOT re-enter
+// the detonation (no chain explosions).
+const DETONATE_RADIUS = 110;
+const DETONATE_DMG = 6;
+export function _detonateStatuses(enemy) {
+    const p = this.player;
+    if (!p || typeof p.hasPassive !== 'function' || !p.hasPassive('DETONATOR')) return;
+    if (!_enemyHasStatus(enemy)) return;
+    const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+    if (!pool) return;
+    const t = frameClock.now;
+    const r2 = DETONATE_RADIUS * DETONATE_RADIUS;
+    const hadBurn = enemy.brnUntil > t;
+    const hadCorrode = enemy.corrodeUntil > t || enemy.corrodeStacks > 0;
+    const hadChill = enemy.chillUntil > t;
+    for (const other of pool) {
+        if (other === enemy || !other.active) continue;
+        if (other._deathFlash > 0 || other.warping) continue;
+        const dx = other.x - enemy.x, dy = other.y - enemy.y;
+        if (dx * dx + dy * dy > r2) continue;
+        // Spread the victim's statuses outward as the burst lands.
+        if (hadBurn && typeof this.applyBurn === 'function') this.applyBurn(other);
+        if (hadCorrode && typeof this.applyCorrode === 'function') this.applyCorrode(other);
+        if (hadChill && typeof this.applyChill === 'function') this.applyChill(other);
+        if (typeof other.takeDamage !== 'function') continue;
+        const destroyed = other.takeDamage(DETONATE_DMG, { element: 'PYRO', showNumber: true });
+        if (destroyed) {
+            other._deathFlash = 8; other._deathFlashMax = 8;
+            if (typeof this.createEnemyDebris === 'function') this.createEnemyDebris(other);
+            if (typeof this.dropOrbsFromEntity === 'function') this.dropOrbsFromEntity(other.x, other.y, other);
+            if (typeof this.onEnemyKill === 'function') this.onEnemyKill(other);
+        }
     }
 }
 
