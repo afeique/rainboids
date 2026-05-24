@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.141.0] - 2026-05-24
+
+### Added — Vendetta passive (Phase P6, content batch)
+
+- **Vendetta** — the last enemy to damage you becomes a grudge target and takes
+  +30% damage from you until it dies. `takeDamage` stamps the attacker as the
+  grudge target; `vendettaMult` applies the bonus on the universal
+  `applyDamageToEnemy` path to that exact enemy. Guarded no-op without the
+  passive; non-enemy damage sources simply never match a damaged enemy.
+
+---
+
 ## [6.140.0] - 2026-05-24
 
 ### Added — Tracer Lock passive (Phase P6, content batch)

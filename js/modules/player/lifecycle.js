@@ -287,6 +287,12 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         if (opts.source && typeof this.applyThorns === 'function') {
             this.applyThorns(finalDamage, opts.source);
         }
+        // P6 — Vendetta: remember the attacker as the grudge target; it takes
+        // +30% from you (applied in applyDamageToEnemy via vendettaMult) until
+        // it dies. Non-enemy sources simply never match a damaged enemy.
+        if (opts.source && this.player.hasPassive && this.player.hasPassive('VENDETTA')) {
+            this.player._vendettaTarget = opts.source;
+        }
         // W6 — Searing/Static/Frost/Null Bulwark: an attacker that hits you
         // while BULWARK is active takes the attunement's element.
         if (this.player.activeAbilityEffects && this.player.activeAbilityEffects.has('BULWARK')

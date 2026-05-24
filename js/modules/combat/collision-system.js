@@ -2235,6 +2235,17 @@ export function tracerLockStep(prevTarget, prevStacks, enemy) {
     return { mult: 1 + stacks * TRACER_LOCK_PER, target: enemy, stacks };
 }
 
+// P6 — Vendetta passive: the last enemy to damage you takes +30% from you until
+// it dies. lifecycle.takeDamage stamps player._vendettaTarget with the attacker;
+// this pure check applies the bonus on the damage path. Returns 1 unless the hit
+// enemy IS the current grudge target.
+export const VENDETTA_MULT = 1.3;
+export function vendettaMult(player, enemy) {
+    return (player && typeof player.hasPassive === 'function'
+        && player.hasPassive('VENDETTA') && player._vendettaTarget === enemy)
+        ? VENDETTA_MULT : 1;
+}
+
 export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
@@ -2277,6 +2288,9 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
             this.player._tracerStacks = tl.stacks;
             if (tl.mult !== 1) damage *= tl.mult;
         }
+        // P6 — Vendetta: the last enemy to damage you takes +30% until it dies.
+        const _vm = vendettaMult(this.player, enemy);
+        if (_vm !== 1) damage *= _vm;
     }
 
     // E2 (Element & Resistance) — scale by the target's resistance to the
