@@ -5,6 +5,7 @@ import { GAME_CONFIG } from '../core/constants.js';
 // Phase B.S1 — canonical export is now `ABILITIES` (was ABILITIES, kept
 // as a back-compat alias in weapon-data.js).
 import { ABILITIES, POWER_WEAPONS } from '../combat/weapon-data.js';
+import { ELEMENTS } from '../combat/elements.js';
 import { cleansePlayerStatus } from './player-status.js';
 
 // ── Active ability updates ──────────────────────────────────────────────────
@@ -526,6 +527,16 @@ export function activateAbility(slot = 0) {
         const maxHp = this.getEffectiveMaxHealth();
         this.health = Math.min(maxHp, this.health + maxHp * pct);
         if (config.cleanse) cleansePlayerStatus(this);
+        // W6 — Cauterize (Pyro) / Purifying Light (Radiant): the heal-flash
+        // also lands the attunement's element on nearby enemies.
+        const mge = this.gameEngine;
+        const medEl = this.activeAbilityAttuneElement && this.activeAbilityAttuneElement.FIELD_MEDIC;
+        if (medEl && mge && mge.enemyPool && typeof mge.applyAbilityElement === 'function') {
+            for (const enemy of mge.enemyPool.activeObjects) {
+                if (!enemy || !enemy.active) continue;
+                if (Math.hypot(enemy.x - this.x, enemy.y - this.y) <= 220) mge.applyAbilityElement(enemy, medEl);
+            }
+        }
     }
 
     // 6.x — Per-ability ON-ACTIVATE effects (previously DEFLECTOR_ORBS and
@@ -552,10 +563,15 @@ export function activateAbility(slot = 0) {
         const ge = this.gameEngine;
         if (ge && ge.enemyPool && typeof ge.applyStun === 'function') {
             const radius = config.radius + this.getPowerupStacks('WIDE_BAND') * 60;
+            const attEl = this.activeAbilityAttuneElement && this.activeAbilityAttuneElement.EMP_PULSE;
             for (const enemy of ge.enemyPool.activeObjects) {
                 if (!enemy.active) continue;
                 const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
-                if (dist <= radius) ge.applyStun(enemy, config.duration);
+                if (dist <= radius) {
+                    ge.applyStun(enemy, config.duration);
+                    // W6 — the attunement also lands its element on caught enemies.
+                    if (attEl && typeof ge.applyAbilityElement === 'function') ge.applyAbilityElement(enemy, attEl);
+                }
             }
         }
     } else if (abilityId === 'SENTRY_DRONE') {
@@ -582,6 +598,16 @@ export function activateAbility(slot = 0) {
             this.y = Math.max(0, Math.min(gf.height, this.y));
         }
         if (typeof this.makeInvincible === 'function') this.makeInvincible(config.iFrameMs || 300);
+        // W6 — Flash/Storm/Void/Frost Step: leave an elemental burst at the
+        // arrival point (enemies near where you land take the element).
+        const bge = this.gameEngine;
+        const blinkEl = this.activeAbilityAttuneElement && this.activeAbilityAttuneElement.BLINK;
+        if (blinkEl && bge && bge.enemyPool && typeof bge.applyAbilityElement === 'function') {
+            for (const enemy of bge.enemyPool.activeObjects) {
+                if (!enemy || !enemy.active) continue;
+                if (Math.hypot(enemy.x - this.x, enemy.y - this.y) <= 160) bge.applyAbilityElement(enemy, blinkEl);
+            }
+        }
     } else if (abilityId === 'GRAVITY_SNARE') {
         // R6.3 — yank nearby non-boss enemies inward (no closer than minDist).
         const ge2 = this.gameEngine;
@@ -589,6 +615,7 @@ export function activateAbility(slot = 0) {
             const r = config.radius || 300;
             const k = config.pullFactor || 0.5;
             const minD = config.minDist || 60;
+            const attEl = this.activeAbilityAttuneElement && this.activeAbilityAttuneElement.GRAVITY_SNARE;
             for (const enemy of ge2.enemyPool.activeObjects) {
                 if (!enemy || !enemy.active || enemy.isBoss) continue;
                 const dx = this.x - enemy.x, dy = this.y - enemy.y;
@@ -597,6 +624,8 @@ export function activateAbility(slot = 0) {
                     const pull = Math.min(dist - minD, dist * k);
                     enemy.x += (dx / dist) * pull;
                     enemy.y += (dy / dist) * pull;
+                    // W6 — snared enemies take the attunement's element.
+                    if (attEl && typeof ge2.applyAbilityElement === 'function') ge2.applyAbilityElement(enemy, attEl);
                 }
             }
         }
@@ -605,10 +634,13 @@ export function activateAbility(slot = 0) {
         const ge3 = this.gameEngine;
         if (ge3 && ge3.enemyPool && typeof ge3.applyMark === 'function') {
             const r = config.radius || 350;
+            const attEl = this.activeAbilityAttuneElement && this.activeAbilityAttuneElement.DESIGNATOR;
             for (const enemy of ge3.enemyPool.activeObjects) {
                 if (!enemy || !enemy.active) continue;
                 if (Math.hypot(enemy.x - this.x, enemy.y - this.y) <= r) {
                     ge3.applyMark(enemy, config.markMs || 6000);
+                    // W6 — marked targets also take the attunement's element.
+                    if (attEl && typeof ge3.applyAbilityElement === 'function') ge3.applyAbilityElement(enemy, attEl);
                 }
             }
         }
@@ -838,6 +870,19 @@ export function spawnSentryDroneBullet(drone, damage, rangeMul) {
     bullet.color = '#ffcc88';
     bullet.baseRadius = 3;
     bullet.radius = 3;
+    // W6 — Incendiary/Tesla/Cryo/Toxic/Mark/Lance Drones: drone rounds carry
+    // the ability attunement's element, so they apply its status on hit via
+    // the standard bullet element-status path.
+    const dEl = this.activeAbilityAttuneElement && this.activeAbilityAttuneElement.SENTRY_DRONE;
+    if (dEl) {
+        bullet.element = dEl;
+        bullet.elements = [dEl];
+        const ec = ELEMENTS[dEl] && ELEMENTS[dEl].color;
+        if (ec) bullet.color = ec;
+    } else {
+        bullet.element = 'KINETIC';
+        bullet.elements = null;
+    }
     if (ge.particlePool) {
         const pp = ge.particlePool;
         for (let i = 0; i < 2; i++) {

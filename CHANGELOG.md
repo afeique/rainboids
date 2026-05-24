@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.118.0] - 2026-05-24
+
+### Added — Ability attunements now apply their element at runtime (Phase W6 complete)
+
+Ability attunements — chosen one-per-ability (a radio pick) in the BUILD tree's
+DEFENSE cluster — were data + loadout-carry only; the chosen element didn't
+actually do anything in a run. They now land their element's status through
+each ability's verb, reusing the same per-element applicator the weapon
+hit-path uses (Pyro burn, Cryo chill→freeze, Volt conduct+fork, Toxic
+corrode+bleed, Void mark+gather):
+
+- **EMP Pulse / Gravity Snare / Designator** — caught/snared/marked enemies in
+  range also take the attuned element.
+- **Field Medic** — Cauterize (Pyro) / Purifying Light (Radiant): the heal-flash
+  erupts an elemental burst on nearby enemies.
+- **Blink** — leaves an elemental burst at the arrival point.
+- **Sentry Drone** — drone rounds carry the element (ignite / chain / chill /
+  corrode / mark / pierce) and are tinted to match.
+- **Bulwark** — an attacker that hits you while shielded takes the element.
+- **Second Wind** — survival triggers an elemental burst to buy space.
+- **Deflector Orbs** — reflected shots carry the element and are tinted to match.
+
+Wired the missing BUILD-tree seeding (`setPreRunAbilityAttune`) so a saved
+ability-attunement choice is restored when the BUILD screen reopens. New
+unit suite (`ability-attunements-w6-runtime`) pins the area/projectile verbs
+and the element→status dispatch.
+
 ## [6.117.1] - 2026-05-24
 
 ### Changed — Left-edge loot feed cards fade out faster

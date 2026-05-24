@@ -6,7 +6,7 @@ import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
-import { elementalMultiplier, multiElementMultiplier, adaptResist } from './elements.js';
+import { elementalMultiplier, multiElementMultiplier, adaptResist, ELEMENTS } from './elements.js';
 import { allyShieldMult } from '../enemy/support-aura.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
@@ -1951,7 +1951,12 @@ export function checkDeflectorOrbCollisions() {
                         const nearest = this.findNearestEnemy();
                         if (nearest) {
                             const ang = Math.atan2(nearest.y - orb.y, nearest.x - orb.x);
-                            this.bulletPool.get(orb.x, orb.y, ang, 8, 2, 3, 500, '#44ddff', this.player);
+                            // W6 — Tesla/Ember/Frost Orbs: the reflected shot
+                            // carries the ability attunement's element.
+                            const orbEl = p.activeAbilityAttuneElement && p.activeAbilityAttuneElement.DEFLECTOR_ORBS;
+                            const orbCol = (orbEl && ELEMENTS[orbEl] && ELEMENTS[orbEl].color) || '#44ddff';
+                            const refl = this.bulletPool.get(orb.x, orb.y, ang, 8, 2, 3, 500, orbCol, this.player);
+                            if (refl && orbEl) { refl.element = orbEl; refl.elements = [orbEl]; }
                         }
                     }
                     break;

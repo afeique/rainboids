@@ -242,6 +242,14 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         if (opts.source && typeof this.applyThorns === 'function') {
             this.applyThorns(finalDamage, opts.source);
         }
+        // W6 — Searing/Static/Frost/Null Bulwark: an attacker that hits you
+        // while BULWARK is active takes the attunement's element.
+        if (this.player.activeAbilityEffects && this.player.activeAbilityEffects.has('BULWARK')
+            && opts.source && this.player.activeAbilityAttuneElement
+            && this.player.activeAbilityAttuneElement.BULWARK
+            && typeof this.applyAbilityElement === 'function') {
+            this.applyAbilityElement(opts.source, this.player.activeAbilityAttuneElement.BULWARK);
+        }
         // RETALIATION — taking a hit while BULWARK is active emits an AoE
         // damage pulse around the ship.
         if (this.player.activeAbilityEffects && this.player.activeAbilityEffects.has('BULWARK')
@@ -392,12 +400,25 @@ export function handlePlayerDeath() {
     // once: consume whichever is set, restore to full HP + one spare tank, and
     // skip the death sequence so the run continues.
     if (this.player && (this.player._reviveToken || this.player._secondWindArmed)) {
+        const wasSecondWind = !!this.player._secondWindArmed;
         this.player._reviveToken = false;
         this.player._secondWindArmed = false;
         const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
             ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
         this.player.health = maxHp;
         if (typeof this.healthTanks === 'number') this.healthTanks = Math.max(this.healthTanks | 0, 1);
+        // W6 — Phoenix/Discharge/Cold Snap: the Second Wind survival triggers an
+        // elemental burst around the player to buy space.
+        const swEl = wasSecondWind && this.player.activeAbilityAttuneElement
+            && this.player.activeAbilityAttuneElement.SECOND_WIND;
+        if (swEl && this.enemyPool && typeof this.applyAbilityElement === 'function') {
+            for (const enemy of this.enemyPool.activeObjects) {
+                if (!enemy || !enemy.active) continue;
+                if (Math.hypot(enemy.x - this.player.x, enemy.y - this.player.y) <= 200) {
+                    this.applyAbilityElement(enemy, swEl);
+                }
+            }
+        }
         if (this.events?.emit) {
             this.events.emit('audio:powerup');
             this.events.emit('ui:show-message', {

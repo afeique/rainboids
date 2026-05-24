@@ -1043,10 +1043,17 @@ export class GameEngine {
         // validated against the known table. Read at activation time
         // (player/abilities.js) to flavor the ability with its element.
         this.player.activeAbilityAttune = {};
+        // W6 — also cache the chosen element per ability so the runtime verb
+        // sites (abilities.js / lifecycle.js / deflector reflect) can stamp it
+        // without re-reading the table each frame.
+        this.player.activeAbilityAttuneElement = {};
         if (loadout && loadout.abilityAttune && typeof loadout.abilityAttune === 'object') {
             for (const [aid, attId] of Object.entries(loadout.abilityAttune)) {
                 const cfg = ABILITY_ATTUNEMENTS[attId];
-                if (cfg && cfg.ability === aid) this.player.activeAbilityAttune[aid] = attId;
+                if (cfg && cfg.ability === aid) {
+                    this.player.activeAbilityAttune[aid] = attId;
+                    this.player.activeAbilityAttuneElement[aid] = cfg.element;
+                }
             }
         }
         // 5.88.3 — energy tanks unified with the triforce. healthTanks is
@@ -2667,6 +2674,12 @@ export class GameEngine {
     applyOil(enemy, durationMs) { return combat.applyOil(enemy, durationMs); }
     applyMark(enemy, durationMs) { return combat.applyMark(enemy, durationMs); }
     applyBleed(enemy, sourceDmg, durationMs, maxStacks) { return combat.applyBleed(enemy, sourceDmg, durationMs, maxStacks); }
+    // W6 — apply an ability attunement's element status to an enemy, reusing
+    // the same per-element verb the weapon hit-path uses (Pyro burn, Cryo
+    // chill/freeze, Volt conduct+fork, Toxic corrode+bleed, Void mark+gather).
+    // `dealt` scales the status (≥8 freezes on Cryo); abilities pass a fixed
+    // representative value since they don't deal per-element damage shares.
+    applyAbilityElement(enemy, element, dealt = 30) { return col.applyWeaponElementStatus.call(this, enemy, element, dealt); }
     // A.E9-S2 — drop a persistent hazard zone (acid/fire/frost). opts:
     // { radius, element, dps, lifeMs }. Used by Plaguebearer trails + (later)
     // player hazard weapons. Damages whoever stands in it (player for now).
@@ -4027,6 +4040,7 @@ export class GameEngine {
         shopDom.setPreRunSelection(normalizeLoadout(meta.loadout || {}, meta));
         shopDom.setPreRunAttunements((meta.loadout && meta.loadout.attunements) || {});
         shopDom.setPreRunMods((meta.loadout && meta.loadout.mods) || {});
+        shopDom.setPreRunAbilityAttune((meta.loadout && meta.loadout.abilityAttune) || {});
         this._preRunTreeOpen = true;
         shopDom.showShopDom(true);
     }
