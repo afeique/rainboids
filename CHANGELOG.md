@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.124.0] - 2026-05-24
+
+### Added — BUILD-tree PASSIVES cluster + loadout carry (Phase P4)
+
+The pre-run BUILD screen gains a **PASSIVES** tab — pick your rule-modifier
+passives for the run. (The old "PASSIVE" tab, which shows the numeric stat
+boons, is now labeled **STATS** — §2 naming.)
+
+- New **PASSIVES** cluster (BUILD-only, hidden in the in-run shop): every
+  slot-deliverable passive shown as a bubble — locked (unlock with
+  account-gold), owned (click to equip), or equipped (lit + slot-number badge).
+  Keystones are marked ★ and capped at 2; the chosen count is capped at the
+  run's `maxSlots`. A header shows `chosen/maxSlots · keystones/2`.
+- **Loadout carry**: the chosen passives are saved to `loadout.passives` and
+  equipped into the player's slots at run start (validated against owned +
+  slot-deliverable + the keystone budget); they activate as their slots unlock
+  over the run (P3).
+- Tests: QA-08f (cluster render, in-run hidden, equip→START carry, un-owned
+  dropped, no JS errors).
+
 ## [6.123.0] - 2026-05-24
 
 ### Added — Passive slots unlock progressively over a run (Phase P3)

@@ -3980,7 +3980,8 @@ body.mobile-portrait .shop-help-icon {
 .shop-tree[data-active-tab="power"]   .shop-tree-cluster[data-tab="power"],
 .shop-tree[data-active-tab="defense"] .shop-tree-cluster[data-tab="defense"],
 .shop-tree[data-active-tab="gear"]    .shop-tree-cluster[data-tab="gear"],
-.shop-tree[data-active-tab="passive"] .shop-tree-cluster[data-tab="passive"] {
+.shop-tree[data-active-tab="passive"] .shop-tree-cluster[data-tab="passive"],
+.shop-tree[data-active-tab="passiveskills"] .shop-tree-cluster[data-tab="passiveskills"] {
     display: flex;
     flex-direction: column;
     flex: 1;

@@ -35,6 +35,9 @@ import {
     getAbilityAttunements,
 } from '../combat/weapon-data.js';
 import { ELEMENTS } from '../combat/elements.js';
+// Phase P4 — rule-modifier PASSIVES cluster (the equippable build layer).
+import { PASSIVES, getSlotPassives, maxPassiveSlots } from '../combat/passive-data.js';
+import { MAX_STAGES } from '../core/constants.js';
 // 2026-05-23 — pre-run BUILD mode reuses the loadout-selection helpers so the
 // tree can act as the start-of-run weapon/ability picker (see _preRun below).
 import { toggleSelection, getUnlockedSet, unlockCost, LOADOUT_SLOTS } from './armory.js';
@@ -98,6 +101,22 @@ let _unlockedMods = null;
 // W6 — per-ability ACTIVE attunement (ONE element each, radio): { abilityId: attId }.
 let _preRunAbilityAttune = {};
 let _unlockedAbilityAttune = null;
+// P4 — chosen rule-modifier PASSIVES for the run: an ORDERED id list (slot
+// order), length ≤ maxSlots(stages). Seeded from meta.loadout.passives; flows
+// into player.equippedPassives on START. `_unlockedPassives` caches owned ids.
+let _preRunPassives = [];
+let _unlockedPassives = null;
+
+// Pre-run passive slot cap for THIS run (round-3 §11.A). Pre-Phase-X there's no
+// runConfig, so derive from the fixed stage count.
+function _passiveMaxSlots() {
+    const stages = (_engine && _engine.game && _engine.game.runConfig && _engine.game.runConfig.stages) || MAX_STAGES;
+    return maxPassiveSlots(stages);
+}
+function _isKeystonePassive(id) {
+    const def = PASSIVES[id];
+    return !!(def && Array.isArray(def.tags) && def.tags.includes('keystone'));
+}
 
 /** Seed the pre-run loadout selection (called by game-engine before show). */
 export function setPreRunSelection(sel) {
@@ -188,6 +207,31 @@ function _setAbilityAttune(abilityId, attId, forceOn) {
     }
 }
 
+/** Seed the chosen passive list (called by game-engine before show). */
+export function setPreRunPassives(list) {
+    _preRunPassives = Array.isArray(list) ? list.filter((id) => PASSIVES[id]).slice(0, _passiveMaxSlots()) : [];
+}
+
+/** The chosen passive id list (ordered = slot order), read by START RUN. */
+export function getPreRunPassives() {
+    return _preRunPassives.slice();
+}
+
+// P4 — toggle a passive into/out of the chosen set. Caps at maxSlots(stages)
+// and enforces the keystone budget (≤2 keystones). Returns true if it changed.
+function _togglePassive(id) {
+    if (!PASSIVES[id]) return false;
+    const at = _preRunPassives.indexOf(id);
+    if (at !== -1) { _preRunPassives.splice(at, 1); return true; }
+    if (_preRunPassives.length >= _passiveMaxSlots()) return false; // slot cap
+    if (_isKeystonePassive(id)) {
+        const keystones = _preRunPassives.filter((p) => _isKeystonePassive(p)).length;
+        if (keystones >= 2) return false; // keystone budget
+    }
+    _preRunPassives.push(id);
+    return true;
+}
+
 function $(id) { return document.getElementById(id); }
 
 // ── Lifecycle ──────────────────────────────────────────────────────
@@ -208,6 +252,7 @@ export function initShopDom(gameEngine) {
         clusterPower:   $('shop-tree-power'),
         clusterDefense: $('shop-tree-defense'),
         clusterPassive: $('shop-tree-passives'),
+        clusterPassiveSkills: $('shop-tree-passiveskills'),
         clusterGear:    $('shop-tree-gear'),
         tooltip:        $('shop-tree-tooltip'),
         closeBtn:       $('shop-close-button'),
@@ -237,6 +282,7 @@ export function initShopDom(gameEngine) {
                     attunements: getPreRunAttunements(),
                     mods: getPreRunMods(),
                     abilityAttune: getPreRunAbilityAttune(),
+                    passives: getPreRunPassives(),
                 });
             }
         });
@@ -342,6 +388,21 @@ export function initShopDom(gameEngine) {
                         }
                     } else {
                         _setAbilityAttune(aid, id);
+                    }
+                    renderShopDom();
+                    return;
+                }
+                // P4 — rule-modifier passive bubble: locked → unlock (gold) then
+                // auto-equip if there's room; owned → toggle into/out of the run.
+                if (node.dataset.kind === 'rulePassive') {
+                    const owned = !!(_unlockedPassives && _unlockedPassives.has(id));
+                    if (!owned) {
+                        if (_engine && typeof _engine.unlockPreRunItem === 'function'
+                            && _engine.unlockPreRunItem('passives', id)) {
+                            _togglePassive(id);
+                        }
+                    } else {
+                        _togglePassive(id);
                     }
                     renderShopDom();
                     return;
@@ -495,12 +556,13 @@ function _applyPreRunChrome() {
     // Legend labels read differently pre-run (the same node states mean
     // locked / equip-able / equipped / active rather than shop costs).
     _relabelLegend(_preRun);
-    // The GEAR tab is BUILD-only — hide it for the in-run shop, and bounce
-    // the active tab off GEAR if we're leaving BUILD mode.
-    const gearTabBtn = _elements.tabs
-        ? _elements.tabs.querySelector('.shop-tree-tab[data-tab="gear"]') : null;
-    if (gearTabBtn) gearTabBtn.style.display = _preRun ? '' : 'none';
-    if (!_preRun && _activeTab === 'gear') { _activeTab = 'primary'; _syncActiveTab(); }
+    // GEAR + PASSIVES are BUILD-only — hide them for the in-run shop, and
+    // bounce the active tab off them if we're leaving BUILD mode.
+    for (const t of ['gear', 'passiveskills']) {
+        const btn = _elements.tabs ? _elements.tabs.querySelector(`.shop-tree-tab[data-tab="${t}"]`) : null;
+        if (btn) btn.style.display = _preRun ? '' : 'none';
+    }
+    if (!_preRun && (_activeTab === 'gear' || _activeTab === 'passiveskills')) { _activeTab = 'primary'; _syncActiveTab(); }
     if (_preRun) _updatePreRunStatus();
 }
 
@@ -540,11 +602,11 @@ function _updatePreRunStatus() {
     }
 }
 
-// U3 — the ordered, currently-VISIBLE tabs. GEAR is BUILD-only (hidden in the
-// in-run shop), so it's only in the cycle pre-run.
+// U3 — the ordered, currently-VISIBLE tabs. GEAR + PASSIVES are BUILD-only
+// (hidden in the in-run shop), so they're only in the cycle pre-run.
 function _visibleTabs() {
     return _preRun
-        ? ['gear', 'primary', 'power', 'defense', 'passive']
+        ? ['gear', 'primary', 'power', 'defense', 'passiveskills', 'passive']
         : ['primary', 'power', 'defense', 'passive'];
 }
 
@@ -612,11 +674,13 @@ export function renderShopDom() {
         _unlockedAttune = getUnlockedSet('attunements', meta);
         _unlockedMods = getUnlockedSet('mods', meta);
         _unlockedAbilityAttune = getUnlockedSet('abilityAttunements', meta);
+        _unlockedPassives = getUnlockedSet('passives', meta);
     } else {
         _unlockedSets = null;
         _unlockedAttune = null;
         _unlockedMods = null;
         _unlockedAbilityAttune = null;
+        _unlockedPassives = null;
     }
 
     // 6.30.0 — Weapon/ability clusters are buyable; the PASSIVE cluster is
@@ -626,6 +690,8 @@ export function renderShopDom() {
     _renderWeaponCluster(_elements.clusterPower,   _collectPowerGroups(),   player, 'powers');
     _renderWeaponCluster(_elements.clusterDefense, _collectDefenseGroups(), player, 'abilities');
     _renderPassiveCluster(_elements.clusterPassive, player);
+    // P4 — rule-modifier PASSIVES cluster (BUILD-only; equippable bubbles).
+    _renderRulePassiveCluster(_elements.clusterPassiveSkills);
 
     // GEAR tab (BUILD-only): the engine renders the equipment + stash panels.
     if (_elements.clusterGear) {
@@ -841,6 +907,72 @@ function _buildPassiveDisplayNode(upg, player) {
         node.appendChild(badge);
     }
 
+    return node;
+}
+
+// P4 — rule-modifier PASSIVES cluster (BUILD-only, equippable). Slot-deliverable
+// passives shown as bubbles: chosen = lit + slot badge; owned-not-chosen = gold
+// (click to equip); locked = grey (click to unlock with account-gold). Caps at
+// maxSlots(stages) + the keystone budget (≤2), enforced in _togglePassive.
+function _renderRulePassiveCluster(container) {
+    if (!container) return;
+    container.replaceChildren();
+
+    const maxSlots = _passiveMaxSlots();
+    const keystones = _preRunPassives.filter((p) => _isKeystonePassive(p)).length;
+
+    const head = document.createElement('div');
+    head.className = 'armory-section-title';
+    head.textContent = `PASSIVES · ${_preRunPassives.length}/${maxSlots} chosen · ${keystones}/2 keystones`;
+    container.appendChild(head);
+
+    const sub = document.createElement('div');
+    sub.className = 'shop-prerun-hint';
+    sub.style.display = '';
+    sub.textContent = 'Rule-changing relics — click to equip (★ = build-defining keystone, max 2; the rest stack safely). More slots open as you clear stages. Locked = unlock with account-gold.';
+    container.appendChild(sub);
+
+    const grid = document.createElement('div');
+    grid.className = 'shop-tree-passive-grid';
+    for (const p of getSlotPassives()) {
+        grid.appendChild(_buildRulePassiveNode(p));
+    }
+    container.appendChild(grid);
+}
+
+function _buildRulePassiveNode(p) {
+    const owned = !!(_unlockedPassives && _unlockedPassives.has(p.id));
+    const chosenAt = _preRunPassives.indexOf(p.id);
+    const chosen = chosenAt !== -1;
+    const keystone = _isKeystonePassive(p.id);
+
+    const node = document.createElement('div');
+    node.className = 'shop-node shop-node--upgrade shop-node--passive';
+    if (keystone) node.classList.add('shop-node--keystone');
+    node.dataset.id = p.id;
+    node.dataset.kind = 'rulePassive';
+
+    const state = chosen ? 'owned' : (owned ? 'affordable' : 'unaffordable');
+    node.dataset.state = state;
+    node.classList.add(`shop-node--${state}`);
+
+    node.dataset.tooltipKind = 'upgrade';
+    node.dataset.tooltipName = `${p.name}${keystone ? ' ★' : ''}`;
+    node.dataset.tooltipDesc = (p.desc || '') + (p.downside ? `  ↯ ${p.downside}` : '');
+    node.dataset.tooltipState = chosen ? `EQUIPPED · slot ${chosenAt + 1}`
+        : (owned ? 'Click to equip' : `LOCKED · ${unlockCost('passives')} ⬢`);
+
+    const icon = document.createElement('span');
+    icon.className = 'shop-node-icon';
+    icon.innerHTML = renderIconHTML(keystone ? 'star' : 'spiral', { size: 24, fallback: '?' });
+    node.appendChild(icon);
+
+    if (chosen) {
+        const badge = document.createElement('span');
+        badge.className = 'shop-node-badge';
+        badge.textContent = `${chosenAt + 1}`;
+        node.appendChild(badge);
+    }
     return node;
 }
 

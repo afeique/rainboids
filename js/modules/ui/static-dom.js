@@ -786,12 +786,15 @@ function _buildShopOverlay() {
     // display so the player can see which passives they've collected.
     const tabs = el('div', { id: 'shop-tree-tabs', className: 'shop-tree-tabs' });
     const tabDefs = [
-        // GEAR is shown only in pre-run BUILD mode (shop-dom toggles it).
-        { tab: 'gear',    label: 'GEAR' },
-        { tab: 'primary', label: 'PRIMARY' },
-        { tab: 'power',   label: 'POWER' },
-        { tab: 'defense', label: 'DEFENSE' },
-        { tab: 'passive', label: 'PASSIVE' },
+        // GEAR + PASSIVES are shown only in pre-run BUILD mode (shop-dom toggles).
+        { tab: 'gear',          label: 'GEAR' },
+        { tab: 'primary',       label: 'PRIMARY' },
+        { tab: 'power',         label: 'POWER' },
+        { tab: 'defense',       label: 'DEFENSE' },
+        // Phase P — the rule-modifier PASSIVES (equippable). Distinct from the
+        // STATS tab below (the numeric wave-clear stat boons; §2 naming).
+        { tab: 'passiveskills', label: 'PASSIVES' },
+        { tab: 'passive',       label: 'STATS' },
     ];
     for (const t of tabDefs) {
         const btn = el('button', { className: 'shop-tree-tab', text: t.label });
@@ -816,11 +819,12 @@ function _buildShopOverlay() {
     const tree = el('div', { id: 'shop-tree', className: 'shop-tree' });
     tree.dataset.activeTab = 'primary';
     const clusters = [
-        { id: 'shop-tree-gear',     tab: 'gear' },
-        { id: 'shop-tree-primary',  tab: 'primary' },
-        { id: 'shop-tree-power',    tab: 'power' },
-        { id: 'shop-tree-defense',  tab: 'defense' },
-        { id: 'shop-tree-passives', tab: 'passive' },
+        { id: 'shop-tree-gear',          tab: 'gear' },
+        { id: 'shop-tree-primary',       tab: 'primary' },
+        { id: 'shop-tree-power',         tab: 'power' },
+        { id: 'shop-tree-defense',       tab: 'defense' },
+        { id: 'shop-tree-passiveskills', tab: 'passiveskills' }, // rule-modifier passives
+        { id: 'shop-tree-passives',      tab: 'passive' },       // STATS (stat boons)
     ];
     for (const c of clusters) {
         const cluster = el('section', { className: 'shop-tree-cluster' });

@@ -29,6 +29,8 @@ import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout } from './shop/armory.js';
+import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
+import { MAX_STAGES } from './core/constants.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
@@ -1140,6 +1142,20 @@ export class GameEngine {
         // / level-XP-SP) onto this fresh run. Runs for NEW GAME + boot;
         // the CONTINUE path overlays its exact run snapshot afterward.
         this.applyPersistentProfile();
+
+        // P4 — equip the run's chosen rule-modifier passives into the player's
+        // slots. ownedPassives was just seeded; place the chosen ids directly
+        // (init bypasses the per-slot unlock gate so a passive pre-assigned to a
+        // slot that unlocks later activates when its slot opens — the
+        // _rebuildActivePassives below respects passiveSlotsUnlocked).
+        if (this.player && loadout && Array.isArray(loadout.passives)
+            && typeof this.player._rebuildActivePassives === 'function') {
+            const owned = this.player.ownedPassives instanceof Set ? this.player.ownedPassives : new Set();
+            const chosen = loadout.passives.filter((id) => owned.has(id) && PASSIVES[id] && PASSIVES[id].slot);
+            const slots = this.player.equippedPassives;
+            for (let i = 0; i < slots.length; i++) slots[i] = chosen[i] || null;
+            this.player._rebuildActivePassives();
+        }
 
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
@@ -4048,6 +4064,7 @@ export class GameEngine {
         shopDom.setPreRunAttunements((meta.loadout && meta.loadout.attunements) || {});
         shopDom.setPreRunMods((meta.loadout && meta.loadout.mods) || {});
         shopDom.setPreRunAbilityAttune((meta.loadout && meta.loadout.abilityAttune) || {});
+        shopDom.setPreRunPassives((meta.loadout && meta.loadout.passives) || []);
         this._preRunTreeOpen = true;
         shopDom.showShopDom(true);
     }
@@ -4101,6 +4118,24 @@ export class GameEngine {
             if (cfg && cfg.ability === aid && ownedAbilAtt.has(attId)) abilityAttune[aid] = attId;
         }
         loadout.abilityAttune = abilityAttune;
+        // P4 — carry the chosen rule-modifier passives (ordered = slot order),
+        // validated against owned + known + slot-deliverable, capped at the
+        // run's maxSlots, keystone budget ≤2.
+        const ownedPass = getUnlockedSet('passives', meta);
+        const totalStages = (this.game.runConfig && this.game.runConfig.stages) || MAX_STAGES;
+        const slotCap = maxPassiveSlots(totalStages);
+        const passivesOut = [];
+        let keystoneCount = 0;
+        for (const id of ((sel && sel.passives) || [])) {
+            const def = PASSIVES[id];
+            if (!def || !def.slot || !ownedPass.has(id) || passivesOut.includes(id)) continue;
+            const isKey = Array.isArray(def.tags) && def.tags.includes('keystone');
+            if (isKey && keystoneCount >= 2) continue;
+            if (passivesOut.length >= slotCap) break;
+            passivesOut.push(id);
+            if (isKey) keystoneCount++;
+        }
+        loadout.passives = passivesOut;
         try { saveMeta({ loadout }); } catch {}
         this._preRunTreeOpen = false;
         shopDom.hideShopDom();

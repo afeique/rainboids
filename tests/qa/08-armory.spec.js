@@ -247,6 +247,93 @@ test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (
     });
 });
 
+test.describe('QA-08f: PASSIVES cluster + loadout carry (Phase P4)', () => {
+    test.beforeEach(async ({ page }) => {
+        page._jsErrors = [];
+        page.on('pageerror', (err) => page._jsErrors.push(err.message));
+        await loadGame(page);
+        await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
+    });
+
+    test('BUILD has a PASSIVES tab + a populated rule-passive cluster', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            window.gameEngine.openArmory();
+            const tab = document.querySelector('.shop-tree-tab[data-tab="passiveskills"]');
+            const nodes = document.querySelectorAll('#shop-tree-passiveskills .shop-node--passive');
+            const starters = [...nodes].map((n) => n.dataset.id);
+            return {
+                tabLabel: tab && tab.textContent,
+                tabVisible: tab && getComputedStyle(tab).display !== 'none',
+                count: nodes.length,
+                hasOpportunist: starters.includes('OPPORTUNIST'),
+                hasKeystone: starters.includes('GLASS_CANNON'),
+            };
+        });
+        expect(r.tabLabel).toBe('PASSIVES');
+        expect(r.tabVisible).toBe(true);
+        expect(r.count).toBeGreaterThan(10);
+        expect(r.hasOpportunist).toBe(true); // base starter (slot-deliverable)
+        expect(r.hasKeystone).toBe(true);    // keystones are slot-deliverable too
+    });
+
+    test('the PASSIVES tab is hidden in the in-run shop', async ({ page }) => {
+        await startGame(page);
+        const vis = await page.evaluate(() => {
+            window.gameEngine.openShop();
+            const tab = document.querySelector('.shop-tree-tab[data-tab="passiveskills"]');
+            return tab && getComputedStyle(tab).display;
+        });
+        expect(vis).toBe('none');
+    });
+
+    test('clicking an owned passive equips it; START carries it into the run', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.openArmory();
+            // Equip the base starter OPPORTUNIST by clicking its bubble.
+            const node = document.querySelector('#shop-tree-passiveskills .shop-node[data-id="OPPORTUNIST"]');
+            node.click();
+            const chosenBadge = document.querySelector('#shop-tree-passiveskills .shop-node[data-id="OPPORTUNIST"] .shop-node-badge');
+            ge.beginPreRunFromTree({ primaries: ['PULSE_CANNON'], passives: ['OPPORTUNIST'] });
+            return {
+                badge: chosenBadge && chosenBadge.textContent,
+                equipped0: ge.player.equippedPassives[0],
+                active: [...ge.player.activePassives],
+                slots: ge.player.passiveSlotsUnlocked,
+            };
+        });
+        expect(r.badge).toBe('1');                 // slot-1 badge after equip
+        expect(r.equipped0).toBe('OPPORTUNIST');
+        expect(r.active).toContain('OPPORTUNIST'); // slot 1 unlocked from start
+        expect(r.slots).toBeGreaterThanOrEqual(1);
+    });
+
+    test('an un-owned passive is dropped on START', async ({ page }) => {
+        const active = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.openArmory();
+            // GLASS_CANNON was never unlocked → must not leak into the run.
+            ge.beginPreRunFromTree({ primaries: ['PULSE_CANNON'], passives: ['GLASS_CANNON'] });
+            return [...ge.player.activePassives];
+        });
+        expect(active).not.toContain('GLASS_CANNON');
+        expect(active).toHaveLength(0);
+    });
+
+    test('no fatal JS errors through the passives BUILD flow', async ({ page }) => {
+        await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.openArmory();
+            const node = document.querySelector('#shop-tree-passiveskills .shop-node[data-id="LAST_BASTION"]');
+            if (node) { node.click(); node.click(); } // equip + unequip
+        });
+        const fatal = page._jsErrors.filter(m =>
+            !m.includes('sfxr') && !m.includes('Audio') && !m.includes('audio') &&
+            !m.includes('Font') && !m.includes('net::ERR'));
+        expect(fatal, `Fatal JS errors: ${fatal.join('; ')}`).toHaveLength(0);
+    });
+});
+
 test.describe('QA-08b: Stash + Cores salvage (Phase R8)', () => {
     test.beforeEach(async ({ page }) => {
         page._jsErrors = [];
