@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.156.0] - 2026-05-24
+
+### Added — Twin Cast passive (Phase P6, keystone) — passive catalog complete
+
+- **Twin Cast** — power weapons fire twice (the 2nd shot at 50% damage) for a
+  +30% energy cost. The +30% applies at both power-fire energy-deduct paths
+  (cooldown-based `firePower` and the charge-based path) and composes with
+  Resonance (a free shot still wins). The double-fire re-dispatches the six
+  *burst* powers — Nova, Missiles, Singularity, Cryo Burst, Orbital Strike,
+  Mine Layer — with a half-damage clone of the config (each power's distinct
+  damage field is scaled on a copy; the shared `POWER_WEAPONS` config is never
+  mutated). Beam/buff/duration powers (Lance, Lightning, Prism, Overdrive) don't
+  double, since a 2nd instantaneous cast is meaningless. Guarded no-op without
+  the passive. (The descriptor's "abilities +1 charge" clause is deferred —
+  abilities run on cooldowns, not a charge system, so it needs new machinery.)
+- **With Twin Cast, the entire Phase P6 passive catalog is now wired** — every
+  catalog entry has a live, unit-tested, QA-verified gameplay effect.
+
+---
+
 ## [6.155.0] - 2026-05-24
 
 ### Added — Afterimage passive (Phase P6)

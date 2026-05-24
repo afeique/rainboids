@@ -330,8 +330,14 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         const powerConfig = this.getActivePowerConfig();
         if (powerConfig.isChargeBased) {
             // CHARGE_SHOT — spend energy, then fire at a fixed full charge.
-            // P6 — Resonance: every 3rd power use is free (no deduction).
+            // P6 — Twin Cast: +30% energy cost (applied before Resonance so a
+            // free shot still wins). CHARGE_SHOT does not double-fire (charge
+            // mechanics) — noted as a Twin Cast follow-up.
             let _chargeCost = this.getPowerEnergyCost();
+            if (typeof this.hasPassive === 'function' && this.hasPassive('TWIN_CAST')) {
+                _chargeCost = twinCastEnergyCost(_chargeCost, true);
+            }
+            // P6 — Resonance: every 3rd power use is free (no deduction).
             if (typeof this.hasPassive === 'function' && this.hasPassive('RESONANCE')) {
                 const _r = resonanceStep(this._resonanceUses);
                 this._resonanceUses = _r.count;
@@ -1207,6 +1213,33 @@ export function resonanceStep(prevCount) {
     return { count, free: count % 3 === 0 };
 }
 
+// P6 — Twin Cast passive: power weapons fire twice (the 2nd at 50% damage) for
+// +30% energy cost. Only BURST powers double — a 2nd cast of a beam / buff /
+// duration power (Lance / Lightning / Prism / Overdrive) is meaningless. Each
+// burst power keeps its damage in a DIFFERENT config field, so the half-clone
+// scales every known damage field on a SHALLOW COPY (never mutate the shared
+// POWER_WEAPONS config returned by getActivePowerConfig). Pure helpers so the
+// cost curve + double-selection + half-clone unit-test cleanly.
+export const TWIN_CAST_ENERGY_MULT = 1.3;
+export const TWIN_CAST_SECOND_MULT = 0.5;
+export const TWIN_CAST_DOUBLES = new Set([
+    'NOVA_BLAST', 'MISSILE_SALVO', 'SINGULARITY', 'CRYO_BURST', 'ORBITAL_STRIKE', 'MINE_LAYER',
+]);
+const TWIN_CAST_DMG_FIELDS = ['damage', 'ringDamage', 'missileDamage', 'collapseDamage', 'strikeDamage', 'mineDamage'];
+export function twinCastDoubles(power) {
+    return TWIN_CAST_DOUBLES.has(power);
+}
+export function twinCastEnergyCost(base, hasTwinCast) {
+    return hasTwinCast ? base * TWIN_CAST_ENERGY_MULT : base;
+}
+export function twinCastHalfConfig(config, mult = TWIN_CAST_SECOND_MULT) {
+    const half = { ...config };
+    for (const k of TWIN_CAST_DMG_FIELDS) {
+        if (typeof half[k] === 'number') half[k] *= mult;
+    }
+    return half;
+}
+
 export function firePower(bulletPool, audioManager, particlePool) {
     // P6 — Gunslinger passive: no power weapons (pure-gunner identity).
     if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) return;
@@ -1215,8 +1248,13 @@ export function firePower(bulletPool, audioManager, particlePool) {
     // 6.29.0 — Spend energy. Callers gate on isPowerReady() (energy >=
     // cost) before reaching here, but deduct defensively in case a
     // future caller skips the gate.
-    // P6 — Resonance: every 3rd power use is free (no deduction).
+    // P6 — Twin Cast: +30% energy cost (it fires twice — see below). Applied
+    // before Resonance so a Resonance free shot still wins (cost → 0).
     let _powerCost = this.getPowerEnergyCost();
+    if (typeof this.hasPassive === 'function' && this.hasPassive('TWIN_CAST')) {
+        _powerCost = twinCastEnergyCost(_powerCost, true);
+    }
+    // P6 — Resonance: every 3rd power use is free (no deduction).
     if (typeof this.hasPassive === 'function' && this.hasPassive('RESONANCE')) {
         const _r = resonanceStep(this._resonanceUses);
         this._resonanceUses = _r.count;
@@ -1273,6 +1311,25 @@ export function firePower(bulletPool, audioManager, particlePool) {
             this.powerCooldown = config.cooldown;
             this.powerCooldownMax = this.powerCooldown;
             return;
+    }
+
+    // P6 — Twin Cast: burst powers fire a 2nd time at 50% damage. No extra
+    // energy (the +30% was already applied above) and no extra cooldown (the
+    // 1st fire set it). Re-dispatches only the BURST powers (beam/buff/duration
+    // powers returned early or are buffs — a 2nd cast is meaningless). The
+    // half-clone scales the active power's damage field without mutating the
+    // shared config.
+    if (typeof this.hasPassive === 'function' && this.hasPassive('TWIN_CAST')
+        && twinCastDoubles(this.activePower)) {
+        const half = twinCastHalfConfig(config);
+        switch (this.activePower) {
+            case 'NOVA_BLAST': this.fireNova(half); break;
+            case 'MISSILE_SALVO': this.fireMissiles(bulletPool, half); break;
+            case 'SINGULARITY': this.fireSingularity(half); break;
+            case 'CRYO_BURST': this.fireCryoBurst(half); break;
+            case 'ORBITAL_STRIKE': this.fireOrbitalStrike(half); break;
+            case 'MINE_LAYER': this.layMine(half); break;
+        }
     }
 
     // Each weapon's fire fn sets its own cooldown with discount applied
