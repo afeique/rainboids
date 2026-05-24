@@ -36,6 +36,8 @@ export const UNLOCK_CATEGORIES = {
     attunements: { metaKey: 'unlockedAttunements', base: [], cost: 7000 },
     // Per-weapon Mechanic Mods (pierce/explode/home/stun/knock + capstones).
     mods: { metaKey: 'unlockedMods', base: [], cost: 5000 },
+    // W6 — per-ability Attunements (one element per ability, element-flavored).
+    abilityAttunements: { metaKey: 'unlockedAbilityAttunements', base: [], cost: 6000 },
 };
 
 /** Cost in account-gold to unlock one item of a category. */

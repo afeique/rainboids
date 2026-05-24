@@ -1162,6 +1162,80 @@ export function attunementElements(ids) {
     return out;
 }
 
+// ─── ABILITY ATTUNEMENTS (Phase W6 — element-flavored ability upgrades) ──────
+// Abilities are element-agnostic; an ability attunement adds ONE element to the
+// ability's effect (one-at-a-time, NOT stacking — strategic commit). Already-
+// elemental abilities (Cryo/Stasis/Storm/Pyre fields, Elemental Infusion) get
+// none. Data only here (W6-data); the runtime application (apply the element's
+// status to the ability's affected enemies on activate) + BUILD-tree DEFENSE
+// nodes are the follow-up. Spec rows: [suffix, element, name, description].
+const _ABILITY_ATTUNE_SPEC = {
+    EMP_PULSE: [
+        ['VOLT', 'VOLT', 'Ion Burst', 'Stunned enemies also CONDUCT (your Volt crits them).'],
+        ['CRYO', 'CRYO', 'Cryo Pulse', 'The pulse also freezes caught enemies.'],
+        ['PYRO', 'PYRO', 'Overload', 'The pulse also ignites caught enemies.'],
+        ['VOID', 'VOID', 'Null Pulse', 'The pulse also marks the whole group.'],
+    ],
+    SENTRY_DRONE: [
+        ['PYRO', 'PYRO', 'Incendiary Drones', 'Drone rounds ignite.'],
+        ['VOLT', 'VOLT', 'Tesla Drones', 'Drone rounds conduct + chain to a nearby enemy.'],
+        ['CRYO', 'CRYO', 'Cryo Drones', 'Drone rounds chill.'],
+        ['TOXIC', 'TOXIC', 'Toxic Drones', 'Drone rounds corrode.'],
+        ['VOID', 'VOID', 'Mark Drones', 'Drone rounds mark.'],
+        ['RADIANT', 'RADIANT', 'Lance Drones', 'Drone rounds pierce armor/shields.'],
+    ],
+    BULWARK: [
+        ['PYRO', 'PYRO', 'Searing Bulwark', 'Attackers that hit you while shielded burn.'],
+        ['VOLT', 'VOLT', 'Static Bulwark', 'Emit a conduct/stun pulse when hit while shielded.'],
+        ['CRYO', 'CRYO', 'Frostguard', 'Attackers that hit you while shielded chill.'],
+        ['VOID', 'VOID', 'Null Bulwark', 'Attackers that hit you while shielded are marked.'],
+    ],
+    DEFLECTOR_ORBS: [
+        ['VOLT', 'VOLT', 'Tesla Orbs', 'Orbs conduct on contact; reflected shots are Volt.'],
+        ['PYRO', 'PYRO', 'Ember Orbs', 'Orbs ignite on contact; reflected shots are Pyro.'],
+        ['CRYO', 'CRYO', 'Frost Orbs', 'Orbs chill on contact; reflected shots are Cryo.'],
+    ],
+    GRAVITY_SNARE: [
+        ['VOID', 'VOID', 'Singularity Snare', 'Snared enemies are marked + implode at the end.'],
+        ['CRYO', 'CRYO', 'Glacial Snare', 'The snared clump freezes.'],
+        ['PYRO', 'PYRO', 'Pyre Snare', 'Snared enemies burn.'],
+        ['TOXIC', 'TOXIC', 'Caustic Snare', 'Snared enemies corrode.'],
+    ],
+    BLINK: [
+        ['PYRO', 'PYRO', 'Flash Step', 'Leave a fire nova at the exit point.'],
+        ['VOLT', 'VOLT', 'Storm Step', 'Leave a conduct discharge at the exit point.'],
+        ['VOID', 'VOID', 'Void Step', 'Gather nearby enemies toward the arrival point.'],
+        ['CRYO', 'CRYO', 'Frost Step', 'Leave a freezing burst at the exit point.'],
+    ],
+    DESIGNATOR: [
+        ['TOXIC', 'TOXIC', 'Caustic Mark', 'Marked targets also corrode.'],
+        ['PYRO', 'PYRO', 'Branding Mark', 'Marked targets also burn.'],
+        ['CRYO', 'CRYO', 'Frostmark', 'Marked targets also chill.'],
+    ],
+    FIELD_MEDIC: [
+        ['RADIANT', 'RADIANT', 'Purifying Light', 'The heal-flash purges/blinds nearby enemies.'],
+        ['PYRO', 'PYRO', 'Cauterize', 'The heal-flash erupts in a fire nova.'],
+    ],
+    SECOND_WIND: [
+        ['PYRO', 'PYRO', 'Phoenix', 'Survival triggers a fire nova to buy space.'],
+        ['VOLT', 'VOLT', 'Discharge', 'Survival triggers a conduct shock to buy space.'],
+        ['CRYO', 'CRYO', 'Cold Snap', 'Survival triggers a freezing burst to buy space.'],
+    ],
+};
+
+export const ABILITY_ATTUNEMENTS = {};
+for (const [ability, list] of Object.entries(_ABILITY_ATTUNE_SPEC)) {
+    for (const [suffix, element, name, description] of list) {
+        const id = `${ability}_${suffix}`;
+        ABILITY_ATTUNEMENTS[id] = { id, name, element, ability, description, cost: _ATTUNE_COST };
+    }
+}
+
+/** All ability attunements for an ability id. */
+export function getAbilityAttunements(abilityId) {
+    return Object.values(ABILITY_ATTUNEMENTS).filter((a) => a.ability === abilityId);
+}
+
 // ─── POWER WEAPON UPGRADES ──────────────────────────────────────────────────
 
 // 5.76.0 — power-weapon upgrade costs scaled ~2× to match the gold curve.
