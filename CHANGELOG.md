@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.134.0] - 2026-05-24
+
+### Added — Hex Touch passive (Phase P6, content batch)
+
+**Hex Touch** — your damage-over-time effects hit harder: **+20% burn and bleed
+tick damage** (scaled in `Enemy._processStatusEffects`, gated on
+`hasPassive('HEX_TOUCH')`). Synergizes with Pyro/Toxic attunements + Catalyst.
+No-op without the passive.
+
 ## [6.133.0] - 2026-05-24
 
 ### Added — Gunslinger passive (Phase P6, content batch)

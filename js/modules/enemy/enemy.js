@@ -1580,6 +1580,11 @@ export class Enemy {
     _processStatusEffects() {
         const now = frameClock.now;
 
+        // P6 — Hex Touch passive: +20% status-tick (burn/bleed DoT) damage.
+        const _ge = this.gameEngine;
+        const _hex = (_ge && _ge.player && typeof _ge.player.hasPassive === 'function'
+            && _ge.player.hasPassive('HEX_TOUCH')) ? 1.2 : 1;
+
         // BRN tick — fire as many ticks as fit since the last tick. Most
         // frames will trigger at most one tick; the while-loop guards
         // against frame-time spikes that span multiple 500 ms windows.
@@ -1590,7 +1595,7 @@ export class Enemy {
         // isn't pre-empted by the expiry check.
         if (this.brnStacks > 0 && this.brnUntil > 0) {
             while (now >= this.brnTickAt && this.brnTickAt <= this.brnUntil) {
-                const tickDmg = this.brnSourceDmg * 0.1 * this.brnStacks;
+                const tickDmg = this.brnSourceDmg * 0.1 * this.brnStacks * _hex;
                 if (tickDmg > 0) {
                     // Route through takeDamage so the engine's standard
                     // damage pipeline runs (XP / kill streak / vampirism /
@@ -1619,7 +1624,7 @@ export class Enemy {
         // full window regardless of re-procs — re-procs only add stacks.
         if (this.bleedStacks > 0 && this.bleedUntil > 0) {
             while (now >= this.bleedTickAt && this.bleedTickAt <= this.bleedUntil) {
-                const tickDmg = this.bleedSourceDmg * 0.08 * this.bleedStacks;
+                const tickDmg = this.bleedSourceDmg * 0.08 * this.bleedStacks * _hex;
                 if (tickDmg > 0) {
                     this.takeDamage(tickDmg, { showNumber: true, isBurn: true });
                     if (!this.active) return; // bleed-killed; bail.
