@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.155.0] - 2026-05-24
+
+### Added — Afterimage passive (Phase P6)
+
+- **Afterimage** — dashing leaves a "clone" at your origin that fires your
+  primary once. Implemented without a persistent entity: at dash-trigger time
+  the ship's position is still the dash origin (the burst velocity integrates
+  afterward), so firing the primary right then spawns the volley from where you
+  dashed *from* — toward your aim — as the ship streaks away. A free bonus shot
+  rate-limited by the dash cooldown (bypasses the primary cooldown). Guarded
+  no-op without the passive; never breaks the dash if the bullet pool is absent.
+  Third of the four new-runtime passives.
+
+---
+
 ## [6.154.0] - 2026-05-24
 
 ### Added — Eye of the Storm passive (Phase P6, keystone)

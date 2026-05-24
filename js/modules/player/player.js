@@ -1399,6 +1399,22 @@ export class Player {
             && typeof this.addEnergy === 'function') {
             this.addEnergy(KINETIC_BATTERY_REFUND);
         }
+
+        // P6 — Afterimage: the dash leaves a "clone" at the origin that fires
+        // your primary once. At trigger time this.x/this.y is still the dash
+        // ORIGIN (the burst velocity integrates in updateActiveAbilities AFTER
+        // this returns), and firePrimary aims along this.angle — so firing now
+        // spawns the volley from where you dashed FROM as the ship streaks away.
+        // Free bonus shot (rate-limited by the dash cooldown); bypasses the
+        // primary cooldown by calling firePrimary directly. Never breaks the dash.
+        if (typeof this.hasPassive === 'function' && this.hasPassive('AFTERIMAGE')
+            && typeof this.firePrimary === 'function') {
+            const ge = this.gameEngine;
+            if (ge && ge.bulletPool) {
+                try { this.firePrimary(ge.bulletPool, ge.audioManager || audio, ge.particlePool); }
+                catch (_) { /* afterimage is a bonus — never break the dash */ }
+            }
+        }
         return true;
     }
 
