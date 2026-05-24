@@ -111,7 +111,8 @@ function _buildTutorialOverlay() {
     body.appendChild(section('POWER WEAPONS', [
         'Right-click weapons (Charge Shot, Mine Layer, Nova Blast,',
         'Missile Salvo, Lance Beam, Lightning Arc).',
-        'Each spends ENERGY — you build energy by landing hits, and',
+        'Each spends ENERGY, which recharges automatically over time.',
+        'The ship charges up as the meter (next to health) fills;',
         'every power weapon costs a different amount to fire.',
     ]));
     body.appendChild(section('DEFENSE ABILITY', [

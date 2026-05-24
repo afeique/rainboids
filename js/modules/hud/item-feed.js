@@ -2,9 +2,10 @@
 //
 // Item drops no longer spawn world-space pickup orbs. Each drop is
 // registered into `player.lootFeed` (newest first, capped) and rendered
-// here as a stack of cards pinned to the LEFT screen edge. Cards persist
-// a long time and fade to near-transparent when the ship or the cursor
-// is over the feed region, so they never block gameplay.
+// here as a stack of cards pinned to the LEFT screen edge. Cards fade out
+// after a few seconds (oldest first) so the feed clears during lulls and
+// never clutters the HUD, and they also fade to near-transparent when the
+// ship or the cursor is over the feed region, so they never block gameplay.
 //
 // `drawItemGlyph` is exported so the 'I' inventory screen reuses the same
 // crystalline per-slot geometry (no big colored halo — that was removed).
@@ -142,8 +143,8 @@ const FEED_TOP = 138;     // below the top-left health bar + level badge
 const CARD_W = 214;
 const CARD_H = 46;
 const CARD_GAP = 7;
-const FEED_LIFE = 90000;  // cards persist ~90s
-const FEED_FADE = 10000;  // fade over the final ~10s
+const FEED_LIFE = 12000;  // cards persist ~12s, then fade out
+const FEED_FADE = 4000;   // fade over the final ~4s
 
 // Draw the loot feed. `this` = gameEngine. Prunes expired entries.
 export function drawItemFeed(ctx) {

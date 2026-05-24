@@ -19,10 +19,6 @@ import { allyShieldMult } from '../enemy/support-aura.js';
 const MOBILE_ASTEROID_SPLIT_MAX_RADIUS = 36;
 const MOBILE_PORTRAIT_ASTEROID_SPLIT_MAX_RADIUS = 28;
 
-// 6.29.0 — Power-weapon energy gained per landed bullet hit. With the
-// 100-cap, ~5 hits banks a Charge Shot (20), ~25 hits a Lance Beam (60).
-const ENERGY_PER_HIT = 4;
-
 // ─── Collision Physics Config ────────────────────────────────────────────────
 export const COLLISION_CONFIG = {
     // Bullet-to-asteroid knockback impulse multiplier
@@ -726,10 +722,9 @@ export function handleCollisions() {
                 const enemyApplied = Math.max(0, enemyHpBefore - enemy.health);
                 if (typeof this.applyVampirism === 'function') this.applyVampirism(enemyApplied);
 
-                // 6.29.0 — Build power-weapon energy on every landed hit.
-                if (this.player && typeof this.player.addEnergy === 'function') {
-                    this.player.addEnergy(ENERGY_PER_HIT);
-                }
+                // 6.116.0 — Power energy is no longer earned per hit; it now
+                // regenerates passively over time (see Player.update). The
+                // old addEnergy(ENERGY_PER_HIT) call here was removed.
 
                 // 6.28.0 — Per-weapon Stun% / Knockback% procs. Chances are
                 // stamped on the bullet at fire time (player/weapons.js).
@@ -2280,7 +2275,8 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
             // resisted hits dim and weakness hits bright (visual cue lands with
             // E8 when enemy resists are populated; flags are inert until then).
             { isCrit: !!opts.isCrit, isEmpowered: !!opts.isEmpowered, isBurn: !!opts.isBurn,
-              isResisted: _resistMult < 1, isWeak: _resistMult > 1, target: enemy }
+              isResisted: _resistMult < 1, isWeak: _resistMult > 1,
+              effectiveness: _resistMult, target: enemy }
         );
     }
     if (this.game?.stats) this.game.stats.totalDamageDealt += damage;

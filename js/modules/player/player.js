@@ -50,6 +50,16 @@ export class Player {
         this.lastThrustTime = 0;      // timestamp of last active thrust input
         this.engineStartup = 0;       // 0→1 ramp for startup shudder
         this.wasThrusting = false;    // edge detection for idle→thrust transition
+
+        // ── Living-ship articulation state (visual only; read by the
+        // renderer). The ship banks into turns like a bird, sweeps its
+        // wings back under thrust like a diving fish, fans its S-foils,
+        // and gently "breathes" while idle. None of this touches physics. ──
+        this.bank = 0;                // -1..1 lateral lean / roll
+        this.wingSweep = 0;           // 0 idle (spread) → 1 thrust (swept back)
+        this.flapOpen = 0;            // 0 closed → 1 S-foils fanned open
+        this.glidePhase = 0;          // ever-advancing idle "breathing" phase
+        this._prevAimAngle = -Math.PI / 2;
         
         // Auto-firing system
         this.autoFireTimer = 0;
@@ -739,13 +749,11 @@ export class Player {
                 // autoFire toggle. Charge-based powers fire on full
                 // charge; cooldown-based powers fire as soon as they're
                 // ready and a valid target is acquired.
+                // Unified energy-gated model (incl. CHARGE_SHOT): auto-fire
+                // the power weapon as soon as enough energy is banked.
                 const pcfg = this.getActivePowerConfig && this.getActivePowerConfig();
-                if (pcfg) {
-                    if (pcfg.isChargeBased) {
-                        if (this.isFullyCharged) input.fireSecondary = true;
-                    } else if (this.isPowerReady && this.isPowerReady()) {
-                        input.fireSecondary = true;
-                    }
+                if (pcfg && this.isPowerReady && this.isPowerReady()) {
+                    input.fireSecondary = true;
                 }
             }
         }
@@ -946,6 +954,46 @@ export class Player {
         const deltaY = this.y - prevY;
         if ((deltaX !== 0 || deltaY !== 0) && input.updateAimForPlayerMovement) {
             input.updateAimForPlayerMovement(deltaX, deltaY);
+        }
+
+        // ── Living-ship articulation (visual only; read by renderer.draw) ──
+        // Bank into lateral motion + aim swings like a bird leaning through a
+        // turn; sweep the wings back as speed/thrust rises like a fish
+        // streamlining; fan the S-foils with thrust; and keep a slow idle
+        // "breathing" phase so the ship is never visually dead at rest.
+        {
+            const maxV = GAME_CONFIG.MAX_V || 3.5;
+            const fx = Math.cos(this.angle), fy = Math.sin(this.angle);
+            // Lateral (right-perpendicular) velocity component, normalized.
+            const lateral = (this.vel.x * -fy + this.vel.y * fx) / maxV;
+            // Aim swing this frame, wrapped to [-PI, PI].
+            let dAim = this.angle - this._prevAimAngle;
+            if (dAim > Math.PI) dAim -= Math.PI * 2;
+            else if (dAim < -Math.PI) dAim += Math.PI * 2;
+            this._prevAimAngle = this.angle;
+            const bankTarget = Math.max(-1, Math.min(1, lateral * 0.9 + dAim * 2.2));
+            this.bank += (bankTarget - this.bank) * 0.18;
+
+            const speed = Math.hypot(this.vel.x, this.vel.y) / maxV;
+            const sweepTarget = Math.min(1, speed * 0.7 + this.thrustLevel * 0.55);
+            this.wingSweep += (sweepTarget - this.wingSweep) * 0.12;
+            this.flapOpen += (this.thrustLevel - this.flapOpen) * 0.1;
+            this.glidePhase += 0.045;
+        }
+
+        // ── Power energy: passive regen over time (empty → full in ~12s) ──
+        // Replaces the old per-hit energy gain: energy is now a continuously
+        // recharging resource. As it fills, the ship visibly "charges up"
+        // (body glow + nose ring), and power weapons fire by spending it.
+        {
+            const eNow = Date.now();
+            const dtMs = Math.min(250, eNow - (this._lastEnergyTime || eNow)); // clamp pause/tab gaps
+            this._lastEnergyTime = eNow;
+            if (!this.chargePaused && dtMs > 0) {
+                const ENERGY_FILL_MS = 12000;  // empty → full in 12 seconds
+                const maxE = this.maxEnergy || 100;
+                this.energy = Math.min(maxE, (this.energy || 0) + maxE * dtMs / ENERGY_FILL_MS);
+            }
         }
 
         // Charging shot system - charge when holding left-click, fire on release

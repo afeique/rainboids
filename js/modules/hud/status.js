@@ -805,9 +805,16 @@ function drawEnergySphere(ctx, cx, cy, r) {
 
         const coreR = Math.max(1, r * frac);
         const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-        grad.addColorStop(0,    `rgba(255,255,255,${0.85 * frac + 0.15})`);
-        grad.addColorStop(0.45, `rgba(${cr},${cg},${cb},0.75)`);
-        grad.addColorStop(1,    `rgba(${cr},${cg},${cb},0)`);
+        // The colored body stays solid out to `solidStop`, then feathers to
+        // transparent in the remaining sliver. solidStop ramps with frac so
+        // at full charge (frac=1) the body reaches the rim and the orb reads
+        // as COMPLETELY full; at partial charge it keeps a soft gaseous edge.
+        // (Previously the colored stop was at 0.45 → fully transparent at the
+        // rim, so the orb never visually filled even when energy was maxed.)
+        const solidStop = Math.min(0.97, 0.5 + 0.47 * frac);
+        grad.addColorStop(0,         `rgba(255,255,255,${0.85 * frac + 0.15})`);
+        grad.addColorStop(solidStop, `rgba(${cr},${cg},${cb},0.8)`);
+        grad.addColorStop(1,         `rgba(${cr},${cg},${cb},0)`);
         ctx.fillStyle = grad;
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
 
@@ -840,7 +847,8 @@ function drawEnergySphere(ctx, cx, cy, r) {
 
     // Ready pulse — gold rim once a power shot is affordable.
     const cost = (typeof player.getPowerEnergyCost === 'function') ? player.getPowerEnergyCost() : 30;
-    if ((player.energy || 0) >= cost) {
+    const ready = (player.energy || 0) >= cost;
+    if (ready) {
         const pulse = 0.4 + 0.3 * Math.sin(now * 0.012);
         ctx.lineWidth = 2;
         ctx.strokeStyle = `rgba(255, 240, 160, ${pulse})`;
@@ -848,6 +856,20 @@ function drawEnergySphere(ctx, cx, cy, r) {
         ctx.arc(cx, cy, r + 2.5, 0, Math.PI * 2);
         ctx.stroke();
     }
+
+    // Numeric readout beneath the orb: current / total energy. Goes gold
+    // once a power shot is affordable (matches the ready-pulse cue), soft
+    // blue-white while still banking.
+    const energyText = `${Math.floor(player.energy || 0)}/${Math.round(maxE)}`;
+    ctx.font = "9px 'Press Start 2P', monospace";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillStyle = ready ? '#FFE0A0' : 'rgba(210, 232, 255, 0.92)';
+    const textY = cy + r + 5;
+    ctx.strokeText(energyText, cx, textY);
+    ctx.fillText(energyText, cx, textY);
 
     ctx.restore();
 }

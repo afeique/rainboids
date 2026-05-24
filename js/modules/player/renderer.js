@@ -6,55 +6,84 @@ import { rgba } from '../core/color-cache.js';
 import { frameClock } from '../core/frame-clock.js';
 import { drawShipShape, SHIP_PALETTE_MAGENTA } from '../render/shapes.js';
 
-// ── Path2D cache for ship geometry ─────────────────────────────────
-// The ship's wings, tips, and central hull are STATIC polygons in
-// ship-local coordinates that depend only on `radius`. We were
-// rebuilding them with beginPath + 4–6 moveTo/lineTo calls per
-// PIECE per PASS per FRAME — and there are TWO passes (silhouette
-// stroke + colored fill+stroke) per piece, so 10 path-build sequences
-// per frame per ship just for the wings/tips/hull. Cache as Path2D
-// objects keyed by radius; build once, reuse forever (cache survives
-// the entire session — radius almost never changes after construction).
-const _shipPathCache = new Map();
+// ── Ship part geometry (Path2D cache) ──────────────────────────────
+// The ship is built from independently-articulated parts so it can
+// "transform" as it flies: the swept-delta WINGS rotate about their root
+// hinge (sweeping back under thrust, rolling asymmetrically when banking),
+// the outboard S-FOIL FLAPS fan open with thrust, and the forward CANARDS
+// steer with the bank. Each part is a static polygon in its OWN hinge-local
+// frame (origin = the hinge), so articulation is pure ctx rotation at draw
+// time and the Path2D objects cache forever (the radius is constant after
+// construction). Left-side parts reuse the right-side paths via
+// ctx.scale(-1, 1), so one definition draws both sides.
+const _shipPartCache = new Map();
 
-function _getShipPaths(r) {
-    let paths = _shipPathCache.get(r);
-    if (paths) return paths;
-    const rightWing  = new Path2D();
-    rightWing.moveTo( r * 0.32, -r * 0.18);
-    rightWing.lineTo( r * 1.12,  r * 0.28);
-    rightWing.lineTo( r * 0.82,  r * 0.68);
-    rightWing.lineTo( r * 0.28,  r * 0.58);
-    rightWing.closePath();
-    const leftWing   = new Path2D();
-    leftWing.moveTo(-r * 0.32, -r * 0.18);
-    leftWing.lineTo(-r * 1.12,  r * 0.28);
-    leftWing.lineTo(-r * 0.82,  r * 0.68);
-    leftWing.lineTo(-r * 0.28,  r * 0.58);
-    leftWing.closePath();
-    const rightTip   = new Path2D();
-    rightTip.moveTo( r * 1.12,  r * 0.28);
-    rightTip.lineTo( r * 1.42,  r * 0.08);
-    rightTip.lineTo( r * 1.18,  r * 0.56);
-    rightTip.lineTo( r * 0.82,  r * 0.68);
-    rightTip.closePath();
-    const leftTip    = new Path2D();
-    leftTip.moveTo(-r * 1.12,  r * 0.28);
-    leftTip.lineTo(-r * 1.42,  r * 0.08);
-    leftTip.lineTo(-r * 1.18,  r * 0.56);
-    leftTip.lineTo(-r * 0.82,  r * 0.68);
-    leftTip.closePath();
-    const centralHull = new Path2D();
-    centralHull.moveTo(0, -r);
-    centralHull.lineTo( r * 0.32, -r * 0.18);
-    centralHull.lineTo( r * 0.28,  r * 0.58);
-    centralHull.lineTo(0,           r * 0.38);
-    centralHull.lineTo(-r * 0.28,  r * 0.58);
-    centralHull.lineTo(-r * 0.32, -r * 0.18);
-    centralHull.closePath();
-    paths = { rightWing, leftWing, rightTip, leftTip, centralHull };
-    _shipPathCache.set(r, paths);
-    return paths;
+function _getShipParts(r) {
+    let parts = _shipPartCache.get(r);
+    if (parts) return parts;
+
+    // Fuselage — a sharp, sleek arrowhead with a forked tail (ship-local,
+    // nose pointing up at -y).
+    const fuselage = new Path2D();
+    fuselage.moveTo(0, -r * 1.18);
+    fuselage.lineTo( r * 0.11, -r * 0.62);
+    fuselage.lineTo( r * 0.17, -r * 0.02);
+    fuselage.lineTo( r * 0.15,  r * 0.46);
+    fuselage.lineTo( r * 0.27,  r * 0.74);
+    fuselage.lineTo( r * 0.12,  r * 0.70);
+    fuselage.lineTo(0,           r * 0.52);
+    fuselage.lineTo(-r * 0.12,  r * 0.70);
+    fuselage.lineTo(-r * 0.27,  r * 0.74);
+    fuselage.lineTo(-r * 0.15,  r * 0.46);
+    fuselage.lineTo(-r * 0.17, -r * 0.02);
+    fuselage.lineTo(-r * 0.11, -r * 0.62);
+    fuselage.closePath();
+
+    // A crisp spine ridge down the fuselage centreline.
+    const spine = new Path2D();
+    spine.moveTo(0, -r * 1.05);
+    spine.lineTo( r * 0.055, -r * 0.2);
+    spine.lineTo(0,           r * 0.4);
+    spine.lineTo(-r * 0.055, -r * 0.2);
+    spine.closePath();
+
+    // Right swept-delta wing — hinge at origin, blade extends outboard (+x)
+    // and aft (+y) to a sharp tip.
+    const wing = new Path2D();
+    wing.moveTo(0, -r * 0.16);
+    wing.lineTo( r * 0.5,  -r * 0.06);
+    wing.lineTo( r * 1.24,  r * 0.18);  // sharp swept tip
+    wing.lineTo( r * 0.95,  r * 0.30);
+    wing.lineTo( r * 0.5,   r * 0.34);
+    wing.lineTo(0,           r * 0.34);
+    wing.closePath();
+
+    // Outboard S-foil flap — hinge near the wingtip, fans aft when open.
+    const flap = new Path2D();
+    flap.moveTo(0, 0);
+    flap.lineTo( r * 0.46,  r * 0.05);
+    flap.lineTo( r * 0.36,  r * 0.28);
+    flap.lineTo(-r * 0.02,  r * 0.2);
+    flap.closePath();
+
+    // Forward canard — a small sharp fin near the cockpit that steers.
+    const canard = new Path2D();
+    canard.moveTo(0, 0);
+    canard.lineTo( r * 0.32, -r * 0.16);
+    canard.lineTo( r * 0.42, -r * 0.02);
+    canard.lineTo( r * 0.08,  r * 0.12);
+    canard.closePath();
+
+    parts = {
+        fuselage, spine, wing, flap, canard,
+        wingHinge:   { x: r * 0.13, y: -r * 0.02 },
+        flapHinge:   { x: r * 1.0,  y: r * 0.16 },   // in WING-local frame
+        canardHinge: { x: r * 0.12, y: -r * 0.48 },
+        enginePods:  [ { x: r * 0.34, y: r * 0.6 }, { x: -r * 0.34, y: r * 0.6 } ],
+        cockpit:     { x: 0, y: -r * 0.5, rx: r * 0.15, ry: r * 0.32 },
+    };
+    _shipPartCache.set(r, parts);
+    return parts;
 }
 
 // ── Remote-peer ship draw (MVD multiplayer, 2026-05-13) ────────────────────
@@ -99,174 +128,237 @@ export function draw(ctx) {
     // Flash effect during invincibility
     if (this.invincible) {
         const flash = Math.sin(frameClock.now * 0.02) > 0;
-        ctx.globalAlpha = flash ? 0.35 : 0.85;
+        ctx.globalAlpha = flash ? 0.4 : 0.9;
     }
-
-    // Hit flash — brief white tint on collision
-    if (this._hitFlashTimer > 0) {
-        this._hitFlashTimer--;
-    }
-
-    ctx.globalCompositeOperation = 'lighter';
+    // Hit flash — brief white burst on collision (decremented here)
+    if (this._hitFlashTimer > 0) this._hitFlashTimer--;
 
     const r = this.radius;
     const t = frameClock.now * 0.001;
+    const noseY = -r * 1.18;
 
-    // ── Engine startup shudder ──────────────────────────────────────────
+    // ── Engine startup shudder ──
     // Brief mechanical vibration when engines re-engage after idle.
     if (this.engineStartup > 0) {
         const shudder = this.engineStartup * 2.2;
-        const sx = Math.sin(t * 65) * shudder;
-        const sy = Math.cos(t * 85) * shudder * 0.7;
-        ctx.translate(sx, sy);
+        ctx.translate(Math.sin(t * 65) * shudder, Math.cos(t * 85) * shudder * 0.7);
     }
 
-    // ── Engine exhaust — modulated by thrust level ──────────────────────
-    // Idle: small warm glow (ship stays visible). Thrusting: long bright plumes.
+    // ── Living-ship articulation (computed each frame in player.update) ──
+    // bank: lateral lean, wingSweep: 0 spread → 1 swept, flapOpen: S-foils,
+    // glidePhase: idle breathing. The ship leans into turns, streamlines
+    // under thrust, and gently flexes its wings when still.
     const thr = this.thrustLevel;
-    const idlePulse = 0.35 + Math.sin(t * 4) * 0.1;   // visible idle glow
-    const thrustPulse = 0.8 + Math.sin(t * 12) * 0.2;  // intense thrust flicker
-    const engPulse = idlePulse + (thrustPulse - idlePulse) * thr;
+    const bank = this.bank || 0;
+    const sweep = this.wingSweep || 0;
+    const flapOpen = this.flapOpen || 0;
+    const breath = Math.sin(this.glidePhase || 0);
 
-    const engines = [
-        { x:  r * 0.42, y: r * 0.78 },
-        { x: -r * 0.42, y: r * 0.78 },
-    ];
-    // Quantize thrustLevel to nearest 0.1 for gradient caching
+    // Lean the whole airframe into the bank — a gentle shear, like a bird
+    // tipping through a turn.
+    ctx.transform(1, 0, bank * 0.12, 1, 0, 0);
+
+    const parts = _getShipParts(r);
+    const engines = parts.enginePods;
+    const OUTLINE = 'rgba(2, 0, 10, 0.98)';
+
+    // ── Spectral gradients (rebuilt only when the radius changes) ──
+    // A warm→cool rainbow sweep flows along each wing span; because the
+    // gradient is defined in wing-local coords it rotates WITH the wing,
+    // so the colours flow as the wing sweeps.
+    if (!this._shipGrads || this._shipGrads.r !== r) {
+        // Wings: a near-pure-saturation spectral sweep, gold root → electric
+        // cyan tip, at high alpha so the colours blaze rather than tint.
+        const wingGrad = ctx.createLinearGradient(0, 0, r * 1.24, r * 0.16);
+        wingGrad.addColorStop(0.0,  rgba(255, 196, 0, 0.85));    // pure gold root
+        wingGrad.addColorStop(0.3,  rgba(255, 32, 96, 0.82));    // hot rose-red
+        wingGrad.addColorStop(0.62, rgba(150, 30, 255, 0.82));   // electric violet
+        wingGrad.addColorStop(1.0,  rgba(0, 235, 255, 0.9));     // electric cyan tip
+        // S-foils: pure hot magenta — maximum contrast against the cyan
+        // wingtips they sit beside, and a vivid colour revealed in motion.
+        const flapGrad = ctx.createLinearGradient(0, 0, r * 0.46, r * 0.22);
+        flapGrad.addColorStop(0, rgba(255, 0, 140, 0.95));       // pure magenta
+        flapGrad.addColorStop(1, rgba(190, 24, 255, 0.78));      // violet-magenta
+        // Fuselage: a deep, cooler body so the blazing wings/flaps pop off it.
+        const fuseGrad = ctx.createLinearGradient(0, noseY, 0, r * 0.74);
+        fuseGrad.addColorStop(0,   rgba(0, 190, 255, 0.62));     // cyan nose
+        fuseGrad.addColorStop(0.5, rgba(86, 36, 255, 0.55));     // deep violet mid
+        fuseGrad.addColorStop(1,   rgba(255, 28, 120, 0.55));    // magenta tail
+        const cp = parts.cockpit;
+        const cockpitGrad = ctx.createRadialGradient(cp.x, cp.y - cp.ry * 0.3, 0, cp.x, cp.y, cp.ry);
+        cockpitGrad.addColorStop(0,   rgba(255, 255, 255, 1.0));
+        cockpitGrad.addColorStop(0.5, rgba(0, 240, 255, 0.9));
+        cockpitGrad.addColorStop(1,   rgba(150, 40, 255, 0.4));
+        this._shipGrads = { r, wingGrad, flapGrad, fuseGrad, cockpitGrad };
+    }
+    const grads = this._shipGrads;
+
+    // Paint a part: an opaque dark body + dark outline (source-over) gives
+    // definition against bright nebulae; a neon spectral sheen + a bright
+    // accent edge (lighter) supply the rainbow glow.
+    const paint = (path, sheen, edge, edgeW, outlineW) => {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(9, 6, 26, 0.97)';
+        ctx.fill(path);
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = OUTLINE;
+        ctx.lineWidth = outlineW;
+        ctx.stroke(path);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = sheen;
+        ctx.fill(path);
+        if (edge) {
+            ctx.strokeStyle = edge;
+            ctx.lineWidth = edgeW;
+            ctx.stroke(path);
+        }
+    };
+
+    // ── Engine exhaust — spectral plume modulated by thrust ──
+    // Idle: small warm-ish glow (ship stays visible). Thrusting: long bright
+    // white→cyan→magenta plumes.
+    const idlePulse = 0.4 + Math.sin(t * 4) * 0.1;
+    const thrustPulse = 0.85 + Math.sin(t * 12) * 0.2;
+    const engPulse = idlePulse + (thrustPulse - idlePulse) * thr;
     const qThr = Math.round(thr * 10) / 10;
     const qPulse = Math.round(engPulse * 10) / 10;
+    ctx.globalCompositeOperation = 'lighter';
     for (let ei = 0; ei < engines.length; ei++) {
         const eng = engines[ei];
-        // Exhaust length: short warm stub at idle → long plume when thrusting
-        const exhaustLen = r * (0.45 + thr * 1.1) * (0.8 + engPulse * 0.4);
-        // Cache gradient, invalidating when quantized thrust or pulse changes
+        const exhaustLen = r * (0.4 + thr * 1.25) * (0.8 + engPulse * 0.4);
+        // Cache gradient, invalidating when quantized thrust or pulse changes.
         const cacheSlot = this._engineGradCache || (this._engineGradCache = [{}, {}]);
         const cache = cacheSlot[ei];
         if (cache.qThr !== qThr || cache.qPulse !== qPulse || cache.r !== r) {
-            const qExhaustLen = r * (0.45 + qThr * 1.1) * (0.8 + qPulse * 0.4);
-            const grad = ctx.createLinearGradient(eng.x, eng.y, eng.x, eng.y + qExhaustLen);
-            grad.addColorStop(0,   rgba(255, 220, 120, 0.9 * qPulse));
-            grad.addColorStop(0.35, rgba(255, 80, 10, 0.6 * qPulse));
-            grad.addColorStop(1,   'transparent');
+            const qLen = r * (0.4 + qThr * 1.25) * (0.8 + qPulse * 0.4);
+            const grad = ctx.createLinearGradient(eng.x, eng.y, eng.x, eng.y + qLen);
+            grad.addColorStop(0,    rgba(255, 255, 255, 0.95 * qPulse));
+            grad.addColorStop(0.3,  rgba(60, 230, 255, 0.7 * qPulse));   // cyan
+            grad.addColorStop(0.65, rgba(255, 60, 180, 0.45 * qPulse));  // magenta
+            grad.addColorStop(1,    'transparent');
             cache.grad = grad;
             cache.qThr = qThr;
             cache.qPulse = qPulse;
             cache.r = r;
         }
         ctx.fillStyle = cache.grad;
-        const glowIntensity = 0.4 + thr * 0.5;
-        glowSpriteCache.draw(ctx, eng.x, eng.y + exhaustLen * 0.5, '#ff8800', r * 0.12, 6, glowIntensity * engPulse);
-        ctx.shadowBlur = 0;
+        const glowI = 0.4 + thr * 0.5;
+        glowSpriteCache.draw(ctx, eng.x, eng.y + exhaustLen * 0.5, '#33ddff', r * 0.14, 6, glowI * engPulse);
         ctx.beginPath();
-        ctx.ellipse(eng.x, eng.y + exhaustLen * 0.5, r * 0.12, exhaustLen * 0.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(eng.x, eng.y + exhaustLen * 0.5, r * 0.13, exhaustLen * 0.5, 0, 0, Math.PI * 2);
         ctx.fill();
     }
 
-    // ── Black silhouette outline pass (5.79.0) ────────────────────────────
-    // Drawn FIRST in source-over so the subsequent 'lighter' fills don't
-    // erase the outline. Wraps every major piece (wings, tips, hull,
-    // engine pods, cockpit) in a thick black stroke for visual definition
-    // against bright nebulae.
-    const paths = _getShipPaths(r);
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = '#000';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = 4;
-    ctx.stroke(paths.rightWing);
-    ctx.stroke(paths.leftWing);
-    ctx.stroke(paths.rightTip);
-    ctx.stroke(paths.leftTip);
-    ctx.lineWidth = 5;
-    ctx.stroke(paths.centralHull);
-    // Engine pods
-    ctx.lineWidth = 2.6;
-    for (const eng of engines) {
-        ctx.beginPath();
-        ctx.ellipse(eng.x, eng.y, r * 0.13, r * 0.09, 0, 0, Math.PI * 2);
-        ctx.stroke();
+    // ── Swept-delta wings + outboard S-foil flaps ──
+    // Wings sweep back with speed and roll asymmetrically with bank; the
+    // flaps fan aft with thrust. Right side drawn at scale +1, left at -1 —
+    // the mirror flips the rotation sense so one path serves both wings.
+    const sweepAng = -0.06 + sweep * 0.5 + breath * 0.05 * (1 - sweep);
+    const flapAng = 0.15 + flapOpen * 0.7;
+    for (let s = 1; s >= -1; s -= 2) {
+        ctx.save();
+        ctx.translate(parts.wingHinge.x * s, parts.wingHinge.y);
+        ctx.scale(s, 1);
+        ctx.rotate(sweepAng + s * bank * 0.22);
+        paint(parts.wing, grads.wingGrad, rgba(255, 238, 90, 0.95), 1.3, 2.6);  // gold edge
+        // S-foil flap, hinged near the wingtip (in wing-local space).
+        ctx.save();
+        ctx.translate(parts.flapHinge.x, parts.flapHinge.y);
+        ctx.rotate(flapAng);
+        paint(parts.flap, grads.flapGrad, rgba(255, 120, 220, 0.98), 1.1, 2.2);  // bright pink edge
+        ctx.restore();
+        ctx.restore();
     }
-    // Cockpit
-    ctx.lineWidth = 2.4;
+
+    // ── Fuselage — cyan outline contrasts the gold wing edges ──
+    paint(parts.fuselage, grads.fuseGrad, rgba(120, 245, 255, 0.9), 1.3, 3.2);
+
+    // ── Spine ridge — a bright hairline down the body ──
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(180, 245, 255, 0.55)';
+    ctx.fill(parts.spine);
+    ctx.strokeStyle = 'rgba(255, 240, 150, 0.7)';
+    ctx.lineWidth = 0.7;
+    ctx.stroke(parts.spine);
+
+    // ── Engine pods — dark housings, fanning nozzle petals, hot cores ──
+    for (const eng of engines) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(10, 8, 30, 0.95)';
+        ctx.strokeStyle = OUTLINE;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(eng.x, eng.y, r * 0.16, r * 0.12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Two nozzle petals that fan apart with thrust.
+        const petal = 0.2 + flapOpen * 0.5;
+        for (const ps of [1, -1]) {
+            ctx.save();
+            ctx.translate(eng.x, eng.y);
+            ctx.rotate(ps * petal);
+            ctx.fillStyle = 'rgba(14, 12, 38, 0.95)';
+            ctx.strokeStyle = OUTLINE;
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(0, -r * 0.02);
+            ctx.lineTo(ps * r * 0.17, r * 0.05);
+            ctx.lineTo(ps * r * 0.11, r * 0.2);
+            ctx.lineTo(0, r * 0.12);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+        // Hot core glow — brightens with thrust.
+        ctx.globalCompositeOperation = 'lighter';
+        const coreI = 0.5 + thr * 0.5;
+        glowSpriteCache.draw(ctx, eng.x, eng.y, '#33e0ff', r * 0.12, 5, coreI);
+        const coreGrad = ctx.createRadialGradient(eng.x, eng.y, 0, eng.x, eng.y, r * 0.13);
+        coreGrad.addColorStop(0,   rgba(255, 255, 255, 0.9 * coreI));
+        coreGrad.addColorStop(0.5, rgba(60, 220, 255, 0.7 * coreI));
+        coreGrad.addColorStop(1,   'transparent');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(eng.x, eng.y, r * 0.13, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // ── Forward canards — steer with bank, tuck back with sweep ──
+    const canardAng = -0.08 + sweep * 0.22 + breath * 0.04;
+    for (let s = 1; s >= -1; s -= 2) {
+        ctx.save();
+        ctx.translate(parts.canardHinge.x * s, parts.canardHinge.y);
+        ctx.scale(s, 1);
+        ctx.rotate(canardAng + s * bank * 0.3);
+        paint(parts.canard, rgba(255, 190, 0, 0.85), rgba(255, 248, 170, 0.95), 0.9, 1.8);
+        ctx.restore();
+    }
+
+    // ── Cockpit canopy ──
+    const cp = parts.cockpit;
+    glowSpriteCache.draw(ctx, cp.x, cp.y, '#9fe8ff', cp.ry, 6, 0.6);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = grads.cockpitGrad;
     ctx.beginPath();
-    ctx.ellipse(0, -r * 0.42, r * 0.17, r * 0.21, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    // ── Primary swept wings ───────────────────────────────────────────────
-    // OPT-2: live GPU blur removed — stroke provides sufficient wing edge glow
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(0, 90, 180, 0.45)';
-    ctx.strokeStyle = '#0088ff';
-    ctx.lineWidth = 1.6;
-    ctx.fill(paths.rightWing);
-    ctx.stroke(paths.rightWing);
-    ctx.fill(paths.leftWing);
-    ctx.stroke(paths.leftWing);
-
-    // ── Wing tip extensions ───────────────────────────────────────────────
-    ctx.fillStyle = 'rgba(0, 160, 255, 0.25)';
-    ctx.strokeStyle = '#44aaff';
-    ctx.lineWidth = 1.1;
-    ctx.fill(paths.rightTip);
-    ctx.stroke(paths.rightTip);
-    ctx.fill(paths.leftTip);
-    ctx.stroke(paths.leftTip);
-
-    // ── Central hull ─────────────────────────────────────────────────────
-    // OPT-2: live GPU blur removed — stroke provides hull edge glow
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(0, 25, 55, 0.92)';
-    ctx.strokeStyle = '#00ccff';
-    ctx.lineWidth = 2;
-    ctx.fill(paths.centralHull);
-    ctx.stroke(paths.centralHull);
-
-    // ── Hull panel detail lines ───────────────────────────────────────────
-    ctx.strokeStyle = 'rgba(0, 200, 255, 0.35)';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.moveTo(0, -r * 0.75); ctx.lineTo(0, r * 0.3); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo( r * 0.14, -r * 0.45); ctx.lineTo( r * 0.24, r * 0.28); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-r * 0.14, -r * 0.45); ctx.lineTo(-r * 0.24, r * 0.28); ctx.stroke();
-
-    // ── Engine pod rings ──────────────────────────────────────────────────
-    for (const eng of engines) {
-        ctx.fillStyle = '#001530';
-        ctx.strokeStyle = '#0066ff';
-        ctx.lineWidth = 1.2;
-        // OPT-2: pre-rendered glow sprite replaces live GPU blur
-        glowSpriteCache.draw(ctx, eng.x, eng.y, '#0088ff', r * 0.13, 5, 0.9);
-        ctx.shadowBlur = 0;
-        ctx.beginPath();
-        ctx.ellipse(eng.x, eng.y, r * 0.13, r * 0.09, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-    }
-
-    // ── Cockpit ───────────────────────────────────────────────────────────
-    // OPT-2: pre-rendered glow sprite replaces live GPU blur
-    glowSpriteCache.draw(ctx, 0, -r * 0.42, '#aaeeff', r * 0.21, 7, 0.7);
-    ctx.shadowBlur = 0;
-    const cpGrad = ctx.createRadialGradient(0, -r * 0.42, 0, 0, -r * 0.42, r * 0.21);
-    cpGrad.addColorStop(0,   'rgba(160, 235, 255, 0.95)');
-    cpGrad.addColorStop(0.55,'rgba(0, 110, 200, 0.75)');
-    cpGrad.addColorStop(1,   'rgba(0, 50, 110, 0.25)');
-    ctx.fillStyle = cpGrad;
-    ctx.strokeStyle = 'rgba(140, 220, 255, 0.6)';
+    ctx.ellipse(cp.x, cp.y, cp.rx, cp.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(190, 245, 255, 0.7)';
     ctx.lineWidth = 0.9;
     ctx.beginPath();
-    ctx.ellipse(0, -r * 0.42, r * 0.17, r * 0.21, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.ellipse(cp.x, cp.y, cp.rx, cp.ry, 0, 0, Math.PI * 2);
     ctx.stroke();
-
-    // ── Nose glow ─────────────────────────────────────────────────────────
-    // OPT-2: pre-rendered glow sprite replaces live GPU blur
-    glowSpriteCache.draw(ctx, 0, -r, '#ffffff', r * 0.075, 12, 0.9);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(200, 245, 255, 0.9)';
+    // Sliding canopy glint — a moving highlight keeps the ship "alive".
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
     ctx.beginPath();
-    ctx.arc(0, -r, r * 0.075, 0, Math.PI * 2);
+    ctx.arc(cp.x, cp.y + breath * cp.ry * 0.4, cp.rx * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Nose tip glow ──
+    glowSpriteCache.draw(ctx, 0, noseY, '#ffffff', r * 0.08, 12, 0.9);
+    ctx.fillStyle = 'rgba(220, 250, 255, 0.95)';
+    ctx.beginPath();
+    ctx.arc(0, noseY, r * 0.08, 0, Math.PI * 2);
     ctx.fill();
 
     // ── Muzzle flash ────────────────────────────────────────────────────
@@ -282,27 +374,27 @@ export function draw(ctx) {
 
         // Large core flash at nose tip — bright burst visible from distance
         const coreR = r * (0.8 + mfIntensity * 0.6) * (1 - mfProgress * 0.4);
-        const mfGrad = ctx.createRadialGradient(0, -r, 0, 0, -r, coreR);
+        const mfGrad = ctx.createRadialGradient(0, noseY, 0, 0, noseY, coreR);
         mfGrad.addColorStop(0, `rgba(255, 255, 255, ${mfAlpha * 1.0})`);
         mfGrad.addColorStop(0.3, `rgba(${mfColor}, ${mfAlpha * 0.8})`);
         mfGrad.addColorStop(0.7, `rgba(${mfColor}, ${mfAlpha * 0.3})`);
         mfGrad.addColorStop(1, `rgba(${mfColor}, 0)`);
         ctx.fillStyle = mfGrad;
         ctx.beginPath();
-        ctx.arc(0, -r, coreR, 0, Math.PI * 2);
+        ctx.arc(0, noseY, coreR, 0, Math.PI * 2);
         ctx.fill();
 
         // Forward flash streak — prominent cone in fire direction
         if (mfIntensity > 0.3) {
             const streakLen = r * (0.8 + mfIntensity * 0.8) * mfAlpha;
             const streakW = r * (0.15 + mfIntensity * 0.15) * mfAlpha;
-            const streakGrad = ctx.createRadialGradient(0, -r - streakLen * 0.3, 0, 0, -r - streakLen * 0.3, streakLen * 0.6);
+            const streakGrad = ctx.createRadialGradient(0, noseY - streakLen * 0.3, 0, 0, noseY - streakLen * 0.3, streakLen * 0.6);
             streakGrad.addColorStop(0, `rgba(255, 255, 255, ${mfAlpha * 0.7})`);
             streakGrad.addColorStop(0.5, `rgba(${mfColor}, ${mfAlpha * 0.4})`);
             streakGrad.addColorStop(1, `rgba(${mfColor}, 0)`);
             ctx.fillStyle = streakGrad;
             ctx.beginPath();
-            ctx.ellipse(0, -r - streakLen * 0.3, streakW, streakLen, 0, 0, Math.PI * 2);
+            ctx.ellipse(0, noseY - streakLen * 0.3, streakW, streakLen, 0, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -311,13 +403,11 @@ export function draw(ctx) {
             const spikeLen = r * 0.5 * mfAlpha;
             const spikeW = r * 0.06;
             ctx.fillStyle = `rgba(${mfColor}, ${mfAlpha * 0.5})`;
-            // Left spike
             ctx.beginPath();
-            ctx.ellipse(-spikeLen * 0.5, -r, spikeLen, spikeW, 0, 0, Math.PI * 2);
+            ctx.ellipse(-spikeLen * 0.5, noseY, spikeLen, spikeW, 0, 0, Math.PI * 2);
             ctx.fill();
-            // Right spike
             ctx.beginPath();
-            ctx.ellipse(spikeLen * 0.5, -r, spikeLen, spikeW, 0, 0, Math.PI * 2);
+            ctx.ellipse(spikeLen * 0.5, noseY, spikeLen, spikeW, 0, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -325,80 +415,38 @@ export function draw(ctx) {
         this._muzzleFlashTimer--;
     }
 
-    // ── Hull outline glow ────────────────────────────────────────────────
-    // Full ship silhouette stroke for visibility against dark backgrounds.
-    // Dims with idle engines but stays visible; brightens with thrust.
-    const outlineAlpha = 0.3 + thr * 0.3;
-    ctx.strokeStyle = `rgba(0, 180, 255, ${outlineAlpha})`;
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.lineTo( r * 0.32, -r * 0.18);
-    ctx.lineTo( r * 1.12,  r * 0.28);
-    ctx.lineTo( r * 1.42,  r * 0.08);
-    ctx.lineTo( r * 1.18,  r * 0.56);
-    ctx.lineTo( r * 0.82,  r * 0.68);
-    ctx.lineTo( r * 0.42,  r * 0.78);
-    ctx.lineTo( r * 0.28,  r * 0.58);
-    ctx.lineTo(0,           r * 0.38);
-    ctx.lineTo(-r * 0.28,  r * 0.58);
-    ctx.lineTo(-r * 0.42,  r * 0.78);
-    ctx.lineTo(-r * 0.82,  r * 0.68);
-    ctx.lineTo(-r * 1.18,  r * 0.56);
-    ctx.lineTo(-r * 1.42,  r * 0.08);
-    ctx.lineTo(-r * 1.12,  r * 0.28);
-    ctx.lineTo(-r * 0.32, -r * 0.18);
-    ctx.closePath();
-    ctx.stroke();
-
-    // ── Hit flash overlay — redraw hull as white silhouette ─────────────
+    // ── Hit flash — bright white burst on collision ──
+    // Replaces the old static-silhouette overlay: the wings now articulate,
+    // so a radial burst centred on the ship reads cleanly as "I got hit"
+    // without having to re-trace the moving geometry.
     if (this._hitFlashTimer > 0) {
         const hfAlpha = Math.min(1, this._hitFlashTimer / 8);
-        ctx.globalAlpha = hfAlpha;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.5;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const hf = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.5);
+        hf.addColorStop(0, `rgba(255, 255, 255, ${hfAlpha * 0.95})`);
+        hf.addColorStop(0.6, `rgba(220, 245, 255, ${hfAlpha * 0.5})`);
+        hf.addColorStop(1, 'rgba(200, 240, 255, 0)');
+        ctx.fillStyle = hf;
         ctx.beginPath();
-        ctx.moveTo(0, -r);
-        ctx.lineTo( r * 0.32, -r * 0.18);
-        ctx.lineTo( r * 1.12,  r * 0.28);
-        ctx.lineTo( r * 1.42,  r * 0.08);
-        ctx.lineTo( r * 1.18,  r * 0.56);
-        ctx.lineTo( r * 0.82,  r * 0.68);
-        ctx.lineTo( r * 0.42,  r * 0.78);
-        ctx.lineTo( r * 0.28,  r * 0.58);
-        ctx.lineTo(0,           r * 0.38);
-        ctx.lineTo(-r * 0.28,  r * 0.58);
-        ctx.lineTo(-r * 0.42,  r * 0.78);
-        ctx.lineTo(-r * 0.82,  r * 0.68);
-        ctx.lineTo(-r * 1.18,  r * 0.56);
-        ctx.lineTo(-r * 1.42,  r * 0.08);
-        ctx.lineTo(-r * 1.12,  r * 0.28);
-        ctx.lineTo(-r * 0.32, -r * 0.18);
-        ctx.closePath();
+        ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        ctx.restore();
     }
 
-    // Draw charging effects for any power weapon. Charge-based weapons
-    // glow only while the player is actively holding the charge button.
-    // Cooldown-based weapons (Mine Layer, Nova Blast, Lightning Arc,
-    // Missile Salvo) glow CONTINUOUSLY — building up as their cooldown
-    // elapses, then sustaining the bright fully-charged flash while the
-    // weapon is ready to fire (powerCooldown === 0). This matches the
-    // charge shot's "fully charged" visual: the bright pulsing ring
-    // never disappears — it just stays at peak intensity until the
-    // player fires, then the cycle restarts.
+    // ── Energy charge glow ──
+    // The ship's body glow now reflects the ENERGY meter (the sphere next
+    // to health). As energy regenerates the ship visibly "charges up": a
+    // faint aura while building, a cyan "ready" ring once a power shot is
+    // affordable, and a bright pulsing flash with sparks when the meter is
+    // full. Power weapons fire by spending this energy.
     {
-        // 6.31.0 — Charge Shot keeps its hold-to-charge body glow. The
-        // old cooldown-based power-weapon body glow is gone (power
-        // weapons run on energy now); the ship-tip ring shows the
-        // defense-ability charge instead (see drawCooldownTimer).
-        const cfg = this.getActivePowerConfig?.();
-        if (cfg && cfg.isChargeBased && this.isCharging) {
-            this.drawChargingEffects(ctx);
+        const maxE = this.maxEnergy || 100;
+        const e = this.energy || 0;
+        if (e > 0) {
+            const cost = this.getPowerEnergyCost ? this.getPowerEnergyCost() : 30;
+            const progress = Math.min(1, e / maxE);
+            drawChargingGlowCore.call(this, ctx, progress, e >= cost, e >= maxE * 0.999, Date.now());
         }
     }
 
@@ -601,63 +649,73 @@ export function drawLevelUpEffects(ctx) {
 // ── Cooldown timer ────────────────────────────────────────────────────────
 
 export function drawCooldownTimer(ctx) {
-    // 6.31.0 — Ship-tip charge ring now shows the active DEFENSE ABILITY's
-    // auto-recharge (was the power-weapon readiness ring; power weapons
-    // run on the energy meter now). The ring fills as the ability's
-    // cooldown elapses and pulses fully-charged when it's ready to use.
-    const abilityCfg = this.getActiveAbilityConfig?.();
-    if (!abilityCfg) return;
+    // Ship-tip ENERGY ring — mirrors the HUD energy SPHERE (hud/status.js
+    // drawEnergySphere). A little glass orb at the nose that fills from the
+    // centre outward as the ship's power energy regenerates, tinted by the
+    // active primary weapon's colour, and pulses a gold rim once a power
+    // shot is affordable. (Previously showed the defense-ability cooldown.)
+    const maxE = this.maxEnergy || 100;
+    const frac = Math.max(0, Math.min(1, (this.energy || 0) / maxE));
 
-    const max = this.activeAbilityCooldownMax || abilityCfg.cooldown || 1;
-    const remaining = Math.max(0, this.activeAbilityCooldown || 0);
-    const charge = 1 - Math.min(1, remaining / max);
-    const isFullyCharged = remaining <= 0;
+    // Tint by the active primary weapon colour, like the HUD sphere.
+    const cfg = this.getActivePrimaryConfig?.();
+    let h = ((cfg && cfg.color) || '#00ccff').replace('#', '');
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    const cr = parseInt(h.slice(0, 2), 16) || 0;
+    const cg = parseInt(h.slice(2, 4), 16) || 0;
+    const cb = parseInt(h.slice(4, 6), 16) || 0;
 
     const tipX = 0;
     const tipY = -this.radius - 14;
-    const timerRadius = 8;
+    const orbR = 7;
+    const now = Date.now();
 
     ctx.save();
+    // Draw opaque, not additively, so the glass orb reads as a solid gauge.
+    ctx.globalCompositeOperation = 'source-over';
 
-    // Background circle
-    ctx.strokeStyle = 'rgba(100, 180, 255, 0.3)';
-    ctx.lineWidth = 2;
+    // Dark glass backdrop.
     ctx.beginPath();
-    ctx.arc(tipX, tipY, timerRadius, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.arc(tipX, tipY, orbR, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(8, 12, 22, 0.72)';
+    ctx.fill();
 
-    // Charge arc — blue to cyan to white as it fills
-    if (charge > 0 || isFullyCharged) {
-        const startAngle = -Math.PI / 2;
-        const endAngle = isFullyCharged
-            ? startAngle + Math.PI * 2 // full ring when ready
-            : startAngle + (charge * Math.PI * 2);
-
-        if (isFullyCharged) {
-            // Pulsing white/cyan when fully charged / ready
-            const pulse = 0.7 + Math.sin(Date.now() * 0.01) * 0.3;
-            ctx.strokeStyle = `rgba(200, 255, 255, ${pulse})`;
-            ctx.lineWidth = 4;
-        } else {
-            // Blue to cyan gradient as charge builds
-            const r = Math.floor(100 + charge * 155);
-            const g = Math.floor(180 + charge * 75);
-            ctx.strokeStyle = `rgb(${r}, ${g}, 255)`;
-            ctx.lineWidth = 3;
-        }
-        ctx.lineCap = 'round';
-
+    // Inner condensate — clipped to the glass, fills centre-outward.
+    if (frac > 0) {
+        ctx.save();
         ctx.beginPath();
-        ctx.arc(tipX, tipY, timerRadius, startAngle, endAngle);
-        ctx.stroke();
+        ctx.arc(tipX, tipY, orbR - 1, 0, Math.PI * 2);
+        ctx.clip();
+        const coreR = Math.max(1, orbR * frac);
+        const grad = ctx.createRadialGradient(tipX, tipY, 0, tipX, tipY, coreR);
+        grad.addColorStop(0,   `rgba(255,255,255,${0.8 * frac + 0.2})`);
+        grad.addColorStop(0.5, `rgba(${cr},${cg},${cb},0.85)`);
+        grad.addColorStop(1,   `rgba(${cr},${cg},${cb},0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(tipX - orbR, tipY - orbR, orbR * 2, orbR * 2);
+        ctx.restore();
+    }
 
-        // Center dot when fully charged
-        if (isFullyCharged) {
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(tipX, tipY, 3, 0, Math.PI * 2);
-            ctx.fill();
-        }
+    // Glass rim + specular highlight.
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(200, 230, 255, 0.55)';
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, orbR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(tipX - orbR * 0.32, tipY - orbR * 0.34, orbR * 0.18, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.fill();
+
+    // Ready pulse — gold rim once a power shot is affordable.
+    const cost = (typeof this.getPowerEnergyCost === 'function') ? this.getPowerEnergyCost() : 30;
+    if ((this.energy || 0) >= cost) {
+        const pulse = 0.4 + 0.3 * Math.sin(now * 0.012);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 240, 160, ${pulse})`;
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, orbR + 2, 0, Math.PI * 2);
+        ctx.stroke();
     }
 
     ctx.restore();

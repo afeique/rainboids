@@ -12,13 +12,18 @@
  * This file pins the new contract:
  *   - Mobile + cooldown power ready, NO tap → does NOT auto-fire.
  *   - Mobile + cooldown power ready + fireSecondary=true → fires.
- *   - Mobile + CHARGE_SHOT + isFullyCharged → auto-fires.
+ *   - Mobile + CHARGE_SHOT below full energy + no tap → does NOT fire.
  *   - Desktop: unchanged (no auto-fire without input).
  *
  * 6.29.0 — isPowerReady() is now ALSO energy-gated (energy >= the
  * weapon's POWER_ENERGY_COST). These tests are about the cooldown/charge
  * contract, not the energy economy, so each player is given full energy
  * in beforeEach to satisfy the gate.
+ *
+ * 6.116.0 — Power weapons are now a UNIFIED energy-gated model: every power
+ * weapon (incl. CHARGE_SHOT) fires instantly when fire-power is pressed and
+ * enough energy is banked. Energy regenerates passively over time, and
+ * `chargeLevel` mirrors the energy meter rather than a hold timer.
  */
 
 // Browser shims — must happen before any game module import.
@@ -163,7 +168,7 @@ describe('Player.update — mobile cooldown power weapons (5.100.0)', () => {
     // input.fireSecondary=true unconditionally fires if ready.
 });
 
-describe('Player.update — mobile CHARGE_SHOT (charge-based, still auto-fires) — 5.100.0', () => {
+describe('Player.update — mobile CHARGE_SHOT (unified energy-gated fire) — 6.116.0', () => {
     let player;
 
     beforeEach(() => {
@@ -174,7 +179,7 @@ describe('Player.update — mobile CHARGE_SHOT (charge-based, still auto-fires) 
         player.active = true;
         player.activePower = 'CHARGE_SHOT';
         player.isFullyCharged = false;
-        player.energy = player.maxEnergy; // satisfy the 6.29.0 energy gate
+        player.energy = player.maxEnergy; // satisfy the energy gate
         player.firingDisabled = false;
         installFakeEngine();
     });
@@ -184,22 +189,23 @@ describe('Player.update — mobile CHARGE_SHOT (charge-based, still auto-fires) 
         clearFakeEngine();
     });
 
-    test('mobile + CHARGE_SHOT mid-charge (not full) → does NOT fire', () => {
+    // 6.116.0 — CHARGE_SHOT no longer winds up on a hold timer. `chargeLevel`
+    // now mirrors the energy meter (energy / maxEnergy), and the renderer
+    // reads `energy` to drive the body glow + nose ring.
+    test('mobile + CHARGE_SHOT below full energy + no tap → does NOT fire; chargeLevel mirrors energy', () => {
         _resetUrlOverrideForTests(true);
-        player.isFullyCharged = false;
-        player.isCharging = true;
-        player.chargeStartTime = Date.now() - 1000; // 1 s into a 5 s charge
-        player.pausedChargeTime = 0;
+        player.energy = player.maxEnergy * 0.5; // half-full meter
 
         const input = makeInput({ fireSecondary: false });
         player.update(input, mockParticlePool(), mockBulletPool(), mockAudio(), null, false, null);
 
         expect(player.chargeLevel).toBeLessThan(1);
+        expect(player.chargeLevel).toBeCloseTo(0.5, 1);
     });
 
-    // We don't assert a "CHARGE_SHOT full-charge fires" test here
-    // because the side effects are non-trivial to set up (bullet pool
-    // shapes, audio loops). The gate is one line in player.js:
-    //   if (cfg.isChargeBased && this.isFullyCharged) input.fireSecondary = true;
-    // The behavior is the same as 5.92; nothing about it changed in 5.100.
+    // We don't assert a "CHARGE_SHOT fires on tap" test here because the side
+    // effects are non-trivial to set up (bullet pool shapes, audio loops).
+    // The gate lives in weapons.js updateChargingSystem:
+    //   if (input.fireSecondary && this.isPowerReady()) { ... fireChargedShot }
+    // i.e. fires instantly at full charge when enough energy is banked.
 });

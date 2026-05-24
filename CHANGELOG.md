@@ -11,6 +11,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.117.1] - 2026-05-24
+
+### Changed — Left-edge loot feed cards fade out faster
+
+Picked-up item cards in the left-edge loot feed now persist ~12s (hold ~8s,
+fade over the final ~4s) instead of ~90s. With the old 90-second lifetime the
+seven-card stack stayed visually full the entire time during active play and
+effectively never cleared, cluttering the HUD. The shorter lifetime lets the
+oldest cards fade out (newest stay readable) so the left edge clears during any
+short lull in combat.
+
+## [6.117.0] - 2026-05-24
+
+### Added — Numeric energy readout beneath the charge sphere
+
+The power-weapon energy sphere (right of the health bar) now shows a
+`current/total` number directly beneath it, so you can read exactly how much
+energy is banked at a glance. The readout goes gold the moment a power shot is
+affordable — matching the sphere's gold "ready" pulse — and stays soft
+blue-white while still charging.
+
+## [6.116.1] - 2026-05-24
+
+### Fixed — Charge sphere never visually filled completely
+
+The energy sphere's interior fill faded to transparent before reaching the rim
+(the gradient's colored stop sat at 45% with a fully-transparent edge), so even
+at maximum energy the orb looked hollow rather than full. The fill now keeps a
+solid colored body that ramps to the rim with the charge level — at full charge
+the orb reads as completely full, while partial charge keeps its soft gaseous
+edge.
+
+## [6.116.0] - 2026-05-24
+
+### Changed — Power energy is now a passive-regen "charge"; unified power-weapon firing
+
+The power-weapon resource was reworked from a per-hit-earned meter into a
+continuously **regenerating energy charge**, and all power weapons now fire on
+one unified rule:
+
+- **Passive regen.** Energy fills automatically over time (empty → full in
+  ~12s) instead of accruing on landed hits. The old `+4 per hit` gain was
+  removed; firing a power weapon still spends energy, so the meter refilling is
+  what paces your power shots.
+- **Unified energy-gated fire.** Every power weapon — including `CHARGE_SHOT` —
+  fires instantly when you press fire-power and have enough energy banked.
+  `CHARGE_SHOT`'s hold-to-charge wind-up is gone; it fires at a fixed
+  full-charge shot (with a short anti-spam floor). Mobile auto-fire and the
+  pre-existing energy cost gate are preserved.
+- **The ship charges up as energy fills.** The ship's body charge-glow now
+  reflects the energy meter rather than a held charge button: a faint aura
+  while building, a cyan "ready" ring once a shot is affordable, and a bright
+  pulsing flash when the meter is full.
+- **Nose ring mirrors the energy sphere.** The circle at the ship's tip now
+  shows the energy meter (a glass orb that fills centre-outward, tinted by the
+  primary weapon's colour, with a gold "ready" pulse) — matching the HUD
+  energy sphere. It previously showed the active defense ability's cooldown.
+
+## [6.115.1] - 2026-05-24
+
+### Changed — Player ship colors: more vibrant, higher contrast between parts
+
+Pushed the redesigned ship's palette to near-pure saturation and gave each part
+a distinct, contrasting hue so the ship pops harder against bright nebulae:
+blazing gold→rose→violet→cyan wings with bright-gold leading edges, pure
+hot-magenta S-foils, pure-gold canards, a deep cooler fuselage with a cyan
+outline (to contrast the gold wing edges), and a brighter white→cyan→violet
+canopy. Darker, more opaque part bodies + outlines make the neon edges read
+more sharply.
+
 ## [6.115.0] - 2026-05-23
 
 ### Changed — Player ship redesign: sleek, articulated, rainbow-colored

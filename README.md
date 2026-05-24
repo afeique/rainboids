@@ -31,7 +31,7 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 | Aim | Mouse cursor (or `←`/`→`) | Right stick (twin-stick) |
 | Dash (i-frames) | `Shift` | `✕` / `A` |
 | Fire primary | Hold `L-click` / `↑` | `R2` |
-| Fire / charge power weapon | `Space` / `R-click` / `↓` | `L2` |
+| Fire power weapon | `Space` / `R-click` / `↓` | `L2` |
 | Activate abilities (4 slots) | `1` `2` `3` `4` | `◯` / `B` |
 | Primary · Power · Ability radial | hold `F` · `E` · `R` | hold `R1` · `L1` · `△`/`Y` |
 | Inventory · Stats · Pause | `I` · `` ` `` · `Esc` | — · — · `Start` |
@@ -44,7 +44,7 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 
 ## ⚙️ How It Works
 
-**🔫 Arsenal** — **11 primary** + **11 power** weapons, swappable from the radial menus. Weapons are **permanent account unlocks** bought with **account-gold** in the pre-run **BUILD** screen, where you also customize each one with **Attunements** and **Mechanic Mods** (see below). `Phase Dash` is a free movement primitive on `Shift`.
+**🔫 Arsenal** — **11 primary** + **11 power** weapons, swappable from the radial menus. Primaries fire continuously; **power weapons run on a passive-regen energy meter** (the sphere next to health) — it fills automatically over time, the ship visibly charges up as it fills, and a power shot fires the instant you have enough energy banked. Weapons are **permanent account unlocks** bought with **account-gold** in the pre-run **BUILD** screen, where you also customize each one with **Attunements** and **Mechanic Mods** (see below). `Phase Dash` is a free movement primitive on `Shift`.
 
 **🧬 Attunements & mods** — every weapon is **element-agnostic** until you tune it. **Attunements** re-element a weapon and change how it plays: Pyro spreads fire to nearby burning enemies, Cryo escalates chill → freeze, Volt chains an arc to the nearest enemy, Toxic spreads a corrosion plague, Void gathers enemies together, Radiant pierces armor & shields. They **stack** — a weapon can carry several elements, but its per-hit damage **divides across them** (focus vs coverage: one element hits hard and spikes weaknesses; many cover more and can't be hard-walled by a single resist). **Mechanic Mods** add element-agnostic behavior (pierce, explosive, homing, stun/knockback procs + per-weapon capstones). Both are permanent account-gold unlocks, toggled active per run as bubbles orbiting each weapon in the BUILD tree.
 

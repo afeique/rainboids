@@ -298,59 +298,43 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         angle: +this.angle.toFixed(3),
     });
 
-    // ── Power weapon: charge-based or cooldown-based ──
-    // Skip power weapon updates while shop/pause is open
+    // ── Power weapon: unified energy-gated fire ──
+    // The energy meter (it regenerates passively over time — see
+    // player.update) is the only "charge" now. EVERY power weapon, including
+    // CHARGE_SHOT, fires instantly when fire-power is pressed and enough
+    // energy is banked; firing spends the energy. CHARGE_SHOT fires at a
+    // fixed full-charge shot. Pacing comes from the meter refilling, not
+    // from holding a charge button.
+    // Skip power weapon updates while shop/pause is open.
     if (this.chargePaused) return;
-    const powerConfig = this.getActivePowerConfig();
 
-    if (powerConfig.isChargeBased) {
-        // Charge shot behavior (existing)
-        if (!this.isCharging) {
-            this.isCharging = true;
-            this.chargeStartTime = now;
-            this.chargeLevel = 0;
-        }
+    // Charge state now mirrors the energy meter; the renderer reads `energy`
+    // directly for the body glow + nose ring, so the legacy hold-charge
+    // flags are simply kept consistent (no wind-up animation anymore).
+    const maxE = this.maxEnergy || 100;
+    this.isCharging = false;
+    this.tractorBeamActive = false;
+    this.chargeLevel = Math.min(1, (this.energy || 0) / maxE);
+    this.isFullyCharged = (this.energy || 0) >= maxE * 0.999;
 
-        const currentChargeTime = (now - this.chargeStartTime) + this.pausedChargeTime;
-        const chargeSpeedStacks = this.getPowerupStacks('CHARGE_SPEED');
-        const reducedMaxChargeTime = Math.max(1000, this.maxChargeTime - (chargeSpeedStacks * 1000));
-
-        this.chargeLevel = Math.min(1, currentChargeTime / reducedMaxChargeTime);
-
-        const isFullyCharged = currentChargeTime >= reducedMaxChargeTime;
-        this.tractorBeamActive = this.isCharging && !isFullyCharged;
-        this.isFullyCharged = isFullyCharged;
-
-        // 6.29.0 — Charge Shot also costs energy. The wind-up charge
-        // still gates damage, but releasing now requires (and spends)
-        // its energy cost; without enough energy the press is consumed
-        // but no shot fires.
-        const shouldFire = input.fireSecondary && currentChargeTime >= this.minChargeTime;
-
-        if (shouldFire) {
-            const cost = this.getPowerEnergyCost();
-            if ((this.energy || 0) >= cost) {
-                this.energy = Math.max(0, this.energy - cost);
-                this.fireChargedShot(bulletPool, audioManager);
-            }
-            this.isCharging = false;
-            this.chargeLevel = 0;
+    if (input.fireSecondary && this.isPowerReady()) {
+        const powerConfig = this.getActivePowerConfig();
+        if (powerConfig.isChargeBased) {
+            // CHARGE_SHOT — spend energy, then fire at a fixed full charge.
+            this.energy = Math.max(0, (this.energy || 0) - this.getPowerEnergyCost());
+            this.chargeStartTime = now - this.maxChargeTime; // force a full-charge shot
             this.pausedChargeTime = 0;
-            input.fireSecondary = false;
-        }
-    } else {
-        // Cooldown-based power weapon
-        this.isCharging = false;
-        this.chargeLevel = 0;
-        this.tractorBeamActive = false;
-        this.isFullyCharged = false;
-
-        // Lightning Arc moved to primary slot in 5.65.4 — power weapons
-        // are now exclusively cooldown-triggered burst weapons.
-        if (input.fireSecondary && this.isPowerReady()) {
+            this.fireChargedShot(bulletPool, audioManager);
+            // Short anti-spam floor so a held button can't dump the whole
+            // meter in consecutive frames; the energy cost is the real gate.
+            this.powerCooldown = 400;
+            this.powerCooldownMax = 400;
+        } else {
+            // Cooldown-based powers deduct energy + set their own cooldown
+            // inside firePower / the per-weapon fire fns.
             this.firePower(bulletPool, audioManager, particlePool);
-            input.fireSecondary = false;
         }
+        input.fireSecondary = false;
     }
 }
 
@@ -2118,9 +2102,9 @@ export function getPowerCooldownRemaining() {
     return Math.max(0, this.powerCooldown);
 }
 
-// 6.29.0 — Power weapons now cost ENERGY (built by landing hits)
-// instead of running on a fixed cooldown. Each power weapon spends a
-// different amount on fire.
+// Power weapons cost ENERGY to fire. 6.116.0 — energy regenerates passively
+// over time (see Player.update) rather than being built by landing hits.
+// Each power weapon spends a different amount on fire.
 export const POWER_ENERGY_COST = {
     CHARGE_SHOT:   20,
     MINE_LAYER:    25,
