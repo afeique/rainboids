@@ -1,0 +1,160 @@
+// Phase P2 — player-side PASSIVES state machine + apply pipeline. Binds the
+// pure player/passives.js functions to a minimal stub (no heavy Player ctor)
+// and pins: equip/own/slot gating, activePassives rebuild, hasPassive,
+// getPassiveMod aggregation, ramp reset on swap, and the getEffective* fold.
+import { describe, expect, test, afterEach } from '@jest/globals';
+import * as passives from '../../js/modules/player/passives.js';
+import { PASSIVES } from '../../js/modules/combat/passive-data.js';
+import * as progression from '../../js/modules/player/progression.js';
+
+function makeStub(over = {}) {
+    return {
+        equippedPassives: [null, null, null],
+        ownedPassives: new Set(),
+        activePassives: new Set(),
+        passiveSlotsUnlocked: 1,
+        _passiveRampState: new Map(),
+        ...over,
+    };
+}
+const equip = (s, slot, id) => passives.equipPassive.call(s, slot, id);
+const own = (s, ids) => passives.setOwnedPassives.call(s, ids);
+const slots = (s, n) => passives.setPassiveSlotsUnlocked.call(s, n);
+const has = (s, id) => passives.hasPassive.call(s, id);
+const mod = (s, k) => passives.getPassiveMod.call(s, k);
+
+describe('P2 — passive state machine', () => {
+    test('fresh stub: nothing active', () => {
+        const s = makeStub();
+        passives._rebuildActivePassives.call(s);
+        expect(s.activePassives.size).toBe(0);
+        expect(has(s, 'OPPORTUNIST')).toBe(false);
+    });
+
+    test('equipping an owned, slot-deliverable passive into an unlocked slot activates it', () => {
+        const s = makeStub();
+        own(s, ['OPPORTUNIST']);
+        expect(equip(s, 0, 'OPPORTUNIST')).toBe(true);
+        expect(has(s, 'OPPORTUNIST')).toBe(true);
+        expect([...s.activePassives]).toEqual(['OPPORTUNIST']);
+    });
+
+    test('equipping an un-owned passive is rejected', () => {
+        const s = makeStub();
+        own(s, ['OPPORTUNIST']);
+        expect(equip(s, 0, 'GLASS_CANNON')).toBe(false);
+        expect(has(s, 'GLASS_CANNON')).toBe(false);
+    });
+
+    test('a locked slot rejects equips (slot 2 with only 1 unlocked)', () => {
+        const s = makeStub();
+        own(s, ['OPPORTUNIST', 'LAST_BASTION']);
+        expect(equip(s, 1, 'LAST_BASTION')).toBe(false);
+        slots(s, 2);
+        expect(equip(s, 1, 'LAST_BASTION')).toBe(true);
+        expect(has(s, 'LAST_BASTION')).toBe(true);
+    });
+
+    test('non-slot-deliverable passives (item-only) cannot be slotted', () => {
+        const s = makeStub();
+        own(s, ['SALVAGE_PROTOCOL']);
+        expect(PASSIVES.SALVAGE_PROTOCOL.slot).toBe(false);
+        expect(equip(s, 0, 'SALVAGE_PROTOCOL')).toBe(false);
+    });
+
+    test('a passive cannot occupy two slots — equipping again moves it', () => {
+        const s = makeStub({ passiveSlotsUnlocked: 3 });
+        own(s, ['OPPORTUNIST']);
+        equip(s, 0, 'OPPORTUNIST');
+        equip(s, 2, 'OPPORTUNIST');
+        expect(s.equippedPassives[0]).toBeNull();
+        expect(s.equippedPassives[2]).toBe('OPPORTUNIST');
+        expect([...s.activePassives]).toEqual(['OPPORTUNIST']);
+    });
+
+    test('clearing a slot (null) deactivates it', () => {
+        const s = makeStub();
+        own(s, ['OPPORTUNIST']);
+        equip(s, 0, 'OPPORTUNIST');
+        expect(equip(s, 0, null)).toBe(true);
+        expect(has(s, 'OPPORTUNIST')).toBe(false);
+    });
+
+    test('reducing unlocked slots drops the now-locked slot from active', () => {
+        const s = makeStub({ passiveSlotsUnlocked: 2 });
+        own(s, ['OPPORTUNIST', 'LAST_BASTION']);
+        equip(s, 0, 'OPPORTUNIST');
+        equip(s, 1, 'LAST_BASTION');
+        expect(s.activePassives.size).toBe(2);
+        slots(s, 1);
+        expect(has(s, 'OPPORTUNIST')).toBe(true);   // slot 0 still unlocked
+        expect(has(s, 'LAST_BASTION')).toBe(false); // slot 1 now locked
+    });
+
+    test('swapping a slot resets the outgoing + incoming passive ramp state', () => {
+        const s = makeStub({ passiveSlotsUnlocked: 2 });
+        own(s, ['OPPORTUNIST', 'LAST_BASTION']);
+        equip(s, 0, 'OPPORTUNIST');
+        s._passiveRampState.set('OPPORTUNIST', { stacks: 5 });
+        s._passiveRampState.set('LAST_BASTION', { stacks: 9 });
+        equip(s, 0, 'LAST_BASTION'); // swap slot 0
+        expect(s._passiveRampState.has('OPPORTUNIST')).toBe(false); // outgoing reset
+        expect(s._passiveRampState.has('LAST_BASTION')).toBe(false); // incoming reset
+    });
+});
+
+describe('P2 — getPassiveMod aggregation', () => {
+    afterEach(() => {
+        // Clean up any injected mods so other suites see the pristine registry.
+        delete PASSIVES.OPPORTUNIST.mods;
+        delete PASSIVES.LAST_BASTION.mods;
+    });
+
+    test('returns 0 when no active passive declares the key', () => {
+        const s = makeStub();
+        own(s, ['OPPORTUNIST']);
+        equip(s, 0, 'OPPORTUNIST');
+        expect(mod(s, 'critChance')).toBe(0);
+        expect(mod(s, 'maxHp')).toBe(0);
+    });
+
+    test('sums numeric mods across active passives', () => {
+        PASSIVES.OPPORTUNIST.mods = { critChance: 5, maxHp: 10 };
+        PASSIVES.LAST_BASTION.mods = { critChance: 3 };
+        const s = makeStub({ passiveSlotsUnlocked: 2 });
+        own(s, ['OPPORTUNIST', 'LAST_BASTION']);
+        equip(s, 0, 'OPPORTUNIST');
+        equip(s, 1, 'LAST_BASTION');
+        expect(mod(s, 'critChance')).toBe(8); // 5 + 3
+        expect(mod(s, 'maxHp')).toBe(10);
+    });
+
+    test('an inactive (locked-slot) passive does not contribute', () => {
+        PASSIVES.LAST_BASTION.mods = { critChance: 3 };
+        const s = makeStub({ passiveSlotsUnlocked: 1 });
+        own(s, ['OPPORTUNIST', 'LAST_BASTION']);
+        equip(s, 0, 'OPPORTUNIST');
+        equip(s, 1, 'LAST_BASTION'); // rejected (locked) → not active
+        expect(mod(s, 'critChance')).toBe(0);
+    });
+});
+
+describe('P2 — getPassiveMod folds into getEffective* getters', () => {
+    afterEach(() => { delete PASSIVES.OPPORTUNIST.mods; });
+
+    test('getEffectiveCritChance picks up a passive critChance mod', () => {
+        PASSIVES.OPPORTUNIST.mods = { critChance: 5 };
+        const s = makeStub({
+            baseCritChance: 10,
+            getPowerupStacks: () => 0,
+            getItemAffixTotal: () => 0,
+            spStats: {},
+        });
+        // Wire the real passive methods onto the stub so the getter's
+        // `this.getPassiveMod` resolves like it does on a Player.
+        s.getPassiveMod = (k) => passives.getPassiveMod.call(s, k);
+        own(s, ['OPPORTUNIST']);
+        equip(s, 0, 'OPPORTUNIST');
+        expect(progression.getEffectiveCritChance.call(s)).toBe(15); // 10 base + 5 passive
+    });
+});

@@ -94,6 +94,13 @@ function _spVal(player, statId) {
     const pts = player.spStats[statId] | 0;
     return pts * (def.max / SP_STAT_MAX_POINTS);
 }
+
+// P2 — additive contribution of the active rule-modifier passives for a stat
+// key (0 until a passive declares a numeric `mods[key]` in P6). Guards a
+// non-Player `this` (some getter unit tests stub it).
+function _passiveMod(player, key) {
+    return (player && typeof player.getPassiveMod === 'function') ? player.getPassiveMod(key) : 0;
+}
 export function spStatTotal(statId) {
     return _spVal(this, statId);
 }
@@ -365,6 +372,7 @@ export function getEffectiveRegen() {
     const stacks = this.getPowerupStacks ? this.getPowerupStacks('REGEN') : 0;
     if (stacks > 0) regen += stacks * 0.5;
     regen += this.getItemAffixTotal('regen'); // 6.32.0 — item regen affixes
+    regen += _passiveMod(this, 'regen');       // P2 — passive numeric mods
     return Math.min(REGEN_RATE_CAP, regen);
 }
 
@@ -384,7 +392,7 @@ export function getEffectiveShield() {
     // regardless of slot. 6.35.0 — + SP TOUGHNESS allocation.
     const itemBonus = this.getItemAffixTotal('toughness');
 
-    const totalShield = baseShield + shieldBoostAmount + itemBonus + _spVal(this, 'TOUGHNESS');
+    const totalShield = baseShield + shieldBoostAmount + itemBonus + _spVal(this, 'TOUGHNESS') + _passiveMod(this, 'toughness');
     return Math.min(75, totalShield); // Cap at 75%
 }
 
@@ -400,7 +408,7 @@ export function getEffectiveMaxHealth() {
     // 6.35.0 — + SP HEALTH allocation.
     const itemBonus = this.getItemAffixTotal('hp') + _spVal(this, 'HEALTH');
 
-    const totalMaxHealth = baseMaxHealth + healthBoostAmount + itemBonus;
+    const totalMaxHealth = baseMaxHealth + healthBoostAmount + itemBonus + _passiveMod(this, 'maxHp');
     // Cap raised to 600 to accommodate the higher per-stack value while
     // still preventing infinite scaling.
     return Math.min(600, totalMaxHealth);
@@ -413,7 +421,7 @@ export function getEffectiveCritChance() {
 
     // 6.32.0 — item critChance affixes. 6.35.0 — + SP CRIT_CHANCE.
     const totalCritChance = baseCritChance + critChanceBonus
-        + this.getItemAffixTotal('critChance') + _spVal(this, 'CRIT_CHANCE');
+        + this.getItemAffixTotal('critChance') + _spVal(this, 'CRIT_CHANCE') + _passiveMod(this, 'critChance');
     return Math.min(60, totalCritChance); // Cap raised 50% → 60%
 }
 
@@ -423,9 +431,9 @@ export function getEffectiveCritDamage() {
 
     // Randomize between 2x (200%) and 3x (300%) base, plus stacks +
     // 6.32.0 item critDamage affixes.
-    const itemCritDmg = this.getItemAffixTotal('critDamage') + _spVal(this, 'CRIT_DAMAGE');
+    const itemCritDmg = this.getItemAffixTotal('critDamage') + _spVal(this, 'CRIT_DAMAGE') + _passiveMod(this, 'critDamage');
     const minCrit = this.baseCritDamage; // 200%
-    const maxCrit = 300 + critDamageBonus + itemCritDmg; // 300% + stacks + items + SP
+    const maxCrit = 300 + critDamageBonus + itemCritDmg; // 300% + stacks + items + SP + passives
     const totalCritDamage = minCrit + Math.random() * (maxCrit - minCrit);
     return Math.min(550, totalCritDamage); // Cap raised 500% → 550%
 }

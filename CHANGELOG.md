@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.122.0] - 2026-05-24
+
+### Added — Player passive state + apply pipeline (Phase P2)
+
+Wires the rule-modifier Passives into the player. No player-facing change yet
+(nothing is equipped until the BUILD cluster + swap menu land in P4/P5, and the
+effects land in P6) — this is the queryable foundation consumers read.
+
+- New `player/passives.js`: `equippedPassives[3]`, `ownedPassives`,
+  `activePassives` (rebuilt on any change = equipped ∩ owned within unlocked
+  slots), `passiveSlotsUnlocked` (default 1), plus `hasPassive(id)`,
+  `getPassiveMod(key)`, `equipPassive(slot, id)`, `setOwnedPassives`,
+  `setPassiveSlotsUnlocked`. A passive can't occupy two slots; swapping a slot
+  resets the affected passives' ramp accrual (anti-cheese, for P5).
+- `getPassiveMod(key)` (additive over active passives' optional numeric `mods`)
+  folds into `getEffective{CritChance,CritDamage,MaxHealth,Shield,Regen}` —
+  a no-op until P6 gives a passive a numeric mod.
+- Run init seeds `ownedPassives` from the unlocked `passives` pool.
+- Tests: `passives-player` (state machine, gating, aggregation, getter fold).
+
 ## [6.121.0] - 2026-05-24
 
 ### Changed — Stat-boon rename + new PASSIVES registry foundation (Phase P1)

@@ -1,0 +1,103 @@
+// player/passives.js — Phase P2: the player-side PASSIVES state + apply
+// pipeline. Mirrors the 4-slot ability model. All functions are bound to the
+// Player via `.call(this)` (see the thin wrappers in player.js).
+//
+// State (owned on the Player, initialized in its constructor):
+//   equippedPassives[3]   — passive id per slot (0..2), or null
+//   ownedPassives: Set     — ids this run may equip (seeded from meta unlocks)
+//   activePassives: Set     — equipped ∩ owned within unlocked slots (queried)
+//   passiveSlotsUnlocked    — usable slot count (1..3; opens over a run in P3)
+//   _passiveRampState: Map  — per-passive accrual for ramping passives (P5/P6),
+//                             reset whenever a slot's occupant changes (anti-cheese)
+//
+// Consumers (P6) query `hasPassive(id)` at their hook site, or read
+// `getPassiveMod(key)` for additive numeric passives (folded into getEffective*).
+
+import { PASSIVES } from '../combat/passive-data.js';
+
+/**
+ * Recompute activePassives from the equipped slots: a slot contributes iff it
+ * is within the unlocked slot count, holds a known + owned passive. Idempotent;
+ * call after any change to equipped/owned/slot-count.
+ */
+export function _rebuildActivePassives() {
+    const active = new Set();
+    const slots = Array.isArray(this.equippedPassives) ? this.equippedPassives : [];
+    const owned = this.ownedPassives instanceof Set ? this.ownedPassives : new Set();
+    const n = Math.max(0, Math.min(this.passiveSlotsUnlocked | 0, slots.length));
+    for (let i = 0; i < n; i++) {
+        const id = slots[i];
+        if (id && owned.has(id) && PASSIVES[id]) active.add(id);
+    }
+    this.activePassives = active;
+    return active;
+}
+
+/** Is passive `id` currently active (equipped in an unlocked slot + owned)? */
+export function hasPassive(id) {
+    return !!(this.activePassives && this.activePassives.has(id));
+}
+
+/**
+ * Additive aggregator over the active passives' optional numeric `mods` map.
+ * A passive entry MAY declare `mods: { <key>: number }` (added in P6 as numeric
+ * passives gain consumers); this sums the contributions for `key`. Returns 0
+ * when nothing contributes — so folding it into a getEffective* getter is a
+ * no-op until a passive actually carries that key.
+ */
+export function getPassiveMod(key) {
+    if (!this.activePassives || this.activePassives.size === 0) return 0;
+    let total = 0;
+    for (const id of this.activePassives) {
+        const mods = PASSIVES[id] && PASSIVES[id].mods;
+        if (mods && typeof mods[key] === 'number') total += mods[key];
+    }
+    return total;
+}
+
+/**
+ * Equip `id` (or null to clear) into `slot` (0..2). Rejects locked slots and
+ * un-owned / non-slot-deliverable ids. A passive can't occupy two slots — if
+ * it's already elsewhere, that slot is cleared. Ramp accrual for any passive
+ * leaving or entering the slot is reset (swap anti-cheese, P5). Rebuilds
+ * activePassives. Returns true on a successful (validated) change.
+ */
+export function equipPassive(slot, id) {
+    const slots = this.equippedPassives;
+    if (!Array.isArray(slots) || slot < 0 || slot >= slots.length) return false;
+    if (slot >= (this.passiveSlotsUnlocked | 0)) return false; // slot still locked
+    if (id != null) {
+        const def = PASSIVES[id];
+        if (!def || !def.slot) return false;                 // unknown / not slot-deliverable
+        if (!(this.ownedPassives instanceof Set) || !this.ownedPassives.has(id)) return false; // not owned
+        const at = slots.indexOf(id);
+        if (at !== -1 && at !== slot) {                       // already equipped elsewhere → move it
+            slots[at] = null;
+            if (this._passiveRampState) this._passiveRampState.delete(id);
+        }
+    }
+    const prev = slots[slot];
+    if (prev === id) return true; // no-op
+    slots[slot] = id;
+    if (this._passiveRampState) {
+        if (prev) this._passiveRampState.delete(prev);
+        if (id) this._passiveRampState.delete(id);
+    }
+    _rebuildActivePassives.call(this);
+    return true;
+}
+
+/** Replace the owned-passive pool (seeded from meta unlocks at run init). */
+export function setOwnedPassives(ids) {
+    this.ownedPassives = new Set(
+        Array.isArray(ids) ? ids : (ids && typeof ids[Symbol.iterator] === 'function' ? [...ids] : []),
+    );
+    _rebuildActivePassives.call(this);
+}
+
+/** Set how many passive slots are usable (1..3). Rebuilds active set (P3). */
+export function setPassiveSlotsUnlocked(n) {
+    const max = Array.isArray(this.equippedPassives) ? this.equippedPassives.length : 3;
+    this.passiveSlotsUnlocked = Math.max(0, Math.min(n | 0, max));
+    _rebuildActivePassives.call(this);
+}

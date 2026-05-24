@@ -4,6 +4,7 @@ import { random, wrap } from '../core/utils.js';
 import * as weapons from './weapons.js';
 import * as abilities from './abilities.js';
 import * as progression from './progression.js';
+import * as passives from './passives.js';
 import * as playerRenderer from './renderer.js';
 import { scoreItem } from '../world/item-system.js';
 // Mobile auto-fire (5.92.0): when running in mobile mode the player
@@ -147,6 +148,20 @@ export class Player {
         this.abilityCooldowns = [0, 0, 0, 0];
         this.abilityCooldownsMax = [0, 0, 0, 0];
         this._defineAbilitySlotAccessors();
+
+        // Phase P2 — rule-modifier PASSIVES (distinct from STATS). Three equip
+        // slots, unlocked over a run (P3); swappable mid-run (P5). State mirrors
+        // the 4-slot ability model:
+        //   equippedPassives[i] — passive id in slot i (0..2), or null
+        //   ownedPassives       — ids this run may equip (seeded from meta)
+        //   activePassives      — equipped ∩ owned within unlocked slots,
+        //                         rebuilt on any change (the queried source)
+        //   passiveSlotsUnlocked— how many slots are currently usable (P3)
+        this.equippedPassives = [null, null, null];
+        this.ownedPassives = new Set();
+        this.activePassives = new Set();
+        this.passiveSlotsUnlocked = 1;
+        this._passiveRampState = new Map(); // ramping-passive accrual (reset on swap, P5)
 
         // Streak buff — set by combat-manager.onEnemyKill when the kill
         // streak crosses a tier threshold. Drives damage multiplier and the
@@ -1103,6 +1118,14 @@ export class Player {
     getPowerupStacks(type) {
         return progression.getPowerupStacks.call(this, type);
     }
+
+    // Phase P2 — rule-modifier passives (see player/passives.js).
+    _rebuildActivePassives() { return passives._rebuildActivePassives.call(this); }
+    hasPassive(id) { return passives.hasPassive.call(this, id); }
+    getPassiveMod(key) { return passives.getPassiveMod.call(this, key); }
+    equipPassive(slot, id) { return passives.equipPassive.call(this, slot, id); }
+    setOwnedPassives(ids) { return passives.setOwnedPassives.call(this, ids); }
+    setPassiveSlotsUnlocked(n) { return passives.setPassiveSlotsUnlocked.call(this, n); }
 
     getItemAffixTotal(type) {
         return progression.getItemAffixTotal.call(this, type);

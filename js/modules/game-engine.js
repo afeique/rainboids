@@ -1495,6 +1495,13 @@ export class GameEngine {
             if (!p.ownedPowers.has(p.activePower))      p.activePower   = [...p.ownedPowers][0] || p.activePower;
             if (!p.ownedAbilities.has(p.activeAbility)) p.activeAbility = [...p.ownedAbilities][0] || p.activeAbility;
         }
+        // Phase P2 — seed the run's owned passives from the unlocked pool
+        // (base ∪ purchased; works with null meta → base starters). P4 narrows
+        // this to the loadout's chosen pool + equips chosen slots; for now the
+        // player owns the full pool but nothing is equipped (activePassives ∅).
+        if (typeof p.setOwnedPassives === 'function') {
+            p.setOwnedPassives(getUnlockedSet('passives', meta));
+        }
         if (!meta) {
             if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
             return;
