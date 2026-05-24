@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.145.0] - 2026-05-24
+
+### Added — Kinetic Battery passive (Phase P6, content batch)
+
+- **Kinetic Battery** — a successful SHIFT dash refunds 20 power energy. The
+  refund rides `_triggerDash`, so it's naturally gated by the dash cooldown
+  (no free-energy spam) and only fires when the dash actually triggers (not when
+  blocked by cooldown / already dashing). Guarded no-op without the passive;
+  refund clamps to max energy.
+
+---
+
 ## [6.144.0] - 2026-05-24
 
 ### Added — Resonance passive (Phase P6, content batch)

@@ -16,6 +16,10 @@ import { scoreItem } from '../world/item-system.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { initPlayerStatus } from './player-status.js';
 
+// P6 — Kinetic Battery passive: a successful dash refunds this much power
+// energy (gated by the dash cooldown, so it can't be spammed for free energy).
+export const KINETIC_BATTERY_REFUND = 20;
+
 export class Player {
     constructor() {
         // One-time setup properties
@@ -1360,6 +1364,12 @@ export class Player {
         const audio = audioManager || (this.gameEngine && this.gameEngine.audioManager) || null;
         if (audio && typeof audio.playSound === 'function') {
             audio.playSound('phaseDash');
+        }
+
+        // P6 — Kinetic Battery: a successful dash refunds power energy.
+        if (typeof this.hasPassive === 'function' && this.hasPassive('KINETIC_BATTERY')
+            && typeof this.addEnergy === 'function') {
+            this.addEnergy(KINETIC_BATTERY_REFUND);
         }
         return true;
     }
