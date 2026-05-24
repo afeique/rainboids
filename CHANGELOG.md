@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.153.0] - 2026-05-24
+
+### Added — Gravity Well passive (Phase P6, keystone)
+
+- **Gravity Well** — a constant weak pull (0.7px/frame within 420px) drags
+  enemies toward your reticle, grouping them up for AoE/multi-hit — with the
+  built-in risk that it pulls danger toward you too. Runs each frame over the
+  enemy pool (`applyGravityWell`, guarded no-op unless equipped) via a pure,
+  overshoot-capped `gravityWellPull` nudge toward the aim point. Bosses are
+  exempt so it can't trivialize boss positioning. First of the new-runtime
+  passives greenlit by the user.
+
+---
+
 ## [6.152.0] - 2026-05-24
 
 ### Added — Siege passive (Phase P6)

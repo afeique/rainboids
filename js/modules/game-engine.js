@@ -2901,6 +2901,7 @@ export class GameEngine {
         };
     }
     
+    applyGravityWell() { return col.applyGravityWell.call(this); }
     handleCollisions() { return col.handleCollisions.call(this); }
     handleWeaponEffectCollisions() { return col.handleWeaponEffectCollisions.call(this); }
     checkLanceBeamCollisions() { return col.checkLanceBeamCollisions.call(this); }
@@ -3142,6 +3143,9 @@ export class GameEngine {
             // collapsing into a single point and reads as natural
             // "they avoid each other" behavior.
             _separateEnemies(this.enemyPool.activeObjects);
+            // P6 — Gravity Well passive: weak per-frame pull of enemies toward
+            // the reticle (guarded no-op unless equipped).
+            this.applyGravityWell();
             // Inject gameEngine ref for enemy bullets (needed for particle effects on death)
             for (const eb of this.enemyBulletPool.activeObjects) eb.gameEngine = this;
             this.enemyBulletPool.updateActive();

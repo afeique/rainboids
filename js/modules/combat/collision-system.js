@@ -2269,6 +2269,38 @@ export function frenzyMult(count) {
     return 1 + Math.min(FRENZY_MAX_ENEMIES, Math.max(0, count | 0)) * FRENZY_PER_ENEMY;
 }
 
+// P6 — Gravity Well passive: a constant weak pull drags enemies toward the
+// player's reticle, grouping them (downside: it pulls danger toward you too).
+// `gravityWellPull` is the pure per-enemy position nudge (toward the target,
+// capped so it never overshoots); `applyGravityWell` (engine-context) runs it
+// over the enemy pool each frame using the aim point. Bosses are exempt so it
+// can't trivialize boss positioning.
+export const GRAVITY_WELL_RADIUS = 420;
+export const GRAVITY_WELL_STEP = 0.7; // px/frame — deliberately weak
+export function gravityWellPull(enemy, tx, ty, radius = GRAVITY_WELL_RADIUS, step = GRAVITY_WELL_STEP) {
+    if (!enemy) return false;
+    const dx = tx - enemy.x, dy = ty - enemy.y;
+    const d = Math.hypot(dx, dy);
+    if (d > radius || d < 1) return false;       // out of range / already on target
+    const move = Math.min(step, d);              // never overshoot the target
+    enemy.x += (dx / d) * move;
+    enemy.y += (dy / d) * move;
+    return true;
+}
+export function applyGravityWell() {
+    const p = this.player;
+    if (!p || typeof p.hasPassive !== 'function' || !p.hasPassive('GRAVITY_WELL')) return;
+    const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+    if (!pool) return;
+    const inp = this.inputHandler && this.inputHandler.input;
+    const tx = (inp && typeof inp.aimX === 'number') ? inp.aimX : p.x;
+    const ty = (inp && typeof inp.aimY === 'number') ? inp.aimY : p.y;
+    for (const e of pool) {
+        if (!e || !e.active || e.warping || e._deathFlash > 0 || e.isBoss) continue;
+        gravityWellPull(e, tx, ty);
+    }
+}
+
 export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
