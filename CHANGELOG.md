@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.157.4] - 2026-05-24
+
+### Changed — Twin Cast polish (Phase P6 keystone)
+
+- **The double-cast now reads as an echo.** When Twin Cast fires a burst power
+  a second time, the heavy muzzle flare tints **phantom-violet** (matching the
+  Afterimage clone) instead of the usual gold — a clear "echo fired" tell
+  rather than a silent double. (Values reviewed and kept: 2nd cast at 50%
+  damage for +30% energy — a deliberate keystone payoff.)
+
+---
+
 ## [6.157.3] - 2026-05-24
 
 ### Changed — Afterimage polish (Phase P6 passive)

@@ -483,7 +483,7 @@ function spawnMuzzleFlare(particlePool, intensity, color) {
     const dur = intensity === 'heavy' ? 8 : intensity === 'medium' ? 5 : 3;
     const intVal = intensity === 'heavy' ? 1.5 : intensity === 'medium' ? 1.0 : 0.6;
     // RGB components for the flash color
-    const colorMap = { '#ffdd88': '255, 220, 140', '#88ccff': '140, 200, 255', '#ffaa44': '255, 170, 70', '#ffcc44': '255, 200, 70', '#44ffaa': '70, 255, 170' };
+    const colorMap = { '#ffdd88': '255, 220, 140', '#88ccff': '140, 200, 255', '#ffaa44': '255, 170, 70', '#ffcc44': '255, 200, 70', '#44ffaa': '70, 255, 170', '#aa88ff': '170, 136, 255' };
     this._muzzleFlashTimer = dur;
     this._muzzleFlashMax = dur;
     this._muzzleFlashIntensity = intVal;
@@ -1319,6 +1319,7 @@ export function firePower(bulletPool, audioManager, particlePool) {
     // powers returned early or are buffs — a 2nd cast is meaningless). The
     // half-clone scales the active power's damage field without mutating the
     // shared config.
+    let _twinEchoed = false;
     if (typeof this.hasPassive === 'function' && this.hasPassive('TWIN_CAST')
         && twinCastDoubles(this.activePower)) {
         const half = twinCastHalfConfig(config);
@@ -1330,6 +1331,7 @@ export function firePower(bulletPool, audioManager, particlePool) {
             case 'ORBITAL_STRIKE': this.fireOrbitalStrike(half); break;
             case 'MINE_LAYER': this.layMine(half); break;
         }
+        _twinEchoed = true;
     }
 
     // Each weapon's fire fn sets its own cooldown with discount applied
@@ -1337,8 +1339,10 @@ export function firePower(bulletPool, audioManager, particlePool) {
     // overwrite here — that would cancel the upgrade.
     audioManager.playShoot();
 
-    // Heavy muzzle flare for power weapons
-    spawnMuzzleFlare.call(this, particlePool, 'heavy', '#ffcc44');
+    // Heavy muzzle flare for power weapons. 6.157.4 — when Twin Cast doubled
+    // the cast, tint the flare phantom-violet (matching the Afterimage clone)
+    // so the player gets a clear "echo fired" tell instead of a silent double.
+    spawnMuzzleFlare.call(this, particlePool, 'heavy', _twinEchoed ? '#aa88ff' : '#ffcc44');
 }
 
 // ── New power weapons (brainstorm drop) ────────────────────────────────────
