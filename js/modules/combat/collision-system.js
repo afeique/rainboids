@@ -731,12 +731,12 @@ export function handleCollisions() {
                 // heal more than we'd dealt to a full-HP target).
                 const enemyApplied = Math.max(0, enemyHpBefore - enemy.health);
                 if (typeof this.applyVampirism === 'function') this.applyVampirism(enemyApplied);
-                // P6 — Vampiric Rounds passive: crits heal 2 HP.
+                // P6 — Vampiric Rounds passive: crits heal 2 HP. 6.149.0 — via
+                // gainHealth so the heal banks toward a tank when at full HP.
                 if (_isCrit && this.player && typeof this.player.hasPassive === 'function'
                     && this.player.hasPassive('VAMPIRIC_ROUNDS')) {
-                    const _mhp = (typeof this.player.getEffectiveMaxHealth === 'function')
-                        ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
-                    this.player.health = Math.min(_mhp, this.player.health + 2);
+                    if (typeof this.player.gainHealth === 'function') this.player.gainHealth(2);
+                    else this.player.health = Math.min(this.player.maxHealth, this.player.health + 2);
                 }
 
                 // 6.116.0 — Power energy is no longer earned per hit; it now

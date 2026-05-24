@@ -1395,6 +1395,27 @@ export function updateHUD() {
             ctx.restore();
         }
 
+        // 6.149.0 — overflow → tank progress, made VISIBLE. Healing past max HP
+        // banks toward the next spare tank (accumulateOverflowToTank); show that
+        // surplus as a bright pulsing cyan fill layered over the full bar, so the
+        // player literally sees the health bar "overflow and fill with the
+        // surplus" as it builds toward regaining a tank.
+        const tankProg = Math.max(0, Math.min(1, (this.player._tankProgress) || 0));
+        if (tankProg > 0) {
+            const ovW = barWidth * tankProg;
+            const pulse = 0.55 + 0.45 * Math.abs(Math.sin(Date.now() * 0.006));
+            ctx.save();
+            createHealthBarPath(barWidth);
+            ctx.clip();
+            ctx.globalAlpha = pulse;
+            const og = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+            og.addColorStop(0, 'rgba(200, 255, 255, 0.95)');
+            og.addColorStop(1, 'rgba(0, 220, 255, 0.85)');
+            ctx.fillStyle = og;
+            ctx.fillRect(barX, barY, Math.max(0, ovW), barHeight);
+            ctx.restore();
+        }
+
         // Remove segmentation lines for cleaner look
 
         // Draw XP bar at the bottom of the health bar

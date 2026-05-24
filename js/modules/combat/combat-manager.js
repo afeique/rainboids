@@ -1499,10 +1499,9 @@ export function applyVampirism(damageDealt) {
     if (lifestealFrac <= 0) return 0;
     const wouldHeal = damageDealt * lifestealFrac;
     if (!(wouldHeal > 0)) return 0;
-    const cap = this.player.getEffectiveMaxHealth();
-    const oldHp = this.player.health;
-    this.player.health = Math.min(cap, oldHp + wouldHeal);
-    const actualHeal = this.player.health - oldHp;
+    // 6.149.0 — route through gainHealth so lifesteal overflow at full HP banks
+    // toward a spare tank instead of being clamped away.
+    const actualHeal = this.player.gainHealth(wouldHeal).healed;
     if (actualHeal > 0 && typeof this.createDamageNumber === 'function') {
         this.createDamageNumber(
             this.player.x,

@@ -527,7 +527,9 @@ export function activateAbility(slot = 0) {
     if (abilityId === 'FIELD_MEDIC') {
         const pct = config.healPct + this.getPowerupStacks('POTENCY') * 0.10;
         const maxHp = this.getEffectiveMaxHealth();
-        this.health = Math.min(maxHp, this.health + maxHp * pct);
+        // 6.149.0 — route through gainHealth so a Field Medic burst at (or near)
+        // full HP banks its surplus toward a spare tank instead of vanishing.
+        this.gainHealth(maxHp * pct);
         if (config.cleanse) cleansePlayerStatus(this);
         // W6 — Cauterize (Pyro) / Purifying Light (Radiant): the heal-flash
         // also lands the attunement's element on nearby enemies.

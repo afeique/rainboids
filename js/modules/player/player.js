@@ -1419,6 +1419,28 @@ export class Player {
         this.energy = Math.max(0, Math.min(this.maxEnergy, (this.energy || 0) + amount));
     }
 
+    // 6.149.0 — canonical heal entry point. Adds `amount` HP, clamps to the
+    // effective max, and credits ANY surplus (overflow past max) to the
+    // spare-tank accumulator. Previously only the health-orb + regen paths
+    // credited overflow, so heals from Field Medic / vampirism / Vampiric
+    // Rounds at full HP were silently discarded and never rebuilt a lost tank.
+    // Routing every heal through here makes "overflow → regain a tank" hold for
+    // ALL sources. Returns { healed, overflow }.
+    gainHealth(amount) {
+        if (!(amount > 0)) return { healed: 0, overflow: 0 };
+        const cap = (typeof this.getEffectiveMaxHealth === 'function')
+            ? this.getEffectiveMaxHealth() : this.maxHealth;
+        const before = this.health;
+        this.health = Math.min(cap, before + amount);
+        const healed = this.health - before;
+        const overflow = amount - healed;
+        if (overflow > 0 && this.gameEngine
+            && typeof this.gameEngine.accumulateOverflowToTank === 'function') {
+            this.gameEngine.accumulateOverflowToTank(overflow);
+        }
+        return { healed, overflow };
+    }
+
     updateAbilityCooldowns(dt) {
         return abilities.updateAbilityCooldowns.call(this, dt);
     }

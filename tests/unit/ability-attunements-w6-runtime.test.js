@@ -21,6 +21,14 @@ function makePlayer(over = {}) {
         getPowerupStacks: () => 0,
         getEffectiveMaxHealth: () => 100,
         health: 100,
+        // 6.149.0 — mirror Player.gainHealth (clamp; FIELD_MEDIC routes through it).
+        gainHealth(amount) {
+            if (!(amount > 0)) return { healed: 0, overflow: 0 };
+            const cap = this.getEffectiveMaxHealth();
+            const before = this.health;
+            this.health = Math.min(cap, before + amount);
+            return { healed: this.health - before, overflow: amount - (this.health - before) };
+        },
         _invincibleMs: 0,
         makeInvincible(ms) { this._invincibleMs = ms; },
         novaRings: [], singularities: [], cryoRings: [], lightningChains: [],

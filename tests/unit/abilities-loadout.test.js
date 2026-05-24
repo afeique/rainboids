@@ -67,6 +67,16 @@ function makeFakePlayer(overrides = {}) {
         gameEngine: null,
         getPowerupStacks: () => 0,
         getEffectiveMaxHealth: () => 100,
+        // 6.149.0 — mirror Player.gainHealth (clamp to max; overflow credit is a
+        // no-op here since the stub has no tank accumulator).
+        gainHealth(amount) {
+            if (!(amount > 0)) return { healed: 0, overflow: 0 };
+            const cap = this.getEffectiveMaxHealth();
+            const before = this.health;
+            this.health = Math.min(cap, before + amount);
+            const healed = this.health - before;
+            return { healed, overflow: amount - healed };
+        },
         ...overrides,
     };
     // Mirror Player._defineAbilitySlotAccessors — legacy single-ability props

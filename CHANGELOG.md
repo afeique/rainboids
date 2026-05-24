@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.149.0] - 2026-05-24
+
+### Fixed — health overflow reliably rebuilds a spare tank
+
+- **Overflow → tank now works from every heal source.** Previously only health
+  orbs and passive regen credited surplus healing toward rebuilding a lost spare
+  tank; Field Medic, vampirism (lifesteal), and the Vampiric Rounds passive all
+  clamped to max HP and silently discarded the overflow — so healing at full HP
+  "did nothing." Added a canonical `Player.gainHealth(amount)` that clamps to
+  max and credits any surplus to the tank accumulator, and routed those three
+  heal paths through it. Healing past max now always banks toward regaining a
+  tank (up to the 3-tank cap), regardless of the heal source.
+
+### Added — visible health-bar overflow
+
+- The overflow→tank progress is now shown on the HUD: when surplus healing is
+  banked toward the next spare tank, a bright pulsing cyan fill layers over the
+  full health bar, so the bar visibly "overflows and fills with the surplus" as
+  it builds toward regaining a tank (the accumulator was previously invisible).
+
+---
+
 ## [6.148.0] - 2026-05-24
 
 ### Fixed — level-ups are announced again
