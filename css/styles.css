@@ -1369,6 +1369,28 @@ button:not([disabled]),
     padding-right: 4px;
 }
 
+/* P5b — in-run PASSIVES swap rows (pause menu). */
+.pause-equip-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "name status" "desc desc";
+    gap: 2px 12px;
+    text-align: left;
+    padding: 10px 14px;
+    border: 1px solid rgba(160, 130, 220, 0.35);
+    border-radius: 8px;
+    background: rgba(40, 30, 60, 0.5);
+    color: #cfc4e8;
+    cursor: pointer;
+    font-family: 'Press Start 2P', monospace;
+    transition: border-color 0.15s, background 0.15s;
+}
+.pause-equip-row:hover { border-color: rgba(190, 160, 255, 0.7); background: rgba(60, 45, 90, 0.6); }
+.pause-equip-row.equipped { border-color: #11bb88; background: rgba(20, 70, 55, 0.55); color: #d6ffe9; }
+.pause-equip-name   { grid-area: name; font-size: 12px; }
+.pause-equip-status { grid-area: status; font-size: 10px; color: #8effc0; align-self: center; }
+.pause-equip-desc   { grid-area: desc; font-size: 9px; color: #9a90b8; line-height: 1.4; }
+
 /* ── SHOP OVERLAY ──────────────────────────────────────────────────────────
    Mirrors the pause-menu layout: full-viewport backdrop, centered column,
    header (title + currency), tab strip, scrollable item list. Reuses

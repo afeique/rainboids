@@ -261,6 +261,7 @@ function _buildPauseMenu() {
         { key: 'stats',    label: 'STATS' },
         { key: 'primary',  label: 'PRIMARY' },
         { key: 'power',    label: 'POWER' },
+        { key: 'passives', label: 'PASSIVES' },
         { key: 'assists',  label: 'ASSISTS' },
         { key: 'timer',    label: 'TIMER' },
         { key: 'music',    label: 'MUSIC' },
@@ -288,6 +289,9 @@ function _buildPauseMenu() {
     menu.appendChild(el('div', { id: 'stats-tab',    className: 'pause-tab-content' }));
     menu.appendChild(el('div', { id: 'primary-tab',  className: 'pause-tab-content' }));
     menu.appendChild(el('div', { id: 'power-tab',    className: 'pause-tab-content' }));
+    // PASSIVES tab — populated by ui-manager.updatePassivesTab(): the in-run
+    // swap panel (assign owned passives to unlocked slots; P5b).
+    menu.appendChild(el('div', { id: 'passives-tab', className: 'pause-tab-content' }));
     // Assists tab content is always built (the toggles are needed for the
     // mobile-with-gamepad case); the tab button's visibility is what gates
     // access on mobile.

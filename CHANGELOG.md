@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.131.0] - 2026-05-24
+
+### Added — In-run PASSIVES swap menu (Phase P5b)
+
+The pause menu gains a **PASSIVES** tab — swap your rule-modifier passives
+between unlocked slots mid-run, any time. Click an owned passive to drop it into
+the first free unlocked slot; click an equipped one to remove it. The panel
+shows slot/keystone occupancy, marks keystones (★), and routes through
+`player.equipPassive` so the **keystone budget (≤2)** and **ramp-reset-on-swap**
+(anti-cheese) are enforced. This completes the passive equip lifecycle
+(BUILD pre-run → unlock slots over the run → swap mid-run → restore on CONTINUE).
+
+Tests: QA-14 (tab present, equip into free slot, unequip, keystone-budget
+rejection, no JS errors).
+
 ## [6.130.0] - 2026-05-24
 
 ### Added — Killing Spree passive (Phase P6, batch 6)

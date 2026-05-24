@@ -6,6 +6,7 @@ import { loadSettings, saveSettings } from '../core/storage.js';
 import { renderIconHTML } from './icons.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { renderSpAllocation } from './sp-allocation.js';
+import { getPassive, getSlotPassives } from '../combat/passive-data.js';
 
 // Format an elapsed-time milliseconds value as M:SS for the pause-menu
 // TIMER tab. Mirrors the same formatter that lives in shop-dom.js for
@@ -941,6 +942,86 @@ export class UIManager {
         }
     }
 
+    // ── Pause-menu PASSIVES tab (P5b) ──────────────────────────────────────
+    // The in-run swap panel: assign any OWNED, slot-deliverable passive into any
+    // currently-UNLOCKED slot, and unequip, at any time. Clicking an unequipped
+    // passive drops it into the first free unlocked slot; clicking an equipped
+    // one removes it. player.equipPassive enforces the keystone budget (≤2) +
+    // resets ramp accrual on the swap.
+    updatePassivesTab() {
+        const tab = document.getElementById('passives-tab');
+        if (!tab) return;
+        const player = this.gameEngine && this.gameEngine.player;
+        tab.replaceChildren();
+        if (!player) return;
+
+        const slots = Array.isArray(player.equippedPassives) ? player.equippedPassives : [];
+        const unlocked = Math.max(0, player.passiveSlotsUnlocked | 0);
+        const owned = (player.ownedPassives instanceof Set) ? player.ownedPassives : new Set();
+        const equippedCount = slots.slice(0, unlocked).filter(Boolean).length;
+        const keystoneCount = slots.slice(0, unlocked)
+            .filter((id) => id && getPassive(id) && (getPassive(id).tags || []).includes('keystone')).length;
+
+        const h2 = document.createElement('h2');
+        h2.textContent = 'PASSIVES';
+        tab.appendChild(h2);
+        const subtitle = document.createElement('div');
+        subtitle.className = 'pause-tab-subtitle';
+        subtitle.textContent = `${equippedCount}/${unlocked} slot${unlocked === 1 ? '' : 's'} filled · ${keystoneCount}/2 keystones · click to equip / unequip · swap freely`;
+        tab.appendChild(subtitle);
+
+        const list = document.createElement('div');
+        list.id = 'passives-swap-list';
+        list.className = 'pause-tab-list';
+        tab.appendChild(list);
+
+        // Owned, slot-deliverable passives (the run's pool ∩ slot channel).
+        const pool = getSlotPassives().filter((p) => owned.has(p.id));
+        if (pool.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.color = '#888';
+            empty.textContent = 'No passives owned for this run. Unlock + pick them on the BUILD screen.';
+            list.appendChild(empty);
+            return;
+        }
+
+        for (const def of pool) {
+            const slotIdx = slots.indexOf(def.id);
+            const equipped = slotIdx !== -1 && slotIdx < unlocked;
+            const keystone = (def.tags || []).includes('keystone');
+            const row = this._buildPassiveSwapRow(def, equipped, equipped ? slotIdx : -1, keystone, () => {
+                if (equipped) {
+                    player.equipPassive(slotIdx, null);
+                } else {
+                    // First free unlocked slot, else no-op (unequip one to free room).
+                    let free = -1;
+                    for (let i = 0; i < unlocked; i++) { if (!slots[i]) { free = i; break; } }
+                    if (free !== -1) player.equipPassive(free, def.id);
+                }
+                this.updatePassivesTab();
+            });
+            list.appendChild(row);
+        }
+    }
+
+    _buildPassiveSwapRow(def, equipped, slotIdx, keystone, onClick) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'pause-equip-row' + (equipped ? ' equipped' : '');
+        const name = document.createElement('span');
+        name.className = 'pause-equip-name';
+        name.textContent = (keystone ? '★ ' : '') + (def.name || def.id);
+        const desc = document.createElement('span');
+        desc.className = 'pause-equip-desc';
+        desc.textContent = (def.desc || '') + (def.downside ? `  ↯ ${def.downside}` : '');
+        const status = document.createElement('span');
+        status.className = 'pause-equip-status';
+        status.textContent = equipped ? `SLOT ${slotIdx + 1}` : '';
+        row.append(name, desc, status);
+        row.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+        return row;
+    }
+
     // Shared row builder for both PRIMARY and POWER tabs.
     // No innerHTML anywhere — every text node is set via textContent.
     // The click listener wraps `onClick` with stopPropagation BEFORE calling
@@ -1790,6 +1871,7 @@ export class UIManager {
         // Refresh equip lists when their tabs are opened.
         if (tabName === 'primary') this.updatePrimaryTab();
         if (tabName === 'power') this.updatePowerTab();
+        if (tabName === 'passives') this.updatePassivesTab();
         if (tabName === 'stats') this.updateStatsTab();
         if (tabName === 'assists') this.syncAssistsTab();
         if (tabName === 'gamepad' && this.gameEngine) {
