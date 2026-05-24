@@ -644,6 +644,14 @@ export function drawLevelUpEffects(ctx) {
         progress: progress,
         active: true
     };
+
+    // 6.148.0 — self-expire once the window elapses (the old per-frame tick
+    // that cleared this was removed in 6.0.0; without this the aura + wavy
+    // text would latch on forever after the re-wired trigger fires).
+    if (progress >= 1) {
+        this.levelUpAnimation.active = false;
+        this.levelUpTextInfo.active = false;
+    }
 }
 
 // ── Cooldown timer ────────────────────────────────────────────────────────

@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.148.0] - 2026-05-24
+
+### Fixed — level-ups are announced again
+
+- Re-wired the on-screen **LEVEL UP** announcement. The 6.0.0 refactor no-op'd
+  `triggerLevelUpEffects` and the 6.35.0 meta-leveling never re-armed it, so
+  leveling up was silent. `addXp` now fires the canvas celebration (ship golden
+  aura + wavy "LEVEL UP! LV N" banner) on every level gain, with a self-expiring
+  animation window. (The DOM `ui:show-message` path stays dead — its overlay is
+  commented out of index.html — so the announcement is canvas-rendered.)
+
+### Added — Stat Point (SP) availability indicator
+
+- The level-up banner subtitle now announces the Stat Point award and how many
+  SP are available to spend (was the stale "Ability Point Gained!").
+- A persistent pulsing green **"+N SP"** pip sits next to the HUD level number
+  whenever the player has unspent Stat Points, so the reward stays visible after
+  the banner fades (SP are spent on the STATS screen).
+
+---
+
 ## [6.147.0] - 2026-05-24
 
 ### Added — Backlash passive (Phase P6, content batch)

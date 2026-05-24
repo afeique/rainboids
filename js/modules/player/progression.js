@@ -61,6 +61,33 @@ export function addXp(amount) {
     if (leveled) {
         this._leveledUpPending = true;
         this.saveMetaState();
+        // 6.148.0 — re-arm the on-screen LEVEL UP announcement. The 6.0.0
+        // refactor no-op'd triggerLevelUpEffects and the 6.35.0 meta-leveling
+        // never re-wired it, so level-ups had gone silent. The canvas
+        // animation (ship aura + wavy "LEVEL UP!" text + "+N SP" subtitle) is
+        // driven by `levelUpAnimation`; the DOM ui:show-message path is dead
+        // (game-message-overlay is commented out of index.html).
+        triggerLevelUpAnnounce.call(this);
+    }
+}
+
+// 6.148.0 — fire the canvas LEVEL UP celebration: a timed `levelUpAnimation`
+// window (ship golden aura via renderer.drawLevelUpEffects + the wavy
+// "LEVEL UP!" / SP subtitle via hud/status.drawLevelUpText) plus a gold
+// particle burst + an audio cue. Safe off-engine (particles/audio guarded).
+const LEVEL_UP_ANNOUNCE_MS = 2600;
+export function triggerLevelUpAnnounce() {
+    this.levelUpAnimation = {
+        active: true,
+        startTime: Date.now(),
+        duration: LEVEL_UP_ANNOUNCE_MS,
+    };
+    if (typeof this.createLevelUpParticles === 'function') {
+        try { this.createLevelUpParticles(); } catch (_) { /* visual only */ }
+    }
+    const ge = this.gameEngine;
+    if (ge && ge.events && typeof ge.events.emit === 'function') {
+        ge.events.emit('audio:powerup');
     }
 }
 

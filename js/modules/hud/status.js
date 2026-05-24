@@ -750,11 +750,47 @@ export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
         const levelText = `${level}`;
         ctx.strokeText(levelText, levelLabelX, shieldCenterY);
         ctx.fillText(levelText, levelLabelX, shieldCenterY);
-
-        // Energy sphere — right of the level number.
         const levelTextW = ctx.measureText(levelText).width;
+
+        // 6.148.0 — persistent "SP available" pip. When the player has unspent
+        // Stat Points, a pulsing green "+N SP" badge sits right of the level
+        // number so the reward stays visible after the LEVEL UP banner fades
+        // (SP are spent on the STATS screen at wave-clear / from the menu).
+        let spPipW = 0;
+        const sp = ((this.player && this.player.sp) | 0) || 0;
+        if (sp > 0) {
+            const pulse = 0.65 + 0.35 * Math.abs(Math.sin(Date.now() * 0.005));
+            const spText = `+${sp} SP`;
+            const spX = levelLabelX + levelTextW + 10;
+            ctx.save();
+            ctx.font = "10px 'Press Start 2P', monospace";
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            const padX = 5;
+            const tw = ctx.measureText(spText).width;
+            const pillH = 16;
+            const pillY = shieldCenterY - pillH / 2;
+            // Pulsing green pill background.
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = 'rgba(0, 80, 30, 0.85)';
+            ctx.strokeStyle = '#39ff88';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            const pillW = tw + padX * 2;
+            if (ctx.roundRect) ctx.roundRect(spX, pillY, pillW, pillH, 4);
+            else ctx.rect(spX, pillY, pillW, pillH);
+            ctx.fill();
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#aaffcc';
+            ctx.fillText(spText, spX + padX, shieldCenterY + 1);
+            ctx.restore();
+            spPipW = pillW + 10;
+        }
+
+        // Energy sphere — right of the level number (and the SP pip if shown).
         const sphereR = barHeight * 0.6;
-        const sphereCX = levelLabelX + levelTextW + 16 + sphereR;
+        const sphereCX = levelLabelX + levelTextW + 16 + spPipW + sphereR;
         drawEnergySphere.call(this, ctx, sphereCX, shieldCenterY, sphereR);
 
         ctx.restore();
@@ -1156,8 +1192,8 @@ export function drawLevelUpText() {
         const lvlFS = _portLU ? 20 : (_mobLU ? 24 : 32);
         const subFS = _portLU ? 11 : (_mobLU ? 13 : 16);
 
-        // Wavy gold "LEVEL X!" — palette pulses around the original #FFD700.
-        this.drawWavyText(`LEVEL ${level}!`, 0, -15, {
+        // Wavy gold "LEVEL UP!" — palette pulses around the original #FFD700.
+        this.drawWavyText(`LEVEL UP!  LV ${level}`, 0, -15, {
             fontSize: lvlFS,
             colors: WAVY_PALETTES.gold,
             amplitude: 6,
@@ -1165,8 +1201,13 @@ export function drawLevelUpText() {
             colorSpeed: 0.45,
         });
 
-        // Wavy orange subtitle around the original #FFA500.
-        this.drawWavyText('Ability Point Gained!', 0, 15, {
+        // 6.148.0 — subtitle announces the Stat Point award + how many are
+        // now available to spend (was the stale "Ability Point Gained!").
+        const sp = (this.player && this.player.sp | 0) || 0;
+        const spText = sp > 0
+            ? `+1 STAT POINT  ·  ${sp} SP TO SPEND`
+            : '+1 STAT POINT';
+        this.drawWavyText(spText, 0, 15, {
             fontSize: subFS,
             colors: WAVY_PALETTES.orange,
             amplitude: 3,

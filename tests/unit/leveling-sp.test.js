@@ -50,6 +50,44 @@ describe('R7 — XP → level → SP', () => {
     });
 });
 
+describe('6.148.0 — level-up announcement trigger', () => {
+    test('crossing a level arms the canvas levelUpAnimation', () => {
+        const p = makePlayer();
+        expect(p.levelUpAnimation).toBeUndefined();
+        progression.addXp.call(p, xpForLevel(1));
+        expect(p.level).toBe(2);
+        expect(p.levelUpAnimation).toBeDefined();
+        expect(p.levelUpAnimation.active).toBe(true);
+        expect(p.levelUpAnimation.duration).toBeGreaterThan(0);
+        expect(typeof p.levelUpAnimation.startTime).toBe('number');
+    });
+
+    test('XP that does NOT level leaves the announcement un-armed', () => {
+        const p = makePlayer();
+        progression.addXp.call(p, xpForLevel(1) - 1);
+        expect(p.levelUpAnimation).toBeUndefined();
+    });
+
+    test('triggerLevelUpAnnounce fires the particle burst + audio cue when present', () => {
+        let particles = 0;
+        const emitted = [];
+        const p = makePlayer({
+            createLevelUpParticles() { particles++; },
+            gameEngine: { events: { emit: (e) => emitted.push(e) } },
+        });
+        progression.triggerLevelUpAnnounce.call(p);
+        expect(particles).toBe(1);
+        expect(emitted).toContain('audio:powerup');
+        expect(p.levelUpAnimation.active).toBe(true);
+    });
+
+    test('triggerLevelUpAnnounce is safe off-engine (no particles/events)', () => {
+        const p = makePlayer();
+        expect(() => progression.triggerLevelUpAnnounce.call(p)).not.toThrow();
+        expect(p.levelUpAnimation.active).toBe(true);
+    });
+});
+
 describe('R7 — SP allocation', () => {
     test('allocateSp spends 1 SP and raises the stat', () => {
         const p = makePlayer({ sp: 2 });
