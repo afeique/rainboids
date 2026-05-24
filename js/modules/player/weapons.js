@@ -322,7 +322,14 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         const powerConfig = this.getActivePowerConfig();
         if (powerConfig.isChargeBased) {
             // CHARGE_SHOT — spend energy, then fire at a fixed full charge.
-            this.energy = Math.max(0, (this.energy || 0) - this.getPowerEnergyCost());
+            // P6 — Resonance: every 3rd power use is free (no deduction).
+            let _chargeCost = this.getPowerEnergyCost();
+            if (typeof this.hasPassive === 'function' && this.hasPassive('RESONANCE')) {
+                const _r = resonanceStep(this._resonanceUses);
+                this._resonanceUses = _r.count;
+                if (_r.free) _chargeCost = 0;
+            }
+            this.energy = Math.max(0, (this.energy || 0) - _chargeCost);
             this.chargeStartTime = now - this.maxChargeTime; // force a full-charge shot
             this.pausedChargeTime = 0;
             this.fireChargedShot(bulletPool, audioManager);
@@ -1180,6 +1187,16 @@ export function applyGlobalBulletUpgrades(bullet) {
 
 // ── Power weapon dispatch ──────────────────────────────────────────────────
 
+// P6 — Resonance passive: every 3rd power-weapon use costs no energy. Pure
+// counter step so the cadence unit-tests cleanly — the fire sites advance the
+// player's `_resonanceUses` and skip the deduction when `free` is true. (The
+// energy gate is left intact: a free use still requires the meter to hold the
+// cost, so this "keeps" rather than "conjures" energy every 3rd shot.)
+export function resonanceStep(prevCount) {
+    const count = (prevCount | 0) + 1;
+    return { count, free: count % 3 === 0 };
+}
+
 export function firePower(bulletPool, audioManager, particlePool) {
     // P6 — Gunslinger passive: no power weapons (pure-gunner identity).
     if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) return;
@@ -1188,7 +1205,14 @@ export function firePower(bulletPool, audioManager, particlePool) {
     // 6.29.0 — Spend energy. Callers gate on isPowerReady() (energy >=
     // cost) before reaching here, but deduct defensively in case a
     // future caller skips the gate.
-    this.energy = Math.max(0, (this.energy || 0) - this.getPowerEnergyCost());
+    // P6 — Resonance: every 3rd power use is free (no deduction).
+    let _powerCost = this.getPowerEnergyCost();
+    if (typeof this.hasPassive === 'function' && this.hasPassive('RESONANCE')) {
+        const _r = resonanceStep(this._resonanceUses);
+        this._resonanceUses = _r.count;
+        if (_r.free) _powerCost = 0;
+    }
+    this.energy = Math.max(0, (this.energy || 0) - _powerCost);
 
     switch (this.activePower) {
         case 'MINE_LAYER':

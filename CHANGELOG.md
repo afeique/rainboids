@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.144.0] - 2026-05-24
+
+### Added — Resonance passive (Phase P6, content batch)
+
+- **Resonance** — every 3rd power-weapon use costs no energy. A per-player use
+  counter (advanced at both the cooldown-based `firePower` path and the
+  charge-based fire path) skips the energy deduction on every third use. Pure
+  `resonanceStep` cadence counter; guarded no-op without the passive. The energy
+  gate is intact, so a free use still requires the meter to hold the cost — it
+  keeps the energy rather than firing from empty.
+
+---
+
 ## [6.143.0] - 2026-05-24
 
 ### Added — Kindling passive (Phase P6, content batch)
