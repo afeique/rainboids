@@ -6,6 +6,7 @@
 import { describe, expect, test } from '@jest/globals';
 import {
     applyEyeOfTheStorm,
+    eyeOfStormStationary,
     EYE_RADIUS,
     EYE_SLOW_FACTOR,
     EYE_STILL_SPEED,
@@ -87,5 +88,16 @@ describe('Eye of the Storm — stationary slow aura', () => {
         eng.player.vel.x = EYE_STILL_SPEED; // at the boundary
         applyEyeOfTheStorm.call(eng);
         expect(eng.slowed.length).toBe(1);
+    });
+});
+
+describe('Eye of the Storm — stationary predicate (shared with the VFX bubble)', () => {
+    test('at/under the threshold is stationary', () => {
+        expect(eyeOfStormStationary(0)).toBe(true);
+        expect(eyeOfStormStationary(EYE_STILL_SPEED)).toBe(true);
+    });
+    test('above the threshold is not stationary', () => {
+        expect(eyeOfStormStationary(EYE_STILL_SPEED + 0.0001)).toBe(false);
+        expect(eyeOfStormStationary(5)).toBe(false);
     });
 });

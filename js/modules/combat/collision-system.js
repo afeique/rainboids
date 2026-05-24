@@ -2318,11 +2318,17 @@ export const EYE_RADIUS = 300;
 export const EYE_SLOW_FACTOR = 0.6;  // 40% slow
 export const EYE_STILL_SPEED = 0.5;  // speed at/below which the player is "stationary"
 export const EYE_SLOW_MS = 200;      // short window, refreshed each frame while held
+// 6.157.2 — shared "is the player holding still enough for the Eye?" predicate,
+// so the gameplay slow (here) and the VFX bubble (weapon-effects-renderer) read
+// from one source of truth. At/under the threshold counts as stationary.
+export function eyeOfStormStationary(speed) {
+    return speed <= EYE_STILL_SPEED;
+}
 export function applyEyeOfTheStorm() {
     const p = this.player;
     if (!p || typeof p.hasPassive !== 'function' || !p.hasPassive('EYE_OF_THE_STORM')) return;
     const spd = Math.hypot((p.vel && p.vel.x) || 0, (p.vel && p.vel.y) || 0);
-    if (spd > EYE_STILL_SPEED) return; // only while ~stationary
+    if (!eyeOfStormStationary(spd)) return; // only while ~stationary
     const r2 = EYE_RADIUS * EYE_RADIUS;
     const enemies = (this.enemyPool && this.enemyPool.activeObjects) || [];
     for (const e of enemies) {

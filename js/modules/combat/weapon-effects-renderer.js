@@ -1,10 +1,13 @@
 // Weapon effects rendering: beams, mines, nova rings, lightning, missiles, ability effects
 import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
-// 6.157.1 — passive-field auras (Gravity Well) draw at the gameplay radii, so
-// import the source-of-truth constants. (weapon-effects-renderer is only
-// imported by game-engine, and collision-system never imports it back, so this
-// is a clean one-way edge — no cycle.)
-import { GRAVITY_WELL_RADIUS, GRAVITY_WELL_DEADZONE } from './collision-system.js';
+// 6.157.1 — passive-field auras (Gravity Well, Eye of the Storm) draw at the
+// gameplay radii, so import the source-of-truth constants/predicate.
+// (weapon-effects-renderer is only imported by game-engine, and collision-system
+// never imports it back, so this is a clean one-way edge — no cycle.)
+import {
+    GRAVITY_WELL_RADIUS, GRAVITY_WELL_DEADZONE,
+    EYE_RADIUS, eyeOfStormStationary,
+} from './collision-system.js';
 
 // 5.79.4 — Module-level scratch buffers for jagged-arc paths. Replace
 //   the per-call `path = [].push([x,y])` allocations that the perf
@@ -1153,5 +1156,39 @@ export function drawWeaponEffects() {
             ctx.stroke();
         }
         ctx.restore();
+    }
+
+    // ─── Eye of the Storm field (P6 passive, 6.157.2) ───────────────
+    // While the player holds still, nearby enemies + their bullets slow 40%
+    // (collision-system.applyEyeOfTheStorm). Draw a calm "bubble" at the slow
+    // radius so the otherwise-invisible field is readable: a creeping dashed
+    // shimmer boundary plus a faint inner membrane ring. Only while the slow
+    // is actually active (same stationary predicate as the gameplay).
+    if (p.hasPassive && p.hasPassive('EYE_OF_THE_STORM')) {
+        const spd = Math.hypot((p.vel && p.vel.x) || 0, (p.vel && p.vel.y) || 0);
+        if (eyeOfStormStationary(spd)) {
+            const now = Date.now();
+            ctx.save();
+            // Shimmer boundary — dashes creep slowly around the rim.
+            ctx.globalAlpha = 0.16 + 0.08 * Math.sin(now * 0.004);
+            ctx.strokeStyle = '#9fe8f2';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 12]);
+            ctx.lineDashOffset = -(now * 0.03) % 22;
+            ctx.shadowColor = '#5cd0e0';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, EYE_RADIUS, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.shadowBlur = 0;
+            // Inner membrane ring — a faint second line just inside the rim.
+            ctx.globalAlpha = 0.08 + 0.04 * Math.sin(now * 0.003);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, EYE_RADIUS - 7, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
     }
 }

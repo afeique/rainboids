@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.157.2] - 2026-05-24
+
+### Changed — Eye of the Storm polish (Phase P6 passive)
+
+- **The slow field is now visible.** While the player holds still and the Eye is
+  active, a calm "bubble" draws at the slow radius — a creeping dashed shimmer
+  boundary plus a faint inner membrane ring — so the otherwise-invisible field
+  reads on-screen. It only shows while the slow is actually active.
+- Extracted a shared `eyeOfStormStationary(speed)` predicate so the gameplay
+  slow and the VFX bubble gate read from one source of truth (no behavior
+  change to the slow itself).
+
+---
+
 ## [6.157.1] - 2026-05-24
 
 ### Changed — Gravity Well polish (Phase P6 passive)
