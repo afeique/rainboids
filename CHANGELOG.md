@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.107.0] - 2026-05-23
+
+### Added — Cryo attunement behavior: sustained cold freezes (Phase W2)
+
+Cryo-attuned weapons now escalate: a hard hit still freezes outright, and a
+soft hit on an **already-chilled** enemy now freezes too (the chill "locks in"),
+so sustained fire on one target reliably freezes it (→ shatter setups). Inert
+unless a Cryo attunement is equipped. 3 new unit tests; 649 unit green.
+
 ## [6.106.0] - 2026-05-23
 
 ### Added — Pyro attunement behavior: fire spread (Phase W2)

@@ -2400,13 +2400,18 @@ export function applyWeaponElementStatus(enemy, element, dealt) {
                 if (wasBurning) _spreadBurn.call(this, enemy, dealt);
             }
             break;
-        case 'CRYO':
-            if (dealt >= ELEM_FREEZE_HIT) {
+        case 'CRYO': {
+            // W2 (Cryo) — sustained cold escalates: a hard hit freezes outright,
+            // and a soft hit on an ALREADY-CHILLED enemy also freezes (the chill
+            // "locked in"). Otherwise it just chills. Inert unless Cryo-attuned.
+            const wasChilled = enemy.chillUntil > frameClock.now;
+            if (dealt >= ELEM_FREEZE_HIT || wasChilled) {
                 if (typeof this.applyFreeze === 'function') this.applyFreeze(enemy);
             } else if (typeof this.applyChill === 'function') {
                 this.applyChill(enemy);
             }
             break;
+        }
         case 'VOLT':
             if (typeof this.applyConduct === 'function') this.applyConduct(enemy);
             if (Math.random() < ELEM_SHOCK_CHANCE && typeof this.applyStun === 'function') {

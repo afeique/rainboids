@@ -37,6 +37,16 @@ function mkCtx(pool) {
     };
 }
 
+// Cryo ctx — records chill/freeze and sets the timers the engine reads.
+function mkCryoCtx() {
+    const chilled = [], frozen = [];
+    return {
+        chilled, frozen,
+        applyChill(e) { chilled.push(e); e.chillUntil = frameClock.now + 2000; },
+        applyFreeze(e) { frozen.push(e); e.freezeUntil = frameClock.now + 1500; },
+    };
+}
+
 describe('W2 Pyro — fire spread', () => {
     test('the igniting hit burns only the target (no spread scan)', () => {
         const a = mkEnemy(0, 0);
@@ -73,5 +83,31 @@ describe('W2 Pyro — fire spread', () => {
         // 1 (target re-burn) + at most BURN_SPREAD_MAX (3) spreads.
         expect(ctx.burns.length).toBeLessThanOrEqual(1 + 3);
         expect(ctx.burns.length).toBeGreaterThan(1);
+    });
+});
+
+describe('W2 Cryo — sustained cold escalates to freeze', () => {
+    test('a soft hit on a fresh enemy only chills', () => {
+        const e = mkEnemy(0, 0);
+        const ctx = mkCryoCtx();
+        applyWeaponElementStatus.call(ctx, e, 'CRYO', 3); // < freeze threshold (8)
+        expect(ctx.chilled).toContain(e);
+        expect(ctx.frozen).not.toContain(e);
+    });
+
+    test('a hard hit freezes outright', () => {
+        const e = mkEnemy(0, 0);
+        const ctx = mkCryoCtx();
+        applyWeaponElementStatus.call(ctx, e, 'CRYO', 10); // >= threshold
+        expect(ctx.frozen).toContain(e);
+        expect(ctx.chilled).not.toContain(e);
+    });
+
+    test('a soft hit on an already-chilled enemy escalates to freeze', () => {
+        const e = mkEnemy(0, 0, { chillUntil: frameClock.now + 1000 });
+        const ctx = mkCryoCtx();
+        applyWeaponElementStatus.call(ctx, e, 'CRYO', 3); // soft, but already chilled
+        expect(ctx.frozen).toContain(e);
+        expect(ctx.chilled).not.toContain(e);
     });
 });
