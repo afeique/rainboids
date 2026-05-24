@@ -28,7 +28,7 @@
 // SHIFT-key core movement primitive; its i-frames now live in
 // player.isDashIFrameActive(), checked at the collision sites.)
 
-import { GAME_STATES } from '../core/constants.js';
+import { GAME_STATES, WAVES_PER_STAGE } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
@@ -242,6 +242,14 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     // wasn't dodged/i-framed (those returned early above), so the status sticks.
     if (opts.element) applyPlayerStatus(this.player, opts.element, frameClock.now);
 
+    // P6 — Failsafe passive: cap any single hit at 50% of max HP (the
+    // anti-one-shot keystone; its −15% max-HP downside is a maxHpMult).
+    if (this.player.hasPassive && this.player.hasPassive('FAILSAFE')) {
+        const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
+            ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
+        reducedDamage = Math.min(reducedDamage, maxHp * 0.5);
+    }
+
     // Round to an integer so HP, damage numbers, and stats stay clean
     // (the collision sites used to round; the generic path didn't).
     const finalDamage = Math.round(reducedDamage);
@@ -409,6 +417,27 @@ export function accumulateOverflowToTank(credit) {
 }
 
 export function handlePlayerDeath() {
+    // P6 — Second Heart passive: survive a lethal hit once PER STAGE at 30% HP
+    // + i-frames (the cheaper-but-repeating cousin of the Second Wind ability).
+    // Tracked by the stage it was last used in, so it auto-rearms each stage.
+    if (this.player && this.player.hasPassive && this.player.hasPassive('SECOND_HEART')) {
+        const stage = Math.max(1, Math.ceil((((this.game && this.game.currentWave) | 0) || 1) / WAVES_PER_STAGE));
+        if (this.player._secondHeartUsedStage !== stage) {
+            this.player._secondHeartUsedStage = stage;
+            const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
+                ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
+            this.player.health = Math.max(1, Math.round(maxHp * 0.30));
+            if (typeof this.player.makeInvincible === 'function') this.player.makeInvincible(1500);
+            if (this.events?.emit) {
+                this.events.emit('audio:powerup');
+                this.events.emit('ui:show-message', {
+                    title: '✦ SECOND HEART ✦', subtitle: 'Survived at 30% HP',
+                    duration: 1600, position: 'top',
+                });
+            }
+            return;
+        }
+    }
     // R4.3 Revive Token (bought) + R6.3 Second Wind (ability) both cheat death
     // once: consume whichever is set, restore to full HP + one spare tank, and
     // skip the death sequence so the run continues.

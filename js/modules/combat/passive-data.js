@@ -204,7 +204,7 @@ export const PASSIVES = {
     FAILSAFE: {
         id: 'FAILSAFE', name: 'Failsafe', desc: 'No single hit can remove more than 50% of your max HP',
         hooks: ['damageTaken'], tags: ['keystone', 'defense'], slot: true, item: false, stack: B,
-        downside: '−15% max HP',
+        downside: '−15% max HP', maxHpMult: 0.85,
     },
     HEAT_SINK: {
         id: 'HEAT_SINK', name: 'Heat Sink', desc: 'Primaries ignore their fire-rate cap and ramp while held, building HEAT; max heat VENTs (brief lockout + AoE burst)',

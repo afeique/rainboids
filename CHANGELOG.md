@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.127.0] - 2026-05-24
+
+### Added — Energy + defense passive effects (Phase P6, batch 3)
+
+- **Overflow Spark** — your primaries deal +25% damage while energy is full.
+- **Failsafe** — no single hit can take more than 50% of your max HP (the
+  anti-one-shot keystone), with its ↯ −15% max-HP downside as a `maxHpMult`.
+- **Second Heart** — survive a lethal hit once **per stage**, dropping to 30%
+  HP with brief i-frames (auto-rearms each stage; the cheaper, repeating cousin
+  of the Second Wind ability).
+
+Tests: Failsafe max-HP mult + Overflow Spark full-energy damage in
+`passives-player`.
+
 ## [6.126.0] - 2026-05-24
 
 ### Added — More passive effects: crit + economy (Phase P6, batch 2)

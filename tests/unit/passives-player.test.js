@@ -6,6 +6,7 @@ import { describe, expect, test, afterEach } from '@jest/globals';
 import * as passives from '../../js/modules/player/passives.js';
 import { PASSIVES } from '../../js/modules/combat/passive-data.js';
 import * as progression from '../../js/modules/player/progression.js';
+import * as weapons from '../../js/modules/player/weapons.js';
 
 function makeStub(over = {}) {
     return {
@@ -223,6 +224,36 @@ describe('P6 — passive effect batch 1 (Glass Cannon multipliers)', () => {
         } finally {
             delete PASSIVES.OPPORTUNIST.damageMult;
         }
+    });
+});
+
+describe('P6 batch 3 — Failsafe maxHP + Overflow Spark', () => {
+    test('Failsafe applies a 0.85 max-HP multiplier', () => {
+        const s = makeStub({ maxHealth: 200, getPowerupStacks: () => 0, getItemAffixTotal: () => 0, spStats: {} });
+        s.getPassiveMod = (k) => passives.getPassiveMod.call(s, k);
+        s.getPassiveMaxHpMult = () => passives.getPassiveMaxHpMult.call(s);
+        own(s, ['FAILSAFE']);
+        equip(s, 0, 'FAILSAFE');
+        expect(passives.getPassiveMaxHpMult.call(s)).toBeCloseTo(0.85);
+        expect(progression.getEffectiveMaxHealth.call(s)).toBe(170); // 200 × 0.85
+    });
+
+    test('Overflow Spark: +25% primary damage only at full energy', () => {
+        const base = {
+            activePrimary: 'X',
+            getActivePrimaryConfig: () => ({ damage: 10 }),
+            getPowerupStacks: () => 0,
+            overdriveTimer: 0,
+            maxEnergy: 100,
+        };
+        const has = (id) => id === 'OVERFLOW_SPARK';
+        // Full energy + passive → ×1.25 vs empty energy (ratio is robust to any
+        // platform mobile multiplier baked into the getter).
+        const full = { ...base, energy: 100, hasPassive: has };
+        const empty = { ...base, energy: 0, hasPassive: has };
+        const dFull = weapons.getEffectivePrimaryDamage.call(full);
+        const dEmpty = weapons.getEffectivePrimaryDamage.call(empty);
+        expect(dFull / dEmpty).toBeCloseTo(1.25);
     });
 });
 

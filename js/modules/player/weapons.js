@@ -2095,6 +2095,12 @@ export function getEffectivePrimaryDamage() {
         damage *= (POWER_WEAPONS.OVERDRIVE.damageMult || 1.5) * (1 + redline * 0.25);
     }
 
+    // P6 — Overflow Spark passive: at full energy, primaries deal +25%.
+    if (typeof this.hasPassive === 'function' && this.hasPassive('OVERFLOW_SPARK')
+        && (this.energy || 0) >= (this.maxEnergy || 100) * 0.999) {
+        damage *= 1.25;
+    }
+
     return damage;
 }
 
