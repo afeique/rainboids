@@ -1988,6 +1988,19 @@ export function updateHoverDetection() {
 // and isn't already carrying this status (skip via its `untilKey` timer) — so
 // the spread choice unit-tests cleanly. applyBurn/applyCorrode own the actual
 // re-apply (with a re-entry flag so the spread never chains indefinitely).
+// P6 — Conduit passive: your statuses tick 25% faster but expire 25% sooner.
+// Both the status DURATION and the burn/bleed tick INTERVAL scale by this same
+// factor, so the tick COUNT is preserved (same total DoT, delivered faster in a
+// shorter window) — Conduit is a tempo trade, not a damage up/down. conduitFactor
+// reads the live passive off the engine `this`; it's undefined for bare unit-test
+// calls, so it guards and returns 1 (no-op). The matching tick-INTERVAL scaling
+// lives in Enemy._processStatusEffects (burn/bleed reschedules).
+export const CONDUIT_SCALE = 0.75;
+export function conduitFactor(ctx) {
+    return (ctx && ctx.player && typeof ctx.player.hasPassive === 'function'
+        && ctx.player.hasPassive('CONDUIT')) ? CONDUIT_SCALE : 1;
+}
+
 export const KINDLING_RADIUS = 120;
 export function kindlingTarget(enemies, source, untilKey, now, radius = KINDLING_RADIUS) {
     if (!Array.isArray(enemies) || !source) return null;
@@ -2010,11 +2023,13 @@ export function applyBurn(enemy, sourceDmg, durationMs = 3000, _spread = true) {
 
     const now = frameClock.now;
     const wasInactive = !(enemy.brnStacks > 0) || enemy.brnUntil <= now;
+    // P6 — Conduit: shorter window + faster ticks (same tick count).
+    const _cf = conduitFactor(this);
 
     // Increment stack, cap at 3.
     enemy.brnStacks = Math.min(3, (enemy.brnStacks || 0) + 1);
     // Refresh duration.
-    enemy.brnUntil = now + durationMs;
+    enemy.brnUntil = now + durationMs * _cf;
     // Track peak source damage seen across all applies for this active
     // burn window. Higher-damage procs upgrade the tick payload mid-burn.
     enemy.brnSourceDmg = Math.max(enemy.brnSourceDmg || 0, sourceDmg);
@@ -2024,7 +2039,7 @@ export function applyBurn(enemy, sourceDmg, durationMs = 3000, _spread = true) {
     // the per-tick cadence mid-burn (otherwise rapid Lance Beam procs
     // would prevent any tick from ever landing).
     if (wasInactive) {
-        enemy.brnTickAt = now + 500;
+        enemy.brnTickAt = now + 500 * _cf;
     }
 
     // P6 — Kindling: spread the burn to one nearby fresh enemy (no re-spread).
@@ -2081,7 +2096,7 @@ function _statusGuard(enemy) {
 export function applyCorrode(enemy, durationMs = 4000, maxStacks = 3, _spread = true) {
     if (!_statusGuard(enemy)) return;
     enemy.corrodeStacks = Math.min(maxStacks, (enemy.corrodeStacks || 0) + 1);
-    enemy.corrodeUntil = frameClock.now + durationMs;
+    enemy.corrodeUntil = frameClock.now + durationMs * conduitFactor(this);
 
     // P6 — Kindling: spread the corrode to one nearby fresh enemy (no re-spread).
     // `this` is undefined for bare unit-test calls — guard before touching it.
@@ -2097,19 +2112,19 @@ export function applyCorrode(enemy, durationMs = 4000, maxStacks = 3, _spread = 
 // CHILL — lighter movement slow (×0.6, applied in Enemy.update). Refresh.
 export function applyChill(enemy, durationMs = 2000) {
     if (!_statusGuard(enemy)) return;
-    enemy.chillUntil = Math.max(enemy.chillUntil || 0, frameClock.now + durationMs);
+    enemy.chillUntil = Math.max(enemy.chillUntil || 0, frameClock.now + durationMs * conduitFactor(this));
 }
 
 // FREEZE — full halt + no firing (OR'd into the stun gate) + brittle. Refresh.
 export function applyFreeze(enemy, durationMs = 1500) {
     if (!_statusGuard(enemy)) return;
-    enemy.freezeUntil = Math.max(enemy.freezeUntil || 0, frameClock.now + durationMs);
+    enemy.freezeUntil = Math.max(enemy.freezeUntil || 0, frameClock.now + durationMs * conduitFactor(this));
 }
 
 // CONDUCT — +50% VOLT damage taken (applied in applyDamageToEnemy). Refresh.
 export function applyConduct(enemy, durationMs = 3000) {
     if (!_statusGuard(enemy)) return;
-    enemy.conductUntil = Math.max(enemy.conductUntil || 0, frameClock.now + durationMs);
+    enemy.conductUntil = Math.max(enemy.conductUntil || 0, frameClock.now + durationMs * conduitFactor(this));
 }
 
 // OIL — primes the enemy; the next Pyro hit flares (E4). Refresh.
@@ -2131,14 +2146,16 @@ export function applyBleed(enemy, sourceDmg, durationMs = 4000, maxStacks = 6) {
     if (!(sourceDmg > 0)) return;
     const now = frameClock.now;
     const wasInactive = !(enemy.bleedStacks > 0) || enemy.bleedUntil <= now;
+    // P6 — Conduit: shorter window + faster ticks (same tick count).
+    const _cf = conduitFactor(this);
     enemy.bleedStacks = Math.min(maxStacks, (enemy.bleedStacks || 0) + 1);
     enemy.bleedSourceDmg = Math.max(enemy.bleedSourceDmg || 0, sourceDmg);
     if (wasInactive) {
         // First application of a fresh bleed sets the (non-refreshing) window
         // and schedules the first tick. Re-procs while bleeding only add
         // stacks — they do NOT extend the window.
-        enemy.bleedUntil = now + durationMs;
-        enemy.bleedTickAt = now + 300;
+        enemy.bleedUntil = now + durationMs * _cf;
+        enemy.bleedTickAt = now + 300 * _cf;
     }
 }
 

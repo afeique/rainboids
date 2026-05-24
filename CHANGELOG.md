@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.146.0] - 2026-05-24
+
+### Added — Conduit passive (Phase P6, content batch)
+
+- **Conduit** — your statuses tick 25% faster but expire 25% sooner. Both the
+  status duration (at the `applyBurn`/`applyChill`/`applyFreeze`/`applyCorrode`/
+  `applyConduct`/`applyBleed` apply sites) and the burn/bleed tick interval (in
+  `Enemy._processStatusEffects`) scale by 0.75, so the tick *count* is preserved
+  — the same total DoT delivered in a shorter, snappier window (a tempo trade,
+  not a damage change). Pure `conduitFactor` gate; guarded no-op without the
+  passive.
+
+---
+
 ## [6.145.0] - 2026-05-24
 
 ### Added — Kinetic Battery passive (Phase P6, content batch)

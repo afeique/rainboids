@@ -1589,6 +1589,11 @@ export class Enemy {
         const _ge = this.gameEngine;
         const _hex = (_ge && _ge.player && typeof _ge.player.hasPassive === 'function'
             && _ge.player.hasPassive('HEX_TOUCH')) ? 1.2 : 1;
+        // P6 — Conduit passive: ticks 25% faster (interval ×0.75). The matching
+        // duration ×0.75 is set at apply time (combat-manager), so the tick
+        // COUNT is preserved — same total DoT, delivered in a shorter window.
+        const _conduit = (_ge && _ge.player && typeof _ge.player.hasPassive === 'function'
+            && _ge.player.hasPassive('CONDUIT')) ? 0.75 : 1;
 
         // BRN tick — fire as many ticks as fit since the last tick. Most
         // frames will trigger at most one tick; the while-loop guards
@@ -1609,7 +1614,7 @@ export class Enemy {
                     this.takeDamage(tickDmg, { showNumber: true, isBurn: true });
                     if (!this.active) return; // burn-killed; bail.
                 }
-                this.brnTickAt += 500;
+                this.brnTickAt += 500 * _conduit;
             }
         }
 
@@ -1634,7 +1639,7 @@ export class Enemy {
                     this.takeDamage(tickDmg, { showNumber: true, isBurn: true });
                     if (!this.active) return; // bleed-killed; bail.
                 }
-                this.bleedTickAt += 300;
+                this.bleedTickAt += 300 * _conduit;
             }
         }
         if (this.bleedStacks > 0 && this.bleedUntil > 0 && now > this.bleedUntil) {
