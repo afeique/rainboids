@@ -176,3 +176,54 @@ test.describe('QA-13b: Mechanic mods (BUILD tree, Phase W5)', () => {
         expect(stacks).toBe(0);
     });
 });
+
+test.describe('QA-13c: Ability attunements (Phase W6 plumbing)', () => {
+    test.beforeEach(async ({ page }) => {
+        page._jsErrors = [];
+        page.on('pageerror', (err) => page._jsErrors.push(err.message));
+        await loadGame(page);
+        await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
+    });
+
+    test('unlocking an ability attunement deducts account-gold + persists', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.openArmory();
+            ge.game.accountGold = 20000;
+            const ok = ge.unlockPreRunItem('abilityAttunements', 'EMP_PULSE_VOLT');
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            return { ok, gold: ge.game.accountGold, owned: meta.unlockedAbilityAttunements || [] };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.gold).toBeLessThan(20000);
+        expect(r.owned).toContain('EMP_PULSE_VOLT');
+    });
+
+    test('START RUN applies an owned ability attunement to the player', async ({ page }) => {
+        const attune = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.openArmory();
+            ge.game.accountGold = 20000;
+            ge.unlockPreRunItem('abilityAttunements', 'EMP_PULSE_VOLT');
+            ge.beginPreRunFromTree({
+                abilities: ['BULWARK', 'FIELD_MEDIC', 'EMP_PULSE', null],
+                abilityAttune: { EMP_PULSE: 'EMP_PULSE_VOLT' },
+            });
+            return ge.player.activeAbilityAttune.EMP_PULSE;
+        });
+        expect(attune).toBe('EMP_PULSE_VOLT');
+    });
+
+    test('a non-owned ability attunement is dropped on START RUN', async ({ page }) => {
+        const attune = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.openArmory();
+            ge.beginPreRunFromTree({
+                abilities: ['EMP_PULSE', null, null, null],
+                abilityAttune: { EMP_PULSE: 'EMP_PULSE_CRYO' }, // never unlocked
+            });
+            return ge.player.activeAbilityAttune.EMP_PULSE;
+        });
+        expect(attune).toBeUndefined();
+    });
+});

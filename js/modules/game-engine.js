@@ -27,7 +27,7 @@ import { LineDebris } from './world/line-debris.js';
 import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
-import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
+import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout } from './shop/armory.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
@@ -1037,6 +1037,16 @@ export class GameEngine {
                     const cfg = getWeaponUpgradeConfig(id);
                     if (cfg) this.player.addPowerup(id, cfg);
                 }
+            }
+        }
+        // W6 — apply the chosen per-ability attunement (one element each),
+        // validated against the known table. Read at activation time
+        // (player/abilities.js) to flavor the ability with its element.
+        this.player.activeAbilityAttune = {};
+        if (loadout && loadout.abilityAttune && typeof loadout.abilityAttune === 'object') {
+            for (const [aid, attId] of Object.entries(loadout.abilityAttune)) {
+                const cfg = ABILITY_ATTUNEMENTS[attId];
+                if (cfg && cfg.ability === aid) this.player.activeAbilityAttune[aid] = attId;
             }
         }
         // 5.88.3 — energy tanks unified with the triforce. healthTanks is
@@ -4056,6 +4066,16 @@ export class GameEngine {
             if (keep.length) mods[wid] = keep;
         }
         loadout.mods = mods;
+        // W6 — carry the chosen per-ability attunement (one element each),
+        // validated against owned + known + ability-matched ids.
+        const ownedAbilAtt = getUnlockedSet('abilityAttunements', meta);
+        const abilityAttune = {};
+        const rawAbilAtt = (sel && sel.abilityAttune) || {};
+        for (const [aid, attId] of Object.entries(rawAbilAtt)) {
+            const cfg = ABILITY_ATTUNEMENTS[attId];
+            if (cfg && cfg.ability === aid && ownedAbilAtt.has(attId)) abilityAttune[aid] = attId;
+        }
+        loadout.abilityAttune = abilityAttune;
         try { saveMeta({ loadout }); } catch {}
         this._preRunTreeOpen = false;
         shopDom.hideShopDom();
