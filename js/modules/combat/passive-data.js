@@ -182,3 +182,40 @@ export function getSlotPassives() { return Object.values(PASSIVES).filter((p) =>
 
 /** Passives that can roll as a gear affix (optionally gated to a rarity). */
 export function getItemPassives() { return Object.values(PASSIVES).filter((p) => p.item); }
+
+// ─── Slot scaling (Phase P3 / round-3 §11.A) ─────────────────────────────────
+// The number of equip slots scales with run length and unlocks progressively.
+
+/** Hard array cap — `equippedPassives.length`. */
+export const MAX_PASSIVE_SLOTS = 5;
+
+/** Max usable passive slots for a run of `totalStages`: 3 + floor(stages/30), cap 5. */
+export function maxPassiveSlots(totalStages) {
+    const n = Math.max(1, totalStages | 0);
+    return Math.max(1, Math.min(MAX_PASSIVE_SLOTS, 3 + Math.floor(n / 30)));
+}
+
+// Stage (1..N) at which slot `k` (1-based) unlocks. Slot 1 is unlocked from the
+// start (stage 0). The rest are spread across the run by `ceil(N·(k−1)/M)` —
+// evenly-spaced but ahead of the final stage so the last slot still has runway
+// to matter (M=3,N=10 → slots open after stages 0/4/7; M=5,N=100 → 0/20/40/60/80).
+function _slotUnlockStage(k, M, N) {
+    if (k <= 1) return 0;
+    return Math.ceil((N * (k - 1)) / M);
+}
+
+/**
+ * How many passive slots are unlocked after clearing `stagesCleared` stages of
+ * a `totalStages`-stage run (slot 1 from the start). Monotonic, capped at
+ * maxPassiveSlots(totalStages). Pure — drives the wave-clear hook + tests.
+ */
+export function passiveSlotsUnlockedAfter(stagesCleared, totalStages) {
+    const M = maxPassiveSlots(totalStages);
+    const N = Math.max(1, totalStages | 0);
+    const cleared = Math.max(0, stagesCleared | 0);
+    let unlocked = 1; // slot 1 always available
+    for (let k = 2; k <= M; k++) {
+        if (_slotUnlockStage(k, M, N) <= cleared) unlocked = k;
+    }
+    return Math.min(M, unlocked);
+}

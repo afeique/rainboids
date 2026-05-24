@@ -5,7 +5,8 @@
  * via `.call(gameEngine)`. This is Phase 3 strangler-fig extraction.
  */
 
-import { GAME_CONFIG, GAME_STATES, MAX_WAVES, WAVES_PER_STAGE, getEnemyFiringCooldown, getStage, getSubWaveIndex, isStageClear, getStageLabel } from '../core/constants.js';
+import { GAME_CONFIG, GAME_STATES, MAX_WAVES, MAX_STAGES, WAVES_PER_STAGE, getEnemyFiringCooldown, getStage, getSubWaveIndex, isStageClear, getStageLabel } from '../core/constants.js';
+import { passiveSlotsUnlockedAfter } from '../combat/passive-data.js';
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
 import { linkBosses } from '../enemy/boss-rage.js';
@@ -160,6 +161,13 @@ export function updateWaveSystem() {
         // AND the survivor card. Mid-stage waves get a smaller bonus
         // and no card so the stage clear feels meaningfully bigger.
         const stageClear = isStageClear(clearedWave);
+        // P3 — unlock passive slots progressively on stage clears. maxSlots +
+        // the unlock cadence scale with the run length (round-3 §11.A). Reads
+        // runConfig.stages once Phase X lands; until then the fixed MAX_STAGES.
+        if (stageClear && this.player && typeof this.player.setPassiveSlotsUnlocked === 'function') {
+            const totalStages = (this.game.runConfig && this.game.runConfig.stages) || MAX_STAGES;
+            this.player.setPassiveSlotsUnlocked(passiveSlotsUnlockedAfter(getStage(clearedWave), totalStages));
+        }
         const bonusXP = 40 + clearedWave * 15; // gainExperience is a no-op since 6.0.0; kept for back-compat
         const baseCoins = 50 + clearedWave * 25;
         const bonusCoins = stageClear ? baseCoins * 2 : Math.round(baseCoins * 0.6);

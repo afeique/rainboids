@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.123.0] - 2026-05-24
+
+### Added — Passive slots unlock progressively over a run (Phase P3)
+
+Passive equip slots now open as you clear stages (round-3 §11.A). Slot 1 is
+available from the start; the rest unlock at evenly-spaced stage-clear
+milestones, up to `maxSlots = 3 + floor(stages/30)` (cap 5). A standard
+10-stage run opens slots after stages 0 / 4 / 7 (→ 3 slots); a 100-stage run
+ramps to 5 (after stages 0 / 20 / 40 / 60 / 80). Still no equipped passives
+until the BUILD cluster + swap menu land (P4/P5), so no player-facing effect
+yet — this wires the unlock cadence.
+
+- New pure helpers in `passive-data.js`: `maxPassiveSlots(stages)` +
+  `passiveSlotsUnlockedAfter(stagesCleared, stages)` (monotonic, capped).
+- The wave-clear stage-clear hook (`wave-manager.js`) calls
+  `player.setPassiveSlotsUnlocked(...)`; reads `runConfig.stages` once Phase X
+  lands, else the fixed 10-stage model.
+- Tests: slot-scaling cases in `passives-registry`.
+
 ## [6.122.1] - 2026-05-24
 
 ### Changed — Passive slots: 5-slot model + keystone budget (round-3 alignment)

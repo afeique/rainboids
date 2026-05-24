@@ -6,6 +6,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
     PASSIVES, PASSIVE_STACK, PASSIVE_ITEM_TIER,
     getPassive, getAllPassives, getSlotPassives, getItemPassives,
+    MAX_PASSIVE_SLOTS, maxPassiveSlots, passiveSlotsUnlockedAfter,
 } from '../../js/modules/combat/passive-data.js';
 import { UNLOCK_CATEGORIES, getUnlockedSet } from '../../js/modules/shop/armory.js';
 import { RARITY_ORDER } from '../../js/modules/world/item-names.js';
@@ -114,5 +115,52 @@ describe('passives unlock category (P1)', () => {
         expect(set.has('LAST_BASTION')).toBe(true);
         // A non-base passive is locked until purchased.
         expect(set.has('GLASS_CANNON')).toBe(false);
+    });
+});
+
+describe('P3 — passive slot scaling (round-3 §11.A)', () => {
+    test('maxPassiveSlots = 3 + floor(stages/30), capped at 5', () => {
+        expect(maxPassiveSlots(10)).toBe(3);
+        expect(maxPassiveSlots(29)).toBe(3);
+        expect(maxPassiveSlots(30)).toBe(4);
+        expect(maxPassiveSlots(59)).toBe(4);
+        expect(maxPassiveSlots(60)).toBe(5);
+        expect(maxPassiveSlots(100)).toBe(5);
+        expect(maxPassiveSlots(99999)).toBe(MAX_PASSIVE_SLOTS); // hard cap
+        expect(maxPassiveSlots(0)).toBeGreaterThanOrEqual(1);   // tolerates garbage
+    });
+
+    test('a standard 10-stage run (3 slots) opens slots after stages 0/4/7', () => {
+        const after = (s) => passiveSlotsUnlockedAfter(s, 10);
+        expect(after(0)).toBe(1); // slot 1 from start
+        expect(after(3)).toBe(1);
+        expect(after(4)).toBe(2);
+        expect(after(6)).toBe(2);
+        expect(after(7)).toBe(3);
+        expect(after(10)).toBe(3); // never exceeds maxSlots(10)=3
+    });
+
+    test('a 100-stage run (5 slots) opens slots after stages 0/20/40/60/80', () => {
+        const after = (s) => passiveSlotsUnlockedAfter(s, 100);
+        expect(after(0)).toBe(1);
+        expect(after(20)).toBe(2);
+        expect(after(40)).toBe(3);
+        expect(after(60)).toBe(4);
+        expect(after(80)).toBe(5);
+        expect(after(100)).toBe(5);
+    });
+
+    test('is monotonic and never exceeds maxPassiveSlots', () => {
+        for (const N of [10, 30, 60, 100]) {
+            const cap = maxPassiveSlots(N);
+            let prev = 0;
+            for (let s = 0; s <= N; s++) {
+                const u = passiveSlotsUnlockedAfter(s, N);
+                expect(u).toBeGreaterThanOrEqual(prev); // monotonic
+                expect(u).toBeLessThanOrEqual(cap);     // capped
+                prev = u;
+            }
+            expect(passiveSlotsUnlockedAfter(N, N)).toBe(cap); // fully unlocked by run end
+        }
     });
 });
