@@ -7,6 +7,7 @@ import * as passives from '../../js/modules/player/passives.js';
 import { PASSIVES } from '../../js/modules/combat/passive-data.js';
 import * as progression from '../../js/modules/player/progression.js';
 import * as weapons from '../../js/modules/player/weapons.js';
+import * as abilities from '../../js/modules/player/abilities.js';
 
 function makeStub(over = {}) {
     return {
@@ -254,6 +255,38 @@ describe('P6 batch 3 — Failsafe maxHP + Overflow Spark', () => {
         const dFull = weapons.getEffectivePrimaryDamage.call(full);
         const dEmpty = weapons.getEffectivePrimaryDamage.call(empty);
         expect(dFull / dEmpty).toBeCloseTo(1.25);
+    });
+});
+
+describe('P6 batch 7 — Gunslinger (pure-gunner)', () => {
+    const gunBase = {
+        activePrimary: 'X',
+        getActivePrimaryConfig: () => ({ damage: 10, fireRate: 130 }),
+        getPowerupStacks: () => 0,
+        overdriveTimer: 0,
+        maxEnergy: 100, energy: 0,
+        _fireHoldTime: 0,
+    };
+    const gun = () => ({ ...gunBase, hasPassive: (id) => id === 'GUNSLINGER' });
+    const plain = () => ({ ...gunBase, hasPassive: () => false });
+
+    test('+50% primary damage', () => {
+        expect(weapons.getEffectivePrimaryDamage.call(gun()) / weapons.getEffectivePrimaryDamage.call(plain()))
+            .toBeCloseTo(1.5);
+    });
+    test('+30% fire rate (shorter interval)', () => {
+        // interval ratio plain/gun ≈ 1.3 (gun fires faster → smaller interval)
+        expect(weapons.getEffectivePrimaryFireRate.call(plain()) / weapons.getEffectivePrimaryFireRate.call(gun()))
+            .toBeCloseTo(1.3, 1);
+    });
+    test('disables abilities (activateAbility returns false)', () => {
+        const s = { hasPassive: (id) => id === 'GUNSLINGER', equippedAbilities: ['BULWARK', null, null, null], abilityCooldowns: [0, 0, 0, 0] };
+        expect(abilities.activateAbility.call(s, 0)).toBe(false);
+    });
+    test('disables power weapons (firePower no-ops, energy untouched)', () => {
+        const s = { hasPassive: (id) => id === 'GUNSLINGER', energy: 99, getPowerEnergyCost: () => 20, getActivePowerConfig: () => ({}) };
+        weapons.firePower.call(s, null, null, null);
+        expect(s.energy).toBe(99); // returned before spending energy
     });
 });
 

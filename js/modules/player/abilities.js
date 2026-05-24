@@ -499,6 +499,8 @@ const ABILITY_ACTIVATE_SOUND = {
 };
 
 export function activateAbility(slot = 0) {
+    // P6 — Gunslinger passive: no abilities (pure-gunner identity).
+    if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) return false;
     const abilityId = this.equippedAbilities[slot];
     if (!abilityId) return false;
     if (this.abilityCooldowns[slot] > 0) return false;

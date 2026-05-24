@@ -1181,6 +1181,8 @@ export function applyGlobalBulletUpgrades(bullet) {
 // ── Power weapon dispatch ──────────────────────────────────────────────────
 
 export function firePower(bulletPool, audioManager, particlePool) {
+    // P6 — Gunslinger passive: no power weapons (pure-gunner identity).
+    if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) return;
     const config = this.getActivePowerConfig();
 
     // 6.29.0 — Spend energy. Callers gate on isPowerReady() (energy >=
@@ -2072,6 +2074,11 @@ export function getEffectivePrimaryFireRate() {
         rate *= (POWER_WEAPONS.OVERDRIVE.fireRateMult || 0.55);
     }
 
+    // P6 — Gunslinger passive: +30% fire rate (shorter interval).
+    if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) {
+        rate /= 1.3;
+    }
+
     return Math.round(rate);
 }
 
@@ -2107,6 +2114,12 @@ export function getEffectivePrimaryDamage() {
     if (typeof this.hasPassive === 'function' && this.hasPassive('OVERFLOW_SPARK')
         && (this.energy || 0) >= (this.maxEnergy || 100) * 0.999) {
         damage *= 1.25;
+    }
+
+    // P6 — Gunslinger passive: +50% primary damage (the trade for giving up
+    // power weapons + abilities; see firePower / activateAbility gates).
+    if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) {
+        damage *= 1.5;
     }
 
     return damage;

@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.133.0] - 2026-05-24
+
+### Added — Gunslinger passive (Phase P6, content batch)
+
+**Gunslinger** — the pure-gunner identity: **+50% primary damage** and **+30%
+fire rate**, but you **give up power weapons and abilities** (both are gated to
+no-op while it's equipped). Hooks: `getEffectivePrimaryDamage` / `getEffective
+PrimaryFireRate` (buffs) + `firePower` / `activateAbility` (early-return gates).
+
+Tests: Gunslinger damage/fire-rate buffs + power/ability disable in
+`passives-player`.
+
 ## [6.132.0] - 2026-05-24
 
 ### Added — Passives can roll on gear (Phase P7) — passive system complete
