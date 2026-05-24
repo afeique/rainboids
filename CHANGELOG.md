@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.147.0] - 2026-05-24
+
+### Added — Backlash passive (Phase P6, content batch)
+
+- **Backlash** — a successful dodge retaliates with a strike at the attacker
+  (12 damage). Enemy contact / asteroid hits retaliate against the source; an
+  enemy bullet retaliates against its shooter; a dead/recycled source is left
+  alone. Pure `backlashTarget` resolver + a guarded strike on the dodge-success
+  path (via the engine's `damageEnemy`). Implemented as a direct strike rather
+  than a spawned projectile. Guarded no-op without the passive.
+
+---
+
 ## [6.146.0] - 2026-05-24
 
 ### Added — Conduit passive (Phase P6, content batch)

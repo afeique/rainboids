@@ -138,6 +138,20 @@ export function guardianEchoNova(player, enemies) {
     return shoved;
 }
 
+// P6 — Backlash passive: a successful dodge retaliates against the attacker.
+// Pure resolver — given the hit's `source` (an enemy, an enemy bullet, or an
+// asteroid), return the live enemy to strike: a bullet retaliates against its
+// `shooter`, everything else against itself. The takeDamage dodge path applies
+// the actual hit via the engine's damageEnemy. (Implemented as a direct strike
+// rather than a spawned projectile — lifecycle has no player bullet-pool ref —
+// which captures the "punish the attacker on a dodge" mechanic cleanly.)
+export const BACKLASH_DAMAGE = 12;
+export function backlashTarget(source) {
+    if (!source) return null;
+    const atk = source.shooter || source;
+    return (atk && atk.active) ? atk : null;
+}
+
 export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     if (this.player.invincible) return 0;
 
@@ -177,6 +191,12 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     const dodgeChance = Math.min(0.5, dodgeStacks * 0.05 + (itemDodge + spDodge) / 100 + passiveDodge);
     if (dodgeChance > 0 && Math.random() < dodgeChance) {
         if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
+        // P6 — Backlash: a dodge retaliates with a strike at the attacker.
+        if (this.player.hasPassive && this.player.hasPassive('BACKLASH')
+            && typeof this.damageEnemy === 'function') {
+            const atk = backlashTarget(opts.source);
+            if (atk) this.damageEnemy(atk, BACKLASH_DAMAGE);
+        }
         return;
     }
 
