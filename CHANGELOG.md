@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.142.0] - 2026-05-24
+
+### Added — Flow State passive (Phase P6, content batch)
+
+- **Flow State** — each kill shaves 3% of a slot's max cooldown off every
+  ability's remaining cooldown, so longer abilities recover more absolute time
+  per kill and a kill streak keeps your kit firing. Pure `flowStateReduce`
+  applied from `onEnemyKill`. Guarded no-op without the passive.
+
+---
+
 ## [6.141.0] - 2026-05-24
 
 ### Added — Vendetta passive (Phase P6, content batch)

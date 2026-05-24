@@ -1155,6 +1155,20 @@ export function splitChildSpec(splitOnDeath, parentMaxHealth, parentRadius, pare
     };
 }
 
+// P6 — Flow State passive: each kill shaves a fraction off every ability's
+// REMAINING cooldown (a fraction of that slot's max cooldown, so longer
+// abilities recover more absolute time per kill). Pure + in-place so the math
+// unit-tests cleanly; onEnemyKill owns the per-kill trigger.
+export const FLOW_STATE_FRACTION = 0.03;
+export function flowStateReduce(cooldowns, maxes, frac = FLOW_STATE_FRACTION) {
+    if (!Array.isArray(cooldowns) || !Array.isArray(maxes)) return;
+    for (let i = 0; i < cooldowns.length; i++) {
+        if (cooldowns[i] > 0) {
+            cooldowns[i] = Math.max(0, cooldowns[i] - (maxes[i] || 0) * frac);
+        }
+    }
+}
+
 export function onEnemyKill(enemy) {
     if (!this.killCount) this.killCount = 0;
     if (!this.killStreakTimer) this.killStreakTimer = 0;
@@ -1163,6 +1177,11 @@ export function onEnemyKill(enemy) {
     this.killCount++;
     this.killStreakCount++;
     this.killStreakTimer = Date.now();
+
+    // P6 — Flow State: each kill cuts every ability's remaining cooldown.
+    if (this.player && this.player.hasPassive && this.player.hasPassive('FLOW_STATE')) {
+        flowStateReduce(this.player.abilityCooldowns, this.player.abilityCooldownsMax);
+    }
 
     // E8b — death flare (ASHEN_DETONATOR and any `deathFlare` enemy): bursts
     // into a Pyro AoE on death, damaging the player if within radius (routed
