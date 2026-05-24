@@ -37,20 +37,20 @@ The requested "Passive Skills" are **rule-changers**, i.e. they are the same *ki
 
 ## 3. The big reconciliation: Passives = the unified rule-modifier pool
 
-The planned **C.I3 traits** and **C.I4 keystones** were always meant to be "a shared `ITEM_TRAITS` pool with two delivery channels (drop + stage-clear keystone card)." The Passive Skills feature is best built as **that same pool**, with the **equip slot as a third (primary) delivery channel**:
+The planned **C.I3 traits** and **C.I4 keystones** were meant to be a shared `ITEM_TRAITS` rule-modifier pool. The Passive Skills feature is best built as **that same pool**, acquired **two ways** — the equip slot (primary) and a roll on gear:
 
 ```
             ┌─────────────────────────────────────────┐
             │   PASSIVES  (one rule-modifier registry) │
             │   id · name · desc · hooks · downside     │
             │   tags (offense/defense/element/econ/…)   │
-            └───────────────┬───────────────┬──────────┘
-       equip slot (NEW)     │   keystone card (C.I4)   │   top-tier item roll (C.I3)
-   gold-bought, 3–5 slots,  │   stage-clear pick       │   Legendary+ / Transcendental
-   swappable mid-run        │   (later)                │   (later)
+            └───────────────────┬───────────────────────┘
+       equip slot (NEW)         │      top-tier item roll (C.I3, later)
+   gold-bought, 3–5 slots,      │      modular passives on Exceptional+ gear;
+   swappable mid-run            │      a keystone only on a Transcendental roll
 ```
 
-**Consequence:** Phase C's C.I3a/b/c + C.I4 are **folded into the Passive phase** (they become "delivery channels for the passive pool," scheduled after the core slot system). This avoids building two parallel modifier systems. One registry, one set of consumer hooks, three ways to acquire.
+**Consequence:** Phase C's C.I3a/b/c + C.I4 are **folded into the Passive phase** — one registry, one set of consumer hooks, **two ways to acquire** (equip slot + gear roll). *(Passives are deliberately NOT delivered via powerup cards — cards amplify weapons/abilities; passives are a separate, gold-bought layer. The old C.I4 "keystone card" channel is dropped.)*
 
 **How passives differ from the neighbours (to keep them distinct):**
 
@@ -208,7 +208,7 @@ Difficulty tier `D` (1 = baseline) applies multipliers **on top of** the existin
 Net: **higher difficulty = harder enemies but markedly more + better loot and gold** — exactly the risk/reward you asked for. All numbers are starting points for a balance pass.
 
 ### 6.3 Cadence & slot-unlock scaling
-- **Powerup-card pick: every stage clear *except the last*** → cards = stages − 1. The layered pool (efficacy → passive → economy) never runs dry (§12.2).
+- **Powerup-card pick: every stage clear *except the last*** → cards = stages − 1 (see §12.2 for keeping all ~99 picks meaningful).
 - **Elite (miniboss): every 3rd wave** that isn't the stage boss (§11.B).
 - **Passive slot unlocks:** progressive across the run, up to `maxSlots(stages)` (§11.A).
 - **XP/level** (meta) accrues per wave-clear — more waves = more meta XP, naturally.
@@ -232,7 +232,7 @@ A small pre-run screen (or a panel folded into the BUILD → START flow): **Stag
 4. **P4** BUILD-tree PASSIVES cluster (unlock + the run's chosen pool) + loadout carry.
 5. **P5** In-run swap menu (pause panel) + ramp-reset-on-swap.
 6. **P6** Catalog batch 1 (~10–12 passives, one per archetype) — each with a live consumer + unit test.
-7. **P7** Later delivery channels: keystone **powerup cards** (old C.I4) + top-tier item rolls (old C.I3) draw from the same pool.
+7. **P7** Second delivery channel: **top-tier item rolls** (old C.I3) draw modular passives (Exceptional+) / a keystone (Transcendental) from the same pool. *(No card-based passive delivery — passives aren't powerup cards.)*
 
 **Phase X — Run Configurator, procedural waves & adaptive difficulty** *(updated round-4, §12)*
 1. **X1** `runConfig = {stages, wavesPerStage}` (no `difficulty`); replace `MAX_WAVES` with `stages×wavesPerStage`; boss + elite schedule + powerup-card-per-stage (cards = stages − 1) + run-complete read the config.
@@ -240,7 +240,7 @@ A small pre-run screen (or a panel folded into the BUILD → START flow): **Stag
 3. **X3** **Adaptive Difficulty Director** (§12.4a): performance signals → challenge index → rate-limited enemy HP/dmg/toughness/resist/density knobs, an absolute upward baseline, and player-power awareness (cards/passives/gear).
 4. **X4** Reward off *achieved* threat × performance: drop-rate, `rollRarity` ceiling+bias, item-level, gold; run-shape reward multipliers (§12.3); **peak-threat** meta stat.
 5. **X5** RUN SETUP UI — length + waves/stage + **reward** readout, **no difficulty selector**; persist for CONTINUE; optional HUD threat meter.
-6. **X6** Powerup-card layering (efficacy → passive → economy; §12.2) so a 99-card run never dry-picks; `CARDS_PER_RUN` derived.
+6. **X6** `CARDS_PER_RUN` derived (`stages − 1`); ensure the amplifier pool sustains the max stage count — deepen the pool and/or cap the stage slider to the loadout's card count (§12.2).
 7. **X7** Balance pass: AI-survival across short/long × weak/strong profiles; verify the Director holds the target HP band and a 99-card late game stays lethal.
 
 ---
@@ -269,7 +269,7 @@ Confirmed by product owner:
 
 > **Round-3 (2026-05-24):** §10.1 adds 7 keystones + 9 modular passives; §11.A answers the "max passives" question (slots cap **5** + keystone budget **2**, gear adds modular); §11.B finalizes the run structure (no endless). These supersede the round-1 §8 forks and the round-2 notes above where they differ.
 
-> **Round-4 (2026-05-24) — see §12, the current direction:** terminology unified to **"powerup cards"**; **cards = stages − 1** (99 for a 100-stage run) with a layered pool that never runs dry; **reward bonuses** for waves/stage + stages (§12.3); and the big pivot — **no player-chosen difficulty**: an **Adaptive Difficulty Director + procedural wave composer** auto-tune and randomize the challenge (§12.4). This **supersedes** §8 fork #5, §9 item #5, §6.2's chosen-tier table, §6.4's difficulty selector, and §11.C's tier-gating.
+> **Round-4 (2026-05-24) — see §12, the current direction:** terminology unified to **"powerup cards"** (one card type — passives are NOT cards); **cards = stages − 1** (99 for a 100-stage run), bounded by the amplifier pool (§12.2); **reward bonuses** for waves/stage + stages (§12.3); and the big pivot — **no player-chosen difficulty**: an **Adaptive Difficulty Director + procedural wave composer** auto-tune and randomize the challenge (§12.4). This **supersedes** §8 fork #5, §9 item #5, §6.2's chosen-tier table, §6.4's difficulty selector, and §11.C's tier-gating.
 
 ---
 
@@ -415,7 +415,7 @@ This supersedes the old "card every 2nd stage" cadence (§6.3 → now a **poweru
 ### E. Long-run reconciliations (boss variety + card stacking)
 *(Stage size & pacing is now defined in §B — waves/stage 3/6/9, elite every 3rd wave, boss + card every stage. The open problems a 100-stage run creates:)*
 - **Boss variety.** A max run has up to **100 bosses** but only ~10 unique are planned (Phase D). Reuse the 10 **cyclically with escalating scale**, and at higher difficulty tiers **"elite-ify"** them (extra phase / affix / rising resist) so repeats stay fresh. **Elites (minibosses)** are cheap variety — elite-ified versions of normal enemy types (buffed HP + one affix), no new art needed.
-- **Powerup-card pool layering** (full detail in §12.2). Up to **99 powerup-card picks**, but weapon **efficacy** cards plateau at their `maxStacks`. The per-stage pool then layers into **passive** cards (keystone/modular — the C.I4 channel, P7) then **economy** (Cores/gold), so it never runs dry and the powerup-card-per-stage cadence naturally becomes a **passive-delivery channel** late in long runs.
+- **Powerup-card pool ceiling** (detail §12.2). A 99-card run needs ~99 meaningful amplifier picks, near the ~70–140 a full loadout yields — so either **deepen the amplifier pool** to reliably hit ≥99 or **cap the stage slider** to the loadout's card count. *(Earlier drafts floated "passive/economy fallback cards" — dropped; passives aren't cards.)*
 
 ### F. Mid-run loadout access (the key call)
 - **Recommendation — tiered commitment, auto-scaling with run length:**
@@ -432,17 +432,17 @@ This supersedes the old "card every 2nd stage" cadence (§6.3 → now a **poweru
 
 > This round makes a **major pivot**: difficulty is **no longer player-chosen** — the game **auto-tunes** it and **evolves with the player**, while a procedural composer keeps every wave **fresh and random**. The overarching goal is **interesting, meaningful challenges**. This **supersedes** the player-chosen difficulty model wherever it differs (§6.2 multiplier table, §6.4 difficulty selector, §11.C tier-gating, the chosen-tier framing in §11.B/§11.D, and the `difficulty` field in `runConfig`).
 
-### 12.1 Terminology — everything is a "powerup card"
-The run-reward cards have been called *efficacy cards*, *draft cards*, *survivor cards*, and *card draft* — these are **all the same thing**. Canonical term from now on: **powerup cards** (the event is a **powerup-card pick**). Wherever an earlier section says efficacy/draft/survivor card, read **powerup card**. (The code module stays `card-draft.js`.) Powerup cards come in **types**: weapon **efficacy** (amplifiers), **passive** (keystone/modular from the shared registry), and **economy** (Cores/gold).
+### 12.1 Terminology — there is one card: the "powerup card"
+The run-reward cards have been called *efficacy cards*, *draft cards*, and *survivor cards* — these are **all the same one thing**. Canonical term: **powerup cards** (the event is a **powerup-card pick**). There are **no sub-types** — a powerup card amplifies an equipped weapon/ability (the "1 primary + 1 power + 2 ability" offer that already exists). (Code module stays `card-draft.js`.)
+- **Passives are NOT cards.** They're gold-bought, slot-equipped, and gear-rollable (§3, §4). Don't confuse the two.
 
-### 12.2 One powerup card per stage; cards = stages − 1; handling 99 cards
-- The player gets **one powerup-card pick at the end of every stage *except the last*** (the final stage's boss is the run's victory — there's no "next stage" to prepare for). So **cards = stages − 1**: a 100-stage run grants **99** powerup cards; a 10-stage run grants 9.
-- **"Limit the stage count to the powerup cards available"** — the cap is bounded by how many *meaningful* powerup cards exist, and the pool is **layered so it never runs dry**:
-  1. **Weapon efficacy** — per equipped weapon; a full 4+4+4 loadout yields **~70–140 stackable picks** (loadout-dependent; each upgrade has a `maxStacks`).
-  2. **Passive cards** — keystone/modular from the ~40-entry shared registry (this *is* the old C.I4 "keystone card" channel).
-  3. **Economy cards** — Cores / gold, the final fallback.
-- **Can we handle 99 powerup cards? Yes.** Efficacy fills the early-to-mid run (~70–140 picks); once a player's relevant amplifiers cap, the draft transparently serves **passive** then **economy** cards. Every stage still hands you a *meaningful* powerup card, so **max stages = 100 (= 99 cards)** is supported. The layering is exactly what makes the run "limited *by*, but never *short of*, the powerup-card pool."
-- *Implementation:* `CARDS_PER_RUN` (currently fixed `5`) becomes derived (`stages − 1`); `card-draft.js buildDraft` gains the passive → economy fallback tiers once the loadout's efficacy pool is exhausted.
+### 12.2 One powerup card per stage; cards = stages − 1; the pool ceiling
+- The player gets **one powerup-card pick at the end of every stage *except the last*** (the final stage's boss is the run's victory — no "next stage" to prepare for). So **cards = stages − 1**: 100 stages → **99** cards; 10 stages → 9.
+- **The real constraint (your "limit stages to the cards you can get" rule):** a powerup card amplifies an equipped weapon/ability and has a `maxStacks` cap, so a full 4+4+4 loadout yields a **finite ~70–140 meaningful picks** (loadout-dependent). A 100-stage run needs 99 — right at that ceiling. So the stage count must be bounded by the pool. Two ways to do that (**this is the one open decision here**):
+  - **(Recommended) Slider max 100 + deepen the amplifier pool** so a full loadout reliably yields **≥99** meaningful picks (a content task — more/raised amplifier stacks — not a new system). If a *minimal* loadout still falls short late, the draft offers the **highest-value remaining amplifier** (or a small stat/gold nudge) rather than a dead card.
+  - **(Most literal) Dynamic slider cap** = the chosen loadout's available powerup-card count, so a deep loadout unlocks all 100 stages and a shallow one caps lower.
+- **No passive/economy "fallback cards"** — that was a wrong turn; passives aren't cards and Cores/gold aren't cards.
+- *Implementation:* `CARDS_PER_RUN` (fixed `5`) becomes derived (`stages − 1`); the pool-ceiling decision above is the only wrinkle — no new card types.
 
 ### 12.3 Bonuses for waves/stage and stages (the reward dial)
 Because difficulty is auto-tuned (§12.4), the player's run-shape choices are a **commitment-for-reward dial**, not a difficulty dial:
