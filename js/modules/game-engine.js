@@ -1325,6 +1325,11 @@ export class GameEngine {
                 ownedPrimaries: Array.from(p.ownedPrimaries || []),
                 ownedPowers: Array.from(p.ownedPowers || []),
                 ownedAbilities: Array.from(p.ownedAbilities || []),
+                // P5 — rule-modifier passives: the equipped slots + unlock
+                // count + owned pool, so CONTINUE keeps the run's passives.
+                equippedPassives: Array.from(p.equippedPassives || []),
+                passiveSlotsUnlocked: p.passiveSlotsUnlocked | 0,
+                ownedPassives: Array.from(p.ownedPassives || []),
                 powerups,
             },
         };
@@ -1386,6 +1391,18 @@ export class GameEngine {
         if (Array.isArray(ps.ownedPrimaries)) p.ownedPrimaries = new Set(ps.ownedPrimaries);
         if (Array.isArray(ps.ownedPowers))    p.ownedPowers    = new Set(ps.ownedPowers);
         if (Array.isArray(ps.ownedAbilities))    p.ownedAbilities    = new Set(ps.ownedAbilities);
+        // P5 — restore rule-modifier passives (owned pool + unlock count +
+        // equipped slots), then rebuild activePassives from them.
+        if (Array.isArray(ps.ownedPassives) && typeof p.setOwnedPassives === 'function') {
+            p.setOwnedPassives(ps.ownedPassives);
+        }
+        if (typeof ps.passiveSlotsUnlocked === 'number' && typeof p.setPassiveSlotsUnlocked === 'function') {
+            p.setPassiveSlotsUnlocked(ps.passiveSlotsUnlocked);
+        }
+        if (Array.isArray(ps.equippedPassives) && Array.isArray(p.equippedPassives)) {
+            for (let i = 0; i < p.equippedPassives.length; i++) p.equippedPassives[i] = ps.equippedPassives[i] || null;
+            if (typeof p._rebuildActivePassives === 'function') p._rebuildActivePassives();
+        }
         // Rehydrate powerups via POWERUP_TYPES so cards / stats look up
         // configs correctly. Falls back to a minimal stub if the type
         // was deleted in a later patch.

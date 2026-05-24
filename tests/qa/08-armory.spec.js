@@ -320,6 +320,31 @@ test.describe('QA-08f: PASSIVES cluster + loadout carry (Phase P4)', () => {
         expect(active).toHaveLength(0);
     });
 
+    test('CONTINUE restores equipped passives + slot count (P5)', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.startNewRun({ primaries: ['PULSE_CANNON'], passives: ['OPPORTUNIST'] });
+            ge.player.setPassiveSlotsUnlocked(2);
+            ge.player.equipPassive(1, 'LAST_BASTION'); // base, owned
+            const snap = ge.serializeRunState();
+            // Wipe the live passive state, then restore from the snapshot.
+            ge.player.equippedPassives = [null, null, null, null, null];
+            ge.player.setPassiveSlotsUnlocked(1);
+            ge.player.setOwnedPassives([]);
+            ge.restoreRunState(snap);
+            return {
+                slot0: ge.player.equippedPassives[0],
+                slot1: ge.player.equippedPassives[1],
+                slots: ge.player.passiveSlotsUnlocked,
+                active: [...ge.player.activePassives],
+            };
+        });
+        expect(r.slot0).toBe('OPPORTUNIST');
+        expect(r.slot1).toBe('LAST_BASTION');
+        expect(r.slots).toBe(2);
+        expect(r.active).toEqual(expect.arrayContaining(['OPPORTUNIST', 'LAST_BASTION']));
+    });
+
     test('no fatal JS errors through the passives BUILD flow', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;

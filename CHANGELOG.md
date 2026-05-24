@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.124.1] - 2026-05-24
+
+### Fixed — CONTINUE now restores equipped passives (Phase P5, part 1)
+
+The run snapshot now serializes the rule-modifier passive state
+(`equippedPassives`, `passiveSlotsUnlocked`, `ownedPassives`) and
+`restoreRunState` rebuilds it, so resuming a run via CONTINUE keeps the
+passives you equipped + the slots you'd unlocked (previously they'd reset).
+Tests: Continue-restore round-trip in QA-08f.
+
 ## [6.124.0] - 2026-05-24
 
 ### Added — BUILD-tree PASSIVES cluster + loadout carry (Phase P4)
