@@ -26,6 +26,7 @@ if (typeof globalThis.navigator === 'undefined') globalThis.navigator = { vibrat
 
 import { beforeEach, describe, expect, test } from '@jest/globals';
 import { Player } from '../../../js/modules/player/player.js';
+import { updateActiveAbilities } from '../../../js/modules/player/abilities.js';
 
 function freshPlayer(passives = []) {
     const p = new Player();
@@ -79,5 +80,43 @@ describe('Afterimage — dash fires a primary volley from the origin', () => {
         const pool = p.gameEngine.bulletPool;
         p._triggerDash(null);
         expect(p.fired[0].bulletPool).toBe(pool);
+    });
+});
+
+describe('Afterimage — fading ghost clone (VFX, 6.157.3)', () => {
+    test('a dash records a ghost at the origin with a full fade timer', () => {
+        const p = freshPlayer(['AFTERIMAGE']);
+        const ox = p.x, oy = p.y, oa = p.angle;
+        p._triggerDash(null);
+        expect(p._afterimageGhost).not.toBeNull();
+        expect(p._afterimageGhost.x).toBe(ox);
+        expect(p._afterimageGhost.y).toBe(oy);
+        expect(p._afterimageGhost.angle).toBe(oa);
+        expect(p._afterimageGhost.t).toBe(Player.AFTERIMAGE_GHOST_MS);
+        expect(p._afterimageGhost.t0).toBe(Player.AFTERIMAGE_GHOST_MS);
+    });
+
+    test('without the passive, no ghost is recorded', () => {
+        const p = freshPlayer([]);
+        p._triggerDash(null);
+        expect(p._afterimageGhost).toBeNull();
+    });
+
+    test('no ghost when no engine/bulletPool is wired', () => {
+        const p = freshPlayer(['AFTERIMAGE']);
+        p.gameEngine = null;
+        p._triggerDash(null);
+        expect(p._afterimageGhost).toBeNull();
+    });
+
+    test('the ghost fades over time and clears when expired', () => {
+        const p = freshPlayer(['AFTERIMAGE']);
+        p._triggerDash(null);
+        const full = Player.AFTERIMAGE_GHOST_MS;
+        updateActiveAbilities.call(p, full * 0.5);
+        expect(p._afterimageGhost).not.toBeNull();
+        expect(p._afterimageGhost.t).toBeCloseTo(full * 0.5, 5);
+        updateActiveAbilities.call(p, full); // overshoot → clear
+        expect(p._afterimageGhost).toBeNull();
     });
 });

@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.157.3] - 2026-05-24
+
+### Changed — Afterimage polish (Phase P6 passive)
+
+- **The dash clone is now visible.** Afterimage fires a bonus primary volley
+  from the dash origin; it now also leaves a **fading violet ship "clone"** at
+  that origin (~360 ms life, ticked down in `updateActiveAbilities`) so the
+  bonus shots have an on-screen source as the ship streaks away. Drawn
+  world-space via the shared ship-silhouette primitive.
+
+---
+
 ## [6.157.2] - 2026-05-24
 
 ### Changed — Eye of the Storm polish (Phase P6 passive)

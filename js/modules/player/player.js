@@ -280,6 +280,9 @@ export class Player {
         this.dashVelX = 0;
         this.dashVelY = 0;
         this.dashCooldown = 0;
+        // P6 Afterimage — fading "clone" left at the dash origin ({x,y,angle,t,t0}
+        // or null). Ticked in abilities.updateActiveAbilities, drawn world-space.
+        this._afterimageGhost = null;
 
         // Bulwark state
         this.bulwarkActive = false;
@@ -392,6 +395,7 @@ export class Player {
         this.isDashing = false;
         this.dashTimer = 0;
         this.dashCooldown = 0;
+        this._afterimageGhost = null;
         this.bulwarkActive = false;
         this.regenActive = false;
         this.regenTimer = 0;
@@ -1341,6 +1345,7 @@ export class Player {
     static DASH_DURATION_MS  = 250;
     static DASH_COOLDOWN_MS  = 1500;
     static DASH_DISTANCE_PX  = 135;  // matches the old PHASE_DASH 150px feel after duration tuning
+    static AFTERIMAGE_GHOST_MS = 360; // fade life of the Afterimage clone (outlasts the burst)
 
     /**
      * Trigger a dash burst if available. Returns true on success.
@@ -1424,6 +1429,14 @@ export class Player {
             if (ge && ge.bulletPool) {
                 try { this.firePrimary(ge.bulletPool, ge.audioManager || audio, ge.particlePool); }
                 catch (_) { /* afterimage is a bonus — never break the dash */ }
+                // Leave a fading violet "clone" at the dash origin so the bonus
+                // volley has a visible source. this.x/this.y/angle are still the
+                // origin here (the burst integrates next frame). t0 lets the
+                // renderer compute the fade without importing Player.
+                this._afterimageGhost = {
+                    x: this.x, y: this.y, angle: this.angle,
+                    t: Player.AFTERIMAGE_GHOST_MS, t0: Player.AFTERIMAGE_GHOST_MS,
+                };
             }
         }
         return true;

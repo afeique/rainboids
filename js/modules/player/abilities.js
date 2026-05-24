@@ -73,6 +73,14 @@ export function updateActiveAbilities(dt) {
         }
     }
 
+    // 6.157.3 — Afterimage ghost fade. The clone left at the dash origin
+    // (player._afterimageGhost) counts down here, independent of the dash
+    // burst so it can linger and fade out a touch after the ship streaks away.
+    if (this._afterimageGhost && this._afterimageGhost.t > 0) {
+        this._afterimageGhost.t -= dt;
+        if (this._afterimageGhost.t <= 0) this._afterimageGhost = null;
+    }
+
     // Update nova rings — render+collision both use `currentRadius`,
     // so we set that here. Clear `novaActive` once all rings have died.
     for (let i = this.novaRings.length - 1; i >= 0; i--) {

@@ -8,6 +8,16 @@ import {
     GRAVITY_WELL_RADIUS, GRAVITY_WELL_DEADZONE,
     EYE_RADIUS, eyeOfStormStationary,
 } from './collision-system.js';
+// 6.157.3 — Afterimage draws a fading ship "clone" at the dash origin. Reuse the
+// shared ship-silhouette primitive (render/shapes.js never imports this module).
+import { drawShipShape } from '../render/shapes.js';
+
+// Violet "phantom" palette for the Afterimage clone — matches the dash trail tint.
+const AFTERIMAGE_PALETTE = {
+    wingFill:    '#6a4bbf', wingStroke:    '#aa88ff',
+    hullFill:    '#7d5cd6', hullStroke:    '#c4b0ff',
+    cockpitFill: '#e6dcff', cockpitStroke: '#aa88ff',
+};
 
 // 5.79.4 — Module-level scratch buffers for jagged-arc paths. Replace
 //   the per-call `path = [].push([x,y])` allocations that the perf
@@ -1190,5 +1200,18 @@ export function drawWeaponEffects() {
             ctx.stroke();
             ctx.restore();
         }
+    }
+
+    // ─── Afterimage clone (P6 passive, 6.157.3) ─────────────────────
+    // Afterimage fires a bonus primary from the dash origin; draw a fading
+    // violet ship "clone" there (ticked down in abilities.updateActiveAbilities)
+    // so the bonus volley has a visible source as the ship streaks away.
+    const ghost = p._afterimageGhost;
+    if (ghost && ghost.t > 0) {
+        const frac = ghost.t0 > 0 ? ghost.t / ghost.t0 : 0;
+        ctx.save();
+        ctx.globalAlpha = 0.6 * Math.max(0, Math.min(1, frac));
+        drawShipShape(ctx, ghost.x, ghost.y, ghost.angle, { radius: 12, palette: AFTERIMAGE_PALETTE });
+        ctx.restore();
     }
 }
