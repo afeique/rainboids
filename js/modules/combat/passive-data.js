@@ -188,11 +188,6 @@ export const PASSIVES = {
         hooks: ['damage', 'proximity'], tags: ['keystone', 'offense'], slot: true, item: false, stack: B,
         downside: '+30% damage taken',
     },
-    SINGULAR_FOCUS: {
-        id: 'SINGULAR_FOCUS', name: 'Singular Focus', desc: 'With exactly one ability equipped: that ability gets −50% cooldown & +50% effect',
-        hooks: ['abilityCast', 'abilityCooldown'], tags: ['keystone', 'tempo'], slot: true, item: false, stack: B,
-        downside: 'You give up your other 3 ability slots',
-    },
     GRAVITY_WELL: {
         id: 'GRAVITY_WELL', name: 'Gravity Well', desc: 'A constant weak pull draws enemies toward your reticle, grouping them',
         hooks: ['update', 'enemyPull'], tags: ['keystone', 'element'], slot: true, item: false, stack: B,
@@ -225,10 +220,6 @@ export const PASSIVES = {
     CONDUIT: {
         id: 'CONDUIT', name: 'Conduit', desc: 'Your statuses tick 25% faster but expire 25% sooner',
         hooks: ['statusTick'], tags: ['element'], slot: true, item: true, itemTierMin: EXC, stack: B,
-    },
-    TRAILBLAZER: {
-        id: 'TRAILBLAZER', name: 'Trailblazer', desc: 'Your engine trail damages enemies you fly past',
-        hooks: ['update', 'trail'], tags: ['offense', 'tempo'], slot: true, item: true, itemTierMin: EXC, stack: B,
     },
     AFTERIMAGE: {
         id: 'AFTERIMAGE', name: 'Afterimage', desc: 'Dashing leaves a clone that fires your primary once',

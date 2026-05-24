@@ -264,7 +264,7 @@ Confirmed by product owner:
 5. **Difficulty tiers gated, reward-feeling** — design in §11.C.
 6. **Waves/stage = radio 3/6/9 (default 3)**, stages = slider 10–100; elite every 3rd wave, boss + card every stage (§11.B); scaling §11.D; long-run reconciliations §11.E; **mid-run loadout access** §11.F.
 
-> **Round-3 (2026-05-24):** §10.1 adds 8 keystones + 10 modular passives; §11.A answers the "max passives" question (slots cap **5** + keystone budget **2**, gear adds modular); §11.B finalizes the run structure (no endless). These supersede the round-1 §8 forks and the round-2 notes above where they differ.
+> **Round-3 (2026-05-24):** §10.1 adds 7 keystones + 9 modular passives; §11.A answers the "max passives" question (slots cap **5** + keystone budget **2**, gear adds modular); §11.B finalizes the run structure (no endless). These supersede the round-1 §8 forks and the round-2 notes above where they differ.
 
 ---
 
@@ -330,7 +330,6 @@ Filtered hard: every entry below either creates a new *decision*, a new *playsty
 | **Eye of the Storm** | While **stationary**, nearby enemies + their projectiles slow 40% (a "plant & delete" stance); moving cancels it | you're a sitting target | Rail Driver / Lance / charge, **Siege**; the anti-thesis of movement builds — a whole different way to play |
 | **Detonator** | Killing a status-afflicted enemy **detonates its statuses as an AoE** (burn→fire nova, freeze→frost nova, corrode→acid pool) | — | Catalyst, Kindling, attunements, Prismatic Soul — turns kills into chain reactions; the cornerstone of a status build |
 | **Frenzy** | +8% damage per nearby enemy (cap +80%) | +30% damage taken | AoE, lifesteal, dodge — rewards diving *into* crowds instead of kiting |
-| **Singular Focus** | If you equip **exactly one** ability (3 ability slots empty): that ability's cooldown −50% and effect +50% | gives up 3 abilities | tall-vs-wide build choice that uses the 4-slot ability model itself |
 | **Gravity Well** | A constant weak pull draws enemies toward your **reticle**, grouping them | pulls danger toward you | VOID, Nova/AoE, Detonator — you *reshape the battlefield* into a kill-box |
 | **Flow State** | Each kill cuts **all ability cooldowns** by 3% | — | low-cooldown abilities, fast clears — enables an ability-spam playstyle |
 | **Failsafe** | No single hit can remove more than **50% of max HP** | −15% max HP | the anti-one-shot pick for high difficulty; pairs with Glass Cannon to cap its fragility spikes |
@@ -342,15 +341,14 @@ Filtered hard: every entry below either creates a new *decision*, a new *playsty
 | **Overkill** | Excess damage from a kill **splashes to the nearest enemy** | burst/crit + single-target weapons; rewards over-killing |
 | **Vendetta** | The last enemy to damage you takes **+30% from you until it dies** (a rival mark) | adds a target-priority decision; Mark/VOID |
 | **Conduit** | Your statuses tick **25% faster but expire 25% sooner** (front-loaded) | Hex Touch, Detonator, fast clears — changes status *pacing* |
-| **Trailblazer** | Your **engine trail damages** enemies you fly past (uses the new ship thruster) | movement builds, Slipstream; thematic with the ship redesign |
 | **Afterimage** | Dashing leaves a **clone that fires your primary once** | dash abilities, Phase Walker |
 | **Resonance** | **Every 3rd power-weapon use costs no energy** | power builds, Overflow Capacitor, Twin Cast — energy economy |
 | **Backlash** | When you **dodge** (evasion proc), fire a retaliating shot at the attacker | DODGE SP, Last Bastion, One With The Void — makes dodge offensive |
 | **Harvest** | Enemies killed by **status damage** (not direct) drop bonus energy + gold | status/element builds, Detonator — rewards a *kill style* |
 | **Tracer Lock** | Repeated hits on the **same target** ramp damage to it (resets on swap) | Rail/Lance, focus-fire — focus-vs-spread decision |
-| **Siege** | Standing **still** ramps damage (stacks, decays on move) | the stationary twin of Slipstream/Trailblazer; pairs with **Eye of the Storm** for a turret build |
+| **Siege** | Standing **still** ramps damage (stacks, decays on move) | the stationary counter to Slipstream; pairs with **Eye of the Storm** for a turret build |
 
-That's **+8 keystones and +10 modular** on top of §10, so the shared registry is ~40 passives — plenty to curate a strong launch batch from (build *one* per archetype first; the rest are content drops).
+That's **+7 keystones and +9 modular** on top of §10, so the shared registry is ~40 passives — plenty to curate a strong launch batch from (build *one* per archetype first; the rest are content drops).
 
 ---
 

@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.128.1] - 2026-05-24
+
+### Removed — Two catalog passives cut (design round-3 revision)
+
+Dropped **Singular Focus** (keystone) and **Trailblazer** (modular) from the
+`PASSIVES` registry to match the revised design (§10.1 is now +7 keystones / +9
+modular). Both were inert catalog data (no effects wired), so this just trims
+two bubbles from the BUILD PASSIVES cluster.
+
 ## [6.128.0] - 2026-05-24
 
 ### Added — Economy + anti-crit passive effects (Phase P6, batch 4)
