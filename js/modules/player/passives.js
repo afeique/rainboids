@@ -3,10 +3,10 @@
 // Player via `.call(this)` (see the thin wrappers in player.js).
 //
 // State (owned on the Player, initialized in its constructor):
-//   equippedPassives[3]   — passive id per slot (0..2), or null
+//   equippedPassives[5]   — passive id per slot (0..4), or null (5 = hard cap)
 //   ownedPassives: Set     — ids this run may equip (seeded from meta unlocks)
 //   activePassives: Set     — equipped ∩ owned within unlocked slots (queried)
-//   passiveSlotsUnlocked    — usable slot count (1..3; opens over a run in P3)
+//   passiveSlotsUnlocked    — usable slot count (1..5; opens over a run in P3)
 //   _passiveRampState: Map  — per-passive accrual for ramping passives (P5/P6),
 //                             reset whenever a slot's occupant changes (anti-cheese)
 //
@@ -14,6 +14,17 @@
 // `getPassiveMod(key)` for additive numeric passives (folded into getEffective*).
 
 import { PASSIVES } from '../combat/passive-data.js';
+
+// Round-3 §11.A — at most this many EQUIPPED slots may hold build-defining
+// keystones (the rest take modular passives). Start tight; loosen from
+// playtest. A Transcendental gear keystone (P7) is exempt — it isn't slotted.
+export const KEYSTONE_BUDGET = 2;
+
+/** Is `id` a build-defining keystone passive? */
+export function isKeystonePassive(id) {
+    const def = PASSIVES[id];
+    return !!(def && Array.isArray(def.tags) && def.tags.includes('keystone'));
+}
 
 /**
  * Recompute activePassives from the equipped slots: a slot contributes iff it
@@ -74,6 +85,15 @@ export function equipPassive(slot, id) {
         if (at !== -1 && at !== slot) {                       // already equipped elsewhere → move it
             slots[at] = null;
             if (this._passiveRampState) this._passiveRampState.delete(id);
+        }
+        // Keystone budget — count keystones already equipped in OTHER slots; a
+        // new keystone is rejected once the budget is full (modular always ok).
+        if (isKeystonePassive(id)) {
+            let keystones = 0;
+            for (let i = 0; i < slots.length; i++) {
+                if (i !== slot && slots[i] && isKeystonePassive(slots[i])) keystones++;
+            }
+            if (keystones >= KEYSTONE_BUDGET) return false;
         }
     }
     const prev = slots[slot];

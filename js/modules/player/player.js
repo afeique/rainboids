@@ -149,15 +149,17 @@ export class Player {
         this.abilityCooldownsMax = [0, 0, 0, 0];
         this._defineAbilitySlotAccessors();
 
-        // Phase P2 — rule-modifier PASSIVES (distinct from STATS). Three equip
-        // slots, unlocked over a run (P3); swappable mid-run (P5). State mirrors
-        // the 4-slot ability model:
-        //   equippedPassives[i] — passive id in slot i (0..2), or null
+        // Phase P2 — rule-modifier PASSIVES (distinct from STATS). Up to FIVE
+        // equip slots (round-3 §11.A: maxSlots = 3 + floor(stages/30), cap 5),
+        // unlocked over a run (P3); swappable mid-run (P5). The array is always
+        // the hard cap (5); `passiveSlotsUnlocked` gates how many are usable.
+        // A KEYSTONE BUDGET caps build-defining keystones at 2 equipped slots.
+        //   equippedPassives[i] — passive id in slot i (0..4), or null
         //   ownedPassives       — ids this run may equip (seeded from meta)
         //   activePassives      — equipped ∩ owned within unlocked slots,
         //                         rebuilt on any change (the queried source)
         //   passiveSlotsUnlocked— how many slots are currently usable (P3)
-        this.equippedPassives = [null, null, null];
+        this.equippedPassives = [null, null, null, null, null];
         this.ownedPassives = new Set();
         this.activePassives = new Set();
         this.passiveSlotsUnlocked = 1;

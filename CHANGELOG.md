@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.122.1] - 2026-05-24
+
+### Changed — Passive slots: 5-slot model + keystone budget (round-3 alignment)
+
+Aligned the P2 player state to the round-3 design (§11.A): `equippedPassives`
+is now a 5-slot array (the hard cap; `maxSlots = 3 + floor(stages/30)` will
+gate usable slots in P3) instead of a fixed 3, and `equipPassive` enforces a
+**keystone budget of 2** — at most two equipped slots may hold build-defining
+keystones (modular passives are unlimited). Still inert until P4/P6.
+
 ## [6.122.0] - 2026-05-24
 
 ### Added — Player passive state + apply pipeline (Phase P2)

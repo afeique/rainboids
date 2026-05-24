@@ -103,6 +103,31 @@ describe('P2 — passive state machine', () => {
     });
 });
 
+describe('P2 — keystone budget (round-3 §11.A, ≤2 equipped keystones)', () => {
+    test('a third equipped keystone is rejected; modular still fits', () => {
+        const s = makeStub({ passiveSlotsUnlocked: 5 });
+        // GLASS_CANNON / GUNSLINGER / PURIST are slot-only keystones; OPPORTUNIST is modular.
+        own(s, ['GLASS_CANNON', 'GUNSLINGER', 'PURIST', 'OPPORTUNIST']);
+        expect(equip(s, 0, 'GLASS_CANNON')).toBe(true);
+        expect(equip(s, 1, 'GUNSLINGER')).toBe(true);
+        expect(equip(s, 2, 'PURIST')).toBe(false);      // 3rd keystone over budget
+        expect(equip(s, 2, 'OPPORTUNIST')).toBe(true);  // modular is fine
+        expect(s.activePassives.has('PURIST')).toBe(false);
+        expect(s.activePassives.has('OPPORTUNIST')).toBe(true);
+    });
+
+    test('swapping a keystone in place (same slot) is allowed within budget', () => {
+        const s = makeStub({ passiveSlotsUnlocked: 5 });
+        own(s, ['GLASS_CANNON', 'GUNSLINGER', 'PURIST']);
+        equip(s, 0, 'GLASS_CANNON');
+        equip(s, 1, 'GUNSLINGER');
+        // Replacing the keystone already in slot 0 doesn't exceed the budget
+        // (the outgoing one in this slot isn't counted).
+        expect(equip(s, 0, 'PURIST')).toBe(true);
+        expect(s.equippedPassives[0]).toBe('PURIST');
+    });
+});
+
 describe('P2 — getPassiveMod aggregation', () => {
     afterEach(() => {
         // Clean up any injected mods so other suites see the pristine registry.
