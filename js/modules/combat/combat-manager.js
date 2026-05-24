@@ -1983,7 +1983,27 @@ export function updateHoverDetection() {
 // enemies — applying status to something that's already dying would
 // just queue empty ticks against a recycled pool slot.
 
-export function applyBurn(enemy, sourceDmg, durationMs = 3000) {
+// P6 — Kindling: a player burn/corrode also catches one nearby enemy. Pure
+// target picker — the NEAREST active enemy within radius that isn't the source
+// and isn't already carrying this status (skip via its `untilKey` timer) — so
+// the spread choice unit-tests cleanly. applyBurn/applyCorrode own the actual
+// re-apply (with a re-entry flag so the spread never chains indefinitely).
+export const KINDLING_RADIUS = 120;
+export function kindlingTarget(enemies, source, untilKey, now, radius = KINDLING_RADIUS) {
+    if (!Array.isArray(enemies) || !source) return null;
+    let best = null, bestD2 = radius * radius;
+    for (const e of enemies) {
+        if (!e || e === source || !e.active) continue;
+        if (e.warping || e._deathFlash > 0) continue;
+        if ((e[untilKey] || 0) > now) continue; // already afflicted — pick a fresh victim
+        const dx = e.x - source.x, dy = e.y - source.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { bestD2 = d2; best = e; }
+    }
+    return best;
+}
+
+export function applyBurn(enemy, sourceDmg, durationMs = 3000, _spread = true) {
     if (!enemy || !enemy.active) return;
     if (enemy.warping || enemy._deathFlash > 0) return;
     if (!(sourceDmg > 0)) return;
@@ -2005,6 +2025,16 @@ export function applyBurn(enemy, sourceDmg, durationMs = 3000) {
     // would prevent any tick from ever landing).
     if (wasInactive) {
         enemy.brnTickAt = now + 500;
+    }
+
+    // P6 — Kindling: spread the burn to one nearby fresh enemy (no re-spread).
+    // `this` is undefined for bare unit-test calls — guard before touching it.
+    if (_spread && this && this.player && this.player.hasPassive && this.player.hasPassive('KINDLING')) {
+        const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+        if (pool) {
+            const other = kindlingTarget(pool, enemy, 'brnUntil', now);
+            if (other) applyBurn.call(this, other, sourceDmg, durationMs, false);
+        }
     }
 }
 
@@ -2048,10 +2078,20 @@ function _statusGuard(enemy) {
 }
 
 // CORRODE — +15% incoming damage per stack from ALL sources. Cap 3, refresh.
-export function applyCorrode(enemy, durationMs = 4000, maxStacks = 3) {
+export function applyCorrode(enemy, durationMs = 4000, maxStacks = 3, _spread = true) {
     if (!_statusGuard(enemy)) return;
     enemy.corrodeStacks = Math.min(maxStacks, (enemy.corrodeStacks || 0) + 1);
     enemy.corrodeUntil = frameClock.now + durationMs;
+
+    // P6 — Kindling: spread the corrode to one nearby fresh enemy (no re-spread).
+    // `this` is undefined for bare unit-test calls — guard before touching it.
+    if (_spread && this && this.player && this.player.hasPassive && this.player.hasPassive('KINDLING')) {
+        const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+        if (pool) {
+            const other = kindlingTarget(pool, enemy, 'corrodeUntil', frameClock.now);
+            if (other) applyCorrode.call(this, other, durationMs, maxStacks, false);
+        }
+    }
 }
 
 // CHILL — lighter movement slow (×0.6, applied in Enemy.update). Refresh.

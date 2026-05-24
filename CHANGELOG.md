@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.143.0] - 2026-05-24
+
+### Added — Kindling passive (Phase P6, content batch)
+
+- **Kindling** — your burns and corrodes also catch one nearby enemy: applying
+  either status spreads it to the nearest fresh (un-afflicted) enemy within
+  120px. The spread re-applies once with a re-entry flag, so it never chains
+  indefinitely. Pure `kindlingTarget` picker (nearest eligible victim) +
+  guarded spread in `applyBurn`/`applyCorrode`; no-op without the passive.
+
+---
+
 ## [6.142.0] - 2026-05-24
 
 ### Added — Flow State passive (Phase P6, content batch)
