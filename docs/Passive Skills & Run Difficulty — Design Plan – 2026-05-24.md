@@ -2,14 +2,14 @@
 
 **Date:** 2026-05-24
 **Status:** Brainstorm / design — not yet scheduled into a version.
-**Scope:** Two new systems — (1) a **Passive Skills** layer (3 gold-bought, slot-gated, swappable gameplay-modifier relics) and (2) a **Run Configurator** that lets the player choose run length / boss count / difficulty, with difficulty scaling loot quantity and quality.
+**Scope:** Two new systems — (1) a **Passive Skills** layer (gold-bought, slot-gated, swappable gameplay-modifier relics, also rollable on gear) and (2) a **Run Configurator + Adaptive Difficulty Director**: the player chooses run **length** + **waves/stage** (a commitment-for-reward dial), while the game **auto-tunes difficulty** to the player and **composes waves procedurally** for fresh, meaningful challenges (§12 is the current direction).
 
 ---
 
 ## 1. Goals
 
 - **Passives** = build-defining *gameplay modifiers* (not stat increments). Equip slots (3 baseline, scaling up to 5 by run length — §11.A), bought with account-gold like weapons/abilities, slot-gated over the run, **swappable mid-run from the menu**, and **also rollable on gear** (shared registry). They should *drastically change how the run plays* and **stack synergistically** in deliberate clusters.
-- **Run Configurator** = player picks how long the run is (stages → waves), how many bosses, and a **difficulty tier**. Higher difficulty = tougher enemies **and** more drops + better item rarity (risk → reward).
+- **Run shape + adaptive difficulty** = the player picks run **length** (stages) and **waves/stage** (a commitment-for-reward dial, §12.3); the game **auto-tunes difficulty** to the player and **composes each wave procedurally** (§12.4) — *no chosen difficulty number*. Harder *achieved* play → more drops + better rarity (risk → reward).
 - **Reconcile, don't duplicate.** Both features must fold cleanly into the already-shipped systems (account-gold unlocks, BUILD tree, 4-slot abilities, the element/status engine, the energy meter, the loot/rarity ladder, kill-streaks, SP stats) and into the still-unbuilt backlog (item traits C.I3, keystones C.I4, W8 Ascension).
 
 ---
@@ -181,16 +181,18 @@ Set at run start (in the BUILD → RUN SETUP flow), stored on `this.game.runConf
 runConfig = {
   stages:        10,   // slider 10..100 (default 10) — also the BOSS count (1 boss / stage)
   wavesPerStage: 3,    // radio 3 | 6 | 9 (default 3)
-  difficulty:    1,    // tier index, 1 = baseline (separate axis; §11.C)
+  // NOTE: no `difficulty` — it is AUTO-TUNED by the Adaptive Difficulty Director (§12.4)
 }
 // derived: totalWaves = stages × wavesPerStage (30..900)
 //   within a stage (local wave 1..W): last wave = BOSS; other multiples of 3 = ELITE; rest = normal
-//   CARD pick after every stage (boss) clear  →  cards = stages
+//   POWERUP-CARD pick after every stage EXCEPT the last  →  cards = stages − 1 (99 for a 100-stage run)
 ```
 
-This **replaces the hardcoded `MAX_WAVES = 30`** with `runConfig.stages × runConfig.wavesPerStage`. Enemy scaling switches from run-normalized to **absolute** (§11.D) so longer runs keep escalating instead of plateauing. `isBossWave`, the new **elite** schedule, the **card-every-stage** cadence, passive-slot unlocks, and the run-complete check (`currentWave >= totalWaves`) all read the config.
+This **replaces the hardcoded `MAX_WAVES = 30`** with `runConfig.stages × runConfig.wavesPerStage`. Enemy scaling becomes the Director's **absolute baseline** (§11.D / §12.4) so longer runs keep escalating instead of plateauing. `isBossWave`, the new **elite** schedule, the **powerup-card-per-stage** cadence, passive-slot unlocks, and the run-complete check (`currentWave >= totalWaves`) all read the config.
 
 ### 6.2 What difficulty scales
+> **Superseded by §12.4** — difficulty is **auto-tuned, not chosen**. The table below is kept as the *scaling reference* (which knobs exist, rough magnitudes); the Director now drives them off **achieved** threat + player performance instead of a chosen tier `D`.
+
 Difficulty tier `D` (1 = baseline) applies multipliers **on top of** the existing wave curve and the existing bonuses (boss bias, LUCKY_DROPS, kill-streak gold), respecting current caps:
 
 | Knob | Formula (proposal) | At D=5 | At D=10 | Hook |
@@ -206,13 +208,13 @@ Difficulty tier `D` (1 = baseline) applies multipliers **on top of** the existin
 Net: **higher difficulty = harder enemies but markedly more + better loot and gold** — exactly the risk/reward you asked for. All numbers are starting points for a balance pass.
 
 ### 6.3 Cadence & slot-unlock scaling
-- **Card draft: every stage clear** (= every boss) → cards = stages (10–100). Once efficacy amplifiers cap, drafts fall back to passive / Cores cards (§11.E).
+- **Powerup-card pick: every stage clear *except the last*** → cards = stages − 1. The layered pool (efficacy → passive → economy) never runs dry (§12.2).
 - **Elite (miniboss): every 3rd wave** that isn't the stage boss (§11.B).
 - **Passive slot unlocks:** progressive across the run, up to `maxSlots(stages)` (§11.A).
 - **XP/level** (meta) accrues per wave-clear — more waves = more meta XP, naturally.
 
 ### 6.4 RUN SETUP UI
-A small pre-run screen (or a panel folded into the BUILD → START flow): **Stages** slider, **Waves/stage** slider, **Difficulty** tier selector, and a **live readout** of the resulting modifiers ("Enemies +48% · Drops +40% · Rarity bias +0.24 · Gold +40%"). `START RUN` writes `runConfig` and proceeds.
+A small pre-run screen (or a panel folded into the BUILD → START flow): **Stages** slider (10–100) + **Waves/stage** radio (3/6/9), and a **live readout of the REWARD dial** (§12.3 — e.g. "9 waves/stage → loot ×1.6, 2 elites/stage; deeper stages → higher rarity ceiling"). **No difficulty selector** — the Director auto-tunes (§12.4). `START RUN` writes `runConfig` and proceeds.
 
 ### 6.5 Reconciliation
 - **Absorbs W8 "Ascension."** W8 described "escalating endless difficulty after first clear: enemy HP/dmg/density + rising resistances; higher item-level gear + more gold." That **is** this difficulty system. Recommend: difficulty tiers above your first clear *are* Ascension; mark W8's Ascension bullet as folded into this phase. (Marathon length — up to 100 stages — + rising resistances at the top tiers carry the Ascension fantasy without a separate endless mode.)
@@ -385,10 +387,10 @@ Passives come from **two sources**, so "max passives" is really "how many *equip
   | **6** | n · n · **ELITE** · n · n · **BOSS** |
   | **9** | n · n · **ELITE** · n · n · **ELITE** · n · n · **BOSS** |
 
-- **Every stage ends with a boss, and every stage clear grants a CARD pick** — that's what gives stage completion a concrete meaning. So **cards = number of stages (10–100)**, bosses = stages, elites = `stages × (W/3 − 1)`.
-- **Total waves = stages × W → 30 (10×3) up to 900 (100×9).** Length is itself a difficulty axis (the absolute scaling in §D climbs the whole way), layered *on top of* the chosen difficulty tier (§C). A 100-stage / 9-wave run at a high tier is the ultimate gauntlet — brutal, multi-hour, but beatable and finite.
+- **Every stage ends with a boss, and every stage clear *except the last* grants a POWERUP CARD** — that's what gives stage completion a concrete meaning. So **cards = stages − 1** (99 for a 100-stage run; §12.2), bosses = stages, elites = `stages × (W/3 − 1)`.
+- **Total waves = stages × W → 30 (10×3) up to 900 (100×9).** Length is itself a challenge axis (the absolute baseline in §D climbs the whole way), and the **Adaptive Difficulty Director** (§12.4) tunes the threat to the player the whole run. A 100-stage / 9-wave run is the ultimate gauntlet — brutal, multi-hour, but beatable and finite.
 
-This supersedes the old "card every 2nd stage" cadence (§6.3 → now **card every stage**) and the old "elite at mid-stage" idea (old §E → now **elite every 3rd wave**).
+This supersedes the old "card every 2nd stage" cadence (§6.3 → now a **powerup card every stage but the last**) and the old "elite at mid-stage" idea (old §E → now **elite every 3rd wave**).
 
 ### C. Difficulty gating (reward-feeling, low-friction)
 - **Unlock tier D+1 by reaching a milestone at tier D — not a full clear.** Proposal: *clear at least 5 stages at tier D in a single run* (even in a longer run — you don't have to finish it). Easy enough to reach in a session, but you must prove you can sustain that tier. New tiers feel earned, not grindy.
@@ -419,3 +421,64 @@ This supersedes the old "card every 2nd stage" cadence (§6.3 → now **card eve
 - **Why this beats both extremes:** fully-free anytime swapping lets you hard-counter every single wave (swap to the perfect element/weapon each fight), which erases build identity and the roguelite tension. Locking everything for a 100-wave run feels awful because you collect mountains of loot you can't use. **Checkpoint-refit threads it:** you adapt to what you've earned between stages, but commit within a stage.
 - **It auto-answers "when to allow vs. lock"** with no special rule: a **short punishing run has few checkpoints** (you're mostly stuck with your build — the punishment you asked for), while a **long gauntlet has many** (you naturally re-tool as you go). Difficulty + length *is* the commitment dial.
 - *If you'd rather minimize friction:* the fallback is "gear + passives anytime, weapons/abilities/attunements also anytime" — fully free. Viable, but I'd hold the line at checkpoint-refit for offense to keep builds meaningful.
+
+---
+
+## 12. Round-4 redesign (2026-05-24): powerup cards, run bonuses & adaptive difficulty
+
+> This round makes a **major pivot**: difficulty is **no longer player-chosen** — the game **auto-tunes** it and **evolves with the player**, while a procedural composer keeps every wave **fresh and random**. The overarching goal is **interesting, meaningful challenges**. This **supersedes** the player-chosen difficulty model wherever it differs (§6.2 multiplier table, §6.4 difficulty selector, §11.C tier-gating, the chosen-tier framing in §11.B/§11.D, and the `difficulty` field in `runConfig`).
+
+### 12.1 Terminology — everything is a "powerup card"
+The run-reward cards have been called *efficacy cards*, *draft cards*, *survivor cards*, and *card draft* — these are **all the same thing**. Canonical term from now on: **powerup cards** (the event is a **powerup-card pick**). Wherever an earlier section says efficacy/draft/survivor card, read **powerup card**. (The code module stays `card-draft.js`.) Powerup cards come in **types**: weapon **efficacy** (amplifiers), **passive** (keystone/modular from the shared registry), and **economy** (Cores/gold).
+
+### 12.2 One powerup card per stage; cards = stages − 1; handling 99 cards
+- The player gets **one powerup-card pick at the end of every stage *except the last*** (the final stage's boss is the run's victory — there's no "next stage" to prepare for). So **cards = stages − 1**: a 100-stage run grants **99** powerup cards; a 10-stage run grants 9.
+- **"Limit the stage count to the powerup cards available"** — the cap is bounded by how many *meaningful* powerup cards exist, and the pool is **layered so it never runs dry**:
+  1. **Weapon efficacy** — per equipped weapon; a full 4+4+4 loadout yields **~70–140 stackable picks** (loadout-dependent; each upgrade has a `maxStacks`).
+  2. **Passive cards** — keystone/modular from the ~40-entry shared registry (this *is* the old C.I4 "keystone card" channel).
+  3. **Economy cards** — Cores / gold, the final fallback.
+- **Can we handle 99 powerup cards? Yes.** Efficacy fills the early-to-mid run (~70–140 picks); once a player's relevant amplifiers cap, the draft transparently serves **passive** then **economy** cards. Every stage still hands you a *meaningful* powerup card, so **max stages = 100 (= 99 cards)** is supported. The layering is exactly what makes the run "limited *by*, but never *short of*, the powerup-card pool."
+- *Implementation:* `CARDS_PER_RUN` (currently fixed `5`) becomes derived (`stages − 1`); `card-draft.js buildDraft` gains the passive → economy fallback tiers once the loadout's efficacy pool is exhausted.
+
+### 12.3 Bonuses for waves/stage and stages (the reward dial)
+Because difficulty is auto-tuned (§12.4), the player's run-shape choices are a **commitment-for-reward dial**, not a difficulty dial:
+- **More waves/stage** = more enemies + elites before each powerup card (more grind per reward) → a per-stage **reward multiplier** on loot drop-rate, gold, rarity bias, and Cores:
+
+  | waves/stage | reward × | elites / stage |
+  |---|---|---|
+  | 3 | ×1.0 | 0 |
+  | 6 | ×1.3 | 1 |
+  | 9 | ×1.6 | 2 |
+
+  (Elites already drop better loot, so 9-wave stages **compound**: more elites × the multiplier.)
+- **More stages** = a longer commitment → an **endurance curve**: the rarity **ceiling**, item **level**, and per-stage gold rise with the stage number reached, so the **best gear lives deep**. (This replaces the old "rarity ceiling gated by chosen difficulty tier" — now gated by *depth + achieved threat*, §12.4.)
+- Net: 9 waves/stage × 100 stages is the grindiest, highest-reward shape; 3 × 10 is a quick low-reward sprint. Both are legitimate — difficulty self-adjusts either way.
+
+### 12.4 Adaptive Difficulty Director + procedural wave composer
+**The player does not pick a difficulty.** A per-run **Director** auto-tunes the challenge to the player and ramps as they grow; a **procedural composer** keeps every wave fresh and randomized.
+
+**Why the current systems can't do this (and can't reach wave 900):** waves are hardcoded tables `WAVE_DATA[1..30]`, and `getWaveConfig` *loops* past wave 30; enemy stats normalize over `MAX_WAVES` and cap at `ENEMY_LEVEL_MAX = MAX_WAVES + 15`. A 900-wave run would replay waves 1–30's compositions against a capped curve — trivially easy for a 99-card player. Both pieces must become **generative + adaptive**.
+
+**(a) Adaptive Difficulty Director** — a controller that watches the player and steers the challenge:
+- **Signals** (rolling window, updated each wave): damage taken ÷ max HP, time-to-clear vs. expected, player DPS / overkill ratio, HP% at wave end, near-death / revive / Second-Heart triggers, dodge & ability usage.
+- **Challenge index:** fold the signals into one 0–1 "pressure" reading vs. a **target band** (e.g. the player *should* end most waves at ~40–70% HP within an expected time). Above band → too easy; below → too punishing.
+- **Knobs it tunes** (rate-limited & smoothed — never swings violently): enemy **HP**, **damage**, **toughness** (armor/DR), **resistance** (drifts toward the player's most-used element — Warden-like), **density/count**, **aggression** (fire rate). *Speeds stay clamped* so nothing becomes physically undodgeable — escalation comes from HP / count / damage / toughness / resist / behavior.
+- **Loop & feel:** ramp **up** when the player dominates (fast clears, full HP); ease **down** gently when they're drowning (anti-death-spiral). A slow **upward baseline** rides underneath so a long run always trends harder — no comfortable farm plateau.
+- **Player-power awareness:** the baseline reads proxies for player strength (**powerup-card count, equipped passives/keystones, gear item-level**) and *pre-loads* threat for a stacked build instead of waiting to observe a stomp. **This is what keeps a 99-card late game lethal** — the answer to "is our scaling capable of handling that?" is *the scaling is relative to the player, so yes*.
+
+**(b) Procedural wave composer** — decides *what* shows up, fresh each time:
+- The Director hands the composer a **threat budget** per wave (scales with the Director's current level). The composer **spends** it on a randomized roster (cheap grunts ↔ expensive elites/specialists) + optional **wave modifiers** — so aggregate difficulty is *tuned* while the exact contents are *never the same twice*.
+- **Wave themes** (weighted random): swarm · artillery/ranged · armored/shielded · elemental-surge (one element dominant → rewards the right coverage) · ambush/reinforcements · mixed. The theme biases the roster.
+- **Wave modifiers** (roguelite affixes, optional per wave, **telegraphed up front** so they read as a puzzle not a gotcha): *enemies explode on death · fast-but-fragile · no health drops this wave · fog · shielded-until-you-kill-the-anchor · bounty (an elite drops extra loot)*. These are the engine of "interesting, meaningful challenge."
+- **Elites & bosses** draw from the same budget logic — an elite is a budget-expensive entry; the stage boss is fixed at the stage end, scaled by the Director.
+
+**(c) Reward keys off *achieved* difficulty, not a chosen tier:**
+- Loot drop-rate, **rarity ceiling**, item level, and gold scale with the Director's **current threat level** × **performance** (flawless / fast clears pay more). Performing well → the Director ramps → better loot, so the "harder = better loot" promise survives with **no difficulty selector**. Top rarities (Divine/Transcendental) appear only once the Director has been pushed past a high threat threshold (i.e. strong play, deep in a run).
+- **Meta:** track **peak threat reached** (and per-run-shape bests) as the bragging-rights / leaderboard stat the old "max difficulty cleared" used to provide.
+
+**What this removes/changes:**
+- `runConfig.difficulty` is **gone** → `runConfig = { stages, wavesPerStage }`.
+- §6.2's fixed multiplier table, §11.C's tier-gating + `maxDifficultyCleared`, and the §6.4 RUN-SETUP "difficulty selector" are **superseded**. RUN SETUP now sets only **length + waves/stage**, and its live readout shows the **reward dial** (§12.3), not a difficulty number.
+- §11.D's absolute unbounded curve **survives as the Director's baseline**; the player-relative correction rides on top.
+
+**Open feel-questions (balance pass, non-blocking):** target HP-band width; how hard the upward baseline climbs vs. the adaptive correction; whether to surface a HUD **threat meter** (recommended — players should *feel* the escalation and know loot is scaling); wave-modifier frequency (every wave vs. ramping with depth).
