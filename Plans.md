@@ -285,9 +285,9 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 - [x] VOID (gravity GATHER — a follow-up hit on a marked enemy tugs nearby enemies toward it; base mark via W1; also deepens Gravity Lance) + 3 tests · commit (6.110.0)
 - [x] RADIANT (PURGE — hits bypass flat armor + SENTINEL frontal shield; empowers Lance/Prism vs armor) + 3 tests · commit (6.111.0)
 
-### W3 — Mechanic Mods (reclassify + per-weapon)
-- [ ] `MECHANIC_MODS` taxonomy: pierce/explode/home/stun/knock + capstones (Meiosis, Charged Caroms, Razor Edge, Implosion, Proximity Fuse, Daisy Chain, Seeker Missiles, Cluster Warhead, Double Pulse, Chain Reaction, Aftershock, Refraction, Overload, Event Horizon, Prism Seek, Orbital Barrage, Afterburn)
-- [ ] Per-weapon mod lists; remove these from the card pool (upfront only) + tests · commit
+### W3 — Mechanic Mods (reclassify + per-weapon)  ✅ DONE (6.112.0)
+- [x] Classification: `isMechanicMod` (pierce/explode/home/stun/knock suffixes + capstone set) + `getMechanicMods` / `getEfficacyUpgrades` per weapon. Inert groundwork; 6 tests pin the split (668 unit). · commit (6.112.0)
+- [ ] Per-weapon mod NODES in the BUILD tree (W5) + removal from the card pool (W4) consume this classification.
 
 ### W4 — Efficacy Cards + recomposition
 - [ ] `EFFICACY_CARDS` pool: reclassify existing amplifiers + add new conditional/handling cards (design §6 A–F)

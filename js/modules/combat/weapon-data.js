@@ -1607,6 +1607,51 @@ export function getPowerUpgrades(weaponId) {
     return Object.values(POWER_UPGRADES).filter(u => u.weapon === weaponId);
 }
 
+// ─── W3 — Mechanic Mods vs Efficacy classification ──────────────────────────
+// The redesign splits a weapon's existing upgrades into two channels:
+//   • MECHANIC MODS — add/transform a behavior (pierce, explode, home, stun,
+//     knockback procs + weapon capstones). These are UPFRONT (bought in the
+//     BUILD tree, W5), never drafted as cards.
+//   • EFFICACY — more/faster/bigger of what the weapon already does (damage,
+//     fire rate, size, counts, radius, cooldown…). These are the in-run CARD
+//     pool (W4).
+// Derived from the existing upgrade ids: the generic procs by suffix, plus an
+// explicit capstone set. Inert until W4 (card filter) + W5 (tree mod nodes)
+// consume it; pinned by unit tests so the split can't silently drift.
+const _MECHANIC_SUFFIXES = ['_PIERCING', '_EXPLODE', '_HOMING', '_STUN', '_KNOCK'];
+const _MECHANIC_CAPSTONES = new Set([
+    // Primary capstones
+    'MEIOSIS', 'CHARGED_CAROMS', 'RAZOR_EDGE', 'IMPLOSION',
+    // Power capstones / behavior-changers
+    'CHARGE_OVERCHARGE', 'CHARGE_HOMING', 'CHARGE_PIERCING',
+    'DAISY_CHAIN', 'MINE_SHIELD_RADIUS', 'MINE_MISSILES',
+    'AFTERSHOCK', 'DOUBLE_PULSE', 'NOVA_LIGHTNING', 'NOVA_CHAIN', 'NOVA_INFERNO',
+    'CLUSTER_WARHEAD', 'MISSILE_PIERCING',
+    'REFRACTION', 'OVERLOAD_BEAM', 'TRIPLE_BEAM',
+    'EVENT_HORIZON', 'PRISM_SEEK', 'ORBITAL_BARRAGE', 'SHATTER', 'AFTERBURN',
+]);
+
+/** True if an upgrade id is a Mechanic Mod (upfront), not an Efficacy card. */
+export function isMechanicMod(id) {
+    if (!id) return false;
+    if (_MECHANIC_CAPSTONES.has(id)) return true;
+    return _MECHANIC_SUFFIXES.some((s) => id.endsWith(s));
+}
+
+function _weaponUpgrades(weaponId) {
+    return PRIMARY_WEAPONS[weaponId] ? getPrimaryUpgrades(weaponId) : getPowerUpgrades(weaponId);
+}
+
+/** A weapon's Mechanic Mods (upfront — bought in the BUILD tree). */
+export function getMechanicMods(weaponId) {
+    return _weaponUpgrades(weaponId).filter((u) => isMechanicMod(u.id));
+}
+
+/** A weapon's Efficacy upgrades (the in-run card pool). */
+export function getEfficacyUpgrades(weaponId) {
+    return _weaponUpgrades(weaponId).filter((u) => !isMechanicMod(u.id));
+}
+
 /** Get all upgrades for a specific defense ability */
 export function getAbilityUpgrades(abilityId) {
     return Object.values(ABILITY_UPGRADES).filter(u => u.ability === abilityId);

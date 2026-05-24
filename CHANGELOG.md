@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.112.0] - 2026-05-23
+
+### Added — Mechanic-mod vs efficacy classification (Phase W3)
+
+Groundwork (inert; W4/W5 consume it). Splits each weapon's existing upgrades
+into two channels: **Mechanic Mods** (pierce/explode/home/stun/knock procs +
+weapon capstones like Meiosis, Daisy Chain, Cluster Warhead, Refraction, Event
+Horizon, Shatter, Afterburn…) which become UPFRONT BUILD-tree picks, and
+**Efficacy** (more/faster/bigger — damage, fire rate, size, counts, radius,
+cooldown) which become the in-run CARD pool. New helpers `isMechanicMod`,
+`getMechanicMods`, `getEfficacyUpgrades` (`weapon-data.js`). No behavior change.
+6 new unit tests pin the split; 668 unit green.
+
 ## [6.111.0] - 2026-05-23
 
 ### Added — Radiant attunement behavior: purge / anti-armor (Phase W2, complete)
