@@ -79,6 +79,22 @@ export function resolveBulletElements(overrideEl, attunementEls, baseEl) {
     return [baseEl || DEFAULT_ELEMENT];
 }
 
+/**
+ * W7 — the element a target is most WEAK to (most-negative resist at or beyond
+ * `threshold`), for the weakness telegraph pip. Returns the element id, or null
+ * when there's no notable weakness. (resist < 0 = weakness; more negative = a
+ * bigger weakness; ties resolve to the first-seen.)
+ */
+export function weaknessElement(resistMap, threshold = -0.3) {
+    if (!resistMap) return null;
+    let el = null;
+    let worst = threshold;
+    for (const k in resistMap) {
+        if (resistMap[k] < worst) { worst = resistMap[k]; el = k; }
+    }
+    return el;
+}
+
 /** True if `id` is a known element. */
 export function isElement(id) {
     return Object.prototype.hasOwnProperty.call(ELEMENTS, id);

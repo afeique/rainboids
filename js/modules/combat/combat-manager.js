@@ -1403,6 +1403,11 @@ export function createDamageNumber(x, y, damage, opts = {}) {
         isEmpowered: !!opts.isEmpowered,
         isPlayerHit,
         isHeal,
+        // W7 — elemental effectiveness cue: >1 = weakness (bright/bigger,
+        // element-tinted), <1 = resisted (small/grey). `elementColor` tints
+        // the weakness pop toward the element that worked.
+        effectiveness: (opts.effectiveness != null) ? opts.effectiveness : 1,
+        elementColor: opts.elementColor || null,
         vel: {
             x: (Math.random() - 0.5) * 2,
             y: -2 - Math.random() * 2

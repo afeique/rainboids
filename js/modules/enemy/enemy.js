@@ -9,7 +9,7 @@ import * as firing from './firing.js';
 import * as shapes from './shapes.js';
 import * as ai from './ai.js';
 import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
-import { decayResistMap } from '../combat/elements.js';
+import { decayResistMap, ELEMENTS, weaknessElement } from '../combat/elements.js';
 import { runAura } from './support-aura.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
 // `isMobile` toggles the lateral weave decoration in update().
@@ -1438,6 +1438,9 @@ export class Enemy {
         // Draw health bar (outside of transform)
         this.drawHealthBar(ctx);
 
+        // W7 — weakness telegraph pip (outside of transform, world space).
+        this.drawWeaknessPip(ctx);
+
         // Level + name label BENEATH the enemy is intentionally disabled —
         // this info now lives only in the top-center info panel (see
         // hud/combat.js drawTargetInfo). Keeping the block as a comment for
@@ -1525,6 +1528,34 @@ export class Enemy {
     drawLightTrail(ctx) { return shapes.drawLightTrail.call(this, ctx); }
     
     drawHealthBar(ctx) { return shapes.drawHealthBar.call(this, ctx); }
+
+    // W7 — weakness telegraph: a small element-colored chevron above the enemy
+    // pointing at it, showing the element it's most WEAK to (resist ≤ −0.3).
+    // Distinct from the body tint (which is the enemy's ATTACK element) so it
+    // never misleads. Pulses gently; absent on enemies with no notable weakness.
+    drawWeaknessPip(ctx) {
+        const el = weaknessElement(this.resist);
+        if (!el) return;
+        const color = (ELEMENTS[el] && ELEMENTS[el].color) || '#ffffff';
+        const px = this.x;
+        const py = this.y - this.radius - 15;
+        const now = (typeof frameClock !== 'undefined' && frameClock.now) ? frameClock.now : Date.now();
+        const pulse = 0.65 + 0.35 * Math.sin(now / 240);
+        const s = 5;
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px - s, py - s);
+        ctx.lineTo(px + s, py - s);
+        ctx.lineTo(px, py + s); // downward point at the enemy
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+    }
     
     drawLaserChargingEffect(ctx) { return shapes.drawLaserChargingEffect.call(this, ctx); }
     

@@ -100,10 +100,32 @@ export function drawDamageNumbers() {
                 ctx.strokeText(text, screenX, screenY);
                 ctx.fillText(text, screenX, screenY);
             } else {
-                // Standard hit: gold, 16px (unchanged from before).
-                ctx.font = "16px 'Press Start 2P', monospace";
-                ctx.fillStyle = rgba(255, 215, 0, alpha);
-                ctx.fillText(dmgNum.damage.toString(), screenX, screenY);
+                // W7 — elemental effectiveness cue on standard hits:
+                //   weakness (eff > 1.05) → bigger, bright, "WEAK" tag;
+                //   resisted (eff < 0.95) → smaller, grey, faint;
+                //   neutral → gold (unchanged).
+                const eff = (dmgNum.effectiveness != null) ? dmgNum.effectiveness : 1;
+                const text = dmgNum.damage.toString();
+                if (eff > 1.05) {
+                    const fontSize = 20;
+                    ctx.font = `bold ${fontSize}px 'Press Start 2P', monospace`;
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = rgba(0, 0, 0, alpha);
+                    ctx.fillStyle = rgba(130, 255, 150, alpha); // effective = vivid green
+                    ctx.strokeText(text, screenX, screenY);
+                    ctx.fillText(text, screenX, screenY);
+                    ctx.font = `9px 'Press Start 2P', monospace`;
+                    ctx.fillStyle = rgba(200, 255, 200, alpha);
+                    ctx.fillText('WEAK', screenX, screenY - fontSize * 0.85);
+                } else if (eff < 0.95) {
+                    ctx.font = "12px 'Press Start 2P', monospace";
+                    ctx.fillStyle = rgba(150, 150, 150, alpha * 0.8); // resisted = dim grey
+                    ctx.fillText(text, screenX, screenY);
+                } else {
+                    ctx.font = "16px 'Press Start 2P', monospace";
+                    ctx.fillStyle = rgba(255, 215, 0, alpha);
+                    ctx.fillText(text, screenX, screenY);
+                }
             }
 
             ctx.restore();
