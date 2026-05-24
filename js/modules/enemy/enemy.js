@@ -9,6 +9,7 @@ import * as firing from './firing.js';
 import * as shapes from './shapes.js';
 import * as ai from './ai.js';
 import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
+import { updateBossPhases, phaseBlocksDamage } from './boss-phases.js';
 import { decayResistMap, ELEMENTS, weaknessElement } from '../combat/elements.js';
 import { runAura } from './support-aura.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
@@ -541,6 +542,9 @@ export class Enemy {
         // Boss rage + per-tier mechanics (HP-threshold telegraph, invuln,
         // tantrum, tier-4 phase cycling, tier-2 partner-death flags).
         if (this.isBoss) updateBossRage(this, gameEngine);
+        // D.B0 — declarative phase-script runner (no-op unless this boss was
+        // given a phaseScript via initBossPhases).
+        if (this.isBoss) updateBossPhases(this, gameEngine);
 
         // Late-wave AI throttle: in waves 15+, run the heavy spatial scans
         // on alternating frames per enemy.
@@ -1685,6 +1689,7 @@ export class Enemy {
         // outside the engine still work.
         if (this.warping || this._deathFlash > 0) return false;
         if (bossRageBlocksDamage(this)) return false;
+        if (phaseBlocksDamage(this)) return false;
         this.health = Math.max(0, this.health - damage);
         return this.health <= 0.001;
     }

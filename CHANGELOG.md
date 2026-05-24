@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.159.0] - 2026-05-24
+
+### Added — Boss phase-script runner (Phase D.B0 foundation)
+
+- **Declarative multi-phase boss runner** (`js/modules/enemy/boss-phases.js`).
+  A boss carries an ordered `phaseScript`; the runner advances phases as each
+  gate trips (descending HP fraction or a custom predicate), fires every
+  phase's `onEnter` **exactly once and in order** (even when one burst of
+  damage drops HP past several thresholds in a single frame), and opens a short
+  **transition invuln window** so a phase shift can't be skipped by overkill.
+  Pure, engine-agnostic logic with `phaseBlocksDamage` / `currentPhase` /
+  `currentPhaseIndex` / `isFinalPhase` helpers.
+- Wired into `enemy.update` (per-frame `updateBossPhases`) and both damage
+  paths (`collision-system.applyDamageToEnemy` + the enemy fallback) — a
+  **guarded no-op** for every existing enemy (none has a `phaseScript` yet),
+  so current play is unchanged. This is the chassis the 10 scripted bosses
+  (D.B1–B5) will build on; weak-point layer, intro/death sequences, and the
+  boss healthbar UI follow. Unit tests: `tests/unit/enemy/boss-phases.test.js`
+  (8 cases — ordering, once-each onEnter, transition invuln, full run +
+  killability, custom gate, dying/warping guard).
+
+---
+
 ## [6.158.1] - 2026-05-24
 
 ### Changed — Asteroid HP rebalance

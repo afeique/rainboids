@@ -4,6 +4,7 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { random, collision, starCollision, triggerHapticFeedback } from '../core/utils.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
+import { phaseBlocksDamage } from '../enemy/boss-phases.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { elementalMultiplier, multiElementMultiplier, adaptResist, ELEMENTS } from './elements.js';
@@ -2353,8 +2354,8 @@ export function applyEyeOfTheStorm() {
 export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
-    // Boss rage invuln window — sparkle feedback then drop the hit.
-    if (enemy.isBoss && enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil) {
+    // Boss rage / phase-transition invuln window — sparkle feedback, drop hit.
+    if (enemy.isBoss && ((enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil) || phaseBlocksDamage(enemy))) {
         if (this.particlePool) {
             const p = this.particlePool.get(enemy.x, enemy.y, 'starSparkle');
             if (p) {
