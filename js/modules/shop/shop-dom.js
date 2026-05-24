@@ -31,6 +31,7 @@ import {
     getAbilityUpgrades,
     getPassiveUpgrades,
     getAttunementsForWeapon,
+    getMechanicMods,
 } from '../combat/weapon-data.js';
 import { ELEMENTS } from '../combat/elements.js';
 // 2026-05-23 — pre-run BUILD mode reuses the loadout-selection helpers so the
@@ -89,6 +90,10 @@ let _unlockedSets = null;
 // START RUN. `_unlockedAttune` caches owned attunement ids for node states.
 let _preRunAttune = {};
 let _unlockedAttune = null;
+// W5 — per-weapon ACTIVE mechanic-mod ids: { weaponId: [id…] }. Mirrors the
+// attunement set; flows into the run as granted powerup stacks on START.
+let _preRunMods = {};
+let _unlockedMods = null;
 
 /** Seed the pre-run loadout selection (called by game-engine before show). */
 export function setPreRunSelection(sel) {
@@ -125,6 +130,33 @@ function _toggleAttune(weaponId, attId, forceOn) {
     if (at !== -1 && !forceOn) cur.splice(at, 1);
     else if (at === -1) cur.push(attId);
     _preRunAttune[weaponId] = cur;
+}
+
+/** Seed the pre-run active-mod map (called by game-engine before show). */
+export function setPreRunMods(map) {
+    _preRunMods = {};
+    if (map && typeof map === 'object') {
+        for (const [wid, ids] of Object.entries(map)) {
+            if (Array.isArray(ids)) _preRunMods[wid] = ids.slice();
+        }
+    }
+}
+
+/** The current pre-run active-mod map (read by START RUN). */
+export function getPreRunMods() {
+    const out = {};
+    for (const [wid, ids] of Object.entries(_preRunMods)) {
+        if (ids && ids.length) out[wid] = ids.slice();
+    }
+    return out;
+}
+
+function _toggleMod(weaponId, modId, forceOn) {
+    const cur = _preRunMods[weaponId] || [];
+    const at = cur.indexOf(modId);
+    if (at !== -1 && !forceOn) cur.splice(at, 1);
+    else if (at === -1) cur.push(modId);
+    _preRunMods[weaponId] = cur;
 }
 
 function $(id) { return document.getElementById(id); }
@@ -167,7 +199,11 @@ export function initShopDom(gameEngine) {
     if (startBtn) {
         startBtn.addEventListener('click', () => {
             if (_engine && typeof _engine.beginPreRunFromTree === 'function') {
-                _engine.beginPreRunFromTree({ ..._preRunSel, attunements: getPreRunAttunements() });
+                _engine.beginPreRunFromTree({
+                    ..._preRunSel,
+                    attunements: getPreRunAttunements(),
+                    mods: getPreRunMods(),
+                });
             }
         });
     }
@@ -226,6 +262,21 @@ export function initShopDom(gameEngine) {
                         }
                     } else {
                         _toggleAttune(wid, id);
+                    }
+                    renderShopDom();
+                    return;
+                }
+                // Mechanic-mod orbit node: same unlock/activate as attunements.
+                if (node.dataset.kind === 'mod') {
+                    const wid = node.dataset.weapon;
+                    const owned = !!(_unlockedMods && _unlockedMods.has(id));
+                    if (!owned) {
+                        if (_engine && typeof _engine.unlockPreRunItem === 'function'
+                            && _engine.unlockPreRunItem('mods', id)) {
+                            _toggleMod(wid, id, true);
+                        }
+                    } else {
+                        _toggleMod(wid, id);
                     }
                     renderShopDom();
                     return;
@@ -397,9 +448,11 @@ export function renderShopDom() {
             abilities: getUnlockedSet('abilities', meta),
         };
         _unlockedAttune = getUnlockedSet('attunements', meta);
+        _unlockedMods = getUnlockedSet('mods', meta);
     } else {
         _unlockedSets = null;
         _unlockedAttune = null;
+        _unlockedMods = null;
     }
 
     // 6.30.0 — Weapon/ability clusters are buyable; the PASSIVE cluster is
@@ -434,6 +487,15 @@ function _attuneNodes(weaponId) {
     }));
 }
 
+// W5 — pre-run: a weapon's mechanic-mod nodes (upfront behavior picks).
+function _modNodes(weaponId) {
+    return getMechanicMods(weaponId).map((m) => ({
+        id: m.id, name: m.name, weaponId,
+        description: m.description || '', cost: m.cost,
+        icon: m.icon || 'bolt', kind: 'mod',
+    }));
+}
+
 // Each "group" describes one weapon/ability node + its orbiting upgrade
 // nodes. Shape:
 //   { parent: { id, name, icon, color },
@@ -443,7 +505,7 @@ function _collectPrimaryGroups() {
     for (const w of Object.values(PRIMARY_WEAPONS)) {
         groups.push({
             parent: { id: w.id, name: w.name, icon: w.icon, color: w.color, description: w.description },
-            upgrades: _preRun ? _attuneNodes(w.id) : getPrimaryUpgrades(w.id).map(u => ({
+            upgrades: _preRun ? [..._attuneNodes(w.id), ..._modNodes(w.id)] : getPrimaryUpgrades(w.id).map(u => ({
                 id: u.id,
                 name: u.name,
                 icon: u.icon,
@@ -466,7 +528,7 @@ function _collectPowerGroups() {
     for (const w of Object.values(POWER_WEAPONS)) {
         groups.push({
             parent: { id: w.id, name: w.name, icon: w.icon, color: w.color, description: w.description },
-            upgrades: _preRun ? _attuneNodes(w.id) : getPowerUpgrades(w.id).map(u => ({
+            upgrades: _preRun ? [..._attuneNodes(w.id), ..._modNodes(w.id)] : getPowerUpgrades(w.id).map(u => ({
                 id: u.id,
                 name: u.name,
                 icon: u.icon,
@@ -527,9 +589,10 @@ function _renderWeaponCluster(container, groups, player, category) {
         // Parent node (centered). In-run: not buyable. Pre-run: equip toggle.
         ring.appendChild(_buildParentNode(group.parent, category));
 
-        // Orbit upgrade nodes around the parent.
+        // Orbit upgrade nodes around the parent. The radius grows with the
+        // node count so the BUILD ring (attunements + mods) doesn't crowd.
         const N = group.upgrades.length;
-        const RADIUS = N <= 4 ? 110 : (N <= 6 ? 130 : 150);
+        const RADIUS = N <= 4 ? 110 : (N <= 6 ? 130 : (N <= 9 ? 152 : 178));
         for (let i = 0; i < N; i++) {
             const upg = group.upgrades[i];
             // Distribute around the circle starting at the top (-90°).
@@ -537,8 +600,9 @@ function _renderWeaponCluster(container, groups, player, category) {
             const angleRad = (angleDeg * Math.PI) / 180;
             const tx = Math.cos(angleRad) * RADIUS;
             const ty = Math.sin(angleRad) * RADIUS;
-            const node = (upg.kind === 'attunement')
-                ? _buildAttunementNode(upg) : _buildUpgradeNode(upg, player);
+            const node = (upg.kind === 'attunement') ? _buildAttunementNode(upg)
+                : (upg.kind === 'mod') ? _buildModNode(upg)
+                : _buildUpgradeNode(upg, player);
             node.style.transform = `translate(-50%, -50%) translate(${tx}px, ${ty}px)`;
             ring.appendChild(node);
         }
@@ -634,6 +698,43 @@ function _buildAttunementNode(att) {
     const icon = document.createElement('span');
     icon.className = 'shop-node-icon';
     icon.innerHTML = renderIconHTML(att.icon, { size: 24, fallback: '?' });
+    node.appendChild(icon);
+
+    if (active) {
+        const badge = document.createElement('span');
+        badge.className = 'shop-node-badge';
+        badge.textContent = '✓';
+        node.appendChild(badge);
+    }
+    return node;
+}
+
+// W5 — pre-run mechanic-mod orbit node. Same state model as attunements
+// (active = lit + ✓, owned = available, locked = grey + cost) but uses the
+// mod's own icon + a neutral accent. Click handling lives in the tree listener.
+function _buildModNode(mod) {
+    const node = document.createElement('div');
+    node.className = 'shop-node shop-node--upgrade shop-node--mod';
+    node.dataset.id = mod.id;
+    node.dataset.kind = 'mod';
+    node.dataset.weapon = mod.weaponId;
+    node.style.setProperty('--node-color', '#cfd8e6'); // neutral (element-agnostic)
+
+    const owned = !!(_unlockedMods && _unlockedMods.has(mod.id));
+    const active = (_preRunMods[mod.weaponId] || []).includes(mod.id);
+    const state = active ? 'owned' : (owned ? 'affordable' : 'unaffordable');
+    node.dataset.state = state;
+    node.classList.add(`shop-node--${state}`);
+
+    node.dataset.tooltipKind = 'upgrade';
+    node.dataset.tooltipName = mod.name;
+    node.dataset.tooltipDesc = mod.description || '';
+    node.dataset.tooltipState = active ? 'ACTIVE'
+        : (owned ? 'Click to activate' : `LOCKED · ${mod.cost} ⬢`);
+
+    const icon = document.createElement('span');
+    icon.className = 'shop-node-icon';
+    icon.innerHTML = renderIconHTML(mod.icon, { size: 24, fallback: '?' });
     node.appendChild(icon);
 
     if (active) {

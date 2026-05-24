@@ -29,6 +29,9 @@ export const UNLOCK_CATEGORIES = {
     // W5 — per-weapon Attunements (element upgrades). Flat cost for now; W7
     // will tune per-attunement (signature vs exotic). Nothing is owned by base.
     attunements: { metaKey: 'unlockedAttunements', base: [], cost: 6000 },
+    // W5 — per-weapon Mechanic Mods (pierce/explode/home/stun/knock + capstones).
+    // Upfront BUILD-tree picks; flat cost for now (W7 tunes).
+    mods: { metaKey: 'unlockedMods', base: [], cost: 5000 },
 };
 
 /** Cost in account-gold to unlock one item of a category. */

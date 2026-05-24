@@ -1652,6 +1652,11 @@ export function getEfficacyUpgrades(weaponId) {
     return _weaponUpgrades(weaponId).filter((u) => !isMechanicMod(u.id));
 }
 
+/** Look up a primary/power upgrade config by id (for granting it as a powerup). */
+export function getWeaponUpgradeConfig(id) {
+    return PRIMARY_UPGRADES[id] || POWER_UPGRADES[id] || null;
+}
+
 /** Get all upgrades for a specific defense ability */
 export function getAbilityUpgrades(abilityId) {
     return Object.values(ABILITY_UPGRADES).filter(u => u.ability === abilityId);

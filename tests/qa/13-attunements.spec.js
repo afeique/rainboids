@@ -114,3 +114,65 @@ test.describe('QA-13: Attunements (BUILD tree)', () => {
         expect(fatal, `Fatal JS errors: ${fatal.join('; ')}`).toHaveLength(0);
     });
 });
+
+test.describe('QA-13b: Mechanic mods (BUILD tree, Phase W5)', () => {
+    test.beforeEach(async ({ page }) => {
+        page._jsErrors = [];
+        page.on('pageerror', (err) => page._jsErrors.push(err.message));
+        await loadGame(page);
+        await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
+    });
+
+    test('weapon clusters show mechanic-mod orbit nodes in BUILD mode', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            window.gameEngine.openArmory();
+            const nodes = [...document.querySelectorAll('#shop-tree-primary .shop-node--mod')];
+            return { count: nodes.length, ids: nodes.map((n) => n.dataset.id) };
+        });
+        expect(r.count).toBeGreaterThan(0);
+        expect(r.ids).toContain('PULSE_PIERCING');
+        expect(r.ids).toContain('PULSE_EXPLODE');
+    });
+
+    test('unlocking a mod deducts account-gold and persists', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.openArmory();
+            ge.game.accountGold = 20000;
+            const ok = ge.unlockPreRunItem('mods', 'PULSE_PIERCING');
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            return { ok, gold: ge.game.accountGold, owned: meta.unlockedMods || [] };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.gold).toBeLessThan(20000);
+        expect(r.owned).toContain('PULSE_PIERCING');
+    });
+
+    test('START RUN grants an owned active mod as a powerup stack', async ({ page }) => {
+        const stacks = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.openArmory();
+            ge.game.accountGold = 20000;
+            ge.unlockPreRunItem('mods', 'PULSE_PIERCING');
+            ge.beginPreRunFromTree({
+                primaries: ['PULSE_CANNON'],
+                mods: { PULSE_CANNON: ['PULSE_PIERCING'] },
+            });
+            return ge.player.getPowerupStacks('PULSE_PIERCING');
+        });
+        expect(stacks).toBeGreaterThanOrEqual(1);
+    });
+
+    test('a non-owned mod is dropped on START RUN', async ({ page }) => {
+        const stacks = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.openArmory();
+            ge.beginPreRunFromTree({
+                primaries: ['PULSE_CANNON'],
+                mods: { PULSE_CANNON: ['PULSE_EXPLODE'] }, // never unlocked
+            });
+            return ge.player.getPowerupStacks('PULSE_EXPLODE');
+        });
+        expect(stacks).toBe(0);
+    });
+});

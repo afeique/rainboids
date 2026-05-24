@@ -27,7 +27,7 @@ import { LineDebris } from './world/line-debris.js';
 import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
-import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS } from './combat/weapon-data.js';
+import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout } from './shop/armory.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
@@ -1024,6 +1024,19 @@ export class GameEngine {
                 if (!Array.isArray(ids)) continue;
                 const valid = ids.filter((id) => ATTUNEMENTS[id] && ATTUNEMENTS[id].weapon === wid);
                 if (valid.length) this.player.activeAttunements[wid] = valid;
+            }
+        }
+        // W5 — grant the chosen per-weapon mechanic mods as powerup stacks
+        // (one stack each) so the existing fire/hit paths read them via
+        // getPowerupStacks. Validated against the known upgrade table.
+        if (loadout && loadout.mods && typeof loadout.mods === 'object'
+            && typeof this.player.addPowerup === 'function') {
+            for (const ids of Object.values(loadout.mods)) {
+                if (!Array.isArray(ids)) continue;
+                for (const id of ids) {
+                    const cfg = getWeaponUpgradeConfig(id);
+                    if (cfg) this.player.addPowerup(id, cfg);
+                }
             }
         }
         // 5.88.3 — energy tanks unified with the triforce. healthTanks is
@@ -4003,6 +4016,7 @@ export class GameEngine {
         const meta = loadMeta() || {};
         shopDom.setPreRunSelection(normalizeLoadout(meta.loadout || {}, meta));
         shopDom.setPreRunAttunements((meta.loadout && meta.loadout.attunements) || {});
+        shopDom.setPreRunMods((meta.loadout && meta.loadout.mods) || {});
         this._preRunTreeOpen = true;
         shopDom.showShopDom(true);
     }
@@ -4028,6 +4042,20 @@ export class GameEngine {
             if (keep.length) att[wid] = keep;
         }
         loadout.attunements = att;
+        // W5 — carry active mechanic mods, validated against owned + known +
+        // weapon-matched ids.
+        const ownedMods = getUnlockedSet('mods', meta);
+        const mods = {};
+        const rawMods = (sel && sel.mods) || {};
+        for (const [wid, ids] of Object.entries(rawMods)) {
+            if (!Array.isArray(ids)) continue;
+            const keep = ids.filter((id) => {
+                const cfg = getWeaponUpgradeConfig(id);
+                return isMechanicMod(id) && cfg && cfg.weapon === wid && ownedMods.has(id);
+            });
+            if (keep.length) mods[wid] = keep;
+        }
+        loadout.mods = mods;
         try { saveMeta({ loadout }); } catch {}
         this._preRunTreeOpen = false;
         shopDom.hideShopDom();

@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.113.0] - 2026-05-23
+
+### Added — Mechanic mods equippable in the BUILD tree (Phase W5)
+
+Each weapon's BUILD-tree orbit ring now shows its **Mechanic Mods** (pierce,
+explode, homing, stun, knockback procs + capstones) alongside its attunements.
+Locked → click unlocks with **account-gold**; owned → click toggles active for
+the run. START RUN grants each active mod as a **powerup stack** (validated
+against owned + known + weapon-matched ids), so the existing fire/hit paths
+pick them up via `getPowerupStacks`.
+
+- New `mods` unlock category (`meta.unlockedMods`, account-gold).
+- `loadout.mods` carried through `beginPreRunFromTree`; granted via
+  `player.addPowerup` at run start.
+- Orbit-ring radius now scales with node count so the combined attunement+mod
+  ring doesn't crowd (finer layout is a W7 polish item).
+- 4 new QA tests; 668 unit + QA green.
+
 ## [6.112.0] - 2026-05-23
 
 ### Added — Mechanic-mod vs efficacy classification (Phase W3)
