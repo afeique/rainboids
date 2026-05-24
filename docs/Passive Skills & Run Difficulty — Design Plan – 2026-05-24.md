@@ -232,15 +232,16 @@ A small pre-run screen (or a panel folded into the BUILD → START flow): **Stag
 4. **P4** BUILD-tree PASSIVES cluster (unlock + the run's chosen pool) + loadout carry.
 5. **P5** In-run swap menu (pause panel) + ramp-reset-on-swap.
 6. **P6** Catalog batch 1 (~10–12 passives, one per archetype) — each with a live consumer + unit test.
-7. **P7** Later delivery channels: keystone cards (old C.I4) + top-tier item rolls (old C.I3) draw from the same pool.
+7. **P7** Later delivery channels: keystone **powerup cards** (old C.I4) + top-tier item rolls (old C.I3) draw from the same pool.
 
-**Phase X — Run Configurator & Difficulty**
-1. **X1** `runConfig` object; replace `MAX_WAVES` reads with config; run-complete + boss schedule + cadence read config.
-2. **X2** Difficulty multipliers wired into enemy scaling + `dropOrbsFromEntity` + `rollRarity(bias)` + gold.
-3. **X3** Cadence/slot-unlock scaling for variable length.
-4. **X4** RUN SETUP UI + live readout; persist in save for CONTINUE.
-5. **X5** Difficulty-tier gating (`maxDifficultyCleared`) — absorbs W8 Ascension.
-6. **X6** Balance pass (AI-survival across a short low-diff and a long high-diff run).
+**Phase X — Run Configurator, procedural waves & adaptive difficulty** *(updated round-4, §12)*
+1. **X1** `runConfig = {stages, wavesPerStage}` (no `difficulty`); replace `MAX_WAVES` with `stages×wavesPerStage`; boss + elite schedule + powerup-card-per-stage (cards = stages − 1) + run-complete read the config.
+2. **X2** **Procedural wave composer** (§12.4b): a threat budget → randomized enemy roster + wave themes + telegraphed modifiers; replaces the looping `WAVE_DATA[1..30]` past wave 30.
+3. **X3** **Adaptive Difficulty Director** (§12.4a): performance signals → challenge index → rate-limited enemy HP/dmg/toughness/resist/density knobs, an absolute upward baseline, and player-power awareness (cards/passives/gear).
+4. **X4** Reward off *achieved* threat × performance: drop-rate, `rollRarity` ceiling+bias, item-level, gold; run-shape reward multipliers (§12.3); **peak-threat** meta stat.
+5. **X5** RUN SETUP UI — length + waves/stage + **reward** readout, **no difficulty selector**; persist for CONTINUE; optional HUD threat meter.
+6. **X6** Powerup-card layering (efficacy → passive → economy; §12.2) so a 99-card run never dry-picks; `CARDS_PER_RUN` derived.
+7. **X7** Balance pass: AI-survival across short/long × weak/strong profiles; verify the Director holds the target HP band and a 99-card late game stays lethal.
 
 ---
 
@@ -267,6 +268,8 @@ Confirmed by product owner:
 6. **Waves/stage = radio 3/6/9 (default 3)**, stages = slider 10–100; elite every 3rd wave, boss + card every stage (§11.B); scaling §11.D; long-run reconciliations §11.E; **mid-run loadout access** §11.F.
 
 > **Round-3 (2026-05-24):** §10.1 adds 7 keystones + 9 modular passives; §11.A answers the "max passives" question (slots cap **5** + keystone budget **2**, gear adds modular); §11.B finalizes the run structure (no endless). These supersede the round-1 §8 forks and the round-2 notes above where they differ.
+
+> **Round-4 (2026-05-24) — see §12, the current direction:** terminology unified to **"powerup cards"**; **cards = stages − 1** (99 for a 100-stage run) with a layered pool that never runs dry; **reward bonuses** for waves/stage + stages (§12.3); and the big pivot — **no player-chosen difficulty**: an **Adaptive Difficulty Director + procedural wave composer** auto-tune and randomize the challenge (§12.4). This **supersedes** §8 fork #5, §9 item #5, §6.2's chosen-tier table, §6.4's difficulty selector, and §11.C's tier-gating.
 
 ---
 
@@ -393,6 +396,7 @@ Passives come from **two sources**, so "max passives" is really "how many *equip
 This supersedes the old "card every 2nd stage" cadence (§6.3 → now a **powerup card every stage but the last**) and the old "elite at mid-stage" idea (old §E → now **elite every 3rd wave**).
 
 ### C. Difficulty gating (reward-feeling, low-friction)
+> **Superseded by §12.4** — there is **no player-chosen difficulty to gate** anymore. The *reward* idea below (rarity ceiling rising with challenge) is retained, but now keys off the Director's **achieved** threat + run depth rather than a chosen tier. Kept for context.
 - **Unlock tier D+1 by reaching a milestone at tier D — not a full clear.** Proposal: *clear at least 5 stages at tier D in a single run* (even in a longer run — you don't have to finish it). Easy enough to reach in a session, but you must prove you can sustain that tier. New tiers feel earned, not grindy.
 - **Tougher tiers pay out better — the loot-system change:** each tier raises a **rarity ceiling** (low tiers literally *cannot* roll Divine/Transcendental; the top tiers are the only place the best gear exists), plus higher **item level** (affix magnitude), **drop rate**, and **gold**. This makes climbing difficulty the *only* path to best-in-slot gear — a strong, self-reinforcing pull. (Implementation: `rollRarity` gains a `rarityCeiling`/`floor` from the tier, alongside the existing bias; `createItem` level term scales with tier.)
 - Stored in `rainboidsMeta.maxDifficultyCleared`; locked tiers shown greyed with their unlock condition.
@@ -411,7 +415,7 @@ This supersedes the old "card every 2nd stage" cadence (§6.3 → now a **poweru
 ### E. Long-run reconciliations (boss variety + card stacking)
 *(Stage size & pacing is now defined in §B — waves/stage 3/6/9, elite every 3rd wave, boss + card every stage. The open problems a 100-stage run creates:)*
 - **Boss variety.** A max run has up to **100 bosses** but only ~10 unique are planned (Phase D). Reuse the 10 **cyclically with escalating scale**, and at higher difficulty tiers **"elite-ify"** them (extra phase / affix / rising resist) so repeats stay fresh. **Elites (minibosses)** are cheap variety — elite-ified versions of normal enemy types (buffed HP + one affix), no new art needed.
-- **Card stacking → passive cards.** Up to **100 card drafts**, but efficacy amplifiers have `maxStacks` caps and plateau. Once a player's relevant amplifiers are maxed, the per-stage draft should **fall back to PASSIVE cards** (keystone/modular from the shared registry — this *is* the C.I4 "keystone card" channel, P7) and/or **Cores/gold**. So the card-every-stage cadence naturally becomes a **passive-delivery channel** in long runs — a clean tie between the card system and the passive registry.
+- **Powerup-card pool layering** (full detail in §12.2). Up to **99 powerup-card picks**, but weapon **efficacy** cards plateau at their `maxStacks`. The per-stage pool then layers into **passive** cards (keystone/modular — the C.I4 channel, P7) then **economy** (Cores/gold), so it never runs dry and the powerup-card-per-stage cadence naturally becomes a **passive-delivery channel** late in long runs.
 
 ### F. Mid-run loadout access (the key call)
 - **Recommendation — tiered commitment, auto-scaling with run length:**
