@@ -54,16 +54,16 @@ test.describe('QA-08: BUILD screen + gold economy', () => {
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            ge.game.accountGold = 5000;
+            ge.game.accountGold = 20000;
             ge._armoryOverlay.render();
             const ok = ge._armoryOverlay.buy('primaries', 'STORM_NEEDLES');
             const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
             return { ok, gold: ge.game.accountGold, unlocked: meta.unlockedPrimaries || [], metaGold: meta.accountGold };
         });
         expect(r.ok).toBe(true);
-        expect(r.gold).toBe(5000 - 1200);
+        expect(r.gold).toBe(20000 - 8000); // primary unlock dialed up to 8000 (W7)
         expect(r.unlocked).toContain('STORM_NEEDLES');
-        expect(r.metaGold).toBe(3800);
+        expect(r.metaGold).toBe(12000);
     });
 
     test('cannot buy an unlock you cannot afford', async ({ page }) => {
@@ -83,7 +83,7 @@ test.describe('QA-08: BUILD screen + gold economy', () => {
         const r = await page.evaluate(async () => {
             const ge = window.gameEngine;
             ge.openArmory();
-            ge.game.accountGold = 5000;
+            ge.game.accountGold = 20000;
             ge._armoryOverlay.buy('primaries', 'STORM_NEEDLES');
             // Begin the run and read the owned pool.
             ge.startNewRun();
@@ -132,7 +132,7 @@ test.describe('QA-08: BUILD screen + gold economy', () => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            ge.game.accountGold = 9999;
+            ge.game.accountGold = 99999;
             ge._armoryOverlay.render();
             ge._armoryOverlay.buy('powers', 'NOVA_BLAST');
             ge._armoryOverlay.back();

@@ -23,14 +23,18 @@ export const BASE_LOADOUT = {
 // Per-category meta key + base set + unlock price. Abilities are priced
 // higher than weapons so the early game stays weapon-led (design §4).
 export const UNLOCK_CATEGORIES = {
-    primaries: { metaKey: 'unlockedPrimaries', base: BASE_LOADOUT.primaries, cost: 1200 },
-    powers:    { metaKey: 'unlockedPowers',    base: BASE_LOADOUT.powers,    cost: 2000 },
-    abilities: { metaKey: 'unlockedAbilities', base: BASE_LOADOUT.abilities, cost: 3500 },
-    // W5 — per-weapon Attunements (element upgrades). Flat cost for now; W7
-    // will tune per-attunement (signature vs exotic). Nothing is owned by base.
-    attunements: { metaKey: 'unlockedAttunements', base: [], cost: 6000 },
-    // W5 — per-weapon Mechanic Mods (pierce/explode/home/stun/knock + capstones).
-    // Upfront BUILD-tree picks; flat cost for now (W7 tunes).
+    // W7 — costs dialed way up (per the design intent): unlocks are long-term
+    // meta-progression goals, not pocket change. Hierarchy preserved
+    // (abilities > powers > primaries). A weapon now costs more than a single
+    // attunement/mod, so the weapon is the headline commitment and tuning it is
+    // the follow-up investment.
+    primaries: { metaKey: 'unlockedPrimaries', base: BASE_LOADOUT.primaries, cost: 8000 },
+    powers:    { metaKey: 'unlockedPowers',    base: BASE_LOADOUT.powers,    cost: 10000 },
+    abilities: { metaKey: 'unlockedAbilities', base: BASE_LOADOUT.abilities, cost: 12000 },
+    // Per-weapon Attunements (element upgrades). Flat cost for now; finer
+    // per-attunement (signature vs exotic) tuning is a later pass.
+    attunements: { metaKey: 'unlockedAttunements', base: [], cost: 7000 },
+    // Per-weapon Mechanic Mods (pierce/explode/home/stun/knock + capstones).
     mods: { metaKey: 'unlockedMods', base: [], cost: 5000 },
 };
 

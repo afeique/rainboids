@@ -54,10 +54,10 @@ describe('Armory economy — purchasing', () => {
 
     test('applyUnlock deducts gold and records the unlock (immutably)', () => {
         const meta = {};
-        const gold = 5000;
+        const gold = 20000;
         const out = applyUnlock('primaries', 'STORM_NEEDLES', meta, gold);
         expect(out.ok).toBe(true);
-        expect(out.accountGold).toBe(5000 - unlockCost('primaries'));
+        expect(out.accountGold).toBe(20000 - unlockCost('primaries'));
         expect(out.meta.unlockedPrimaries).toContain('STORM_NEEDLES');
         // original inputs untouched
         expect(meta.unlockedPrimaries).toBeUndefined();

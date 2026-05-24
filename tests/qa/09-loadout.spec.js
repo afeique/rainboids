@@ -98,14 +98,14 @@ test.describe('QA-09: BUILD-tree loadout selection', () => {
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            ge.game.accountGold = 5000;
+            ge.game.accountGold = 20000; // covers the dialed-up primary cost (8000)
             const ok = ge.unlockPreRunItem('primaries', 'RAIL_DRIVER');
             const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
             return { ok, gold: ge.game.accountGold, unlocked: meta.unlockedPrimaries || [] };
         });
         expect(r.ok).toBe(true);
         expect(r.unlocked).toContain('RAIL_DRIVER');
-        expect(r.gold).toBeLessThan(5000);
+        expect(r.gold).toBeLessThan(20000);
     });
 
     test('no fatal JS errors through the BUILD flow', async ({ page }) => {

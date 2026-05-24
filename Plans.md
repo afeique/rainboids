@@ -303,10 +303,12 @@ Source: `docs/Weapon Element Identity & Meta-Progression — Design Plan – 202
 ### W6 — Ability behavior/element upgrades
 - [ ] Ability equivalent of attunements (upfront element-flavored behavior; e.g. EMP "Ion Burst" → CONDUCT) + tests · commit
 
-### W7 — Economy + balance + polish
-- [ ] Dial up unlock costs (weapons ~8–12k, attunements ~5–9k, mods ~4–7k account-gold)
+### W7 — Economy + balance + polish  🟡 PARTIAL
+- [x] Dial up unlock costs: primary 8k / power 10k / ability 12k / attunement 7k / mod 5k (hierarchy preserved; tests updated) · commit (6.114.1)
+- [x] README sweep — attunement/mod/efficacy-card system documented · commit (docs)
 - [ ] KINETIC viability; resist/weakness telegraph (enemy tint/icon); per-attunement VFX + tooltips
-- [ ] Final README/CHANGELOG sweep · commit
+- [ ] New §6 conditional/handling efficacy cards (Executioner, Point-Blank, Hot Loads…) as global powerups + per-weapon card-curation matrix
+- [ ] Per-attunement signature-vs-exotic pricing
 
 ### Open questions (resolve as phases reach them)
 - OQ-A: per-weapon active-slot budget (cap on active attunements/mods)? — proposed soft cap

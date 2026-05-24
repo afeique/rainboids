@@ -11,6 +11,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.115.0] - 2026-05-23
+
+### Changed — Player ship redesign: sleek, articulated, rainbow-colored
+
+The player ship was a static all-blue silhouette that looked identical at rest
+and in flight. It's now an Arwing/Gundam-style airframe built from independently
+**articulated parts** that transform as you fly, so it reads as a living thing
+gliding through space:
+
+- **Living motion.** Swept-delta wings sweep back as speed/thrust rises (fish
+  streamlining), roll asymmetrically when you strafe or swing your aim (a bird
+  banking into a turn), outboard S-foil flaps fan open under thrust, forward
+  canards steer with the bank, engine-nozzle petals flare, and the whole
+  airframe leans into turns. When still, the wings and canopy "breathe" with a
+  slow idle flex so the ship is never visually dead.
+- **Vibrant rainbow palette** (color theory): a warm→cool spectral sweep along
+  each wing (gold → rose → violet → cyan), hot-magenta S-foils revealed in
+  motion, gold leading-edge accents for pop, a spectral white→cyan→magenta
+  exhaust, and a teal-white canopy — all over a dark indigo body so the colors
+  jump out against bright nebulae.
+
+New visual-only player state (`bank`, `wingSweep`, `flapOpen`, `glidePhase`)
+is derived each frame from velocity/aim/thrust; it drives the renderer and does
+not affect physics. Geometry is cached as per-part `Path2D` objects (articulated
+via ctx transforms, not rebuilt) and gradients are cached per-radius, so the
+richer ship keeps the previous renderer's performance profile. Multiplayer
+remote ships are unaffected.
+
+## [6.114.1] - 2026-05-23
+
+### Changed — Unlock costs dialed way up (Phase W7, economy)
+
+Permanent account-gold unlocks are now long-term meta goals, not pocket change:
+primary **8,000** (was 1,200), power **10,000** (was 2,000), ability **12,000**
+(was 3,500); attunements **7,000**, mechanic mods **5,000**. The
+abilities > powers > primaries hierarchy is preserved, and a weapon now costs
+more than a single attunement/mod (weapon = headline commitment, tuning it =
+follow-up investment). Per-attunement signature-vs-exotic pricing is a later
+tuning pass. Cost-dependent unit + QA assertions updated.
+
 ## [6.114.0] - 2026-05-23
 
 ### Changed — Card draft: efficacy-only, recomposed to 1 primary + 1 power + 2 ability (Phase W4)
