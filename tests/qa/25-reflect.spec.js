@@ -208,6 +208,63 @@ test.describe('QA-25: Projectile reflection / Prism Mirror', () => {
     });
 
     // ------------------------------------------------------------------
+    // (c2) A FAR in-arc bullet is NOT reflected (audit H1 range gate)
+    // ------------------------------------------------------------------
+
+    test('a far in-arc bullet is not reflected (range-gated, no field-wide reflect)', async ({ page }) => {
+        const result = await page.evaluate(async () => {
+            const ge = window.gameEngine;
+            const col = await import('/js/modules/combat/collision-system.js');
+            const reflect = await import('/js/modules/enemy/abilities/reflect.js');
+
+            const e = ge.spawnPrismMirror({ x: ge.player.x + 300, y: ge.player.y });
+            e.x = ge.player.x + 300; e.y = ge.player.y; e.warping = false;
+            e.reflect.facingRad = 0; // faces +X
+            const hpBefore = e.health;
+            const range = e.reflect.range;
+
+            // A bullet dead-center in the FRONT arc (+X, toBullet ≈ 0 ≈ facing) but
+            // placed well BEYOND the mirror's reflect range → it is NOT striking the
+            // face, so the mirror must not bounce it. Before the H1 fix this far
+            // bullet would have been reflected purely on its angle.
+            const farBullet = {
+                active: true,
+                x: e.x + (range + 400), y: e.y, // far in front, way past range
+                vx: -8, vy: 0, angle: Math.PI,
+                damage: 5, element: 'KINETIC',
+                startDying() { this.active = false; },
+            };
+
+            const ebBefore = ge.enemyBulletPool.activeObjects.length;
+            const farShould = reflect.shouldReflect(e, farBullet);
+            const farReflected = col.routeBulletToReflect.call(ge, farBullet);
+            const ebAfter = ge.enemyBulletPool.activeObjects.length;
+
+            return {
+                range,
+                farShould,
+                farReflected,
+                farConsumed: farBullet.active === false,
+                ebBefore,
+                ebAfter,
+                hpBefore,
+                hpAfter: e.health,
+            };
+        });
+
+        expect(typeof result.range).toBe('number');
+        expect(result.range).toBeGreaterThan(0);
+        // In-arc by angle, but out of range → NOT reflected.
+        expect(result.farShould).toBe(false);
+        expect(result.farReflected).toBe(false);
+        // Player bullet survives the pre-pass (falls through to normal damage path).
+        expect(result.farConsumed).toBe(false);
+        // No enemy bullet was spawned and the mirror is unaffected.
+        expect(result.ebAfter).toBe(result.ebBefore);
+        expect(result.hpAfter).toBe(result.hpBefore);
+    });
+
+    // ------------------------------------------------------------------
     // (d) An already-reflected bullet is NOT re-reflected (no ping-pong)
     // ------------------------------------------------------------------
 

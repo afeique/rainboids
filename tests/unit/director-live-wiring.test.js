@@ -84,6 +84,41 @@ describe('RUN-05a — buildDirectorOutcome (pure outcome builder)', () => {
         expect(o.hitsSurvived).toBe(0);
         expect(o.deaths).toBe(0);
     });
+
+    // FIX-02 / M2 — when feedDirectorOnWaveClear has NO wave-start clock
+    // (_waveStartMs unset on a restored/edge wave) it substitutes the SAME
+    // target clear time as actualClearTime. That must produce a NEUTRAL
+    // clear-speed signal (ratio 1.0), NOT the 0ms→1ms→huge-ratio spike that
+    // would slam D_hp toward its 3.0 ceiling. This asserts the substituted
+    // value yields exactly that neutral outcome.
+    test('M2: actualClearTime == targetClearTime yields a neutral speed ratio (no spike)', () => {
+        const TARGET = 35000; // DIRECTOR_TARGET_CLEAR_MS — the value the guard substitutes
+        const o = buildDirectorOutcome({ actualClearTime: TARGET, hpRetainedFrac: 1 });
+        // dpsOnTarget/expectedDps == targetClearTime/actualClearTime == 1.0 → neutral.
+        expect(o.actualClearTime).toBe(TARGET);
+        expect(o.targetClearTime).toBe(TARGET);
+        expect(o.dpsOnTarget / o.expectedDps).toBeCloseTo(1.0, 10);
+        // Contrast: the bug path (0ms → floored to 1ms) would explode this ratio.
+        const buggy = buildDirectorOutcome({ actualClearTime: 0, hpRetainedFrac: 1 });
+        expect(buggy.dpsOnTarget / buggy.expectedDps).toBeGreaterThan(1000);
+    });
+
+    test('M2: a no-clock wave fed at the neutral default does NOT push D_hp up', () => {
+        const dir = createDirector();
+        const TARGET = 35000;
+        // Feed the exact outcome the M2 guard produces (full HP, neutral clear
+        // speed, no hits) for several waves past cold-start. A neutral signal
+        // must leave D_hp parked at 1.0 — proving the guard can't spike.
+        const neutral = () => buildDirectorOutcome({
+            actualClearTime: TARGET,
+            hpRetainedFrac: 1.0,
+            hitsSurvived: 4, // == expectedHits default → neutral Pd too
+            deaths: 0,
+        });
+        for (let i = 0; i < 7; i++) tickWave(dir, neutral());
+        expect(dir.wave).toBe(7);
+        expect(getDifficulty(dir).D_hp).toBeCloseTo(1.0, 6);
+    });
 });
 
 describe('RUN-05a — sanity: live feed of fast-clear/high-HP outcomes raises D_hp', () => {

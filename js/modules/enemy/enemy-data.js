@@ -689,7 +689,7 @@ export const ENEMY_TYPES = {
         movePattern: 'keep_distance',
         points: 170,
         reflect: true,             // → initializeEnemy attaches the reflect config
-        reflectOpts: { halfAngleRad: Math.PI / 3, speed: 7 }, // 120° face, speed-7 bounce
+        reflectOpts: { halfAngleRad: Math.PI / 3, range: 120, speed: 7 }, // 120° face, strikes within 120px, speed-7 bounce
         movement: { pattern: 'keep_distance', turnSpeed: 0.07, rotationSpeed: { min: -0.01, max: 0.01 }, preferredDistance: 300 },
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1800, max: 5400 } },
         visual: { shape: 'shield_turret', glowColor: '#ffb0ee', trailLength: 14 },

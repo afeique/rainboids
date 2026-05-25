@@ -13,11 +13,12 @@ import {
     REFLECT_DEFAULTS,
 } from '../../../../js/modules/enemy/abilities/reflect.js';
 
-// A mirror enemy at the origin facing +x (facingRad 0), 120° arc (±60°).
+// A mirror enemy at the origin facing +x (facingRad 0), 120° arc (±60°),
+// reflecting only bullets that strike within `range` (120px) of the face.
 const mirror = (over = {}) => ({
     x: 0, y: 0,
     reflects: true,
-    reflect: { halfAngleRad: Math.PI / 3, facingRad: 0, speed: 7, ...over },
+    reflect: { halfAngleRad: Math.PI / 3, facingRad: 0, range: 120, speed: 7, ...over },
 });
 
 // A plain player bullet at (x,y) with an optional incoming velocity/flags.
@@ -30,6 +31,12 @@ describe('REFLECT_DEFAULTS', () => {
         expect(REFLECT_DEFAULTS.halfAngleRad).toBeGreaterThan(0);
         expect(REFLECT_DEFAULTS.halfAngleRad).toBeLessThanOrEqual(Math.PI);
         expect(REFLECT_DEFAULTS.speed).toBeGreaterThan(0);
+    });
+
+    test('exposes a finite reflect range so distant bullets are NOT reflected (audit H1)', () => {
+        expect(typeof REFLECT_DEFAULTS.range).toBe('number');
+        expect(REFLECT_DEFAULTS.range).toBeGreaterThan(0);
+        expect(Number.isFinite(REFLECT_DEFAULTS.range)).toBe(true);
     });
 });
 
@@ -71,6 +78,32 @@ describe('bulletInReflectArc', () => {
 
     test('bullet exactly on the enemy counts as in-arc (degenerate)', () => {
         expect(bulletInReflectArc(mirror(), bullet({ x: 0, y: 0 }))).toBe(true);
+    });
+
+    // --- range gate (audit H1): only bullets that STRIKE the face reflect ---
+
+    test('in-arc bullet WITHIN range is in-arc', () => {
+        // Straight ahead at distance 100 < range 120 → strikes the face.
+        expect(bulletInReflectArc(mirror(), bullet({ x: 100, y: 0 }))).toBe(true);
+    });
+
+    test('in-arc bullet BEYOND range is NOT in-arc (no field-wide reflect)', () => {
+        // Straight ahead but at distance 500 ≫ range 120 → not striking → false,
+        // even though the angle is dead-center in the front arc.
+        expect(bulletInReflectArc(mirror(), bullet({ x: 500, y: 0 }))).toBe(false);
+    });
+
+    test('range boundary: just inside reflects, just outside does not', () => {
+        const m = mirror({ range: 100 });
+        // 99px straight ahead → inside the 100px range.
+        expect(bulletInReflectArc(m, bullet({ x: 99, y: 0 }))).toBe(true);
+        // 101px straight ahead → outside the 100px range.
+        expect(bulletInReflectArc(m, bullet({ x: 101, y: 0 }))).toBe(false);
+    });
+
+    test('bullet exactly at range (dist == range) is in-arc (only > range fails)', () => {
+        const m = mirror({ range: 100 });
+        expect(bulletInReflectArc(m, bullet({ x: 100, y: 0 }))).toBe(true);
     });
 
     test('false when enemy has no reflect config', () => {
@@ -115,6 +148,16 @@ describe('shouldReflect — gating', () => {
 
     test('false when the in-arc gate fails (bullet behind)', () => {
         expect(shouldReflect(mirror(), bullet({ x: -100, y: 0 }))).toBe(false);
+    });
+
+    test('false when in-arc but beyond range (does not reflect across the field)', () => {
+        // Dead-center in the front arc but far outside the reflect range → the
+        // range gate fails, so the mirror does NOT bounce it (audit H1).
+        expect(shouldReflect(mirror(), bullet({ x: 500, y: 0 }))).toBe(false);
+    });
+
+    test('true when in-arc AND within range (a bullet that actually strikes)', () => {
+        expect(shouldReflect(mirror(), bullet({ x: 100, y: 0 }))).toBe(true);
     });
 
     test('false on null inputs', () => {

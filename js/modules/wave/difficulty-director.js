@@ -142,6 +142,13 @@ export function updateDifficulty(state) {
         return { D_hp: state.D_hp, D_thr: state.D_thr };
     }
 
+    // Snapshot the entry values. Every block below pushes the axes in its
+    // intended DIRECTION; the NET wave-over-wave move is rate-limited ONCE at the
+    // end (against these snapshots) so stacked effects (deadband + escalation +
+    // cross-term + mercy) can never compound past ±maxStep. (FIX-01.)
+    const hp0 = state.D_hp;
+    const thr0 = state.D_thr;
+
     const Po = state.Po;
     const Pd = state.Pd;
 
@@ -192,6 +199,16 @@ export function updateDifficulty(state) {
             state.D_thr = clamp(Math.max(state.D_thr, bumpThr), c.thrMin, c.thrMax);
         }
     }
+
+    // ── Net per-wave rate limit (applied ONCE, against the entry snapshots) ──
+    // The per-block rateLimit calls above each bound their own slice, but multiple
+    // blocks firing in one wave used to compound (deadband +12% then escalation
+    // +12% of the new value ⇒ ~+25%/wave). Clamping the NET move from hp0/thr0
+    // guarantees ≤ ±maxStep, then re-clamp to the absolute bounds. Mercy stays
+    // safe: it only ever lowers D_thr, and a symmetric net clamp can't push a
+    // post-mercy value back ABOVE thr0 (the clamp only restricts the move).
+    state.D_hp = clamp(rateLimit(hp0, state.D_hp, c.maxStep), c.hpMin, c.hpMax);
+    state.D_thr = clamp(rateLimit(thr0, state.D_thr, c.maxStep), c.thrMin, c.thrMax);
 
     return { D_hp: state.D_hp, D_thr: state.D_thr };
 }

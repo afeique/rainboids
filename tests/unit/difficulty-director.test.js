@@ -324,6 +324,103 @@ describe('getThreatLevel (CD-16 1..5 pip)', () => {
     });
 });
 
+// ── FIX-01: NET per-wave rate limit (no compounding across blocks) ──────────
+// The rate limit must bound the NET wave-over-wave change of each axis, applied
+// ONCE — not separately per block. Stacked effects (deadband exponent-step +
+// escalation stomp + cross-term cap + mercy ease) firing in the same wave must
+// never compound past ±maxStep of the axis's pre-call value.
+describe('net per-wave rate limit (FIX-01 — no compounding)', () => {
+    const MS = DIRECTOR_DEFAULTS.maxStep;
+    const EPS = 1e-9;
+    const netMove = (before, after) => Math.abs(after - before) / before;
+
+    // Helper: get a director past cold-start sitting at a known entry state.
+    function pastColdStart() {
+        const s = createDirector();
+        tickWave(s, neutralOutcome());
+        tickWave(s, neutralOutcome()); // wave 2: still D=1/1, cold start over
+        return s;
+    }
+
+    test('deadband-only over-perform: |ΔD_hp| ≤ maxStep', () => {
+        const s = pastColdStart();
+        const before = s.D_hp;
+        tickWave(s, strongOffense()); // pure offense, no stomp flag, no mercy
+        expect(netMove(before, s.D_hp)).toBeLessThanOrEqual(MS + EPS);
+    });
+
+    test('deadband + escalation stomp: net D_hp move ≤ maxStep (the bug)', () => {
+        const s = pastColdStart();
+        const before = s.D_hp;
+        // strongOffense drives Po>1 (deadband block bumps D_hp up) AND it clears
+        // at full HP well under 60% target time (escalation stomp also bumps).
+        // Previously these compounded to ~+25%; must now stay ≤ +12%.
+        tickWave(s, strongOffense({ clearedFullHp: true }));
+        expect(s.Po).toBeGreaterThan(1);                 // deadband block fired
+        expect(s.clearedFullHp).toBe(true);               // escalation fired
+        expect(s.clearTimeFrac).toBeLessThan(DIRECTOR_DEFAULTS.escalationTimeFrac);
+        expect(netMove(before, s.D_hp)).toBeLessThanOrEqual(MS + EPS);
+    });
+
+    test('deadband + mercy: net D_thr move ≤ maxStep AND D_thr did not rise', () => {
+        // First climb D_thr above neutral with a pure-tank profile (Pd high),
+        // then hit a wave that's still tanky (deadband would push D_thr UP) but
+        // ALSO has deaths>0 (mercy must ease DOWN). Net move bounded; no rise.
+        const s = createDirector();
+        const tank = strongDefense({
+            dpsOnTarget: 40, expectedDps: 100,
+            actualClearTime: 70, targetClearTime: 35,
+        });
+        runWaves(s, () => tank, 20);
+        const before = s.D_thr;
+        expect(before).toBeGreaterThan(1.0); // threat climbed; mercy has room to ease
+        // tanky again (Pd>1 ⇒ deadband would raise) but a death triggers mercy
+        tickWave(s, strongDefense({
+            dpsOnTarget: 40, expectedDps: 100,
+            actualClearTime: 70, targetClearTime: 35,
+            deaths: 1,
+        }));
+        expect(netMove(before, s.D_thr)).toBeLessThanOrEqual(MS + EPS);
+        expect(s.D_thr).toBeLessThanOrEqual(before); // mercy never raises D_thr
+    });
+
+    test('stomp + cross-term (god build): both axes net move ≤ maxStep', () => {
+        const s = createDirector();
+        runWaves(s, godOutcome, 30); // Po,Pd>1.3 ⇒ cross-term unlocked, climbing
+        const beforeHp = s.D_hp;
+        const beforeThr = s.D_thr;
+        // god wave that also stomps (full HP, fast clear): deadband + escalation
+        // (both axes, since Pd>crossTerm) + cross-term all push at once.
+        tickWave(s, godOutcome({ clearedFullHp: true }));
+        expect(netMove(beforeHp, s.D_hp)).toBeLessThanOrEqual(MS + EPS);
+        expect(netMove(beforeThr, s.D_thr)).toBeLessThanOrEqual(MS + EPS);
+    });
+
+    test('multi-wave run: no single update moves an axis > maxStep from its pre-value', () => {
+        const profiles = [
+            strongOffense, godOutcome, weakOutcome, strongDefense, neutralOutcome,
+        ];
+        const s = createDirector();
+        for (let w = 0; w < 120; w++) {
+            // rotate through profiles + occasionally fire stomp/mercy together
+            const base = profiles[w % profiles.length]();
+            const extra = {};
+            if (w % 5 === 0) extra.clearedFullHp = true, extra.actualClearTime = 8, extra.targetClearTime = 35;
+            if (w % 7 === 0) extra.deaths = 1;
+            recordWave(s, { ...base, ...extra });
+            const beforeHp = s.D_hp;
+            const beforeThr = s.D_thr;
+            updateDifficulty(s);
+            // cold-start waves snap to 1.0 (can legitimately move > maxStep from
+            // a non-1 pre-value), so only assert once adapting.
+            if (s.wave > s.cfg.coldStartWaves) {
+                expect(netMove(beforeHp, s.D_hp)).toBeLessThanOrEqual(MS + EPS);
+                expect(netMove(beforeThr, s.D_thr)).toBeLessThanOrEqual(MS + EPS);
+            }
+        }
+    });
+});
+
 describe('lockForBoss (frozen snapshot)', () => {
     test('returns the current D snapshot', () => {
         const s = createDirector();

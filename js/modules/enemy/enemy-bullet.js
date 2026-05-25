@@ -104,6 +104,11 @@ export class EnemyBullet {
         // loop falls through to its normal hit behavior.
         this.shooter = null;
 
+        // L5 — reflected flag (set by collision-system routeBulletToReflect
+        // after reset). Cleared on every pool reuse so a recycled bullet
+        // doesn't carry a stale `reflected = true` into its next life.
+        this.reflected = false;
+
         // Sine-wave oscillation (used by Sentinel sine-needle)
         this.sinePhase = 0;
         this.sineFreq  = 0;

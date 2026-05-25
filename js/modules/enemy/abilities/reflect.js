@@ -22,6 +22,7 @@
 
 export const REFLECT_DEFAULTS = {
     halfAngleRad: Math.PI / 3, // 60° half-angle → 120° mirror arc across the front
+    range: 120,                // bullets only reflect when they STRIKE within this distance
     speed: 7,                  // speed of the reflected enemy bullet
 };
 
@@ -37,16 +38,21 @@ function angleDelta(a, b) {
 }
 
 /**
- * True when `bullet` is approaching within the enemy's front mirror arc: the
- * direction from the enemy TO the bullet is within `reflect.halfAngleRad` of
- * `reflect.facingRad`. Uses enemy.x/y + bullet.x/y; angle wraparound is handled.
- * A bullet AT the enemy (zero offset) counts as in-arc (degenerate but safe).
+ * True when `bullet` is STRIKING within the enemy's front mirror arc: within
+ * `reflect.range` of the enemy AND the direction from the enemy TO the bullet is
+ * within `reflect.halfAngleRad` of `reflect.facingRad`. The range gate ensures a
+ * mirror only bounces bullets that actually hit its face — not every player
+ * bullet anywhere on the field that happens to share the front 120° (audit H1).
+ * Uses enemy.x/y + bullet.x/y; angle wraparound is handled. A bullet AT the enemy
+ * (zero offset) counts as in-arc (degenerate but safe).
  */
 export function bulletInReflectArc(enemy, bullet) {
     if (!enemy || !enemy.reflect || !bullet) return false;
     const r = enemy.reflect;
     const dx = bullet.x - enemy.x;
     const dy = bullet.y - enemy.y;
+    const dist2 = dx * dx + dy * dy;
+    if (typeof r.range === 'number' && dist2 > r.range * r.range) return false;
     if (dx === 0 && dy === 0) return true; // degenerate: on top of the mirror
     const toBullet = Math.atan2(dy, dx);
     return Math.abs(angleDelta(r.facingRad, toBullet)) <= r.halfAngleRad;

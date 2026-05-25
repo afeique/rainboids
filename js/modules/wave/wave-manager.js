@@ -331,7 +331,19 @@ export function feedDirectorOnWaveClear() {
         if (this.game) this.game._waveHits = 0;
         return;
     }
-    const actualClearTime = Date.now() - (this._waveStartMs || Date.now());
+    // M2 guard: spawnWaveEntities normally stamps `_waveStartMs` at wave start,
+    // but a restored/edge wave can reach clear before it was ever set. Without
+    // this guard, a falsy start time made `Date.now() - Date.now() === 0`, which
+    // buildDirectorOutcome clamps to 1ms → an absurdly high dpsRatio → Po
+    // explodes → D_hp slams toward its 3.0 ceiling in a single EMA fold (a
+    // silent difficulty-spike failure mode). Treat a missing clock as NO
+    // clear-speed signal: default actualClearTime to the SAME target clear time
+    // buildDirectorOutcome uses (DIRECTOR_TARGET_CLEAR_MS), so the speed ratio
+    // lands at a neutral 1.0 (the wave still counts; it just doesn't move the
+    // clear-speed half of Po).
+    const actualClearTime = this._waveStartMs
+        ? Date.now() - this._waveStartMs
+        : DIRECTOR_TARGET_CLEAR_MS;
     const maxHp = (this.player && typeof this.player.getEffectiveMaxHealth === 'function')
         ? this.player.getEffectiveMaxHealth()
         : (this.player && this.player.maxHealth) || 1;
@@ -1801,7 +1813,10 @@ export function openWavePickOverlay() {
             // by leveling, spent in the STATS menu). Gold fits the new economy
             // (spend on extra cards / repair, or bank toward unlocks).
             const justCleared = (this.game && this.game.currentWave) | 0;
-            if (justCleared > 0 && isBossWave(justCleared)) {
+            // M1: thread the run's wavesPerStage so boss-bonus gold fires on
+            // the SAME waves as every other isBossWave() call in this file.
+            // Omitting it defaulted to 3, mis-firing under a non-default config.
+            if (justCleared > 0 && isBossWave(justCleared, runWavesPerStage(this.game))) {
                 const bossGold = 200 + justCleared * 20;
                 this.game.money = (this.game.money | 0) + bossGold;
                 if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);

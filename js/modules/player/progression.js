@@ -248,6 +248,8 @@ export function addPowerup(type, config, isShopItem = false) {
     if (isShopItem) {
     } else {
     }
+
+    return true;
 }
 
 export function updatePowerups() {
