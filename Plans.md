@@ -47,10 +47,10 @@ All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + 
 | ID | FILE (owned) `js/modules/enemy/bosses/…` | Boss | ∥group |
 |----|----|----|----|
 | ~~BOSS-05~~ | `harbinger.js` | ✅ **6.163.0** — THE HARBINGER (1-3, Kinetic — rotating bolt-head weak-points); established the `enemy/bosses/` descriptor pattern + chassis-API usage for BOSS-06..14 | B |
-| BOSS-06 | `aegis.js` | THE AEGIS (2-6, armor — rotating plate-gap, CORRODE-bypass, plate-shed) | B |
-| BOSS-07 | `lumen.js` | LUMEN THE PRISM SOVEREIGN (3-9, Radiant — reflect-ring, shield drones, DISJUNCTION) | B |
+| ~~BOSS-06~~ | `aegis.js` | ✅ **6.164.0** — THE AEGIS (2-6, armor — rotating plate-gap, CORRODE-bypass, plate-shed) | B |
+| ~~BOSS-07~~ | `lumen.js` | ✅ **6.164.0** — LUMEN THE PRISM SOVEREIGN (3-9, Radiant — shield drones, DISJUNCTION) | B |
 | BOSS-08 | `gemini.js` | GEMINI (4-12, Pyro+Cryo twins — opposite resists, tether, partner-enrage) | B |
-| BOSS-09 | `maelstrom.js` | MAELSTROM THE STORM CROWN (5-15, Volt — conduit nodes, CONDUCT rain) | B |
+| ~~BOSS-09~~ | `maelstrom.js` | ✅ **6.164.0** — MAELSTROM THE STORM CROWN (5-15, Volt — conduit nodes, CONDUCT rain) | B |
 | BOSS-10 | `hivemother.js` | THE HIVEMOTHER (6-18, Toxic — egg-sac spawns, CORRODE clouds) | B |
 | BOSS-11 | `iron-throne.js` | THE IRON THRONE (7-21, 4 per-element turrets, core-invuln-while-turrets-live) | B |
 | BOSS-12 | `warden-prime.js` | THE WARDEN PRIME (8-24, adaptive resist wall, ADAPTIVE PURGE) | B |
