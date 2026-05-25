@@ -51,10 +51,10 @@ All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + 
 | ~~BOSS-07~~ | `lumen.js` | ✅ **6.164.0** — LUMEN THE PRISM SOVEREIGN (3-9, Radiant — shield drones, DISJUNCTION) | B |
 | BOSS-08 | `gemini.js` | GEMINI (4-12, Pyro+Cryo twins — opposite resists, tether, partner-enrage) | B |
 | ~~BOSS-09~~ | `maelstrom.js` | ✅ **6.164.0** — MAELSTROM THE STORM CROWN (5-15, Volt — conduit nodes, CONDUCT rain) | B |
-| BOSS-10 | `hivemother.js` | THE HIVEMOTHER (6-18, Toxic — egg-sac spawns, CORRODE clouds) | B |
-| BOSS-11 | `iron-throne.js` | THE IRON THRONE (7-21, 4 per-element turrets, core-invuln-while-turrets-live) | B |
+| ~~BOSS-10~~ | `hivemother.js` | ✅ **6.165.0** — THE HIVEMOTHER (6-18, Toxic — egg-sac spawns, CORRODE clouds) | B |
+| ~~BOSS-11~~ | `iron-throne.js` | ✅ **6.165.0** — THE IRON THRONE (7-21, 4 per-element turrets, core-invuln-while-turrets-live) | B |
 | BOSS-12 | `warden-prime.js` | THE WARDEN PRIME (8-24, adaptive resist wall, ADAPTIVE PURGE) | B |
-| BOSS-13 | `nullmaw.js` | NULLMAW THE DEVOURER (9-27, Void — pull, projectile-eat cone, IMPLOSION) | B |
+| ~~BOSS-13~~ | `nullmaw.js` | ✅ **6.165.0** — NULLMAW THE DEVOURER (9-27, Void — pull, projectile-eat cone, IMPLOSION) | B |
 | BOSS-14 | `prismarch.js` | THE PRISMARCH / OMEGA (10-30, all 7 — 5-aspect gauntlet; wire `isFinalBoss`→run-complete + death cinematic + run summary) | B (after B05–B13) |
 | BOSS-15 | NEW `tests/qa/17-bosses.spec.js` | Parameterized boss smoke tests (spawn → reach every phase → killable, per boss) | after bosses |
 
