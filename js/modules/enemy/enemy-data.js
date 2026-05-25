@@ -725,6 +725,35 @@ export const ENEMY_TYPES = {
         visual: { shape: 'shield_turret', glowColor: '#c08aff', trailLength: 16 },
         ai: { evasion: 0.25, preferredRange: 280, dodgeBullets: false, microMovements: true, fishMotion: true },
     },
+
+    // SYS-8 / ENMY-05 — LEECH: a FAST, low-HP Toxic HARRIER (buff-strip.js
+    // suppression convention). On CONTACT with the player it STRIPS a random
+    // active powerup and SUPPRESSES its re-grant for STRIP_DURATION_MS (5s) —
+    // so a careless brush with one costs you a buff for a few seconds. The
+    // `stripsBuff: true` marker tells initializeEnemy to flag the instance;
+    // collision-system.handlePlayerEnemyCollision (the ram-contact handler)
+    // reads `enemy.stripsBuff` and calls applyBuffStrip, gated + throttled by a
+    // per-Leech `stripCooldownMs` cooldown (contact fires every frame while the
+    // ship overlaps, so the cooldown stops it draining everything instantly).
+    // Aggressive HOMING movement (it WANTS to touch you) + modest ram damage +
+    // very low HP so it reads as a fragile gnat you should swat before it lands.
+    LEECH: {
+        name: 'Leech',
+        color: '#7fff5f',
+        health: 5,
+        speed: 4.2,
+        size: 26,
+        shootPattern: 'hunter_single',
+        shootRate: 0.0,            // doesn't shoot — it's a contact harrier
+        movePattern: 'chase',      // homing pursuit — it WANTS to touch the player
+        points: 150,
+        stripsBuff: true,          // → initializeEnemy flags the instance
+        stripCooldownMs: 1500,     // per-Leech strip throttle (default; explicit for clarity)
+        movement: { pattern: 'chase', turnSpeed: 0.14, rotationSpeed: { min: -0.02, max: 0.02 }, preferredDistance: 0 },
+        firing: { pattern: 'hunter_single', burstCount: 0, burstDelay: 0, cooldown: { min: 99999, max: 99999 } },
+        visual: { shape: 'wasp', glowColor: '#b6ff8a', trailLength: 18 },
+        ai: { evasion: 0.2, preferredRange: 0, dodgeBullets: false, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -754,6 +783,7 @@ const ENEMY_ELEMENTS = {
     NULL_DRONE:  'VOLT',    // ENMY-10 — skill-suppress Volt support drone
     PRISM_MIRROR: 'RADIANT', // ENMY-04 — front-arc Radiant reflector
     DEVOURER:    'VOID',     // ENMY-09 — maw-cone Void projectile-eater / soaker
+    LEECH:       'TOXIC',    // ENMY-05 — fast contact buff-stripper (it siphons / corrodes)
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -784,6 +814,7 @@ const ENEMY_RESISTS = {
     NULL_DRONE:  { VOLT: 0.40, RADIANT: -0.50 },               // ENMY-10 — Volt-tough support drone; Radiant snuffs the suppress aura
     PRISM_MIRROR: { RADIANT: 0.50, VOID: -0.50 },              // ENMY-04 — Radiant-tough mirror (bounces its own light back); Void shatters the glass
     DEVOURER:    { VOID: 0.50, RADIANT: -0.50 },               // ENMY-09 — Void-tough maw (it IS the hungry dark); RADIANT light burns through the throat
+    LEECH:       { TOXIC: 0.40, PYRO: -0.50 },                 // ENMY-05 — Toxic-tough siphon gnat; PYRO scorches it off you
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

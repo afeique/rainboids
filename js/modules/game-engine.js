@@ -2797,6 +2797,24 @@ export class GameEngine {
         return wave.requestEnemySpawn.call(this, 'DEVOURER', cx, cy, { cap: 9999 });
     }
 
+    // SYS-8 / ENMY-05 — DEBUG HOOK. Force-spawn a LEECH (fast contact buff-stripper)
+    // on demand for QA + manual testing, mirroring spawnDevourer. Returns the enemy
+    // (carrying a `stripsBuff` flag + `stripCooldownMs`), or null if the pool is dry.
+    //   gameEngine.spawnLeech()  or  gameEngine.spawnLeech({ x, y })
+    spawnLeech(opts = {}) {
+        // Default to ~120px off the player (or viewport center) — close enough that
+        // QA can immediately drive a contact, but not overlapping on spawn. Explicit
+        // opts.x/opts.y override (e.g. spawn right on the player to force contact).
+        const baseX = this.player ? this.player.x
+            : (this.camera ? this.camera.x + this.width / 2 : (this.gameField ? this.gameField.width / 2 : 600));
+        const baseY = this.player ? this.player.y
+            : (this.camera ? this.camera.y + this.height / 2 : (this.gameField ? this.gameField.height / 2 : 400));
+        const cx = (opts.x != null) ? opts.x : baseX + 120;
+        const cy = (opts.y != null) ? opts.y : baseY - 80;
+        // Bypass the concurrent-spawn cap for the debug hook (huge cap).
+        return wave.requestEnemySpawn.call(this, 'LEECH', cx, cy, { cap: 9999 });
+    }
+
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }

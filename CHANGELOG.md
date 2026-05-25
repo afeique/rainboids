@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.185.0] - 2026-05-25
+
+### Added — Buff-stripping harrier: the LEECH (ENMY buff-strip slice — all 7 helpers now live)
+
+The seventh and final enemy enabling-system helper goes live. A new **Leech**
+(Toxic, fast, fragile) chases the player and, on **contact**, strips a random
+active powerup — suppressing its re-grant for 5s.
+
+- Wired `enemy/abilities/buff-strip.js`'s suppression convention
+  (`isBuffSuppressed` + `STRIP_DURATION_MS`) into the live game, adapting around a
+  data-model mismatch: the helper assumed a `player.activePowerups` object-map,
+  but the live player uses a `player.powerups` Map — so the strip operates on the
+  real Map. **Default-safe** — gated on `enemy.stripsBuff`: `applyBuffStrip` in
+  the player-contact path removes one random powerup (per-Leech ~1.5s cooldown;
+  `SPARE_SHIP` and already-suppressed buffs excluded) + a canvas "BUFF STRIPPED!"
+  toast; `addPowerup` honors `isBuffSuppressed` to block re-grant during the
+  window (a true no-op when no buff is suppressed).
+- New **LEECH** type (`enemy-data.js`, Toxic-resist / Pyro-weak, chase movement)
+  + `gameEngine.spawnLeech()` debug hook. (Joins the live wave roster with ENMY-10.)
+
+**Milestone:** all 7 ENMY enabling-system helpers (telegraph, cloak, reflect,
+projectile-absorb, buff-strip, suppress-aura, blink-burrow) are now wired live,
+each demonstrated by a debug-spawnable enemy archetype. Coverage: 5 Playwright QA
+tests (`tests/qa/27-buff-strip.spec.js`); full unit suite (1442) + sibling/bosses
+QA regression green.
+
+---
+
 ## [6.184.0] - 2026-05-25
 
 ### Added — Bullet-eating enemy: the DEVOURER (ENMY projectile-absorb slice)

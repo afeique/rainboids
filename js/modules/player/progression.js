@@ -24,6 +24,12 @@ import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-
 import { loadMeta, saveMeta } from '../core/storage.js';
 import { frameClock } from '../core/frame-clock.js';
 import { playerChillSpeedMult } from './player-status.js';
+// SYS-8 / ENMY-05 — buff-strip suppression convention. After a Leech strips a
+// powerup it stamps `player._buffSuppressed[type] = now + STRIP_DURATION_MS`;
+// addPowerup honors this so a just-stripped powerup can't be instantly
+// re-acquired until the window lapses. Default-safe: with no stamp,
+// isBuffSuppressed returns false and addPowerup behaves byte-for-byte as before.
+import { isBuffSuppressed } from '../enemy/abilities/buff-strip.js';
 
 // Initialize the player's meta fields from storage (called in ctor).
 export function initMeta() {
@@ -204,6 +210,11 @@ export function getExperienceProgress() {
 // ── Powerup management ────────────────────────────────────────────────────
 
 export function addPowerup(type, config, isShopItem = false) {
+    // SYS-8 / ENMY-05 — re-grant guard. If a Leech just stripped this powerup
+    // and the suppression window hasn't lapsed, refuse the re-grant so the buff
+    // stays gone for the full window. Default-safe: with no `_buffSuppressed`
+    // stamp (normal play), isBuffSuppressed returns false and this is a no-op.
+    if (isBuffSuppressed(this, type, Date.now())) return false;
     // ALL powerups are now permanent and stacking — drops included.
     // The `isShopItem` param is kept for back-compat with any caller
     // that still passes it; it no longer controls duration.

@@ -29,6 +29,84 @@ import { shouldReflect, makeReflectedBullet } from '../enemy/abilities/reflect.j
 // path (alongside allyShieldMult). Gated on `enemy.eatsProjectiles` / `enemy.maw`,
 // so this is a no-op for every other enemy. Mirrors the reflect pre-pass.
 import { shouldAbsorb, absorbBullet, consumeAbsorbShield } from '../enemy/abilities/projectile-absorb.js';
+// SYS-8 / ENMY-05 — player-buff strip on contact (LEECH). A Leech that touches
+// the player STRIPS a random active powerup and SUPPRESSES its re-grant for a
+// few seconds. The shipped buff-strip.js helper was written against an ASSUMED
+// `player.activePowerups` object-map; the LIVE game stores powerups in a
+// `player.powerups` Map (type → { stacks, timeRemaining }), so the strip itself
+// (applyBuffStrip, below) is implemented against the real Map. We REUSE only the
+// helper's model-agnostic parts — its suppression CONVENTION (`isBuffSuppressed`
+// reads `player._buffSuppressed[key] > now`) + the exported STRIP_DURATION_MS —
+// so the suppression window matches the unit-tested helper and the progression
+// re-grant guard. Gated on `enemy.stripsBuff` (only LEECH carries it), so this
+// is a no-op for every other enemy's contact. (The helper's activePowerups-based
+// functions stay unused — a known ENMY-05 spec gap vs the live model.)
+import { isBuffSuppressed, STRIP_DURATION_MS } from '../enemy/abilities/buff-strip.js';
+
+// SYS-8 / ENMY-05 — powerups that a Leech must NOT strip (permanent / structural
+// grants whose removal would be a broken / unfair surprise rather than a fun
+// temporary loss). Kept deliberately small — almost everything is fair game.
+const UNSTRIPPABLE_POWERUPS = new Set([
+    'SPARE_SHIP', // an extra-life grant — structural, not a tempo buff
+]);
+
+/**
+ * SYS-8 / ENMY-05 — Leech contact strip. When a Leech (`enemy.stripsBuff`)
+ * touches the player, remove one random active powerup from the LIVE
+ * `player.powerups` Map and stamp `player._buffSuppressed[key] = now +
+ * STRIP_DURATION_MS` (the buff-strip.js suppression convention) so the
+ * progression re-grant guard refuses to re-grant it until the window lapses.
+ * Throttled per-Leech by `enemy.stripCooldownMs` (contact fires every frame
+ * while the ship overlaps). Returns the stripped key, or null when nothing was
+ * eligible / the cooldown hasn't elapsed / the enemy isn't a Leech.
+ * `this` is the GameEngine instance.
+ */
+export function applyBuffStrip(player, enemy, now) {
+    // Gate: only Leeches strip — every other contact is byte-for-byte unchanged.
+    if (!enemy || !enemy.stripsBuff || !player || !player.powerups) return null;
+    // Per-Leech cooldown so a single Leech can't drain everything in one overlap.
+    const cooldown = enemy.stripCooldownMs || 1500;
+    if (enemy._lastStripAt && (now - enemy._lastStripAt) < cooldown) return null;
+
+    // Build the candidate list from the LIVE powerups Map: present (stacks > 0),
+    // not flagged unstrippable, and not already suppressed (can't double-strip a
+    // buff that's mid-suppression).
+    const candidates = [];
+    for (const [key, p] of player.powerups.entries()) {
+        if (!p || !(p.stacks > 0)) continue;
+        if (UNSTRIPPABLE_POWERUPS.has(key)) continue;
+        if (isBuffSuppressed(player, key, now)) continue;
+        candidates.push(key);
+    }
+    if (candidates.length === 0) return null;
+
+    const key = candidates[Math.floor(Math.random() * candidates.length)];
+    // Strip it: remove from the live Map + stamp the suppression window so the
+    // progression.addPowerup guard refuses to re-grant it until it lapses.
+    player.powerups.delete(key);
+    player._buffSuppressed = player._buffSuppressed || {};
+    player._buffSuppressed[key] = now + STRIP_DURATION_MS;
+    enemy._lastStripAt = now;
+
+    // FX + a CANVAS toast cue (the DOM ui:show-message path is dead). Reuse the
+    // existing canvas pickup-toast renderer. Guarded so a missing hook can't NPE.
+    if (this && typeof this.triggerPickupToast === 'function') {
+        this.triggerPickupToast({
+            title: 'BUFF STRIPPED!',
+            subtitle: key,
+            accentColor: enemy.color || '#7fff5f',
+            duration: 1400,
+        });
+    }
+    if (this && this.particlePool && typeof this.particlePool.get === 'function') {
+        for (let i = 0; i < 10; i++) {
+            const particle = this.particlePool.get(player.x, player.y, 'hit');
+            if (particle) particle.color = enemy.color || '#7fff5f';
+        }
+    }
+
+    return key;
+}
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
 //   Duplicated here (rather than imported) because wave-manager.js bundles
@@ -3188,6 +3266,15 @@ export function damageEnemy(enemy, damage, element) {
 }
 
 export function handlePlayerEnemyCollision(player, enemy) {
+    // SYS-8 / ENMY-05 — Leech contact strip. Gated on `enemy.stripsBuff` (only
+    // LEECH carries it) so this is a no-op for every other enemy's contact. Runs
+    // BEFORE the ram-damage pipeline so a strip lands regardless of whether the
+    // player survives the ram (a dead player makes it moot anyway). Throttled
+    // per-Leech inside applyBuffStrip by `enemy.stripCooldownMs`.
+    if (enemy.stripsBuff) {
+        applyBuffStrip.call(this, player, enemy, Date.now());
+    }
+
     // Apply damage only if not invincible
     if (!this.player.invincible) {
         // 6.x — Route through the SINGLE takeDamage pipeline. It applies

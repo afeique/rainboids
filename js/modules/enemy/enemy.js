@@ -202,6 +202,17 @@ export class Enemy {
         this.eatsProjectiles = !!this.config.maw;
         this._absorbShield = 0;
         this._absorbShieldUntil = 0;
+        // SYS-8 / ENMY-05 — buff-strip on contact (LEECH). Default-safe: the
+        // contact strip in collision-system.handlePlayerEnemyCollision is gated
+        // on `this.stripsBuff`, which only LEECH (config.stripsBuff) ever gets,
+        // so every non-Leech contact is byte-for-byte unchanged. `stripCooldownMs`
+        // throttles how often a single Leech can strip (contact fires every frame
+        // while overlapping); `_lastStripAt` is the per-Leech last-strip stamp,
+        // ALWAYS reset here (even for non-Leeches) so a recycled enemy can't carry
+        // a stale cooldown. No per-frame update hook — the strip is contact-driven.
+        this.stripsBuff = !!this.config.stripsBuff;
+        this.stripCooldownMs = this.config.stripCooldownMs || 1500;
+        this._lastStripAt = 0;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
