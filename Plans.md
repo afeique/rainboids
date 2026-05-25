@@ -28,7 +28,7 @@ Audit detail + verified line numbers: `docs/Bug-Pass Audit — Findings & Fixes 
 | FIX-03 | `enemy/abilities/reflect.js` + `enemy/enemy-data.js` + `tests/qa/25-reflect.spec.js` + unit test | **(H1) reflect range gate** — `bulletInReflectArc` tests angle only (the maw sibling gates `range`); a mirror reflects bullets anywhere in its 120° arc across the field. Add `range` to `REFLECT_DEFAULTS` (~120) + `PRISM_MIRROR.reflectOpts`; short-circuit `dist2 > range²` (keep the degenerate on-top check). Add a "far in-arc bullet NOT reflected" QA case + unit test | X |
 | FIX-04 | `player/progression.js` + `enemy/enemy-bullet.js` | **(L3)** `addPowerup` `return true` on the success path (currently `undefined`). **(L5)** add `this.reflected = false;` to `EnemyBullet.reset()` (latent pool-reuse footgun). Tiny hygiene; extend a unit test if a natural one exists | X |
 
-*(H2 run-config boss path → folds into **RUN-05b** composer (P5); interim: RUN SETUP could clamp `runMaxWaves ≤ 30`. L4/L6/D1/D2 → RUN-07 tuning.)*
+*(H2 run-config boss path → **interim fix shipped 6.191.1** — boss-spawn decoupled from the fixed `isBoss` table position (drives off `isBossWave(wave, wps)`) + `getWaveConfig` cycles the authored 30-wave pattern past wave 30 instead of collapsing to wave-1. Default 10×3 byte-for-byte unchanged. The full procedural composer **RUN-05b** (P5) eventually replaces the cycled-config synthesis. L4/L6/D1/D2 → RUN-07 tuning.)*
 
 ---
 

@@ -713,14 +713,30 @@ function spawnSubWave(idx) {
         // on stage finals (gated; defaults ON). The escort groups (non-isBoss)
         // still spawn normally. spawnStageBoss is self-guarded to fire once per
         // boss wave, so a multi-boss-group config can't double-spawn.
+        //
+        // H2 (Bug-Pass 2026-05-25) — the authored `isBoss` group lives at the
+        // FIXED wave position 3/6/9/…/30 (the wps=3 layout). For a non-default
+        // wps (e.g. 6), spawnStageBoss returns null at that wave (it's NOT a
+        // stage-final for the chosen wps) — and the old code `continue`d
+        // unconditionally, dropping the whole group so the wave spawned NOTHING
+        // (no boss, no escort). Now: if no boss spawned, fall through to spawn
+        // the group as ESCORT enemies. The real stage-final boss is driven by
+        // isBossWave(wave, wps) in maybeSpawnStageFinalBoss below, decoupled
+        // from this fixed-position flag.
         if (enemyGroup.isBoss && this._modularBossesEnabled !== false) {
-            spawnStageBoss.call(this);
-            continue;
+            if (spawnStageBoss.call(this)) continue;
+            // else: no boss this wave/wps → spawn the group as escort instead.
         }
         const opts = { onScreen: true };
         if (enemyGroup.isBoss && enemyGroup.bossTier) opts.bossTier = enemyGroup.bossTier;
         this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count, opts);
     }
+    // H2 — guarantee the modular boss on EVERY real stage-final (wave % wps ===
+    // 0), even when the cycled / non-default-wps WAVE_DATA entry has no `isBoss`
+    // group at this sub-wave position. Fires on the LAST sub-wave so the escort
+    // softens the player first (mirrors the authored boss-in-final-subwave
+    // layout). Self-guarded (once per wave) + a no-op on non-stage-finals.
+    maybeSpawnStageFinalBoss.call(this, idx, subWaves.length);
     this.game.subWaveIndex = idx + 1;
     this.game.lastSubWaveSpawnAt = Date.now();
 
@@ -808,16 +824,26 @@ export function tryAdvanceSubWave() {
         for (const group of groups) {
             // BOSS-04 — modular boss replaces the legacy TITAN-tier boss on
             // stage finals (gated; defaults ON). Self-guarded to fire once.
+            //
+            // H2 (Bug-Pass 2026-05-25) — same decoupling as spawnSubWave: the
+            // authored `isBoss` flag sits at a FIXED wave position; for a
+            // non-default wps spawnStageBoss returns null here, so DON'T drop
+            // the group — fall through to spawn it as escort. The actual
+            // stage-final boss is driven by isBossWave(wave, wps) in
+            // maybeSpawnStageFinalBoss after the loop.
             if (group.isBoss && this._modularBossesEnabled !== false) {
-                spawnStageBoss.call(this);
-                spawnedThisTick = true;
-                continue;
+                if (spawnStageBoss.call(this)) { spawnedThisTick = true; continue; }
+                // else: no boss this wave/wps → spawn the group as escort.
             }
             const opts = { onScreen: true };
             if (group.bossTier) opts.bossTier = group.bossTier | 0;
             this.spawnLeveledEnemies(group.type, group.count | 0, opts);
             spawnedThisTick = true;
         }
+        // H2 — modular boss on the real stage-final (wave % wps === 0), driven
+        // by isBossWave(wave, wps) not the fixed-position flag. Fires on the
+        // last sub-wave; self-guarded once per wave; no-op otherwise.
+        if (maybeSpawnStageFinalBoss.call(this, idx, totalSubWaves)) spawnedThisTick = true;
         if (idx > 0 && this.events?.emit) {
             this.events.emit('ui:show-message', {
                 title: `STAGE ${getStageLabel(this.game.currentWave, runWavesPerStage(this.game))} · PHASE ${idx + 1} of ${totalSubWaves}`,
@@ -1001,6 +1027,30 @@ export function spawnStageBoss() {
     const boss = spawnModularBoss.call(this, stage, { warp: true });
     if (boss) this._modularBossSpawnedWave = wave;
     return boss;
+}
+
+// H2 (Bug-Pass 2026-05-25) — decouple the modular-boss spawn from the
+// hard-coded `isBoss` table position. Called after EVERY sub-wave's groups
+// are spawned (from spawnSubWave + tryAdvanceSubWave). On the LAST sub-wave of
+// a REAL stage-final (isBossWave(wave, wps) — the actual marker for the chosen
+// wps), spawn the modular boss + escort. This guarantees a boss on every
+// stage-final regardless of wps and regardless of whether the cycled WAVE_DATA
+// entry happens to carry an `isBoss` group at that position.
+//
+// `spawnStageBoss` is itself self-guarded (once per wave via
+// `_modularBossSpawnedWave`), so when the authored `isBoss` group already
+// triggered the boss on the default 10×3 layout, this is a NO-OP — the default
+// run is byte-for-byte unchanged (boss still spawns from the isBoss group on
+// the final sub-wave; this just confirms it). Returns the boss or null.
+//
+// `this` is the engine.
+export function maybeSpawnStageFinalBoss(subWaveIdx, totalSubWaves) {
+    if (this._modularBossesEnabled === false) return null;
+    // Only on the last sub-wave (escort softens the player up first).
+    if ((subWaveIdx | 0) < (totalSubWaves | 0) - 1) return null;
+    const wave = this.game.currentWave | 0;
+    if (!isBossWave(wave, runWavesPerStage(this.game))) return null;
+    return spawnStageBoss.call(this);
 }
 
 export function spawnLeveledAsteroids(count, opts = {}) {

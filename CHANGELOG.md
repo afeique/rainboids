@@ -11,6 +11,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.191.1] - 2026-05-25
+
+### Fixed — non-default run shapes now spawn bosses + stay non-trivial past wave 30 (H2)
+
+- **Boss spawning decoupled from the hard-coded `isBoss` table position**
+  (`wave/wave-manager.js`). The authored boss subwave entries live at the fixed
+  waves 3/6/9/…/30 (the `wavesPerStage = 3` layout). For a non-default
+  `wavesPerStage` (6 or 9 — selectable via RUN SETUP since RUN-06/DIR-09),
+  `spawnStageBoss` correctly returned `null` at those positions (not a real
+  stage-final for the chosen cadence), but both spawn paths then `continue`d
+  unconditionally — **dropping the whole group**, so no boss *and* no escort
+  appeared. Now: `spawnSubWave`/`tryAdvanceSubWave` fall through to spawn the
+  group as escort when no boss spawns, and a new
+  `maybeSpawnStageFinalBoss(subWaveIdx, totalSubWaves)` fires `spawnStageBoss`
+  on the **last subwave of every real stage-final** (`isBossWave(wave,
+  runWavesPerStage(game))`). `spawnStageBoss` is self-guarded
+  (`_modularBossSpawnedWave`), so the default 10×3 run is a **no-op** — its
+  bosses still come from the authored group exactly as before.
+- **`getWaveConfig` past wave 30 no longer collapses to wave-1 content**
+  (`wave/wave-data.js`). Beyond the 30 hand-authored waves it returned
+  `WAVE_DATA[1]` (3 HUNTERs, no boss), so long runs (`stages > 10`) degenerated
+  into trivial, boss-less spawns. A new `_configKeyForWave` helper **cycles the
+  authored pattern** — `(((wave - 1) % 30) + 1)` — so deep waves keep varied,
+  escalating group content; combined with the boss decoupling above, stage-finals
+  past 30 spawn bosses correctly. Enemy level/HP/speed scaling stays driven by
+  the real `wave`/`maxWaves` (the cycle only picks *which* groups spawn — no
+  double-scaling). Waves ≤ 30 and the default 10×3 run are byte-for-byte unchanged.
+- Tests: `tests/unit/wave/wave-data-runshape.test.js` (+9 — w≤30 verbatim,
+  `getWaveConfig(33) === WAVE_DATA[3]`, cycle mapping across laps, wps=6
+  stage-final boss-eligibility incl. past-30) + `tests/qa/30-run-shape-bosses.spec.js`
+  (+3 — live wps=6 boss on wave 6 not 3; past-30 non-trivial config + stage-final
+  boss; default 10×3 boss on wave 3 intact). Full unit suite **1606** green;
+  QA-17 bosses 7/7, QA-19 run-setup 11/11.
+
+---
+
 ## [6.191.0] - 2026-05-25
 
 ### Added — PWR HUD readout + reference-dependent expected-clear (DIR-06 / DIR-07)

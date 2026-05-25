@@ -346,14 +346,41 @@ function _scaleConfigForMobile(cfg, waveNumber) {
 // override + the live viewport state at module load).
 const _mobileWaveCache = new Map();
 
+// H2 (Bug-Pass 2026-05-25) — past the hand-authored WAVE_DATA (waves
+// 1..MAX_WAVES = 1..30), long runs (stages > 10) used to fall back to
+// WAVE_DATA[1] — wave-1's trivial 3-HUNTER content with no boss entry — so
+// any wave > 30 went trivial AND never spawned a boss. RUN-05b (the
+// procedural wave composer) will replace this; until then we CYCLE the
+// authored 30-wave pattern so a long run keeps varied, escalating GROUP
+// content. The per-wave enemy LEVEL / HP / speed scaling is still driven by
+// the REAL `waveNumber` / `maxWaves` in getEnemyLevel / getLevelScaledEnemyStats
+// (NOT this cycled key), so cycling only picks WHICH enemy groups spawn — the
+// stat curve is untouched and there's no double-scaling. Stage-finals past 30
+// are made boss-eligible by isBossWave(wave, wps) on the spawn path (fix #1),
+// independent of which authored entry the cycle landed on.
+//
+// Default-safe: for waveNumber ≤ MAX_WAVES this is byte-for-byte the old
+// `WAVE_DATA[w] || WAVE_DATA[1]` (the cycle key === w in that range, and the
+// `|| WAVE_DATA[1]` guard is preserved). The default 10×3 run never reaches
+// the cycle branch.
+function _configKeyForWave(waveNumber) {
+    const w = Math.max(1, waveNumber | 0);
+    if (w <= MAX_WAVES) return w;
+    // Cycle 1..MAX_WAVES: wave 31 → 1, 32 → 2, …, 60 → 30, 61 → 1, …
+    return (((w - 1) % MAX_WAVES) + 1);
+}
+
 export function getWaveConfig(waveNumber, maxWaves = MAX_WAVES) {
     const mw = Math.max(1, maxWaves | 0);
-    const w = Math.max(1, Math.min(mw, waveNumber | 0));
-    const base = WAVE_DATA[w] || WAVE_DATA[1];
+    // Clamp the wave to the real run length, THEN map to an authored-table key
+    // (identity for ≤30, cycled for the synthesized late game).
+    const clamped = Math.max(1, Math.min(mw, waveNumber | 0));
+    const key = _configKeyForWave(clamped);
+    const base = WAVE_DATA[key] || WAVE_DATA[1];
     if (!isMobile()) return base;
-    if (_mobileWaveCache.has(w)) return _mobileWaveCache.get(w);
-    const scaled = _scaleConfigForMobile(base, w);
-    _mobileWaveCache.set(w, scaled);
+    if (_mobileWaveCache.has(key)) return _mobileWaveCache.get(key);
+    const scaled = _scaleConfigForMobile(base, key);
+    _mobileWaveCache.set(key, scaled);
     return scaled;
 }
 
