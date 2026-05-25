@@ -13,7 +13,7 @@ Elements & resistances, rolled rarity-tiered gear, kill-streak power tiers, and 
 ![Version](https://img.shields.io/badge/version-6.83.0-8b5cf6?style=flat-square)
 &nbsp;![Stack](https://img.shields.io/badge/Canvas2D_+_WebGL2-f59e0b?style=flat-square)
 &nbsp;![Platforms](https://img.shields.io/badge/desktop_·_mobile_·_gamepad-3b82f6?style=flat-square)
-&nbsp;![License](https://img.shields.io/badge/license-ISC-64748b?style=flat-square)
+&nbsp;[![License: PolyForm-NC 1.0.0](https://img.shields.io/badge/license-PolyForm--NC_1.0.0-64748b?style=flat-square)](LICENSE)
 
 [Changelog](CHANGELOG.md) &nbsp;·&nbsp; [Community](#-community)
 
@@ -150,8 +150,10 @@ multiplayer/            # experimental WASM co-op — SHELVED (see multiplayer/R
 
 ## 🎵 Credits & License
 
-- **Music** — most tracks are original compositions by **afeique**; 10 royalty-free tracks come from **[Karl Casey @ White Bat Audio](https://karlcasey.bandcamp.com/)** ([YouTube](https://www.youtube.com/@WhiteBatAudio)), used under his royalty-free license: *Aura · Beyond the Shadows · Dangerous · Inferno · Iridium · Legend · Midnight · Out for Blood · Salvation · World Eater*.
+- **Music** — most tracks are original compositions by **afeique** (licensed **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)**); 10 royalty-free tracks are **"Music by Karl Casey @ White Bat Audio"** ([whitebataudio.com](https://whitebataudio.com/) · [YouTube](https://www.youtube.com/@WhiteBatAudio)), used under [his license](https://whitebataudio.com/license-agreement/): *Aura · Beyond the Shadows · Dangerous · Inferno · Iridium · Legend · Midnight · Out for Blood · Salvation · World Eater*.
 - **SFX** — every sound is SFXR-generated (no third-party sample packs).
-- Builds on the original **[Monolithic Rainboids](https://github.com/afeique/rainboids-monolithic)** with extensive modularization. Licensed **ISC**.
+- **Key-hint sprites** — "[SimpleKeys](https://beamedeighth.itch.io/simplekeys-animated-pixel-keyboard-keys)" by **beamedeighth**, used under its free-use license.
+- Builds on the original **[Monolithic Rainboids](https://github.com/afeique/rainboids-monolithic)** with extensive modularization.
+- **License** — source code is **source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE)**: free to use, study, modify, and share for *noncommercial* purposes; commercial use requires a separate license. Original **music is [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)**; artwork and the "Rainboids" name are reserved. Full details in **[NOTICE](NOTICE)**.
 
 <div align="center"><sub>made with 🌈 by <a href="https://github.com/afeique">@afeique</a></sub></div>

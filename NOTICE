@@ -1,0 +1,57 @@
+Rainboids — Licensing & Attribution NOTICE
+===========================================
+
+This project separates SOURCE CODE, ORIGINAL ASSETS, and THIRD-PARTY
+ASSETS, which carry different terms.
+
+SOURCE CODE
+-----------
+All source code in this repository (JavaScript, CSS, HTML, and the
+build/test tooling) is licensed under the PolyForm Noncommercial License
+1.0.0 — see the LICENSE file. You may use, study, modify, and share the
+code for any NONCOMMERCIAL purpose. Commercial use requires a separate
+license from the copyright holder.
+
+Note: most of the game's visual art (ships, enemies, bosses, asteroids,
+particles, ship skins) is drawn procedurally in code, so it falls under
+the source-code license above — there are no separate sprite files for it.
+
+ORIGINAL MUSIC  —  CC BY-NC 4.0
+-------------------------------
+The original music composed by Afeique Sheikh (the afeique-credited tracks
+in music/) is licensed under Creative Commons Attribution-NonCommercial 4.0
+International (CC BY-NC 4.0): https://creativecommons.org/licenses/by-nc/4.0/
+You may share and adapt it for NONCOMMERCIAL purposes with attribution.
+
+Sound effects in sfx/ are SFXR-generated and original to this project.
+
+BRAND & ARTWORK  —  All Rights Reserved
+---------------------------------------
+The following are © Afeique Sheikh, All Rights Reserved — NOT licensed
+for reuse, commercial or noncommercial:
+
+  • The "Rainboids" name and brand, and the rainboids.com domain
+  • Logos, banners ("Rainboids - Banner.png", the Discord image), favicon
+  • Screenshots
+
+THIRD-PARTY ASSETS
+------------------
+• Keyboard-key sprites (sprites/keys/, sprites/SimpleKeys/), used for the
+  on-screen control hints, are the "SimpleKeys" pack by beamedeighth
+  (https://beamedeighth.itch.io/simplekeys-animated-pixel-keyboard-keys).
+  Free to use in any project (personal or commercial), credit appreciated;
+  the asset pack itself may not be resold. Not covered by this repository's
+  source-code license.
+
+• The music includes 10 royalty-free tracks by Karl Casey @ White Bat Audio
+  (Aura, Beyond the Shadows, Dangerous, Inferno, Iridium, Legend, Midnight,
+  Out for Blood, Salvation, World Eater), used under White Bat Audio's
+  royalty-free license and credited as "Music by Karl Casey @ White Bat Audio".
+  They are NOT covered by this repository's license and may not be sold or
+  distributed as a standalone soundtrack separately from the game.
+  License terms: https://whitebataudio.com/license-agreement/
+
+COMMERCIAL LICENSING
+--------------------
+For commercial use of the source code, contact Afeique Sheikh
+(https://github.com/afeique).

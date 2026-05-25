@@ -4,7 +4,7 @@
   "private": true,
   "description": "Electron desktop wrapper for Rainboids",
   "author": "afeique",
-  "license": "ISC",
+  "license": "SEE LICENSE IN ../LICENSE",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
