@@ -25,12 +25,19 @@ export function affixCount(item) {
  * Cores granted by salvaging one item: rarity-rank × affix-count, scaled
  * up gently by item level. Floored at 1 so even a common L1 is worth
  * something. Traited items (C.I3*) add a flat bonus per trait (R8.9).
+ *
+ * RUN-03 — optional `rewardMult` (the Reward Dial factor) scales the Cores
+ * granted. DEFAULTS TO 1.0 so every existing call site is byte-for-byte
+ * unchanged; richer runs (wps ≥ 6) pass the rewardMultiplier() factor to
+ * grant more Cores per salvage. Multiplied in BEFORE the final round so the
+ * dial nudges the floored integer result.
  */
-export function salvageValue(item) {
+export function salvageValue(item, rewardMult = 1.0) {
     if (!item) return 0;
     const traits = (item && Array.isArray(item.traits)) ? item.traits.length : 0;
     const lvl = Math.max(1, item.level | 0);
-    const base = rarityRank(item) * affixCount(item) * (1 + lvl * 0.1);
+    const mult = (typeof rewardMult === 'number' && isFinite(rewardMult) && rewardMult > 0) ? rewardMult : 1.0;
+    const base = rarityRank(item) * affixCount(item) * (1 + lvl * 0.1) * mult;
     return Math.max(1, Math.round(base) + traits * 3);
 }
 

@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.175.0] - 2026-05-25
+
+### Added — Reward Dial: rewards scale with run shape (RUN-03)
+
+New pure helper `world/reward-dial.js` scales run rewards (gold, drop chance,
+rarity bias, Cores) by the player's chosen run shape, so picking more
+waves-per-stage (a longer grind per stage) pays out more:
+
+- **Waves/stage multiplier:** 3 → ×1.0, 6 → ×1.3, 9 → ×1.6 (`wavesPerStageRewardMult`).
+- **Stage-depth endurance curve** (`stageDepthRewardMult`): a gentle bonus that
+  grows with run depth (≈1.0 at stage 1 → +40% at the final stage), so long runs
+  stay worthwhile.
+- `rewardMultiplier(game, wave)` combines them — and returns **exactly 1.0 for
+  the default 3-waves/stage campaign at every wave**, so a default run is
+  reward-identical to before. The dial is opt-in plumbing that activates with the
+  RUN-06 setup UI.
+
+Wired (all no-ops on a default run): wave-clear gold + gold budget
+(`wave-manager.js`), money-orb / gear drop rates + rarity bias + money budget
+(`combat-manager.js`), and Cores-per-salvage (`cores.js` `salvageValue` gained an
+optional `rewardMult` defaulting to 1.0 — existing callers unchanged).
+
+Coverage: +18 unit tests (1394 total); gold-sink QA green.
+
 ## [6.174.0] - 2026-05-25
 
 ### Changed — Card draft fires on every stage except the last (RUN-01b)

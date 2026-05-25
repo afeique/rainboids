@@ -25,6 +25,7 @@ import {
     reviveCost as reviveGoldCost, canRevive as reviveCanBuy,
 } from '../world/run-shop.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
+import { rewardMultiplier } from '../world/reward-dial.js';
 
 // Sub-wave advance thresholds — advance to next sub-wave when ≤ 2
 // enemies remain (player has cleared the field) or 12 s of idle time
@@ -172,7 +173,10 @@ export function updateWaveSystem() {
         }
         const bonusXP = 40 + clearedWave * 15; // gainExperience is a no-op since 6.0.0; kept for back-compat
         const baseCoins = 50 + clearedWave * 25;
-        const bonusCoins = stageClear ? baseCoins * 2 : Math.round(baseCoins * 0.6);
+        // RUN-03 — Reward Dial. Default 10×3 run → ×1.0 (no-op); richer runs
+        // (wps ≥ 6) scale gold by the waves-per-stage × stage-depth factor.
+        const rewardMult = rewardMultiplier(this.game, clearedWave);
+        const bonusCoins = Math.round((stageClear ? baseCoins * 2 : baseCoins * 0.6) * rewardMult);
         this.player.gainExperience(bonusXP);
         this.game.money += bonusCoins;
         const _mob = isMobile();
@@ -1014,7 +1018,8 @@ export function completeWave() {
     // free powerup pick (5.70.0) the player redeems in the shop.
     // Picks accumulate, so skipping the shop one wave doesn't waste them.
     const bonusXP = 20 + clearedWave * 10;
-    const bonusCoins = 50 + clearedWave * 25;
+    // RUN-03 — Reward Dial (no-op at the default 10×3 run → ×1.0).
+    const bonusCoins = Math.round((50 + clearedWave * 25) * rewardMultiplier(this.game, clearedWave));
     this.player.gainExperience(bonusXP);
     this.game.money += bonusCoins;
     this.player.skillPoints += 1;

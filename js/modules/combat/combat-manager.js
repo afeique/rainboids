@@ -7,6 +7,7 @@ import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { createItem } from '../world/item-system.js';
 import { rollRarity } from '../world/item-names.js';
+import { rewardMultiplier } from '../world/reward-dial.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { initBossDeath } from '../enemy/boss-intro.js';
@@ -906,6 +907,11 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const waveDropRateBonus = (wave - 1) * 0.015;
     const waveQuantityBonus = Math.floor((wave - 1) / 5);
 
+    // RUN-03 — Reward Dial. ×1.0 for the default 10×3 run (no behavior
+    // change); > 1.0 for richer runs. Applied below to money-orb drop
+    // chance + budget, gear-drop chance, and the rarity bias.
+    const runRewardMult = rewardMultiplier(this.game, wave);
+
     const hitStreakMultiplier = this.player.getHitStreakMultiplier();
 
     const isEnemy = entity && entity.type && typeof entity.type === 'string';
@@ -955,7 +961,8 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     //   per STREAK_TIER. Cap at 1.50 at the RAINBOIDS GOD tier.
     const streakGoldMult = getStreakGoldMult(streakCount);
     const healthDropRate = Math.min(1.0, baseHealthDropRate);
-    const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult * streakGoldMult * profileRateMult);
+    // RUN-03 — Reward Dial scales the money-orb drop CHANCE (clamped ≤ 0.95).
+    const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult * streakGoldMult * profileRateMult * runRewardMult);
 
     // ── Health orbs ──
     // Global cooldown gate. Triage stacks shorten the cooldown; when
@@ -1002,14 +1009,20 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         const boss = !!(entity && entity.isBoss);
         // P6 — Scavenger passive: +50% item (gear) drop rate.
         const dropMult = (player.hasPassive && player.hasPassive('SCAVENGER')) ? 1.5 : 1;
-        const hpRate     = (boss ? 0.085 : 0.025) * dropMult;
-        const toughRate  = (boss ? 0.075 : 0.020) * dropMult;
-        const trinkRate  = (boss ? 0.060 : 0.015) * dropMult;
-        const bonusRare  = boss ? 0.10  : 0;
+        // RUN-03 — Reward Dial scales gear-drop CHANCE (each rate clamped
+        // ≤ 1.0 in tryRoll) and nudges the RARITY BIAS upward. For the
+        // default run runRewardMult === 1.0 → both are exact no-ops.
+        const hpRate     = (boss ? 0.085 : 0.025) * dropMult * runRewardMult;
+        const toughRate  = (boss ? 0.075 : 0.020) * dropMult * runRewardMult;
+        const trinkRate  = (boss ? 0.060 : 0.015) * dropMult * runRewardMult;
+        // Conservative rarity-bias nudge: half the dial's "extra" folds into
+        // the rollRarity bossBias (0..1). +0 on default runs.
+        const rewardRarityBias = Math.max(0, (runRewardMult - 1) * 0.5);
+        const bonusRare  = (boss ? 0.10  : 0) + rewardRarityBias;
         const bonusEpic  = boss ? 0.08  : 0;
 
         const tryRoll = (slot, rate) => {
-            if (Math.random() >= rate) return;
+            if (Math.random() >= Math.min(1.0, rate)) return;
             const rarity = rollRarity(bonusRare, bonusEpic);
             const item = createItem(slot, wave, rarity);
             player.registerItemDrop(item);
@@ -1031,8 +1044,9 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         const maxMoney = Math.max(minMoney,
             GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (wave - 1) * 5);
         const avgMoney = (minMoney + maxMoney) / 2;
+        // RUN-03 — Reward Dial scales the gold budget (×1.0 default run).
         const moneyBudget = Math.max(1,
-            Math.round(totalLegacyCount * avgMoney * goldFindMult * streakGoldMult * profileBudgetMult));
+            Math.round(totalLegacyCount * avgMoney * goldFindMult * streakGoldMult * profileBudgetMult * runRewardMult));
 
         // 6.18.0 — _splitMoneyDrop reads profile for boss budget cap
         //   + bonus pixel pieces.
