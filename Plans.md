@@ -10,6 +10,40 @@ Task IDs are `DOMAIN-NN`. Domains: **BOSS · ENMY · SKILL · ITEM · META · RU
 
 ---
 
+# ★ DIR — Director & Adaptive Difficulty: full §14 model *(TOP PRIORITY — authoritative)*
+
+**Authoritative spec:** `Passive Skills & Run Difficulty – 2026-05-24` **§14** (PWR §14.1 · control loop §14.2 · composer §14.3 · reward §14.4 · baseline §14.5 · constants §14.6 · mode-gating §14.7). Cross-ref Balance Model §6/§6b and `Tuning the Flow Channel`.
+
+**Current state:** the shipped director (`wave/difficulty-director.js`, RUN-04/05a) is a **first-pass** — a *reactive two-axis* controller (Po/Pd → D_hp/D_thr) with a flat 35 s expected-clear and **no** PWR, **no** absolute baseline, **no** difficulty mode. This track evolves it to the **§14 model**: a **PWR-aware pre-load** + **absolute monotonic baseline curve** + **difficulty MODE (Easy→Legendary)** that biases a **single-pressure control loop**, with **mode-gated reward scaling**. Every constant in §14.6 is a *starting value* for the RUN-07 balance pass — implement the **shapes**.
+
+**Discipline:** DIR-04/10 modify a LIVE, wired module/path — keep the public API shape working for RUN-05a, default-safe (absent mode→Normal, absent PWR→neutral pre-load), suite green. NEW-file tasks (DIR-01/02) are pure + fully parallel.
+
+### ∥group J — foundation *(NEW pure files; dispatch together first)*
+| ID | FILE (owned) | DOES | DEP |
+|----|----|----|----|
+| DIR-01 | NEW `wave/power-level.js` + test | `computePWR(player)` per §14.1: geometric `K_PWR·O^0.45·S^0.35·U^0.20` (K_PWR so a starter build ≈ 100) + pure `offense`/`survivability`/`utility` sub-fns (read passed player-like getters; no double-count). Unit-test the §4.1 worked examples: starter ≈100, Glass-Nuke ≈ designed-mid (geometric blend cancels its offense), Synergy-God ≈ 2.3× | — |
+| DIR-02 | NEW `wave/difficulty-constants.js` + test | The §14.6 constants table (MODE_BAND/UP_RATE/DOWN_RATE/MULT_MIN/MAX/MODE_BASE/MODE_RESIST/A/B/W_* weights/PWR_REF/SUSTAIN_WINDOW/reward+rarity consts) + pure `baseline(wave)=1+A·wave+B·wave^1.5` (§14.5). Unit-test baseline(30)≈15.4, baseline(90)≈65, strictly monotonic | — |
+
+### ∥group K — control loop *(depends J)*
+| ID | FILE (owned) | DOES | DEP |
+|----|----|----|----|
+| DIR-03 | `core/constants.js` + runConfig | Add `mode` to `runConfig` (Easy/Normal/Hard/Epic/Legendary; default Normal; default-safe absent→Normal). Accessor `getRunMode(game)`; persist in save | DIR-02 |
+| DIR-04 ⚠ | `wave/difficulty-director.js` (refactor) | Implement the §14.2 single-pressure loop: `P = W_HP·(1−hpEnd)+W_DMG·dmgTaken+W_CLEAR·(clearRatio/2)+W_ND·nearDeath`; mode-band steer (Plo/Phi, UP/DOWN_RATE asymmetry, DRIFT settle, clamp MULT_MIN/MAX); `enemyPower = baseline·MODE_BASE·directorMult·pwrPreload(PWR)`, `pwrPreload=clamp((PWR/PWR_REF)^0.5,0.8,3.0)`; distribute → `hpMult=enemyPower^.5 · dmgMult^.3 · densityMult^.2` + toughnessDR + resistDrift; speeds clamped. **Keep createDirector/recordWave/updateDifficulty/tickWave/getDifficulty/getThreatLevel/lockForBoss working** (extend, don't break RUN-05a). Keep ±12%/wave + cold-start | DIR-01/02/03 |
+
+### ∥group L — wiring + surfacing *(depends K; mostly disjoint files)*
+| ID | FILE (owned) | DOES | DEP |
+|----|----|----|----|
+| DIR-05 | `game-engine.js` (+ read player getters) | Compute + cache `game.playerPWR` on every build change (card pick / gear equip / passive swap / loadout / weapon change); feed the director pre-load | DIR-01 |
+| DIR-06 | `hud/status.js` | HUD shield badge → **"P" + PWR number** (§13.6); keep the CD-16 threat meter. PWR vs THREAT legibility | DIR-05 |
+| DIR-07 | `wave/difficulty-director.js` + `wave-manager.js` | Reference-dependent `expectedClearMs = threatBudget(wave)/estimatedPlayerDPS(PWR)` × pacing — replaces RUN-05a's flat 35 s, so "fast/slow" is judged vs the build's own power | DIR-01/04 |
+| DIR-08 | `world/reward-dial.js` (extend) | §14.4 reward: `rewardMult = MODE_REWARD·depthReward·perfBonus`; `rarityBias` + **`rollRarity(bias, ceiling)`** rarity-ceiling gate (Transcendental only Legendary-deep); itemLevel scaling. Folds in/extends the shipped RUN-03 dial | DIR-03 |
+| DIR-09 | `shop/shop-dom.js` (RUN SETUP) + meta | Mode selector (Easy→Legendary; Epic/Legendary gated by `rainboidsMeta.maxModeCleared`, §14.7) + reward/PWR readout; unlock-on-clear logic (Epic after ≥stage-5 Hard, Legendary after ≥stage-5 Epic) | DIR-03 |
+| DIR-10 ⚠ | `wave-manager.js` / `applyEnemyLevelScaling` (refactor RUN-05a) | Apply the §14 `enemyPower` knobs live (hpMult/dmgMult/densityMult/toughnessDR/resistDrift), replacing the current raw D_hp/D_thr application; density→spawn count (overlaps RUN-05b composer — coordinate) | DIR-04 |
+
+*(Wave composer §14.3 = **RUN-05b** (P5 below). Telemetry to tune all constants = **CD-17** (P2). Final calibration of every §14.6 constant = **RUN-07** (P2).)*
+
+---
+
 # ✅ COMPLETED (archived for traceability — detail in CHANGELOG)
 
 - **BOSS track — COMPLETE** (6.159.0–6.168.0): chassis (boss-phases/parts/intro/fx/render/healthbar) + **all 10 unique bosses** (Harbinger→Prismarch) spawn / render / fight / die in-game; weak-point hit-routing; final-boss→GAME_COMPLETE; 7 smoke tests (`17-bosses.spec.js`). *(BOSS-01..15)*
