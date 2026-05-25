@@ -1,6 +1,20 @@
 # Ability Attunements, Upgrades & New Abilities — Brainstorm
 *2026-05-24 — for review. Nothing here is implemented yet; this is the design backlog the user asked for.*
 
+> **★ DECISIONS (2026-05-24, refined w/ afeique) — read first.** See the companion
+> `Energy & Health Systems — Brainstorm + Ability Audit` doc for the master decision log. Key calls that
+> reshape §2 below:
+> - **The 4 elemental fields collapse into ONE `FIELD_PROJECTOR` ability** whose element is the attunement
+>   (Pyro→burn, Cryo→freeze, Volt→shock, Void→heavy slow+pull). The per-field "upgrades" in §2 (CRYO_FIELD /
+>   STASIS_FIELD / STORM_CELL / PYRE_AURA) become **FIELD_PROJECTOR's attunement behaviors + shared upgrades**
+>   (radius / duration / lingering trail / a cross-element reaction capstone). This frees 3 ability slots.
+> - **ELEMENTAL_INFUSION is reworked → "Attune"**: lock shots to ONE chosen element + amplify (Prismatic Soul
+>   stays the auto-cycler). So §2's ELEMENTAL_INFUSION upgrades fold into the reworked single-element ability.
+>   *(Open: rework vs. cut — afeique to confirm.)*
+> - **SENTRY_DRONE: keep + rework** (aim-targeted, gains fire rate per kill, recast-to-reposition) and **trim
+>   its 6 elemental attunements to 3** (Pyro incendiary / Volt chain-shot / Cryo chilling).
+> - **BLINK / GRAVITY_SNARE / DESIGNATOR / SECOND_WIND** get the upgrades proposed in §2 (fills their rings).
+
 ## Why this doc
 Two asks:
 1. **Every Defense ability should have something unlockable** in the BUILD tree (an attunement and/or upgrade). Today several abilities show an empty ring — no orbiting bubbles — because they have no ability-attunements *and* no ability-upgrades wired into the tree.
@@ -137,3 +151,30 @@ Grouped by archetype. Each notes the unique verb so it doesn't overlap the 14 ex
 - New ability-upgrades: add to `ABILITY_UPGRADES` and **confirm/route them into the BUILD-tree DEFENSE ring** (the empty-ring fix depends on the tree sourcing upgrades, not just attunements).
 - Each new unlockable needs a slug icon (`js/modules/ui/icons.js`) for its bubble.
 - New abilities: out of scope until reviewed; each needs a cooldown, an activation hook, FX, and an entry in `ABILITIES` + unlock wiring.
+
+---
+
+## 5. Tuned ability numbers (v1 — no-downsides era)
+*Concrete values, tuned so each ability **anchors a build** (see Balance Model §3 / build doc). Cooldowns kept close to current; magnitudes pushed up because there are no drawbacks and difficulty scales to meet them (Balance §6).*
+
+### Reworked / collapsed
+- **FIELD_PROJECTOR** — cd **16 s**, deploy a zone r **220**, duration **5 s**. Element = chosen attunement:
+  - *Pyro:* burn **8 dmg/s** in-zone (rides status/Hex Touch). *Cryo:* chill → **freeze after 1.5 s** in-zone (2.5 s freeze). *Volt:* shock pulse **every 0.5 s**, conducted enemies take **+25%**. *Void:* **slow 65%** + gentle pull to center.
+  - Upgrades: **Wide Field** (+40% r), **Sustained** (+2 s), **Lingering** (2 s trail after it ends), capstone **Reaction Core** (in-zone status reactions deal +50%). Anchors: Status Reactionist / Freeze-Shatter / Volt Chain / Zone Controller.
+- **Attune** (ex-Elemental Infusion) — cd **14 s**, duration **8 s**: lock shots to ONE chosen element, **+25% that element's damage** and **+1 status stack per hit**. Complements Prismatic Soul (auto-cycle). Anchors: Conduit Caster / any single-element build.
+- **Sentry Drone** — cd **18 s**, duration **8 s** (recast repositions). Drone DPS = **~55% of your current primary DPS** (rides the player damage pipeline, so it scales with the build). **6 attunements**, **radial retune** (free). Upgrades: **Extra Drone** (+1, stacks), **Rapid Servo** (+40% RoF), **Heavy Caliber** (+50% drone dmg). Anchors: Swarm Commander.
+
+### Build-anchor reworks
+- **Designator** — cd **16 s**, r **360**, mark **6 s**. Reworked payoff: marked enemies take **+20% from all sources**, **your next hit on a marked enemy auto-crits**, and **marked enemies detonate their statuses + drop bonus energy/heal on death**. Anchors: Crit Assassin / Reactionist. (Fixes "useful but not fun" — now it's a burst enabler.)
+- **Second Wind** — cd **45 s**. On cast (immediate, fun-to-press): **+30% fire-rate & move-speed for 5 s** AND arms a death-save for that window; if the save triggers, emit a **knockback + ignite nova**. Anchors: aggressive Assassin. (No longer pure insurance.)
+- **Bulwark** — cd **20 s**, **50% DR for 4 s** (IRON_WILL → 65%). Universal dive-enabler; glues every bruiser. Keep.
+
+### New abilities (numbers for when greenlit)
+- **Overcharge Core** — cd **20 s**: instantly **+60 energy** (or fill to max). Anchors Spellslinger (the "cast NOW" button).
+- **Nanite Swarm** — cd **20 s**: a healing cloud follows you **6 s**, **4% max HP/s + cleanse**. Anchors Vampire Bruiser / Regen Juggernaut (sustained vs Field Medic's burst).
+- **Decoy** — cd **16 s**: hologram of your ship for **5 s** that draws enemy aggro/fire. Anchors Swarm Commander / Hit-and-Run.
+
+### Existing kept (confirm numbers)
+- Field Medic 22 s / 45% burst + cleanse (POTENCY +10%×2). Deflector Orbs 15 s / 3 orbs / 5 s. EMP Pulse 22 s / 2 s stun / r200. Blink 9 s / 220 px / 350 ms i-frames (+ upgrades: 2 charges, phase trail, displace, +40% dist). Gravity Snare 14 s / r320 / pull 0.6 (+ upgrades: implosion, +radius, crush, tether).
+
+> **Tuning lens:** every cooldown/magnitude above is sized for the *designed* build; the adaptive system (Balance §6) absorbs the spread to god-builds. If an ability still anchors no build after tuning, cut or re-theme it (the test that produced FIELD_PROJECTOR).
