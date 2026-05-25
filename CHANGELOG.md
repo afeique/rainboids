@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.164.0] - 2026-05-24
+
+### Added — Three more boss modules (BOSS-06 / 07 / 09)
+
+Three standalone bosses on the shipped chassis, following the Harbinger pattern;
+unit-tested headless (36 tests total), not yet spawn-wired (lands with BOSS-04):
+- **THE AEGIS** (`bosses/aegis.js`, stage 2-6, armor) — rotating armor plates
+  shield the core with a sweeping plate-gap; CORRODE (Toxic) bypasses the armor;
+  plates shed + re-arm tougher each phase.
+- **LUMEN THE PRISM SOVEREIGN** (`bosses/lumen.js`, stage 3-9, Radiant) — orbiting
+  shield drones gate the core; a telegraphed DISJUNCTION purge on a tightening
+  cadence; drones re-arm fewer/tougher each phase.
+- **MAELSTROM THE STORM CROWN** (`bosses/maelstrom.js`, stage 5-15, Volt) —
+  conduit nodes gate the core (clear the ring to open windows); telegraphed
+  CONDUCT-rain cadence; nodes re-arm leaner/faster each phase.
+
+All three: 3 HP-gated phases, core-invuln-while-parts-live, final-phase enrage.
+
+---
+
 ## [6.163.0] - 2026-05-24
 
 ### Added — THE HARBINGER, first concrete boss (BOSS-05)
