@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.162.0] - 2026-05-24
+
+### Added — Boss healthbar HUD (BOSS-01)
+
+- **Always-visible boss healthbar** (`js/modules/hud/boss-healthbar.js`). While
+  a boss-flagged enemy is alive, a top-center bar surfaces the boss **name**, a
+  **segmented HP bar** (one segment per phase, with the active phase's segment
+  highlighted), **phase pips** below the bar (filled = entered), and an
+  **element tint** pulled from the shared element taxonomy
+  (`combat/elements.js`). Reads phase state from the shipped phase runner
+  (`boss-phases.js`) and tolerates a lightweight stub shape for testing.
+- **Pure layout helper** `computeBossHealthbarLayout(boss, viewW)` — no canvas
+  access, fully unit-tested (`tests/unit/hud/boss-healthbar.test.js`).
+- Wired via a tiny per-frame hook in the HUD draw path (`hud/status.js`) that
+  scans the active enemy pool and no-ops when no boss is present.
+
 ## [6.161.0] - 2026-05-24
 
 ### Added — Boss intro/death sequence runner (Phase D.B0)

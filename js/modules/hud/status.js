@@ -9,6 +9,7 @@ import { xpForLevel, MAX_LEVEL } from '../core/sp-stats.js';
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
 import { drawItemFeed } from './item-feed.js';
+import { drawBossHealthbarHook } from './boss-healthbar.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 // 5.92.0 — Mobile HUD simplification: hide the coins readout,
 // survival timer, and loadout/weapon meters in mobile mode so the
@@ -50,6 +51,10 @@ export function drawHUD() {
             }
             // 6.x — Left-edge item loot feed (replaces world pickup orbs).
             drawItemFeed.call(this, this.ctx);
+            // BOSS-01 — Always-visible boss healthbar. Renders top-center
+            // only while a boss-flagged enemy is alive (the hook scans the
+            // active enemy pool and no-ops otherwise).
+            drawBossHealthbarHook.call(this);
         } else {
             // Clear stale rects so input handlers don't act on them.
             this._hudButtonRects = null;
