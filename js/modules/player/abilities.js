@@ -7,6 +7,12 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { ABILITIES, POWER_WEAPONS } from '../combat/weapon-data.js';
 import { ELEMENTS } from '../combat/elements.js';
 import { cleansePlayerStatus } from './player-status.js';
+// SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE). The enemy-side wrapper
+// (collision-system.applySuppressAura) stamps this player's _skill* fields when
+// in a drone's aura; here we READ them. cooldownRegenScale defaults to 1 (full-
+// speed regen) and isActivationBlocked to false when no stamp is active, so the
+// wiring below is a no-op for a player nowhere near a NULL_DRONE.
+import { cooldownRegenScale, isActivationBlocked } from '../enemy/abilities/suppress-aura.js';
 
 // ── Active ability updates ──────────────────────────────────────────────────
 
@@ -512,6 +518,13 @@ export function activateAbility(slot = 0) {
     const abilityId = this.equippedAbilities[slot];
     if (!abilityId) return false;
     if (this.abilityCooldowns[slot] > 0) return false;
+    // SYS-9 / ENMY-10 — NULL_DRONE suppression can hard-lock activation
+    // (blocksActivation aura flag). isActivationBlocked is false unless a
+    // suppression stamp with blocksActivation is currently active, so this is a
+    // no-op for a player not in a hard-lock drone's aura. (NULL_DRONE ships with
+    // blocksActivation:false — slow-the-recharge only — so this stays dormant
+    // until a future hard-lock support type sets the flag.)
+    if (isActivationBlocked(this, Date.now())) return false;
 
     const config = ABILITIES[abilityId];
     if (!config) return false;
@@ -690,12 +703,19 @@ export function activateAbility(slot = 0) {
 // ── Ability cooldowns ───────────────────────────────────────────────────────
 
 export function updateAbilityCooldowns(dt) {
+    // SYS-9 / ENMY-10 — scale the skill-cooldown regen tick by the active
+    // NULL_DRONE suppression. cooldownRegenScale is 1 when not suppressed, so
+    // `dec` equals `dt` for every player not standing in a drone's aura — the
+    // recharge speed is byte-for-byte unchanged. While suppressed it's < 1, so
+    // the slots drain toward 0 slower (a slower recharge). The stamp self-
+    // expires via LINGER_MS, so killing the drone restores full-speed regen.
+    const dec = dt * cooldownRegenScale(this, Date.now());
     // Phase B.S1 — decay all 4 slot cooldowns (slot 0 is also reachable via
     // the legacy activeAbilityCooldown accessor, but we write the array
     // directly to cover every slot uniformly).
     for (let i = 0; i < this.abilityCooldowns.length; i++) {
         if (this.abilityCooldowns[i] > 0) {
-            this.abilityCooldowns[i] = Math.max(0, this.abilityCooldowns[i] - dt);
+            this.abilityCooldowns[i] = Math.max(0, this.abilityCooldowns[i] - dec);
         }
     }
 

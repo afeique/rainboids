@@ -2739,6 +2739,24 @@ export class GameEngine {
         return wave.requestEnemySpawn.call(this, 'WRAITHWORM', cx, cy, { cap: 9999 });
     }
 
+    // ENMY-10 — DEBUG HOOK. Force-spawn a NULL_DRONE (skill-suppress support) on
+    // demand for QA + manual testing, mirroring spawnWraithworm. Returns the
+    // enemy (carrying a `suppressAura` config), or null if the pool is dry.
+    //   gameEngine.spawnNullDrone()  or  gameEngine.spawnNullDrone({ x, y })
+    spawnNullDrone(opts = {}) {
+        // Default close-ish to the player so QA can stand the ship inside the
+        // ~220px aura and observe the suppression. Explicit opts.x/opts.y
+        // override (e.g. spawn far away to assert the no-suppression baseline).
+        const baseX = this.player ? this.player.x
+            : (this.camera ? this.camera.x + this.width / 2 : (this.gameField ? this.gameField.width / 2 : 600));
+        const baseY = this.player ? this.player.y
+            : (this.camera ? this.camera.y + this.height / 2 : (this.gameField ? this.gameField.height / 2 : 400));
+        const cx = (opts.x != null) ? opts.x : baseX + 80;
+        const cy = (opts.y != null) ? opts.y : baseY - 60;
+        // Bypass the concurrent-spawn cap for the debug hook (huge cap).
+        return wave.requestEnemySpawn.call(this, 'NULL_DRONE', cx, cy, { cap: 9999 });
+    }
+
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }
@@ -3026,6 +3044,7 @@ export class GameEngine {
     
     applyGravityWell() { return col.applyGravityWell.call(this); }
     applyEyeOfTheStorm() { return col.applyEyeOfTheStorm.call(this); }
+    applySuppressAura() { return col.applySuppressAura.call(this); }
     handleCollisions() { return col.handleCollisions.call(this); }
     handleWeaponEffectCollisions() { return col.handleWeaponEffectCollisions.call(this); }
     checkLanceBeamCollisions() { return col.checkLanceBeamCollisions.call(this); }
@@ -3273,6 +3292,10 @@ export class GameEngine {
             // P6 — Eye of the Storm: while ~stationary, slow nearby enemies +
             // their projectiles (guarded no-op unless equipped).
             this.applyEyeOfTheStorm();
+            // SYS-9 / ENMY-10 — NULL_DRONE skill-suppress aura: stamp the
+            // player's suppression fields while they stand in a drone's aura
+            // (guarded no-op unless a suppressAura enemy is active).
+            this.applySuppressAura();
             // Inject gameEngine ref for enemy bullets (needed for particle effects on death)
             for (const eb of this.enemyBulletPool.activeObjects) eb.gameEngine = this;
             this.enemyBulletPool.updateActive();

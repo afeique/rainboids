@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.182.0] - 2026-05-25
+
+### Added — Skill-suppressing support enemy: the NULL DRONE (ENMY suppress-aura slice)
+
+A fourth enabling-system helper goes live. A new **Null Drone** (Volt support)
+projects an aura that **stalls the player's ability-cooldown recharge** while you
+stand in it — a "kill the drone to get your tempo back" threat.
+
+- Wired `enemy/abilities/suppress-aura.js` into the live paths, **default-safe**:
+  a per-frame `applySuppressAura` engine scan (mirroring the GravityWell/
+  Eye-of-the-Storm auras) stamps the player when in range; `updateAbilityCooldowns`
+  scales its recharge by `cooldownRegenScale` (=1 / unchanged when no drone is
+  near); `activateAbility` honors `isActivationBlocked`; suppression self-expires
+  via a 350ms linger.
+- **HUD cue:** while suppressed, the ability-slot bar gets a violet wash + a
+  small canvas "SUPPRESSED" tag (DOM messages are dead — canvas only).
+- New **NULL_DRONE** type (`enemy-data.js`, Volt, `suppressAura{radius 220,
+  cooldownScale 0.35}`) + `gameEngine.spawnNullDrone()` debug hook. (Joins the
+  live wave roster with ENMY-10.)
+
+Coverage: 5 Playwright QA tests (`tests/qa/24-suppress.spec.js`: in-aura
+slowdown, no-drone baseline =1, kill restores regen, no fatal errors); full unit
+suite (1442) + cloak/blink QA regression green.
+
 ## [6.181.0] - 2026-05-25
 
 ### Added — Blinking burrowers: the WRAITHWORM (ENMY blink-burrow slice)

@@ -643,6 +643,31 @@ export const ENEMY_TYPES = {
         visual: { shape: 'spiked_circle', glowColor: '#8af0ff', trailLength: 16 },
         ai: { evasion: 0.5, preferredRange: 300, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
+
+    // ENMY-10 — NULL_DRONE: a slow Volt SUPPORT drone (suppress-aura.js). It
+    // projects a skill-suppress aura — while the player stands inside, their
+    // skill-cooldown REGEN runs at `cooldownScale` speed (slower recharge). It
+    // does NOT hard-lock activation (blocksActivation:false — less punishing;
+    // "kill the drone to get your tempo back"). The `suppressAura` config is
+    // copied onto the instance by initializeEnemy and read each frame by
+    // collision-system.applySuppressAura. Low/modest HP + slow + standoff so it
+    // hangs back and projects rather than ramming. A normal killable enemy.
+    NULL_DRONE: {
+        name: 'Null Drone',
+        color: '#7a5fff',
+        health: 7,
+        speed: 1.8,
+        size: 32,
+        shootPattern: 'hunter_single',
+        shootRate: 0.22,
+        movePattern: 'keep_distance',
+        points: 165,
+        suppressAura: { radius: 220, cooldownScale: 0.35, blocksActivation: false },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.08, rotationSpeed: { min: -0.012, max: 0.012 }, preferredDistance: 320 },
+        firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1600, max: 5200 } },
+        visual: { shape: 'shield_turret', glowColor: '#a98aff', trailLength: 14 },
+        ai: { evasion: 0.4, preferredRange: 320, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -669,6 +694,7 @@ const ENEMY_ELEMENTS = {
     LUMEN_DRONE: 'RADIANT', // E8d — radiant ally-shield support
     PHANTOM:     'VOID',    // ENMY-03 — cloaking Void skirmisher
     WRAITHWORM:  'VOLT',    // ENMY-07 — blink/burrow Volt skirmisher
+    NULL_DRONE:  'VOLT',    // ENMY-10 — skill-suppress Volt support drone
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -696,6 +722,7 @@ const ENEMY_RESISTS = {
     LUMEN_DRONE: { RADIANT: 0.50, VOID: -0.40 },               // E8d — radiant-tough support; Void snuffs it
     PHANTOM:     { VOID: 0.40, RADIANT: -0.50 },               // ENMY-03 — Void-tough cloaker; Radiant lights it up
     WRAITHWORM:  { VOLT: 0.40, CRYO: -0.50 },                  // ENMY-07 — Volt-tough burrower; Cryo CHILLs it so it can't blink away
+    NULL_DRONE:  { VOLT: 0.40, RADIANT: -0.50 },               // ENMY-10 — Volt-tough support drone; Radiant snuffs the suppress aura
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

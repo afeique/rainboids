@@ -154,6 +154,13 @@ export class Enemy {
         // recycled into a non-blink type can't carry a stale blink. The config
         // may carry `blinkOpts` (kind/range/interval/telegraph timings).
         this.blink = this.config.blink ? createBlink(this.config.blinkOpts) : null;
+        // SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE). Carry the type's
+        // `suppressAura` config { radius, cooldownScale, blocksActivation } onto
+        // the instance (or NULL for every other type, so a pooled enemy recycled
+        // into a non-drone type can't project a stale aura). Read each frame by
+        // collision-system.applySuppressAura → applySuppression. No created
+        // state — it's a plain read-only config the helper consumes.
+        this.suppressAura = this.config.suppressAura || null;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player

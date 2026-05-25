@@ -13,6 +13,10 @@ import { drawBossHealthbarHook } from './boss-healthbar.js';
 import { drawThreatLevelHook } from './threat-level.js';
 import { drawBossFxHook } from '../enemy/boss-fx.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
+// SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE) HUD cue. isSuppressed is
+// false unless an active suppression stamp is live, so the slot-bar tint below
+// is a no-op for a player not standing in a drone's aura.
+import { isSuppressed } from '../enemy/abilities/suppress-aura.js';
 // 5.92.0 — Mobile HUD simplification: hide the coins readout,
 // survival timer, and loadout/weapon meters in mobile mode so the
 // player has a clean top-left status panel (health + triforce + XP)
@@ -1796,6 +1800,12 @@ export function drawAbilitySlotBar(ctx, leftX, bottomY) {
     const radius = 9;
     const top = bottomY - slotSize; // bar grows upward from bottomY
 
+    // SYS-9 / ENMY-10 — NULL_DRONE suppress cue. While the player stands in a
+    // drone's aura, tint the slot bar violet + tag it so the slowed recharge is
+    // legible. isSuppressed defaults false (no stamp) ⇒ this whole block is
+    // skipped for a player not in an aura.
+    const suppressed = isSuppressed(this.player, Date.now());
+
     for (let slot = 0; slot < 4; slot++) {
         const sx = leftX + slot * (slotSize + slotGap);
         const cx = sx + slotSize / 2;
@@ -1865,6 +1875,18 @@ export function drawAbilitySlotBar(ctx, leftX, bottomY) {
             ctx.globalAlpha = 1;
         }
 
+        // SYS-9 / ENMY-10 — suppress tint: a translucent violet wash + outline
+        // over the slot while suppressed (the NULL_DRONE accent color).
+        if (suppressed) {
+            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
+            ctx.fillStyle = 'rgba(122, 95, 255, 0.28)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(169, 138, 255, 0.85)';
+            ctx.lineWidth = 1.5;
+            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
+            ctx.stroke();
+        }
+
         ctx.restore();
 
         // Keybind label (1–4) in the slot's top-left corner. Drawn after
@@ -1880,6 +1902,24 @@ export function drawAbilitySlotBar(ctx, leftX, bottomY) {
         const keyLabel = `${slot + 1}`;
         ctx.strokeText(keyLabel, sx + 3, top + 3);
         ctx.fillText(keyLabel, sx + 3, top + 3);
+        ctx.restore();
+    }
+
+    // SYS-9 / ENMY-10 — a tiny "SUPPRESSED" tag above the bar while in a
+    // NULL_DRONE aura. Canvas-drawn (DOM ui:show-message is dead). Skipped
+    // entirely when not suppressed.
+    if (suppressed) {
+        ctx.save();
+        ctx.font = "7px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#c9b6ff';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        const tag = 'SUPPRESSED';
+        ctx.strokeText(tag, leftX + 1, top - 5);
+        ctx.fillText(tag, leftX + 1, top - 5);
         ctx.restore();
     }
 }

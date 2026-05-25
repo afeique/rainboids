@@ -11,6 +11,11 @@ import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { elementalMultiplier, multiElementMultiplier, adaptResist, ELEMENTS } from './elements.js';
 import { allyShieldMult } from '../enemy/support-aura.js';
+// SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE). Per-frame ENEMY→PLAYER
+// debuff: applySuppression stamps the player's _skill* fields when they stand
+// in a NULL_DRONE's aura. Gated on `enemy.suppressAura`, so this is a no-op for
+// every other enemy. Mirrors the GravityWell / Eye-of-the-Storm aura wrappers.
+import { applySuppression } from '../enemy/abilities/suppress-aura.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
 //   Duplicated here (rather than imported) because wave-manager.js bundles
@@ -2355,6 +2360,26 @@ export function applyEyeOfTheStorm() {
             b.vel.x *= EYE_SLOW_FACTOR;
             b.vel.y *= EYE_SLOW_FACTOR;
         }
+    }
+}
+
+// SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE). Per-frame engine wrapper
+// that mirrors applyGravityWell / applyEyeOfTheStorm: scan the active enemies
+// and, for any carrying a `suppressAura`, stamp the player's suppression fields
+// while they stand inside (applySuppression handles the radius test + the timed
+// linger). DEFAULT-SAFE: no enemy with `suppressAura` ⇒ the loop stamps nothing
+// ⇒ the player's _skill* fields stay unset ⇒ cooldownRegenScale === 1. Uses the
+// same frameClock.now the other auras read, so the suppression stamp + the
+// abilities.js regen read agree on the wall-clock.
+export function applySuppressAura() {
+    const p = this.player;
+    if (!p) return;
+    const pool = (this.enemyPool && this.enemyPool.activeObjects) || null;
+    if (!pool) return;
+    const now = frameClock.now;
+    for (const e of pool) {
+        if (!e || !e.active || !e.suppressAura || e.warping || e._deathFlash > 0) continue;
+        applySuppression(e, p, now);
     }
 }
 
