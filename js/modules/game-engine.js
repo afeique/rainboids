@@ -37,7 +37,11 @@ import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout } from './shop/armory.js';
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
-import { MAX_STAGES, DEFAULT_RUN_CONFIG, runMaxWaves } from './core/constants.js';
+import { MAX_STAGES, WAVES_PER_STAGE, DEFAULT_RUN_CONFIG, runMaxWaves } from './core/constants.js';
+// DIR-03 — canonical difficulty mode list + fallback (the DIR-02 table is the
+// single source of truth; imported directly so game-engine doesn't depend on a
+// re-export from core/constants.js).
+import { MODES, DEFAULT_MODE } from './wave/difficulty-constants.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
@@ -1198,7 +1202,13 @@ export class GameEngine {
                 ? (loadout.runConfig.wavesPerStage | 0)
                 : [3, 6, 9].reduce((b, o) =>
                     Math.abs(o - loadout.runConfig.wavesPerStage) < Math.abs(b - loadout.runConfig.wavesPerStage) ? o : b, 3);
-            this.game.runConfig = { stages, wavesPerStage: wps };
+            // DIR-03 — carry the run's difficulty mode (valid MODES member,
+            // case-normalized; else NORMAL). beginPreRunFromTree already
+            // validated it, but re-guard here so a hand-crafted loadout can't
+            // smuggle a bogus mode into the run.
+            const rawMode = typeof loadout.runConfig.mode === 'string' ? loadout.runConfig.mode.toUpperCase() : '';
+            const mode = MODES.includes(rawMode) ? rawMode : DEFAULT_MODE;
+            this.game.runConfig = { stages, wavesPerStage: wps, mode };
         } else {
             this.game.runConfig = { ...DEFAULT_RUN_CONFIG };
         }
@@ -1358,8 +1368,14 @@ export class GameEngine {
             // RUN-01a — persist the run shape so CONTINUE resumes with the
             // same stages × wavesPerStage the run was started with. Old
             // saves lack this; restoreRunState defaults them to 10 × 3.
+            // DIR-03 — persist `mode` alongside the run shape (NORMAL fallback);
+            // old saves lack it, restoreRunState defaults them to NORMAL.
             runConfig: this.game.runConfig
-                ? { stages: this.game.runConfig.stages | 0, wavesPerStage: this.game.runConfig.wavesPerStage | 0 }
+                ? {
+                    stages: this.game.runConfig.stages | 0,
+                    wavesPerStage: this.game.runConfig.wavesPerStage | 0,
+                    mode: MODES.includes(this.game.runConfig.mode) ? this.game.runConfig.mode : DEFAULT_MODE,
+                }
                 : { ...DEFAULT_RUN_CONFIG },
             money: this.game.money | 0,
             // 5.88.0 — `lives` removed; energy tanks are now serialized via
@@ -1422,9 +1438,13 @@ export class GameEngine {
         if (snap.runConfig
             && typeof snap.runConfig.stages === 'number'
             && typeof snap.runConfig.wavesPerStage === 'number') {
+            // DIR-03 — restore `mode`; pre-DIR-03 saves lack it → NORMAL.
+            const rawMode = typeof snap.runConfig.mode === 'string' ? snap.runConfig.mode.toUpperCase() : '';
+            const mode = MODES.includes(rawMode) ? rawMode : DEFAULT_MODE;
             this.game.runConfig = {
                 stages: Math.max(1, snap.runConfig.stages | 0),
                 wavesPerStage: Math.max(1, snap.runConfig.wavesPerStage | 0),
+                mode,
             };
         } else {
             this.game.runConfig = { ...DEFAULT_RUN_CONFIG };
@@ -4420,14 +4440,25 @@ export class GameEngine {
         // RUN-06 — carry the chosen RUN SHAPE so the run honors it. Validate +
         // clamp here so a malformed selection can never produce a NaN-length
         // run; absent / invalid → undefined, and init() keeps the default 10×3.
+        // DIR-03 — also carry the chosen difficulty MODE (valid MODES member,
+        // case-normalized; else NORMAL). Mode is resolved independently of the
+        // run shape so a player can pick a non-default mode on the default 10×3
+        // shape (and vice-versa).
         const rawRc = sel && sel.runConfig;
+        const rawMode = rawRc && typeof rawRc.mode === 'string' ? rawRc.mode.toUpperCase() : '';
+        const mode = MODES.includes(rawMode) ? rawMode : DEFAULT_MODE;
         if (rawRc
             && typeof rawRc.stages === 'number' && isFinite(rawRc.stages)
             && typeof rawRc.wavesPerStage === 'number' && isFinite(rawRc.wavesPerStage)) {
             const stages = Math.max(10, Math.min(100, Math.round(rawRc.stages / 10) * 10));
             const wps = [3, 6, 9].reduce((b, o) =>
                 Math.abs(o - rawRc.wavesPerStage) < Math.abs(b - rawRc.wavesPerStage) ? o : b, 3);
-            loadout.runConfig = { stages, wavesPerStage: wps };
+            loadout.runConfig = { stages, wavesPerStage: wps, mode };
+        } else if (mode !== DEFAULT_MODE) {
+            // Non-default mode on the default run shape: carry it through so
+            // init() applies it (init()'s loadout branch supplies the default
+            // stages/wps clamps when a mode is present).
+            loadout.runConfig = { stages: MAX_STAGES, wavesPerStage: WAVES_PER_STAGE, mode };
         }
         try { saveMeta({ loadout }); } catch {}
         this._preRunTreeOpen = false;

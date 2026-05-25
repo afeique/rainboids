@@ -1,4 +1,12 @@
 // Game constants and configuration
+//
+// DIR-03 — the run's difficulty MODE lives on runConfig. The canonical mode
+// list (MODES) + fallback (DEFAULT_MODE) are owned by the DIR-02 difficulty
+// table; we import them here as the single source of truth rather than
+// duplicating the list. Safe import: difficulty-constants.js is a PURE module
+// (no imports at all), so there is NO cycle back into core/constants.js.
+import { MODES, DEFAULT_MODE } from '../wave/difficulty-constants.js';
+
 export const GAME_CONFIG = {
     // Game field dimensions (fixed logical resolution)
     FIELD_WIDTH: 1920,
@@ -348,25 +356,49 @@ export const BOSS_WAVE_INTERVAL = WAVES_PER_STAGE;
 // RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
 // The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
 // accessor below returns today's values when no runConfig is set.
+// DIR-03 adds `mode` (the §14 Adaptive Difficulty mode dimension); it
+// defaults to NORMAL so absent/invalid modes are byte-for-byte unchanged.
 // runConfig is plumbing only this phase — the RUN-06 UI will let
 // players pick other values later; for now it is always the default.
-export const DEFAULT_RUN_CONFIG = { stages: MAX_STAGES, wavesPerStage: WAVES_PER_STAGE };
+export const DEFAULT_RUN_CONFIG = { stages: MAX_STAGES, wavesPerStage: WAVES_PER_STAGE, mode: DEFAULT_MODE };
 
 // Pure: read a game-like object's runConfig, falling back to the
 // default. Guards against missing / non-numeric / sub-1 values so the
 // downstream math (runMaxWaves, the stage helpers) never produces NaN
 // or a zero-length run. NO side effects, NO game-state imports.
+// DIR-03 — also resolves `mode`: a valid MODES member (case-normalized to
+// upper) is kept; anything else (absent / bogus / wrong case-not-in-set)
+// falls back to DEFAULT_MODE. mode is resolved independently of the
+// stages/wavesPerStage validation so a valid mode survives even when the
+// run-shape fields are missing/invalid (and vice-versa).
 export function getRunConfig(game) {
     const rc = game && game.runConfig;
+    // Resolve mode first so it can ride on either branch below.
+    let mode = DEFAULT_MODE;
+    if (rc && typeof rc.mode === 'string') {
+        const up = rc.mode.toUpperCase();
+        if (MODES.includes(up)) mode = up;
+    }
     if (rc
         && typeof rc.stages === 'number' && isFinite(rc.stages)
         && typeof rc.wavesPerStage === 'number' && isFinite(rc.wavesPerStage)) {
         return {
             stages: Math.max(1, rc.stages | 0),
             wavesPerStage: Math.max(1, rc.wavesPerStage | 0),
+            mode,
         };
     }
-    return DEFAULT_RUN_CONFIG;
+    // Run-shape invalid/absent → default shape, but still honor a valid mode.
+    return mode === DEFAULT_MODE
+        ? DEFAULT_RUN_CONFIG
+        : { ...DEFAULT_RUN_CONFIG, mode };
+}
+
+// DIR-03 — the run's difficulty mode, always a valid MODES member
+// (NORMAL fallback for missing/invalid). Pure; nothing reads it for
+// gameplay yet (DIR-04/08/09 will consume it).
+export function getRunMode(game) {
+    return getRunConfig(game).mode;
 }
 
 // Total waves in the run = stages × wavesPerStage (default → 30).

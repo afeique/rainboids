@@ -8,6 +8,7 @@
 import {
     DEFAULT_RUN_CONFIG,
     getRunConfig,
+    getRunMode,
     runMaxWaves,
     runWavesPerStage,
     getStage,
@@ -33,6 +34,11 @@ describe('DEFAULT_RUN_CONFIG', () => {
         expect(DEFAULT_RUN_CONFIG.wavesPerStage).toBe(3);
         expect(DEFAULT_RUN_CONFIG.stages * DEFAULT_RUN_CONFIG.wavesPerStage).toBe(MAX_WAVES);
     });
+
+    // DIR-03 — default mode is NORMAL (default-safe).
+    test('default mode is NORMAL', () => {
+        expect(DEFAULT_RUN_CONFIG.mode).toBe('NORMAL');
+    });
 });
 
 describe('getRunConfig()', () => {
@@ -48,6 +54,8 @@ describe('getRunConfig()', () => {
     });
 
     test('returns the default when runConfig is invalid (non-numeric / NaN / Infinity)', () => {
+        // DIR-03 — these have no valid mode either, so they collapse to the
+        // full default (now including mode: 'NORMAL').
         expect(getRunConfig({ runConfig: { stages: 'x', wavesPerStage: 3 } })).toEqual(DEFAULT_RUN_CONFIG);
         expect(getRunConfig({ runConfig: { stages: 10 } })).toEqual(DEFAULT_RUN_CONFIG);
         expect(getRunConfig({ runConfig: { stages: NaN, wavesPerStage: 3 } })).toEqual(DEFAULT_RUN_CONFIG);
@@ -55,20 +63,71 @@ describe('getRunConfig()', () => {
     });
 
     test('returns the configured value when present and valid', () => {
+        // DIR-03 — a valid run shape with no mode resolves mode → NORMAL.
         expect(getRunConfig({ runConfig: { stages: 20, wavesPerStage: 6 } }))
-            .toEqual({ stages: 20, wavesPerStage: 6 });
+            .toEqual({ stages: 20, wavesPerStage: 6, mode: 'NORMAL' });
     });
 
     test('clamps stages / wavesPerStage to >= 1', () => {
         expect(getRunConfig({ runConfig: { stages: 0, wavesPerStage: 0 } }))
-            .toEqual({ stages: 1, wavesPerStage: 1 });
+            .toEqual({ stages: 1, wavesPerStage: 1, mode: 'NORMAL' });
         expect(getRunConfig({ runConfig: { stages: -5, wavesPerStage: -2 } }))
-            .toEqual({ stages: 1, wavesPerStage: 1 });
+            .toEqual({ stages: 1, wavesPerStage: 1, mode: 'NORMAL' });
     });
 
     test('floors fractional values to integers', () => {
         expect(getRunConfig({ runConfig: { stages: 10.9, wavesPerStage: 3.7 } }))
-            .toEqual({ stages: 10, wavesPerStage: 3 });
+            .toEqual({ stages: 10, wavesPerStage: 3, mode: 'NORMAL' });
+    });
+});
+
+// ── DIR-03 — difficulty MODE on runConfig ─────────────────────────────────
+describe('getRunConfig() — mode (DIR-03)', () => {
+    test('mode is NORMAL when absent or runConfig is invalid', () => {
+        expect(getRunConfig().mode).toBe('NORMAL');
+        expect(getRunConfig({}).mode).toBe('NORMAL');
+        expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3 } }).mode).toBe('NORMAL');
+    });
+
+    test('keeps a valid mode', () => {
+        for (const m of ['EASY', 'NORMAL', 'HARD', 'EPIC', 'LEGENDARY']) {
+            expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: m } }).mode).toBe(m);
+        }
+    });
+
+    test('case-normalizes mode to upper', () => {
+        expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: 'normal' } }).mode).toBe('NORMAL');
+        expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: 'legendary' } }).mode).toBe('LEGENDARY');
+        expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: 'HaRd' } }).mode).toBe('HARD');
+    });
+
+    test('rejects a bogus mode → NORMAL', () => {
+        expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: 'NIGHTMARE' } }).mode).toBe('NORMAL');
+        expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: 42 } }).mode).toBe('NORMAL');
+        expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: '' } }).mode).toBe('NORMAL');
+        expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: null } }).mode).toBe('NORMAL');
+    });
+
+    test('a valid mode survives even when the run shape is invalid', () => {
+        // Mode is resolved independently of stages/wavesPerStage: a valid mode
+        // on a broken shape still yields the default shape + that mode.
+        expect(getRunConfig({ runConfig: { stages: 'x', wavesPerStage: 3, mode: 'hard' } }))
+            .toEqual({ ...DEFAULT_RUN_CONFIG, mode: 'HARD' });
+    });
+});
+
+describe('getRunMode() (DIR-03)', () => {
+    test('NORMAL fallback for missing / invalid', () => {
+        expect(getRunMode()).toBe('NORMAL');
+        expect(getRunMode(null)).toBe('NORMAL');
+        expect(getRunMode({})).toBe('NORMAL');
+        expect(getRunMode({ runConfig: { stages: 10, wavesPerStage: 3 } })).toBe('NORMAL');
+        expect(getRunMode({ runConfig: { stages: 10, wavesPerStage: 3, mode: 'BOGUS' } })).toBe('NORMAL');
+    });
+
+    test('returns the resolved (case-normalized) mode', () => {
+        expect(getRunMode({ runConfig: { stages: 10, wavesPerStage: 3, mode: 'EPIC' } })).toBe('EPIC');
+        expect(getRunMode({ runConfig: { stages: 10, wavesPerStage: 3, mode: 'easy' } })).toBe('EASY');
     });
 });
 
