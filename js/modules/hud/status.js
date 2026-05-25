@@ -10,6 +10,7 @@ import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
 import { drawItemFeed } from './item-feed.js';
 import { drawBossHealthbarHook } from './boss-healthbar.js';
+import { drawBossFxHook } from '../enemy/boss-fx.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 // 5.92.0 — Mobile HUD simplification: hide the coins readout,
 // survival timer, and loadout/weapon meters in mobile mode so the
@@ -55,6 +56,11 @@ export function drawHUD() {
             // only while a boss-flagged enemy is alive (the hook scans the
             // active enemy pool and no-ops otherwise).
             drawBossHealthbarHook.call(this);
+            // BOSS-03 — Boss intro/death canvas FX (name-card sweep +
+            // death detonation). Co-located with the healthbar hook; the
+            // hook scans the pool for a boss playing an intro/death
+            // sequence and no-ops otherwise.
+            drawBossFxHook.call(this);
         } else {
             // Clear stale rects so input handlers don't act on them.
             this._hudButtonRects = null;

@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.167.0] - 2026-05-24
+
+### Added — Boss intro/death FX (BOSS-03)
+
+- **`js/modules/enemy/boss-fx.js`** — canvas FX driven by the shipped boss intro/
+  death sequence runner: a **name-card sweep** (in/hold/out, element-tinted), a
+  **death detonation** (expanding shockwave + flash, multi-stage aware), and a
+  pure deterministic **camera-shake** contribution (`bossFxCameraShake`). Pure
+  layout helpers + renderers; hooked into the HUD draw path (`hud/status.js`)
+  alongside the boss healthbar. 19 unit tests.
+- Note: the camera-shake offset is exposed but not yet summed into the engine
+  shake loop — that wiring lands with the boss spawn integration (BOSS-04).
+
+---
+
 ## [6.166.0] - 2026-05-24
 
 ### Added — Final 3 boss modules; all 10 boss content modules complete (BOSS-08/12/14)
