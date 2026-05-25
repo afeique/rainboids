@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.166.0] - 2026-05-24
+
+### Added — Final 3 boss modules; all 10 boss content modules complete (BOSS-08/12/14)
+
+- **GEMINI** (`bosses/gemini.js`, stage 4-12) — Pyro+Cryo twins with opposite
+  resists (forces both elements), a tether, and partner-enrage when one twin dies.
+- **THE WARDEN PRIME** (`bosses/warden-prime.js`, stage 8-24) — an adaptive resist
+  wall that climbs against your most-used element (forces rotation), plus a
+  telegraphed ADAPTIVE PURGE that resets + re-spikes its learning.
+- **THE PRISMARCH / OMEGA** (`bosses/prismarch.js`, stage 10-30, final) — a
+  5-aspect gauntlet walking all 7 elements, per-aspect themed weak-point ring +
+  signature telegraphed attack, `isFinalBoss` flag (run-complete wiring deferred
+  to the spawn integration, BOSS-04).
+
+With these, **all 10 boss modules** are built + headless unit-tested (Harbinger,
+Aegis, Lumen, Gemini, Maelstrom, Hivemother, Iron Throne, Warden Prime, Nullmaw,
+Prismarch). Still pending: spawn integration (BOSS-02/03/04) + smoke tests.
+
+---
+
 ## [6.165.0] - 2026-05-24
 
 ### Added — Three more boss modules (BOSS-10 / 11 / 13)
