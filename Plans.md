@@ -69,9 +69,9 @@ All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + 
 | ~~ENMY-02~~ | `js/modules/enemy/abilities/projectile-absorb.js` + test | ✅ **6.169.0** — maw-cone eats bullets→capped shield; beams/melee bypass; 39 tests | D |
 | ~~ENMY-03~~ | `…/cloak.js` + test | ✅ **6.169.0** — visible↔cloak cycle + fade; de-target unless MARK/AoE reveal; 21 tests | D |
 | ~~ENMY-04~~ | `…/reflect.js` + test | ✅ **6.169.0** — front-arc reflects player bullets→enemy bullets; beams/melee/reflected bypass; 28 tests | D |
-| ENMY-05 | NEW `…/buff-strip.js` + test | Strips a player powerup/skill-buff on hit *(A.E9-S8)* | — | D |
-| ENMY-06 | NEW `…/suppress-aura.js` + test | Aura stalls skill cooldowns / blocks activation *(A.E9-S9)* | — | D |
-| ENMY-07 | NEW `…/blink-burrow.js` + test | Periodic teleport/burrow w/ telegraph; frozen blocks *(A.E9-S10)* | ENMY-01 | D |
+| ~~ENMY-05~~ | `…/buff-strip.js` + test | ✅ **6.170.0** — Leech contact strips a random player powerup + suppresses re-grant; injectable RNG; 24 tests | D |
+| ~~ENMY-06~~ | `…/suppress-aura.js` + test | ✅ **6.170.0** — Null Drone aura stalls cooldown regen / blocks activation (linger-stamped, player-facing mirror of SYS-7); 26 tests | D |
+| ~~ENMY-07~~ | `…/blink-burrow.js` + test | ✅ **6.170.0** — periodic teleport/burrow composing the ENMY-01 telegraph; relocate-on-strike, frozen-blocks, vanish-mid-blink; 25 tests | D |
 | ENMY-08 | `enemy/enemy-data.js` + AI | Conduit Node (Volt support) *(A.E8c)* | ENMY-S7(shipped) | — (serialize w/ 09/10) |
 | ENMY-09 | `enemy/enemy-data.js` + AI | Batch-4 types: Devourer/Phantom/Prism-Mirror/Beacon *(A.E8d)* | ENMY-02/03/04 | — (serialize) |
 | ENMY-10 | `enemy/enemy-data.js` + AI | Batch-5: Leech/Null-Drone/Juggernaut/Thornback/Wraithworm + artillery *(A.E8e)* | ENMY-01/05/06/07 | — (serialize) |

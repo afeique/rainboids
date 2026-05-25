@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.170.0] - 2026-05-24
+
+### Added — Enemy enabling-system helpers, batch 2 (ENMY-05 / 06 / 07)
+
+Three more pure, unit-tested helper modules — completing the ENMY helper track
+(SYS-4..6, SYS-8..11 now all have standalone helpers). Same `support-aura.js`
+convention: explicit `now`, no globals, no rendering; wiring lands with the new
+enemy types.
+
+- **Player-buff strip** (`enemy/abilities/buff-strip.js`, SYS-8) — Leech contact
+  removes a random active player powerup and suppresses re-grant for a duration
+  (`listStrippablePowerups`, `pickStripTarget`, `stripPlayerBuff`,
+  `isBuffSuppressed`); RNG is injectable for determinism, un-strippable buffs are
+  respected.
+- **Skill-suppress aura** (`enemy/abilities/suppress-aura.js`, SYS-9) — Null Drone
+  aura stalls skill-cooldown regen and can hard-block activation while the player
+  is inside; linger-stamped like the ally aura (`playerInAura`,
+  `applySuppression`, `cooldownRegenScale`, `isActivationBlocked`, `isSuppressed`).
+  It is the player-facing mirror of the SYS-7 ally aura.
+- **Blink / burrow** (`enemy/abilities/blink-burrow.js`, SYS-10) — Tesla Wraith /
+  Wraithworm periodic relocation that **composes the ENMY-01 telegraph** as its
+  wind-up: relocates exactly once on the telegraph's strike, biases burrow
+  re-emergence toward the player, vanishes (skip-render/untargetable) mid-blink,
+  and cannot blink while frozen (`createBlink`, `canBlink`, `tickBlink`,
+  `chooseBlinkDestination`, `isVanished`).
+
+Coverage: +75 unit tests (1293 total). ENMY-01..07 helper modules complete; the
+ENMY track now moves to enemy-type definitions (ENMY-08..10).
+
 ## [6.169.0] - 2026-05-24
 
 ### Added — Enemy enabling-system helpers, batch 1 (ENMY-01 / 02 / 03 / 04)
