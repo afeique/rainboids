@@ -20,9 +20,38 @@
 //   Pd = 0.6·(hpRetainedFrac/expectedHpRetainedFrac) + 0.4·(hitsSurvived/expectedHits)
 // Po>1 ⇒ over-performing (killing faster than designed); Pd>1 ⇒ over-tanky.
 //
+// ── DIR-04 augmentation (§14 structural levers) ─────────────────────────────
+// The reactive two-axis controller above is KEPT INTACT. DIR-04 layers three
+// §14 levers the reactive loop lacked, all DEFAULT-SAFE (neutral at PWR_REF +
+// NORMAL ⇒ byte-for-byte the prior behavior):
+//   • PWR pre-load  — a strong build pre-faces tougher enemies immediately
+//                     instead of waiting ~10 reactive waves to ramp.
+//   • mode base     — a static per-mode bias on the effective difficulty.
+//   • mode bias     — EASY/HARD/… widen-or-tighten the reactive bands/rates/
+//                     clamps (NORMAL = the current constants, exactly).
+// CRITICAL: these fold into the EFFECTIVE difficulty getDifficulty/getThreatLevel
+// return (reactive_D × preload × mBase), clamped by a mode-aware ceiling so HP
+// can't explode into bullet-sponges. The reactive D_hp/D_thr the loop updates is
+// UNCHANGED — DIR-04 does not touch the update rule's math. The absolute baseline
+// curve's deep-run escalation is COMPUTED + EXPOSED via getEnemyPower for the
+// DIR-10 composer to consume later, but NOT applied to live D here.
+//
 // Pure: no globals, Date.now(), Math.random(), DOM, or game-module imports —
 // driven entirely by the `outcome` data the caller feeds + the `state` it
 // mutates. Unit-tests cleanly.
+
+import {
+    baseline,
+    pwrPreload,
+    PWR_REF,
+    modeBase,
+    modeMult,
+    modeBand,
+    modeRate,
+    MODES,
+    DEFAULT_MODE,
+    ENEMY_POWER_EXP,
+} from './difficulty-constants.js';
 
 /**
  * Tuning constants (Balance Model §8 final-targets table is authoritative).
@@ -67,6 +96,60 @@ function rateLimit(cur, next, frac) {
     return clamp(next, lo, hi);
 }
 
+// Validate a difficulty mode against the canonical MODES table; unknown / missing
+// modes fall back to DEFAULT_MODE (NORMAL) — same NORMAL-fallback contract the
+// difficulty-constants accessors use, surfaced here so state.mode is always valid.
+function validateMode(mode) {
+    return MODES.includes(mode) ? mode : DEFAULT_MODE;
+}
+
+// The combined preload × mode-base scalar folded onto the reactive axes to make
+// the EFFECTIVE difficulty. = 1.0 at PWR_REF + NORMAL (default-safe). preload is
+// already clamped [0.8, 3.0] by difficulty-constants.pwrPreload; mBase is the
+// static per-mode multiplier (1.0 at NORMAL).
+function contextScale(state) {
+    const preload = pwrPreload(state.pwr, PWR_REF); // 1.0 at PWR_REF, clamp [0.8,3.0]
+    const mBase = modeBase(state.mode);             // 1.0 at NORMAL
+    return { preload, mBase, scale: preload * mBase };
+}
+
+// Mode-biased reactive params. At NORMAL this returns the *unmodified* cfg values
+// (so NORMAL = current behavior, EXACTLY). For other modes it biases the reactive
+// loop toward that mode's intent without ever touching the update-rule MATH:
+//   • deadband ← scaled by the mode's relative band-WIDTH (a tighter band on a
+//     harder mode means the controller reacts to smaller deviations).
+//   • maxStep  ← the mode's UP rate (higher mode ramps faster toward pressure).
+//   • hpMax/thrMax ← lifted by the mode's MULT_MAX relative to NORMAL's, so a
+//     harder mode lets the reactive axes climb to higher reactive ceilings.
+// All biases collapse to identity at NORMAL because every ratio below is 1.0
+// there (band-width, up-rate, and MULT_MAX all read NORMAL's own row).
+function modeBiasedCfg(state) {
+    const c = state.cfg;
+    if (state.mode === DEFAULT_MODE) return c; // NORMAL ⇒ byte-identical reactive params
+
+    const [nBandLo, nBandHi] = modeBand(DEFAULT_MODE);
+    const [bandLo, bandHi] = modeBand(state.mode);
+    const nWidth = nBandHi - nBandLo;
+    const width = bandHi - bandLo;
+    const bandRatio = nWidth > 0 ? width / nWidth : 1; // 1.0 at NORMAL
+
+    const [nUp] = modeRate(DEFAULT_MODE);
+    const [up] = modeRate(state.mode);
+    const upRatio = nUp > 0 ? up / nUp : 1; // 1.0 at NORMAL
+
+    const [, nMultMax] = modeMult(DEFAULT_MODE);
+    const [, multMax] = modeMult(state.mode);
+    const ceilRatio = nMultMax > 0 ? multMax / nMultMax : 1; // 1.0 at NORMAL
+
+    return {
+        ...c,
+        deadband: c.deadband * bandRatio,
+        maxStep: c.maxStep * upRatio,
+        hpMax: c.hpMax * ceilRatio,
+        thrMax: c.thrMax * ceilRatio,
+    };
+}
+
 /**
  * Fresh director state. `opts` may override any DIRECTOR_DEFAULTS field (bounds,
  * alpha, deadband, …) — handy for tests. Both axes and both estimates start
@@ -75,6 +158,7 @@ function rateLimit(cur, next, frac) {
 export function createDirector(opts = {}) {
     const cfg = { ...DIRECTOR_DEFAULTS, ...opts };
     return {
+        // ── reactive core (UNCHANGED) ──
         D_hp: 1,
         D_thr: 1,
         Po: 1,
@@ -85,8 +169,30 @@ export function createDirector(opts = {}) {
         clearedFullHp: false,
         hpRetainedFrac: 1,
         clearTimeFrac: 1, // actualClearTime / targetClearTime (this wave)
+        // ── DIR-04 §14 context (DEFAULT-SAFE: PWR_REF + NORMAL ⇒ neutral) ──
+        // pwr: the build-strength prior (DIR-05 feeds the live PWR per wave); at
+        // PWR_REF the pre-load is exactly 1.0 so live difficulty is unchanged.
+        pwr: Number.isFinite(opts.pwr) ? opts.pwr : PWR_REF,
+        // mode: difficulty mode (validated against MODES; unknown ⇒ NORMAL).
+        mode: validateMode(opts.mode),
         cfg,
     };
+}
+
+/**
+ * DIR-05 hook — update the §14 context (build PWR + difficulty mode) the
+ * EFFECTIVE difficulty rides on, without disturbing the reactive Po/Pd/D state.
+ * Either field is optional; an omitted/invalid field is left unchanged (mode is
+ * re-validated, falling back to NORMAL only when an explicit unknown is passed).
+ * Returns `state` for chaining. DEFAULT-SAFE: setting pwr=PWR_REF + mode=NORMAL
+ * restores neutral context (= current behavior).
+ * @param {object} state director state from createDirector.
+ * @param {{pwr?: number, mode?: string}} [ctx]
+ */
+export function setDirectorContext(state, ctx = {}) {
+    if (Number.isFinite(ctx.pwr)) state.pwr = ctx.pwr;
+    if (ctx.mode !== undefined) state.mode = validateMode(ctx.mode);
+    return state;
 }
 
 /**
@@ -98,6 +204,12 @@ export function createDirector(opts = {}) {
  * Returns the smoothed `{ Po, Pd }` after folding.
  */
 export function recordWave(state, outcome = {}) {
+    // DIR-05 may piggyback the wave's build PWR / mode on the outcome so the
+    // EFFECTIVE difficulty pre-loads from this wave (default-safe: omitted ⇒
+    // unchanged; PWR_REF + NORMAL ⇒ neutral). Reactive math below is untouched.
+    if (Number.isFinite(outcome.pwr)) state.pwr = outcome.pwr;
+    if (outcome.mode !== undefined) state.mode = validateMode(outcome.mode);
+
     const a = state.cfg.alpha;
 
     // Offense composite (Po). 0.6 weight on DPS ratio, 0.4 on clear-speed ratio.
@@ -133,7 +245,10 @@ export function recordWave(state, outcome = {}) {
  * (only eases D_thr) → escalation (only bumps). Returns `{ D_hp, D_thr }`.
  */
 export function updateDifficulty(state) {
-    const c = state.cfg;
+    // Mode-biased reactive params (= state.cfg exactly at NORMAL → current
+    // behavior). The reactive UPDATE MATH below is unchanged; only the band /
+    // step / reactive-ceiling constants are biased by mode for non-NORMAL modes.
+    const c = modeBiasedCfg(state);
 
     // Cold start: waves 1–2 hold D=1.0 (collect data); begin adapting at wave 3.
     if (state.wave <= c.coldStartWaves) {
@@ -222,9 +337,32 @@ export function tickWave(state, outcome) {
     return updateDifficulty(state);
 }
 
-/** Current difficulty snapshot. */
+/**
+ * EFFECTIVE difficulty snapshot the live game reads. The reactive D_hp/D_thr are
+ * multiplied by the §14 context (PWR pre-load × mode base) and then clamped by a
+ * mode-aware ceiling so a strong build / hard mode pre-faces higher difficulty
+ * immediately WITHOUT inflating HP into bullet-sponges (the deep-run escalation
+ * rides enemyPower→density in DIR-10/composer, NOT D_hp here).
+ *
+ *   D_hp_eff  = clamp(D_hp_reactive · preload · mBase , hpMin , hpMax · MULT_MAX/2.5)
+ *   D_thr_eff = clamp(D_thr_reactive · preload · mBase, thrMin, thrMax · MULT_MAX/2.5)
+ *
+ * DEFAULT-SAFE: at PWR_REF + NORMAL, preload = mBase = 1.0 and the ceiling factor
+ * is 1.0 (MULT_MAX is NORMAL's own), so this returns EXACTLY { D_hp, D_thr } — the
+ * byte-for-byte prior behavior.
+ */
 export function getDifficulty(state) {
-    return { D_hp: state.D_hp, D_thr: state.D_thr };
+    const c = state.cfg;
+    const { scale } = contextScale(state);
+    // Mode-aware ceiling: lift the reactive bounds by this mode's MULT_MAX vs
+    // NORMAL's (1.0 at NORMAL). Keeps the APPLIED HP/threat bounded so the
+    // preload/mode multipliers can't explode into absurd HP.
+    const [, multMax] = modeMult(state.mode);
+    const [, nMultMax] = modeMult(DEFAULT_MODE);
+    const ceilRatio = nMultMax > 0 ? multMax / nMultMax : 1; // 1.0 at NORMAL
+    const D_hp = clamp(state.D_hp * scale, c.hpMin, c.hpMax * ceilRatio);
+    const D_thr = clamp(state.D_thr * scale, c.thrMin, c.thrMax * ceilRatio);
+    return { D_hp, D_thr };
 }
 
 /**
@@ -234,7 +372,12 @@ export function getDifficulty(state) {
  */
 export function getThreatLevel(state) {
     const c = state.cfg;
-    const combined = (state.D_hp + state.D_thr) / 2;
+    // Reflect the EFFECTIVE (preload × mode-included) difficulty so the HUD pip
+    // tracks what the player actually faces. At neutral context this equals the
+    // reactive (D_hp+D_thr)/2 mapping (= prior behavior). The pip range stays
+    // anchored on the reactive bounds (the meter is a coarse 1..5 indicator).
+    const eff = getDifficulty(state);
+    const combined = (eff.D_hp + eff.D_thr) / 2;
     const lo = (c.hpMin + c.thrMin) / 2;   // combined floor (≈0.6)
     const hi = (c.hpMax + c.thrMax) / 2;   // combined ceiling (≈2.4)
     const mid = THREAT_PIPS / 2 + 0.5;     // center pip (3 for 5 pips)
@@ -259,5 +402,51 @@ export function getThreatLevel(state) {
  * baseTier × D_hp; boss threat = base × D_thr.
  */
 export function lockForBoss(state) {
-    return Object.freeze({ D_hp: state.D_hp, D_thr: state.D_thr });
+    // Freeze the EFFECTIVE difficulty (reactive × preload × mode, clamped) so the
+    // boss inherits the same difficulty the live game is reading. At neutral
+    // context this equals { D_hp, D_thr } (= prior behavior; existing tests green).
+    return Object.freeze(getDifficulty(state));
+}
+
+/**
+ * DIR-04 — compute + EXPOSE the §14 absolute-baseline enemyPower and its split
+ * knobs for a given wave. This is the SOURCE the DIR-10 composer will consume to
+ * drive the deep-run escalation through enemy HP / damage / density — it does
+ * NOT change how the live game currently applies D_hp/D_thr (that stays via
+ * getDifficulty), so DIR-04 stays default-safe and avoids the bullet-sponge trap
+ * until count/density distribution lands.
+ *
+ *   enemyPower = baseline(wave) · mBase · directorMult · preload
+ *
+ * where `directorMult` maps the reactive offense axis (D_hp) to a single scalar:
+ * D_hp is the offense-outlet pressure (1.0 = on-design), so it IS the reactive
+ * "how much enemy mass to throw" multiplier — we use it directly as directorMult.
+ * The knobs split enemyPower by the ENEMY_POWER_EXP exponents (sum 1.0), so
+ * `hpMult · dmgMult · densityMult === enemyPower` exactly:
+ *   hpMult = enemyPower^0.5 · dmgMult = enemyPower^0.3 · densityMult = enemyPower^0.2
+ *
+ * @param {object} state director state.
+ * @param {number} wave 1-indexed wave number.
+ * @returns {{enemyPower:number, hpMult:number, dmgMult:number, densityMult:number,
+ *            baseline:number, mBase:number, directorMult:number, preload:number}}
+ */
+export function getEnemyPower(state, wave) {
+    const { preload, mBase } = contextScale(state);
+    const base = baseline(wave);
+    const directorMult = state.D_hp; // reactive offense-outlet pressure (1.0 = on-design)
+    const enemyPower = base * mBase * directorMult * preload;
+    const hpMult = Math.pow(enemyPower, ENEMY_POWER_EXP.hp);
+    const dmgMult = Math.pow(enemyPower, ENEMY_POWER_EXP.dmg);
+    const densityMult = Math.pow(enemyPower, ENEMY_POWER_EXP.density);
+    return {
+        enemyPower,
+        hpMult,
+        dmgMult,
+        densityMult,
+        // expose the factors for the composer / diagnostics
+        baseline: base,
+        mBase,
+        directorMult,
+        preload,
+    };
 }

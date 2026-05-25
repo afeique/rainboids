@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.189.0] - 2026-05-25
+
+### Added — Director §14 control-loop augmentation: PWR pre-load + mode bias (DIR-04)
+
+The live Adaptive Difficulty Director now supports the §14 structural levers,
+**augmenting** (not replacing) the validated two-axis Po/Pd reactive core +
+cross-term decoupling. **Default-safe:** at NORMAL mode + neutral PWR (PWR_REF)
+every new multiplier collapses to 1.0, so `getDifficulty` returns the exact
+current `{D_hp, D_thr}` trajectory — live difficulty is unchanged until DIR-05
+feeds real PWR and a non-default mode is chosen.
+
+- **PWR pre-load** — `getDifficulty` folds `pwrPreload(state.pwr)` (clamp
+  [0.8,3.0], = 1.0 at PWR_REF) into the effective D, so a strong build pre-faces
+  tougher enemies *immediately* (eliminates the ~9.7-wave reactive ramp lag the
+  stress analysis measured).
+- **Difficulty mode** — `state.mode` biases the effective D via `modeBase` + a
+  mode-aware ceiling (`MODE_MULT`), and biases the reactive deadband/step/clamps
+  (all = current at NORMAL).
+- **enemyPower exposed (not yet applied)** — new `getEnemyPower(state, wave)` =
+  `baseline(wave)·modeBase·directorMult·preload` split into hp/dmg/density via
+  the §14.6 exponents, for DIR-10 / the wave composer to distribute across *count*
+  (avoiding the bullet-sponge trap). Does NOT change the live D_hp/D_thr
+  application yet.
+- New API `setDirectorContext(state,{pwr,mode})` (DIR-05 hook) + `getEnemyPower`;
+  `getThreatLevel`/`lockForBoss` now reflect the effective D. FIX-01 net
+  rate-limit + cold-start preserved.
+
+Coverage: +19 unit tests (1559 total); stress script confirms 0 rate-limit
+breaches + neutral-default = prior behavior + pre-load eliminates the ramp lag.
+
 ## [6.188.0] - 2026-05-25
 
 ### Added — Adaptive Difficulty Director §14 foundation (DIR-01 / DIR-02 / DIR-03)
