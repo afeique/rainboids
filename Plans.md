@@ -65,10 +65,10 @@ All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + 
 ⚠ Many attach to enemy entities — prefer **new per-mechanic helper modules** (parallel) over editing `enemy.js` directly; serialize any `enemy.js`/`collision-system.js` edits.
 | ID | FILES (owned) | DOES *(old)* | DEPENDS | ∥group |
 |----|----|----|----|----|
-| ENMY-01 | NEW `js/modules/enemy/telegraph.js` + unit test | Reusable wind-up→strike helper *(A.E9-S11)* | — | D |
-| ENMY-02 | NEW `js/modules/enemy/abilities/projectile-absorb.js` + test | Maw-cone eats bullets→shield; beams/melee bypass *(A.E9-S4)* | — | D |
-| ENMY-03 | NEW `…/cloak.js` + test | Periodic invis + de-target; MARK/AoE reveals *(A.E9-S5)* | — | D |
-| ENMY-04 | NEW `…/reflect.js` + test | Front-arc reflects player bullets *(A.E9-S6)* | — | D |
+| ~~ENMY-01~~ | `js/modules/enemy/telegraph.js` + test | ✅ **6.169.0** — wind-up→strike→recover state machine (create/start/tick/phase/isStriking/progress); 15 tests | D |
+| ~~ENMY-02~~ | `js/modules/enemy/abilities/projectile-absorb.js` + test | ✅ **6.169.0** — maw-cone eats bullets→capped shield; beams/melee bypass; 39 tests | D |
+| ~~ENMY-03~~ | `…/cloak.js` + test | ✅ **6.169.0** — visible↔cloak cycle + fade; de-target unless MARK/AoE reveal; 21 tests | D |
+| ~~ENMY-04~~ | `…/reflect.js` + test | ✅ **6.169.0** — front-arc reflects player bullets→enemy bullets; beams/melee/reflected bypass; 28 tests | D |
 | ENMY-05 | NEW `…/buff-strip.js` + test | Strips a player powerup/skill-buff on hit *(A.E9-S8)* | — | D |
 | ENMY-06 | NEW `…/suppress-aura.js` + test | Aura stalls skill cooldowns / blocks activation *(A.E9-S9)* | — | D |
 | ENMY-07 | NEW `…/blink-burrow.js` + test | Periodic teleport/burrow w/ telegraph; frozen blocks *(A.E9-S10)* | ENMY-01 | D |

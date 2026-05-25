@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.169.0] - 2026-05-24
+
+### Added — Enemy enabling-system helpers, batch 1 (ENMY-01 / 02 / 03 / 04)
+
+Four new pure, unit-tested helper modules that give enemies distinctive
+mechanics. Each is standalone (no edits to `enemy.js` / `collision-system.js`
+yet — wiring lands with the new enemy types), matching the shipped
+`support-aura.js` (SYS-7) convention: explicit `now`, no globals, no rendering.
+
+- **Telegraphed strike** (`enemy/telegraph.js`, SYS-11) — reusable
+  wind-up → strike → recover state machine (`createTelegraph`, `startTelegraph`,
+  `tickTelegraph`, `telegraphPhase`, `isStriking`, `telegraphProgress`).
+  Generalizes TITAN's bespoke telegraph for Ashen / Juggernaut / boss attacks.
+- **Projectile absorption** (`enemy/abilities/projectile-absorb.js`, SYS-4) —
+  Devourer's maw cone eats player bullets for a capped temp shield; beams/melee
+  bypass (`shouldAbsorb`, `bulletInMawCone`, `absorbBullet`,
+  `absorbShieldRemaining`, `consumeAbsorbShield`). Shield is hard-capped so it
+  can stall but never grants immunity.
+- **Cloak / invisibility** (`enemy/abilities/cloak.js`, SYS-5) — Phantom's
+  periodic visible↔cloaked cycle with a fade window; cloaked enemies drop off
+  homing/aim unless MARKed or AoE-revealed (`tickCloak`, `isCloaked`,
+  `cloakAlpha`, `isTargetable`, `revealCloak`).
+- **Projectile reflection** (`enemy/abilities/reflect.js`, SYS-6) — Prism
+  Mirror's front-arc reflects player bullets back as enemy bullets; beams/melee
+  and already-reflected bullets bypass (`shouldReflect`, `bulletInReflectArc`,
+  `reflectVector`, `makeReflectedBullet`).
+
+Coverage: +103 unit tests (1218 total).
+
 ## [6.168.0] - 2026-05-24
 
 ### Added — Bosses are playable: spawn integration (BOSS-02 / BOSS-04 / BOSS-15)
