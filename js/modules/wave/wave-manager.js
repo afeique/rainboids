@@ -30,13 +30,48 @@ import { rewardMultiplier } from '../world/reward-dial.js';
 // chokepoint (applyEnemyLevelScaling) and feed the director one outcome per
 // wave clear (tickWave). Absent director ⇒ ×1.0 (default below) and no feed.
 import { getDifficulty, tickWave } from './difficulty-director.js';
+// DIR-07 — PWR_REF anchors the reference-dependent expected clear time. The
+// flat DIRECTOR_TARGET_CLEAR_MS below is scaled by the player's PWR relative to
+// this anchor so a strong build is judged against ITS OWN expected pace, not a
+// fixed clock (see expectedClearMsForPWR). Import only — power-level.js is
+// untouched by DIR-07.
+import { PWR_REF } from './power-level.js';
 
 // RUN-05a — wave-clear baselines (Balance Model first-pass targets; UNTUNED,
 // calibrated in RUN-07). The director's [0.6,3.0]/[0.6,1.8] clamps + cold-start
 // + ≤12%/wave rate-limit keep these safe even if a baseline is off.
-const DIRECTOR_TARGET_CLEAR_MS = 35000;       // target ~35s/wave
+const DIRECTOR_TARGET_CLEAR_MS = 35000;       // target ~35s/wave (a STARTER's reference)
 const DIRECTOR_EXPECTED_HP_RETAINED = 0.6;    // expect ~60% HP retained on clear
 const DIRECTOR_EXPECTED_HITS = 4;             // expect ~4 hits taken per wave
+
+// DIR-07 — reference-dependent expected clear time (§14.2 / §6.1: "fast/slow
+// clear is judged against the player's own power, not a fixed clock"). The
+// expected clear scales with the player's PWR: a stronger build is EXPECTED to
+// clear faster, so its reference clock is shorter — it must beat its OWN
+// expected pace to read as over-performing on the clear-speed half of Po.
+//
+// §14 (full model): expectedClearMs = threatBudget(wave) / estimatedPlayerDPS(PWR)
+// × pacing. We don't have the threat-budget/composer yet, so this FIRST PASS
+// uses the available signal — game.playerPWR (set by DIR-05; ≈ PWR_REF = 100 for
+// a starter) — as a DPS proxy:
+//   expectedClearMs = DIRECTOR_TARGET_CLEAR_MS · clamp( (PWR_REF/PWR)^0.5, LO, HI )
+// (RUN-07 refines this with the real threatBudget / estimated-DPS model.)
+//
+// Default-safe: a starter (PWR ≈ PWR_REF) → factor 1.0 → exactly 35 s
+// (byte-identical to the old flat behavior). A ~4× PWR build → √(1/4) = 0.5 →
+// ~17.5 s expected. Missing/NaN/≤0 PWR ⇒ treated as PWR_REF ⇒ neutral 35 s. The
+// LO/HI clamp keeps the factor in a sane band so it can't run away at extremes.
+const DIRECTOR_EXPECTED_CLEAR_PWR_LO = 0.3;   // strongest builds clamp to 30% of target
+const DIRECTOR_EXPECTED_CLEAR_PWR_HI = 1.5;   // weakest builds clamp to 150% of target
+const DIRECTOR_EXPECTED_CLEAR_PWR_EXP = 0.5;  // sqrt falloff (a 4× build ⇒ ×0.5 clock)
+export function expectedClearMsForPWR(playerPWR) {
+    const pwr = (Number.isFinite(playerPWR) && playerPWR > 0) ? playerPWR : PWR_REF;
+    let factor = Math.pow(PWR_REF / pwr, DIRECTOR_EXPECTED_CLEAR_PWR_EXP);
+    if (!Number.isFinite(factor)) factor = 1;
+    factor = Math.min(DIRECTOR_EXPECTED_CLEAR_PWR_HI,
+                      Math.max(DIRECTOR_EXPECTED_CLEAR_PWR_LO, factor));
+    return DIRECTOR_TARGET_CLEAR_MS * factor;
+}
 
 // RUN-05a — read the director's enemy-HP axis (D_hp). Returns 1.0 with no
 // director so untouched runs/tests are byte-identical. NOTE (RUN-05b/RUN-07
@@ -291,6 +326,12 @@ export function updateWaveSystem() {
 //     1/targetClearTime, so dpsOnTarget/expectedDps == targetClearTime/
 //     actualClearTime (clear faster ⇒ both halves of Po push >1). This is a
 //     stand-in until a real damage-on-target meter exists.
+//   • DIR-07 — targetClearTime is now REFERENCE-DEPENDENT on the player's PWR
+//     (not the flat 35 s constant): the caller passes expectedClearMsForPWR(PWR)
+//     so a stronger build's clear is judged against ITS OWN faster expected pace
+//     (§14.2 / §6.1). A starter (PWR ≈ PWR_REF) still resolves to 35 s, so the
+//     DPS-proxy relationship above is unchanged for the default case. This is a
+//     first pass; RUN-07 swaps the PWR proxy for the full threatBudget/DPS model.
 //   • hpRetainedFrac vs expectedHpRetainedFrac drive the HP-retained half of Pd.
 //   • hitsSurvived vs expectedHits drive the hits half of Pd.
 //   • clearedFullHp + clearTimeFrac feed the director's escalation/mercy gates.
@@ -331,25 +372,32 @@ export function feedDirectorOnWaveClear() {
         if (this.game) this.game._waveHits = 0;
         return;
     }
-    // M2 guard: spawnWaveEntities normally stamps `_waveStartMs` at wave start,
-    // but a restored/edge wave can reach clear before it was ever set. Without
-    // this guard, a falsy start time made `Date.now() - Date.now() === 0`, which
-    // buildDirectorOutcome clamps to 1ms → an absurdly high dpsRatio → Po
+    // DIR-07 — the expected clear is REFERENCE-DEPENDENT on the player's PWR
+    // (DIR-05 caches it on game.playerPWR; ≈ PWR_REF for a starter). A stronger
+    // build is expected to clear faster, so its reference clock is shorter — it
+    // must beat its OWN expected pace to read as over-performing. Missing/NaN PWR
+    // → PWR_REF → neutral 35 s (default-safe). See expectedClearMsForPWR.
+    const targetClearTime = expectedClearMsForPWR(this.game && this.game.playerPWR);
+    // M2 / FIX-02 guard: spawnWaveEntities normally stamps `_waveStartMs` at wave
+    // start, but a restored/edge wave can reach clear before it was ever set.
+    // Without this guard, a falsy start time made `Date.now() - Date.now() === 0`,
+    // which buildDirectorOutcome clamps to 1ms → an absurdly high dpsRatio → Po
     // explodes → D_hp slams toward its 3.0 ceiling in a single EMA fold (a
     // silent difficulty-spike failure mode). Treat a missing clock as NO
-    // clear-speed signal: default actualClearTime to the SAME target clear time
-    // buildDirectorOutcome uses (DIRECTOR_TARGET_CLEAR_MS), so the speed ratio
-    // lands at a neutral 1.0 (the wave still counts; it just doesn't move the
-    // clear-speed half of Po).
+    // clear-speed signal: default actualClearTime to the SAME (PWR-referenced)
+    // target clear time buildDirectorOutcome uses, so the speed ratio lands at a
+    // neutral 1.0 (the wave still counts; it just doesn't move the clear-speed
+    // half of Po) regardless of how the PWR reference scaled the clock.
     const actualClearTime = this._waveStartMs
         ? Date.now() - this._waveStartMs
-        : DIRECTOR_TARGET_CLEAR_MS;
+        : targetClearTime;
     const maxHp = (this.player && typeof this.player.getEffectiveMaxHealth === 'function')
         ? this.player.getEffectiveMaxHealth()
         : (this.player && this.player.maxHealth) || 1;
     const hpRetainedFrac = (this.player && maxHp > 0) ? this.player.health / maxHp : 1;
     const outcome = buildDirectorOutcome({
         actualClearTime,
+        targetClearTime,
         hpRetainedFrac,
         hitsSurvived: this.game._waveHits || 0,
         // deaths not separately tracked per wave this pass — Pd leans on

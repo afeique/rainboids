@@ -811,6 +811,34 @@ export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
         const sphereCX = levelLabelX + levelTextW + 16 + spPipW + sphereR;
         drawEnergySphere.call(this, ctx, sphereCX, shieldCenterY, sphereR);
 
+        // DIR-06 (§13.6) — Power Level (PWR) readout. A compact "P {value}"
+        // beside the level/shield cluster (right of the energy sphere) so the
+        // player sees their build strength climb — the competence scoreboard
+        // that pairs with the CD-16 THREAT meter ("PWR vs THREAT"). DIR-05
+        // computes + caches `game.playerPWR` at each wave start; here we only
+        // READ it. Defensive: if it's undefined/NaN (a save mid-migration, or
+        // before DIR-05 runs) we fall back to the neutral reference (≈100) so
+        // the readout never throws and never reads blank.
+        const PWR_FALLBACK = 100;
+        const rawPwr = this.game ? this.game.playerPWR : undefined;
+        const pwrVal = Number.isFinite(rawPwr) ? Math.round(rawPwr) : PWR_FALLBACK;
+        // Queryable marker for QA (mirrors `_threatLevelDrawn`).
+        this._pwrDrawn = pwrVal;
+        const pwrText = `P ${pwrVal}`;
+        const pwrX = sphereCX + sphereR + 12;
+        ctx.save();
+        ctx.font = "10px 'Press Start 2P', monospace";
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        // Warm violet-gold — reads as "your power", distinct from the THREAT
+        // meter's cool→hot pip ramp. Subtle, like the level number.
+        ctx.fillStyle = '#c9a6ff';
+        ctx.strokeText(pwrText, pwrX, shieldCenterY);
+        ctx.fillText(pwrText, pwrX, shieldCenterY);
+        ctx.restore();
+
         ctx.restore();
 }
 

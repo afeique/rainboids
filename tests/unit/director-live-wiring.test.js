@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, test } from '@jest/globals';
-import { buildDirectorOutcome } from '../../js/modules/wave/wave-manager.js';
+import { buildDirectorOutcome, expectedClearMsForPWR } from '../../js/modules/wave/wave-manager.js';
 import {
     createDirector,
     tickWave,
@@ -120,6 +120,84 @@ describe('RUN-05a — buildDirectorOutcome (pure outcome builder)', () => {
         for (let i = 0; i < 7; i++) tickWave(dir, neutral());
         expect(dir.wave).toBe(7);
         expect(getDifficulty(dir).D_hp).toBeCloseTo(1.0, 6);
+    });
+});
+
+// ── DIR-07 — reference-dependent expected clear time ─────────────────────────
+// The expected clear fed to the director (as targetClearTime) now scales with
+// the player's PWR: a stronger build is EXPECTED to clear faster, so its
+// reference clock is shorter (§14.2 / §6.1). expectedClearMsForPWR is the pure
+// helper wave-manager's live feed (feedDirectorOnWaveClear) uses.
+describe('DIR-07 — expected clear time is reference-dependent on PWR', () => {
+    const TARGET = 35000; // DIRECTOR_TARGET_CLEAR_MS (a starter's reference clock)
+
+    test('a starter PWR (= PWR_REF) yields exactly 35000ms (default-safe, unchanged)', () => {
+        expect(expectedClearMsForPWR(PWR_REF)).toBe(TARGET);
+        // a real fresh starter computes to PWR_REF, so the live feed is unchanged
+        expect(expectedClearMsForPWR(computePWR(starterStub()))).toBe(TARGET);
+    });
+
+    test('a high PWR (4×PWR_REF) yields a proportionally SHORTER expected clear (≈ ×0.5)', () => {
+        // sqrt(1/4) = 0.5 → ~17.5s. Well inside the [0.3, 1.5] clamp band.
+        const ms = expectedClearMsForPWR(4 * PWR_REF);
+        expect(ms).toBeCloseTo(TARGET * 0.5, 6);
+        expect(ms).toBeLessThan(TARGET);
+        // monotonic: stronger build ⇒ shorter (or equal at the clamp) reference.
+        expect(expectedClearMsForPWR(2 * PWR_REF)).toBeLessThan(expectedClearMsForPWR(PWR_REF));
+        expect(expectedClearMsForPWR(8 * PWR_REF)).toBeLessThan(expectedClearMsForPWR(4 * PWR_REF));
+    });
+
+    test('the factor is clamped to the LO/HI band at extremes', () => {
+        // Absurdly strong build: factor floored at LO=0.3 → 0.3 × 35000 = 10500.
+        expect(expectedClearMsForPWR(1e9)).toBeCloseTo(TARGET * 0.3, 6);
+        // Very weak build (PWR ≪ PWR_REF): factor capped at HI=1.5 → 52500.
+        expect(expectedClearMsForPWR(1)).toBeCloseTo(TARGET * 1.5, 6);
+    });
+
+    test('missing / NaN / non-positive PWR ⇒ neutral 35000ms', () => {
+        expect(expectedClearMsForPWR(undefined)).toBe(TARGET);
+        expect(expectedClearMsForPWR(null)).toBe(TARGET);
+        expect(expectedClearMsForPWR(NaN)).toBe(TARGET);
+        expect(expectedClearMsForPWR(0)).toBe(TARGET);
+        expect(expectedClearMsForPWR(-50)).toBe(TARGET);
+    });
+
+    test('fed as targetClearTime: a strong build that clears at the OLD 35s pace now OVER-performs', () => {
+        // A strong build (4×PWR) is expected to clear in ~17.5s. If it instead
+        // takes the full 35s, its clear-speed signal reads UNDER-performing
+        // (ratio < 1) — exactly the reference-dependent judgement DIR-07 adds.
+        const strongTarget = expectedClearMsForPWR(4 * PWR_REF);
+        const slowForItsPower = buildDirectorOutcome({
+            actualClearTime: 35000,
+            targetClearTime: strongTarget,
+            hpRetainedFrac: 1,
+        });
+        // dpsOnTarget/expectedDps == targetClearTime/actualClearTime < 1 (slow for its power).
+        expect(slowForItsPower.dpsOnTarget / slowForItsPower.expectedDps).toBeLessThan(1);
+        // The SAME 35s clear from a STARTER reads neutral (ratio 1.0) — unchanged.
+        const starterTarget = expectedClearMsForPWR(PWR_REF);
+        const neutralForStarter = buildDirectorOutcome({
+            actualClearTime: 35000,
+            targetClearTime: starterTarget,
+            hpRetainedFrac: 1,
+        });
+        expect(neutralForStarter.dpsOnTarget / neutralForStarter.expectedDps).toBeCloseTo(1.0, 10);
+    });
+
+    // FIX-02 / M2 — the unset-`_waveStartMs` path substitutes the PWR-referenced
+    // target as actualClearTime, so the speed ratio stays neutral (1.0) — no
+    // spike — even when PWR scaled the clock away from 35s. Model that path here.
+    test('M2/FIX-02: no-clock wave at a PWR-scaled reference still yields a neutral ratio', () => {
+        for (const pwr of [PWR_REF, 4 * PWR_REF, 1, 1e9]) {
+            const target = expectedClearMsForPWR(pwr);
+            // The live guard sets actualClearTime = target when _waveStartMs is unset.
+            const o = buildDirectorOutcome({
+                actualClearTime: target,
+                targetClearTime: target,
+                hpRetainedFrac: 1,
+            });
+            expect(o.dpsOnTarget / o.expectedDps).toBeCloseTo(1.0, 10);
+        }
     });
 });
 

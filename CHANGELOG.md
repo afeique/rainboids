@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.191.0] - 2026-05-25
+
+### Added — PWR HUD readout + reference-dependent expected-clear (DIR-06 / DIR-07)
+
+- **DIR-06** (`hud/status.js`) — the HUD now shows a **`P {value}`** Power-Level
+  readout beside the level/energy cluster (violet, reads as "your power" vs the
+  cool→hot THREAT meter — the §13.6 "PWR vs THREAT" pairing). Reads
+  `game.playerPWR` defensively (NaN/missing → neutral `P 100`).
+- **DIR-07** (`wave-manager.js`) — the director's expected clear time is now
+  **reference-dependent on PWR** instead of a flat 35 s:
+  `expectedClearMs = 35000 · clamp((PWR_REF/playerPWR)^0.5, 0.3, 1.5)`. A stronger
+  build is *expected* to clear faster (shorter reference), so it must beat its
+  **own** pace to read as over-performing — "fast/slow" is judged against the
+  build's power, not a fixed clock. Default-safe (starter PWR ≈ PWR_REF → 35 s,
+  unchanged); the FIX-02 no-clock guard still yields a neutral ratio. First-pass;
+  RUN-07 refines with the full threatBudget/DPS model.
+
+Coverage: +6 unit tests (1597 total) + PWR-HUD & director-live QA green. Next:
+DIR-10 (apply `getEnemyPower` across spawn count — deep-run escalation without
+bullet sponges) + RUN-07 calibration.
+
 ## [6.190.0] - 2026-05-25
 
 ### Added — §14 director levers go live: PWR feed + mode rewards + mode selector (DIR-05 / 08 / 09)
