@@ -158,7 +158,7 @@ Full detail in `docs/Combat Depth — Implementation Plan (consolidated) – 202
 |----|----|----|----|
 | CD-14 | `ui/sp-allocation.js` | Surface Capacitor/Reactor/Efficiency/Regeneration in SP grid | CD-01 |
 | CD-15 | `ui/icons.js` | Icons for new stats/abilities/passives | — |
-| CD-16 | NEW `js/modules/hud/threat-level.js` + HUD hook | **R-THREATUI**: 5-pip cool→hot threat meter; "THREAT ↑" toast; fed by `director.getThreatLevel()` | RUN-04 |
+| ~~CD-16~~ | `js/modules/hud/threat-level.js` + `hud/status.js` hook | ✅ **6.172.0** — **R-THREATUI**: 5-chevron cool→hot threat meter (top-center) + THREAT ↑/↓ toast/pulse; pure layout/anim core; defensive hook reads `getThreatLevel()` (or `_debugThreatLevel` test seam), no-ops until director wired live (RUN-01/05). 25 unit + 4 QA tests | RUN-04 |
 
 ### CD Phase 4 — balance/telemetry *(last; merges into RUN-07)*
 | ID | FILES (owned) | DOES |

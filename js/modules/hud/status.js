@@ -10,6 +10,7 @@ import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
 import { drawItemFeed } from './item-feed.js';
 import { drawBossHealthbarHook } from './boss-healthbar.js';
+import { drawThreatLevelHook } from './threat-level.js';
 import { drawBossFxHook } from '../enemy/boss-fx.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 // 5.92.0 — Mobile HUD simplification: hide the coins readout,
@@ -61,6 +62,8 @@ export function drawHUD() {
             // hook scans the pool for a boss playing an intro/death
             // sequence and no-ops otherwise.
             drawBossFxHook.call(this);
+            // CD-16 — Threat-Level meter (top-center); no-ops until the difficulty director is wired live.
+            drawThreatLevelHook.call(this);
         } else {
             // Clear stale rects so input handlers don't act on them.
             this._hudButtonRects = null;

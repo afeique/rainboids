@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.172.0] - 2026-05-24
+
+### Added — Threat-Level HUD (CD-16 / T15, R-THREATUI)
+
+New canvas HUD module `hud/threat-level.js` — a top-center row of **5 chevron
+pips** that surfaces the Adaptive Difficulty Director's current threat (1–5) so
+escalation reads as *earned*, not random. Cool→hot color ramp (cyan 1 → gold 3
+→ red 5); on a level **increase** a brief pulse + a **"THREAT ↑"** toast, on a
+mercy **decrease** a subtler **"THREAT ↓"**; small numeric label for a11y.
+
+- Pure, unit-tested layout/anim core (`computeThreatLayout`, `threatPipColor`,
+  `updateThreatAnim`) + a `drawThreatLevel` renderer.
+- `drawThreatLevelHook` is hooked into `hud/status.js` alongside the boss hooks
+  and is **defensive**: it resolves a live difficulty director if present
+  (`getThreatLevel`), otherwise honors a `_debugThreatLevel` test override,
+  otherwise no-ops. It lights up automatically once the director is wired into
+  the live game (RUN-01 / RUN-05).
+
+Coverage: +25 unit tests (1344 total) + 4 Playwright QA smoke tests
+(`tests/qa/18-threat-hud.spec.js`): no-op-without-source, debug-override drives
+the meter, [1,5] clamp, and no fatal errors while the level changes.
+
 ## [6.171.0] - 2026-05-24
 
 ### Added — Adaptive Difficulty Director (RUN-04)
