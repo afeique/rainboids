@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.194.0] - 2026-05-25
+
+### Added — Thornback enemy: counter-attacking Kinetic bruiser (ENMY-10b)
+
+- **`THORNBACK`** (`enemy/enemy-data.js`) — a Kinetic bruiser that **counter-attacks
+  when hit**: every damage instance it survives triggers a small **retaliatory
+  pulse** *if the player is within a short radius* (150px) — counter-damage back
+  + a ring particle, **throttled** (~260ms per-burst cooldown). Mindless
+  point-blank full-auto eats a steady stream of counters; fighting from range or
+  in measured bursts avoids it. The enemy→player mirror of the player's BULWARK
+  RETALIATION pulse. Kinetic-resistant, weak to Pyro (burn the thorns off). 14 HP.
+- **New ability module** `enemy/abilities/thorns.js` — a pure, unit-testable
+  helper (`createThorns` / `canRetaliate` throttle / `playerInThornsRange` /
+  `markRetaliated`), mirroring the `charge.js` / `blink-burrow.js` pattern.
+- **Default-safe**: the counter hook in `collision-system.js` `applyDamageToEnemy`
+  is gated on `enemy.thorns` (only Thornback carries it) and skipped on killing
+  blows; the enemy.js change is just the marker init (NULLed on pool-reuse). The
+  counter routes through the **same `takeDamage` entry point** a contact ram uses,
+  so the player's shield / dash i-frames / DODGE / REFLEXES all apply (no bypass).
+  Other enemies are byte-for-byte unchanged (verified: full suite + roster QA).
+- **Roster** (`wave/wave-data.js`) — debuts as a single 1-count accent on **wave
+  25** (Stage 9, Kinetic-flavored); the director absorbs the added pressure.
+- Render (`enemy/shapes.js`): a 10-spike thorned star. Debug: `spawnThornback()`.
+- Tests: `tests/unit/enemy/thornback.test.js` (+12 — config/element/resist,
+  `createThorns`, the throttle + radius-boundary + retaliate-marker logic) +
+  `tests/qa/34-thornback.spec.js` (+4 — live spawn carries thorns; hitting it
+  while the player is CLOSE damages the player, while FAR does not; no fatal
+  errors). Full unit suite **1641** green; QA-28 roster regression 6/6.
+
+---
+
 ## [6.193.0] - 2026-05-25
 
 ### Added — Juggernaut enemy: telegraphed charge-and-ram bruiser (ENMY-10b)

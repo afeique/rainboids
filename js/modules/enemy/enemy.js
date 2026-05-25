@@ -31,6 +31,11 @@ import { createBlink, tickBlink, isVanished } from './abilities/blink-burrow.js'
 // windup→strike→recover cycle + locks the lane (the render reads the telegraph
 // phase directly via telegraphPhase, and the damage path reads isRearExposed).
 import { createCharge, tickCharge } from './abilities/charge.js';
+// ENMY-10b — counter-attack on being hit (THORNBACK). `createThorns` builds the
+// per-instance counter state attached on `this.thorns` (only THORNBACK carries
+// `config.thorns`). The counter itself fires from collision-system's universal
+// damage path, gated on `enemy.thorns`, so thorns-less enemies are unchanged.
+import { createThorns } from './abilities/thorns.js';
 import { telegraphPhase, telegraphProgress } from './telegraph.js';
 // ENMY-04 — projectile reflection. Default-safe: every wiring below is gated on
 // `this.reflects`, which only PRISM_MIRROR (config.reflect) ever gets. Non-mirror
@@ -182,6 +187,13 @@ export class Enemy {
         // windup/strike/recover timings + ramDamage). All AI/render/damage wiring
         // below is gated on `this.charge`, so this is a no-op for every other type.
         this.charge = this.config.charge ? createCharge(this.config.chargeOpts) : null;
+        // ENMY-10b — counter-attack on being hit (THORNBACK). Attach a fresh
+        // thorns state when the type marks it; otherwise NULL it out so a pooled
+        // enemy recycled into a non-thorns type can't carry a stale counter. The
+        // config may carry `thornsOpts` (radius/damage/cooldownMs). The counter
+        // hook in collision-system.applyDamageToEnemy is gated on `this.thorns`,
+        // so this is a no-op for every other type.
+        this.thorns = this.config.thorns ? createThorns(this.config.thornsOpts) : null;
         // SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE). Carry the type's
         // `suppressAura` config { radius, cooldownScale, blocksActivation } onto
         // the instance (or NULL for every other type, so a pooled enemy recycled

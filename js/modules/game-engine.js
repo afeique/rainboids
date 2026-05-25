@@ -2908,6 +2908,25 @@ export class GameEngine {
         return wave.requestEnemySpawn.call(this, 'JUGGERNAUT', cx, cy, { cap: 9999 });
     }
 
+    // ENMY-10b — DEBUG HOOK. Force-spawn a THORNBACK (counter-attack bruiser) on
+    // demand for QA + manual testing, mirroring spawnJuggernaut/spawnLeech.
+    // Returns the enemy (carrying a `thorns` counter state), or null if the pool
+    // is dry.
+    //   gameEngine.spawnThornback()  or  gameEngine.spawnThornback({ x, y })
+    spawnThornback(opts = {}) {
+        // Default ~120px off the player (or viewport center) — well inside the
+        // thorns radius (150) so QA can immediately drive a counter, but not
+        // overlapping on spawn. Explicit opts.x/opts.y override.
+        const baseX = this.player ? this.player.x
+            : (this.camera ? this.camera.x + this.width / 2 : (this.gameField ? this.gameField.width / 2 : 600));
+        const baseY = this.player ? this.player.y
+            : (this.camera ? this.camera.y + this.height / 2 : (this.gameField ? this.gameField.height / 2 : 400));
+        const cx = (opts.x != null) ? opts.x : baseX + 120;
+        const cy = (opts.y != null) ? opts.y : baseY - 80;
+        // Bypass the concurrent-spawn cap for the debug hook (huge cap).
+        return wave.requestEnemySpawn.call(this, 'THORNBACK', cx, cy, { cap: 9999 });
+    }
+
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }

@@ -426,6 +426,11 @@ export function drawEnemyShape(ctx) {
             // lane tell + a recover rear-exposed read.
             drawJuggernautRam.call(this, drawCtx);
             break;
+        case 'THORNBACK':
+            // ENMY-10b bruiser — spiky counter-attacker; the thorned silhouette
+            // reads "don't crowd me" (its retaliatory pulse punishes point-blank).
+            drawThornback.call(this, drawCtx);
+            break;
         default:
             this.drawTriangle(drawCtx);
     }
@@ -830,6 +835,40 @@ export function drawJuggernautRam(ctx) {
         ctx.stroke();
         ctx.restore();
     }
+}
+
+// ENMY-10b — THORNBACK. A spiky/thorned silhouette: a compact central body
+// ringed by sharp outward spikes (the "thorns" that punish a point-blank
+// attacker). Pure render off `this` (the Enemy instance). The spikes pulse
+// slightly over time so the read is unmistakably a hazard hull. `this.radius`
+// scales the whole shape; no telegraph reads (the counter is reactive, not
+// telegraphed) so it stays static-feeling beyond the gentle pulse.
+export function drawThornback(ctx) {
+    const r = this.radius * 0.72;
+    const now = frameClock.now;
+    const pulse = 1 + 0.08 * Math.sin(now * 0.004 + (this.spawnSeed || 0));
+    const spikes = 10;
+    const inner = r * 0.55;          // body radius (spike base)
+    const outer = r * 1.15 * pulse;  // spike tip radius
+
+    // Thorned star: alternate spike-base / spike-tip points around the hull.
+    ctx.beginPath();
+    for (let i = 0; i < spikes * 2; i++) {
+        const ang = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;
+        const rad = (i % 2 === 0) ? outer : inner;
+        const x = Math.cos(ang) * rad;
+        const y = Math.sin(ang) * rad;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner core ring — the "spine" the thorns guard.
+    ctx.beginPath();
+    ctx.arc(0, 0, inner * 0.55, 0, Math.PI * 2);
+    ctx.stroke();
 }
 
 export function drawPulsatingCircle(ctx) {

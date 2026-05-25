@@ -825,6 +825,41 @@ export const ENEMY_TYPES = {
         visual: { shape: 'juggernaut_ram', glowColor: '#ffb066', trailLength: 12 },
         ai: { evasion: 0.1, preferredRange: 120, dodgeBullets: false, microMovements: false, fishMotion: false },
     },
+    // ENMY-10b — THORNBACK: a Kinetic BRUISER built around a COUNTER-ATTACK. Every
+    // damage instance it takes triggers a small RETALIATORY pulse — but ONLY if
+    // the player is within a short radius (`thornsOpts.radius`): a little
+    // counter-damage back + a ring particle, THROTTLED by `thornsOpts.cooldownMs`
+    // so sustained point-blank full-auto applies a steady punish-pulse rather
+    // than damage every tick. Fighting from RANGE (outside the radius) draws NO
+    // counter, so the read is: stay back / use measured bursts. The counter
+    // routes through the SAME player-damage entry point as a contact ram
+    // (this.takeDamage), so i-frames / dodge / shield all apply. The `thorns: true`
+    // marker tells initializeEnemy to attach a fresh createThorns(thornsOpts) on
+    // `this.thorns`; the counter hook in collision-system.applyDamageToEnemy is
+    // gated on `enemy.thorns`, so non-Thornback enemies are byte-for-byte
+    // unchanged. It is the ENEMY→PLAYER mirror of the player-side RETALIATION
+    // pulse (BULWARK). Slow-ish skirmisher, beefy-ish HP, Kinetic-tough but WEAK
+    // to Pyro (burn off the thorns).
+    THORNBACK: {
+        name: 'Thornback',
+        color: '#c2566b',
+        health: 14,
+        speed: 1.8,                 // slow-ish skirmisher — the THREAT is the counter, not the chase
+        size: 38,
+        shootPattern: 'hunter_single',
+        shootRate: 0.0,             // doesn't shoot — it counters
+        movePattern: 'keep_distance', // base standoff/approach (reused; no bespoke movement)
+        points: 240,
+        thorns: true,               // → initializeEnemy attaches createThorns(thornsOpts) on this.thorns
+        // radius = the proximity gate (counter only fires within this distance);
+        // damage = counter-damage per pulse; cooldownMs = per-burst throttle so
+        // sustained full-auto applies a steady punish-pulse, not damage every tick.
+        thornsOpts: { radius: 150, damage: 6, cooldownMs: 260 },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.06, rotationSpeed: { min: -0.01, max: 0.01 } },
+        firing: { pattern: 'hunter_single', burstCount: 0, burstDelay: 0, cooldown: { min: 99999, max: 99999 } },
+        visual: { shape: 'thornback', glowColor: '#ff7d97', trailLength: 8 },
+        ai: { evasion: 0.15, preferredRange: 180, dodgeBullets: false, microMovements: false, fishMotion: false },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -857,6 +892,7 @@ const ENEMY_ELEMENTS = {
     DEVOURER:    'VOID',     // ENMY-09 — maw-cone Void projectile-eater / soaker
     LEECH:       'TOXIC',    // ENMY-05 — fast contact buff-stripper (it siphons / corrodes)
     JUGGERNAUT:  'KINETIC',  // ENMY-10b — charge-and-ram bruiser (its ram IS the kinetic threat)
+    THORNBACK:   'KINETIC',  // ENMY-10b — counter-attacking bruiser (its retaliatory pulse is the kinetic threat)
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -890,6 +926,7 @@ const ENEMY_RESISTS = {
     DEVOURER:    { VOID: 0.50, RADIANT: -0.50 },               // ENMY-09 — Void-tough maw (it IS the hungry dark); RADIANT light burns through the throat
     LEECH:       { TOXIC: 0.40, PYRO: -0.50 },                 // ENMY-05 — Toxic-tough siphon gnat; PYRO scorches it off you
     JUGGERNAUT:  { KINETIC: 0.45, VOLT: -0.50 },               // ENMY-10b — Kinetic-tough ram bruiser; VOLT shorts its drive (shock it during the recovery)
+    THORNBACK:   { KINETIC: 0.45, PYRO: -0.50 },               // ENMY-10b — Kinetic-tough counter bruiser; PYRO burns off its thorns (and outranges the counter while it cooks)
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

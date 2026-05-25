@@ -50,6 +50,14 @@ import { isBuffSuppressed, STRIP_DURATION_MS } from '../enemy/abilities/buff-str
 // contact base while the charge is striking.
 import { isRearExposed } from '../enemy/abilities/charge.js';
 import { isStriking as isChargeStriking } from '../enemy/telegraph.js';
+// ENMY-10b — THORNBACK counter-attack. Every damage instance a Thornback takes
+// triggers a small RETALIATORY pulse IF the player is within a short radius:
+// counter-damage back (routed through the SAME this.takeDamage entry point a
+// ram uses, so i-frames/dodge/shield apply) + a ring particle, THROTTLED by a
+// per-burst cooldown. Gated on `enemy.thorns` (only THORNBACK carries it), so
+// this is a no-op for every other enemy. The ENEMY→PLAYER mirror of the
+// player-side RETALIATION pulse in player/lifecycle.js.
+import { canRetaliate, playerInThornsRange, markRetaliated } from '../enemy/abilities/thorns.js';
 
 // SYS-8 / ENMY-05 — powerups that a Leech must NOT strip (permanent / structural
 // grants whose removal would be a broken / unfair surprise rather than a fun
@@ -2680,6 +2688,34 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     // is the post-multiplier dealt amount. Fires even on a killing blow so a
     // frozen enemy still shatters into its neighbors as it dies.
     _triggerStatusReactions.call(this, enemy, damage, opts);
+
+    // ENMY-10b — THORNBACK counter-attack. Every damage instance a Thornback
+    // SURVIVES triggers a small retaliatory pulse — but only if the player is
+    // within the thorns radius (fight from range = no counter) AND the per-burst
+    // cooldown has elapsed (so sustained full-auto applies a STEADY punish-pulse,
+    // not damage every tick). The counter routes through the SAME this.takeDamage
+    // entry point a contact ram uses, so the player's i-frames / dodge / shield
+    // all apply (we do NOT bypass them) — the ENEMY→PLAYER mirror of the
+    // BULWARK RETALIATION pulse. Gated on `enemy.thorns` (only THORNBACK carries
+    // it), so this is a no-op for every other enemy. Skipped on a killing blow (a
+    // counter from a corpse is moot).
+    if (!destroyed && enemy.thorns && this.player
+        && canRetaliate(enemy.thorns, frameClock.now)
+        && playerInThornsRange(enemy, this.player)) {
+        if (typeof this.takeDamage === 'function') {
+            // Same entry point as handlePlayerEnemyCollision's ram → shield /
+            // dash i-frames / DODGE / REFLEXES all honored. `source` is the enemy
+            // (Thorns-passive reflect / Vendetta keys off it); element is the
+            // enemy's (KINETIC), so player elemental resist applies.
+            this.takeDamage(enemy.thorns.damage, {
+                source: enemy, element: enemy.element, fxX: enemy.x, fxY: enemy.y,
+            });
+        }
+        if (this.particlePool) {
+            this.particlePool.get(enemy.x, enemy.y, 'explosionRingColored', enemy.thorns.radius, enemy.color || '#c2566b');
+        }
+        markRetaliated(enemy.thorns, frameClock.now);
+    }
 
     return { blocked: false, destroyed };
 }

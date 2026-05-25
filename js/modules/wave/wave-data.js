@@ -27,6 +27,7 @@
 //   PRISM_MIRROR (Radiant reflect): 23(1), 28(1)         — count 1 only
 //   CONDUIT_NODE (Volt heal-aura) : 25(1)                — count 1 only; debut
 //   JUGGERNAUT   (Kinetic ram)    : 22(1)                — count 1 only; debut (charge-and-ram bruiser)
+//   THORNBACK    (Kinetic counter): 25(1)                — count 1 only; debut (counter-attack bruiser)
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
@@ -235,8 +236,11 @@ export const WAVE_DATA = {
     // 25-2 as a SINGLE accent — it sits among the Volt-flavored WRAITHWORM
     // and a beefy SENTINEL/PROWLER escort whose HP its aura can meaningfully
     // mend, so killing the node first becomes the priority. Count 1 only.
+    // THORNBACK (Kinetic counter-attack bruiser) DEBUTS on 25-1 as a single
+    // accent among the Kinetic-flavored STALKER/GUARDIAN/WASP opener — a
+    // punish-point-blank threat that rewards measured fire from range. Count 1.
     25: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }, { type: 'THORNBACK', count: 1 }],
         [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WRAITHWORM', count: 1 }, { type: 'CONDUIT_NODE', count: 1 }],
         [{ type: 'TANGERINE', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 3 }],
     ] },
