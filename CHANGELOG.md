@@ -11,6 +11,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.188.0] - 2026-05-25
+
+### Added — Adaptive Difficulty Director §14 foundation (DIR-01 / DIR-02 / DIR-03)
+
+The pure foundation for the full §14 Director model (from the
+`Director & Codebase Audit` recommendations). New systems, not yet wired into the
+live director (that's DIR-04) — no gameplay change yet.
+
+- **DIR-01 `wave/power-level.js`** — `computePWR(player)` = `K_PWR·O^0.45·S^0.35·U^0.20`
+  (geometric blend, K_PWR≈4.461 so a starter ≈ 100). Pure `offense`/`survivability`/
+  `utility` sub-functions read the real player getters defensively (NaN/div0-guarded;
+  work with a live Player or a test stub). The blend deliberately refuses to
+  over-rate one-dimensional builds (a glass cannon ranks below a balanced build).
+- **DIR-02 `wave/difficulty-constants.js`** — absolute monotonic baseline curve
+  `baseline(wave)=1+0.15·w+0.06·w^1.5` (×15.4 @ wave 30, ×66 @ 90), `pwrPreload(pwr)`
+  clamp [0.8,3.0], and the §14.6 constants table (MODE_BAND/RATE/MULT/BASE/RESIST,
+  pressure-signal weights, enemyPower exponents, reward consts), deep-frozen with
+  NORMAL-fallback mode accessors.
+- **DIR-03** — difficulty `mode` (EASY/NORMAL/HARD/EPIC/LEGENDARY) added to
+  `runConfig` (`getRunMode`, validated, default-safe NORMAL; persisted/restored),
+  the dimension that will bias the Director.
+
+Coverage: +95 unit tests (1540 total).
+
+## [6.187.2] - 2026-05-25
+
+### Fixed — Adaptive-difficulty + collision correctness fixes (FIX-01…04)
+
+Quick correctness fixes from the `Director & Codebase Audit`:
+
+- **FIX-01 (difficulty-director.js)** — rate-limit breach: `updateDifficulty`
+  rate-limited *per block*, so the deadband step and the escalation/mercy bumps
+  compounded to ~±25%/wave vs the documented ≤12%. Now snapshots D at entry and
+  clamps the **net** per-wave move to ±maxStep once at the end (every effect's
+  direction preserved; mercy still never raises D_thr). Verified 0 breaches.
+- **FIX-02 (wave-manager.js)** — director Po-spike guard (an unset `_waveStartMs`
+  now yields a neutral clear-time, not a 1 ms spike toward the D_hp ceiling) +
+  boss-bonus gold now threads `runWavesPerStage`.
+- **FIX-03 (reflect.js + enemy-data.js)** — PRISM_MIRROR reflect now gated on
+  range (`dist2 > range²`, range 120) like the maw — no longer reflects bullets
+  across the whole field.
+- **FIX-04** — `addPowerup` returns `true` on success; `EnemyBullet.reset` clears
+  `reflected`.
+
+Coverage: +15 unit tests + reflect QA.
+
 ## [6.187.1] - 2026-05-25
 
 ### Fixed — Stale e2e wave-1 tests updated to the current design
