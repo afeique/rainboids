@@ -39,7 +39,7 @@ Chassis pure-cores SHIPPED (`boss-phases.js` 6.159.0 · `boss-parts.js` 6.160.0 
 |----|----|----|----|----|----|
 | ~~BOSS-01~~ | `js/modules/hud/boss-healthbar.js` + hook in `hud/status.js` | Boss healthbar (name·segmented-HP·phase-pips·element tint) + pure layout helper + 13 unit tests | boss-phases | A | ✅ 6.162.0 |
 | BOSS-02 | `js/modules/combat/collision-system.js` | Route player bullets → boss weak-points (`boss-parts.js`): hits on a live part damage it, core invuln while parts live. Unit test the hit-routing decision | boss-parts (shipped) | — (serialize) | TODO |
-| BOSS-03 | `js/modules/enemy/boss-intro.js` + NEW `js/modules/enemy/boss-fx.js` | Intro/death canvas FX: name-card sweep, death detonation, camera-shake; driven by the shipped intro/death runner. QA: stub boss plays intro→death | boss-intro (shipped) | A | TODO |
+| ~~BOSS-03~~ | NEW `js/modules/enemy/boss-fx.js` + hook in `hud/status.js` | ✅ **6.167.0** — name-card sweep, death detonation, camera-shake (pure helpers + 19 tests). NOTE: camera-shake offset exposed but not yet summed into the engine shake loop → finish in BOSS-04 | boss-intro | A | ✅ 6.167.0 |
 | BOSS-04 | NEW `js/modules/enemy/bosses/index.js` + spawn hook in `wave/wave-manager.js` | Boss registry + "spawn the stage's boss on its last wave"; `isFinalBoss` flag wiring. Unit test registry lookup by stage | BOSS-01/02/03 | — | TODO |
 
 ### The 10 bosses — each its own file ⇒ **fully parallel** *(old D.B1–D.B5)*
@@ -49,13 +49,13 @@ All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + 
 | ~~BOSS-05~~ | `harbinger.js` | ✅ **6.163.0** — THE HARBINGER (1-3, Kinetic — rotating bolt-head weak-points); established the `enemy/bosses/` descriptor pattern + chassis-API usage for BOSS-06..14 | B |
 | ~~BOSS-06~~ | `aegis.js` | ✅ **6.164.0** — THE AEGIS (2-6, armor — rotating plate-gap, CORRODE-bypass, plate-shed) | B |
 | ~~BOSS-07~~ | `lumen.js` | ✅ **6.164.0** — LUMEN THE PRISM SOVEREIGN (3-9, Radiant — shield drones, DISJUNCTION) | B |
-| BOSS-08 | `gemini.js` | GEMINI (4-12, Pyro+Cryo twins — opposite resists, tether, partner-enrage) | B |
+| ~~BOSS-08~~ | `gemini.js` | ✅ **6.166.0** — GEMINI (4-12, Pyro+Cryo twins — opposite resists, tether, partner-enrage) | B |
 | ~~BOSS-09~~ | `maelstrom.js` | ✅ **6.164.0** — MAELSTROM THE STORM CROWN (5-15, Volt — conduit nodes, CONDUCT rain) | B |
 | ~~BOSS-10~~ | `hivemother.js` | ✅ **6.165.0** — THE HIVEMOTHER (6-18, Toxic — egg-sac spawns, CORRODE clouds) | B |
 | ~~BOSS-11~~ | `iron-throne.js` | ✅ **6.165.0** — THE IRON THRONE (7-21, 4 per-element turrets, core-invuln-while-turrets-live) | B |
-| BOSS-12 | `warden-prime.js` | THE WARDEN PRIME (8-24, adaptive resist wall, ADAPTIVE PURGE) | B |
+| ~~BOSS-12~~ | `warden-prime.js` | ✅ **6.166.0** — THE WARDEN PRIME (8-24, adaptive resist wall, ADAPTIVE PURGE) | B |
 | ~~BOSS-13~~ | `nullmaw.js` | ✅ **6.165.0** — NULLMAW THE DEVOURER (9-27, Void — pull, projectile-eat cone, IMPLOSION) | B |
-| BOSS-14 | `prismarch.js` | THE PRISMARCH / OMEGA (10-30, all 7 — 5-aspect gauntlet; wire `isFinalBoss`→run-complete + death cinematic + run summary) | B (after B05–B13) |
+| ~~BOSS-14~~ | `prismarch.js` | ✅ **6.166.0** (module) — THE PRISMARCH / OMEGA (10-30, all 7 — 5-aspect gauntlet; `isFinalBoss` flag set). NOTE: run-complete + death cinematic + run summary wiring → BOSS-04 | B |
 | BOSS-15 | NEW `tests/qa/17-bosses.spec.js` | Parameterized boss smoke tests (spawn → reach every phase → killable, per boss) | after bosses |
 
 ---
