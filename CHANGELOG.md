@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.183.0] - 2026-05-25
+
+### Added — Bullet-reflecting enemy: the PRISM MIRROR (ENMY reflect slice)
+
+A fifth enabling-system helper goes live, in the hot bullet-collision path. A new
+**Prism Mirror** (Radiant) reflects player bullets that strike its **front arc**
+back as enemy bullets — flank it, beam it, or hit it from behind to break it.
+
+- Wired `enemy/abilities/reflect.js` as a bullet pre-pass `routeBulletToReflect`
+  in `collision-system.js`, mirroring the boss weak-point routing
+  (`routeBulletToBossPart`): on a front-arc hit it consumes the player bullet,
+  spawns a `reflected` enemy bullet (from `makeReflectedBullet`) + a spark FX, and
+  the mirror takes no damage. **Default-safe** — gated on `enemy.reflects`,
+  returns false (normal damage) when no reflector is present; beams/melee/
+  already-reflected shots bypass; reflected bullets can't be re-reflected.
+- The mirror's front arc tracks the player (`enemy.reflect.facingRad` updated in
+  `enemy.update`). Reflected damage is clamped (`REFLECT_DMG_CAP = 6`, untuned —
+  RUN-07 calibrates) so it threatens without one-shotting.
+- New **PRISM_MIRROR** type (`enemy-data.js`, Radiant-resist / Void-weak) +
+  `gameEngine.spawnPrismMirror()` debug hook. (Joins the live wave roster with
+  ENMY-09.)
+
+Coverage: 5 Playwright QA tests (`tests/qa/25-reflect.spec.js`: front-arc reflect,
+rear/beam bypass, no re-reflect, no fatal errors); full unit suite (1442) +
+cloak/blink/suppress/bosses QA regression green (boss weak-point routing intact).
+
+---
+
 ## [6.182.0] - 2026-05-25
 
 ### Added — Skill-suppressing support enemy: the NULL DRONE (ENMY suppress-aura slice)

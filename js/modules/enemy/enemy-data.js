@@ -668,6 +668,33 @@ export const ENEMY_TYPES = {
         visual: { shape: 'shield_turret', glowColor: '#a98aff', trailLength: 14 },
         ai: { evasion: 0.4, preferredRange: 320, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
+
+    // ENMY-04 — PRISM_MIRROR: a slow, hovering Radiant enemy with a front-arc
+    // MIRROR (reflect.js). A player bullet that strikes inside the front arc is
+    // bounced back as an ENEMY bullet — the mirror takes NO damage from the front
+    // — so the player must flank it / hit it from the side or rear, or melt it
+    // with a beam (beams BYPASS the mirror). The `reflect: true` marker tells
+    // initializeEnemy to attach a fresh REFLECT_DEFAULTS-merged config; the front
+    // arc faces the player each frame (enemy.update). `reflectOpts` widens the
+    // half-angle to ~60° (a 120° face) and sets the bounced bullet's speed.
+    // Modest HP, slow standoff hover so it presents its face rather than ramming.
+    PRISM_MIRROR: {
+        name: 'Prism Mirror',
+        color: '#ffd6f5',
+        health: 8,
+        speed: 1.6,
+        size: 34,
+        shootPattern: 'hunter_single',
+        shootRate: 0.18,
+        movePattern: 'keep_distance',
+        points: 170,
+        reflect: true,             // → initializeEnemy attaches the reflect config
+        reflectOpts: { halfAngleRad: Math.PI / 3, speed: 7 }, // 120° face, speed-7 bounce
+        movement: { pattern: 'keep_distance', turnSpeed: 0.07, rotationSpeed: { min: -0.01, max: 0.01 }, preferredDistance: 300 },
+        firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1800, max: 5400 } },
+        visual: { shape: 'shield_turret', glowColor: '#ffb0ee', trailLength: 14 },
+        ai: { evasion: 0.4, preferredRange: 300, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -695,6 +722,7 @@ const ENEMY_ELEMENTS = {
     PHANTOM:     'VOID',    // ENMY-03 — cloaking Void skirmisher
     WRAITHWORM:  'VOLT',    // ENMY-07 — blink/burrow Volt skirmisher
     NULL_DRONE:  'VOLT',    // ENMY-10 — skill-suppress Volt support drone
+    PRISM_MIRROR: 'RADIANT', // ENMY-04 — front-arc Radiant reflector
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -723,6 +751,7 @@ const ENEMY_RESISTS = {
     PHANTOM:     { VOID: 0.40, RADIANT: -0.50 },               // ENMY-03 — Void-tough cloaker; Radiant lights it up
     WRAITHWORM:  { VOLT: 0.40, CRYO: -0.50 },                  // ENMY-07 — Volt-tough burrower; Cryo CHILLs it so it can't blink away
     NULL_DRONE:  { VOLT: 0.40, RADIANT: -0.50 },               // ENMY-10 — Volt-tough support drone; Radiant snuffs the suppress aura
+    PRISM_MIRROR: { RADIANT: 0.50, VOID: -0.50 },              // ENMY-04 — Radiant-tough mirror (bounces its own light back); Void shatters the glass
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

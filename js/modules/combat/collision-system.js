@@ -16,6 +16,12 @@ import { allyShieldMult } from '../enemy/support-aura.js';
 // in a NULL_DRONE's aura. Gated on `enemy.suppressAura`, so this is a no-op for
 // every other enemy. Mirrors the GravityWell / Eye-of-the-Storm aura wrappers.
 import { applySuppression } from '../enemy/abilities/suppress-aura.js';
+// SYS-6 / ENMY-04 — projectile reflection (PRISM_MIRROR). A bullet-vs-enemy
+// pre-pass (routeBulletToReflect, below) bounces a player bullet that strikes a
+// mirror's front arc back as an ENEMY bullet; the mirror takes no damage and the
+// original is consumed. Gated on `enemy.reflects`, so this is a no-op for every
+// other enemy. Mirrors the routeBulletToBossPart weak-point pre-pass precedent.
+import { shouldReflect, makeReflectedBullet } from '../enemy/abilities/reflect.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
 //   Duplicated here (rather than imported) because wave-manager.js bundles
@@ -677,6 +683,14 @@ export function handleCollisions() {
         // the bullet to a live weak-point first; if it lands on one, the bullet
         // is consumed there and we move to the next bullet.
         if (routeBulletToBossPart.call(this, bullet)) continue;
+        // ENMY-04 — reflect pre-pass (PRISM_MIRROR). Runs AFTER boss-part
+        // routing (the two are disjoint — boss parts are never reflectors).
+        // If a mirror's front arc bounces this bullet, it's consumed here (an
+        // enemy bullet is spawned flying back) and we move to the next bullet,
+        // so the normal enemy-damage path below is skipped. Gated on
+        // `enemy.reflects`, so for every non-mirror enemy the scan finds nothing
+        // and returns false — a byte-for-byte no-op for today's roster.
+        if (routeBulletToReflect.call(this, bullet)) continue;
         const nearbyEn = this.spatialGrid.retrieve(bullet);
         for (let j = nearbyEn.length - 1; j >= 0; j--) {
             const enemy = nearbyEn[j];
@@ -2631,6 +2645,95 @@ export function routeBulletToBossPart(bullet) {
         // (they re-seek on the next enemy hit), matching "boss eats the shot".
         if (bullet.explosive) bullet.explode(this);
         bullet.onHit(boss);
+        return true;
+    }
+    return false;
+}
+
+// ENMY-04 — route a player bullet onto a reflecting enemy (PRISM_MIRROR).
+//
+// A "mirror" enemy holds a front-arc MIRROR (`enemy.reflect`) and the
+// `enemy.reflects` flag. This pre-pass — modeled on routeBulletToBossPart —
+// scans active enemies and, for the FIRST one whose front arc this bullet is
+// approaching from (`shouldReflect`, which also rejects beams / melee / already-
+// reflected shots), bounces the shot:
+//   • spawns a real ENEMY bullet flying back OUT along the enemy→bullet vector
+//     (so it threatens the player via the existing player-vs-enemy-bullet path),
+//     flagged `reflected:true` so a second mirror can't re-reflect it.
+//   • paints a small reflect-spark FX at the impact (reuses particlePool like
+//     routeBulletToBossPart).
+//   • CONSUMES the player bullet (startDying → disappear puff + deactivate) and
+//     returns true so the caller skips the normal enemy-damage path — the mirror
+//     takes NO damage from a front-arc hit.
+// A bullet from outside the arc (or a beam/melee) is NOT reflected → false →
+// the normal damage path runs and the mirror is killable from the flank / by
+// beams. Gated on `enemy.reflects`, so with no mirror on the field the scan
+// finds nothing and returns false (byte-for-byte no-op for the current roster).
+//
+// BALANCE — REFLECT_DMG_CAP: makeReflectedBullet carries the player bullet's
+// FULL damage, so a reflected charge/Lance/Rail shot could one-shot the player.
+// We clamp the reflected bullet's damage to a modest enemy-bullet level (cap of
+// 6 — in line with explosive enemy bullets at ~3 and titan rockets, so a mirror
+// THREATENS without deleting the ship). The player's takeDamage per-hit failsafe
+// is only a backstop; this clamp is the primary guard. RUN-07 calibrates later.
+const REFLECT_DMG_CAP = 6;
+export function routeBulletToReflect(bullet) {
+    const pool = this.enemyPool;
+    if (!pool || !pool.activeObjects || !bullet || !bullet.active) return false;
+    // Beams/melee never enter the bullet pool, but guard defensively anyway:
+    // shouldReflect rejects them too (and already-reflected / bypass shots).
+    for (const enemy of pool.activeObjects) {
+        // Only live, fightable reflectors — skip warping / dying / intro, same
+        // exclusions the normal hit loop uses for an Enemy.
+        if (!enemy || !enemy.reflects || !enemy.active) continue;
+        if (enemy.warping || enemy._deathFlash > 0) continue;
+        if (introBlocksDamage(enemy)) continue;
+        if (!shouldReflect(enemy, bullet)) continue;
+
+        // Build the reflected-bullet spec (enemy→bullet direction, reflect.speed,
+        // carrying the original damage + element, flagged reflected:true).
+        const spec = makeReflectedBullet(enemy, bullet);
+
+        // Spawn a REAL enemy bullet from the spec so it hits the player via the
+        // existing player-vs-enemy-bullet collision. Pool-get + set fields, the
+        // createEnemyBullet field-set pattern (firing.js) minus the level scaling
+        // (the reflected shot's velocity is already fully resolved by the helper).
+        if (this.enemyBulletPool) {
+            const eb = this.enemyBulletPool.get();
+            if (eb) {
+                const color = enemy.glowColor || enemy.color || '#ffffff';
+                eb.reset(spec.x, spec.y, spec.vx, spec.vy, color, false);
+                eb.angle = spec.angle;
+                eb.element = spec.element || 'RADIANT';
+                // Clamp the carried damage so a reflected heavy shot threatens
+                // without one-shotting (see REFLECT_DMG_CAP note above).
+                eb.damage = Math.min(spec.damage || 0, REFLECT_DMG_CAP);
+                // Flag so shouldReflect rejects it at a second mirror — no
+                // infinite ping-pong between two facing mirrors.
+                eb.reflected = true;
+                // Tag the shooter so the friendly-fire enemy-bullet loop skips
+                // the mirror itself.
+                eb.shooter = enemy;
+            }
+        }
+
+        // Reflect-spark FX at the impact point (same particlePool path as the
+        // boss-part hit burst). A short bright flash that reads as a "ting".
+        if (this.particlePool) {
+            const c = enemy.glowColor || enemy.color || '#ffffff';
+            for (let p = 0; p < 6; p++) {
+                const a = Math.random() * Math.PI * 2;
+                const sp = random(2, 6);
+                this.particlePool.get(bullet.x, bullet.y, 'explosionShrapnel', a, sp,
+                    p < 2 ? '#ffffff' : c);
+            }
+        }
+
+        // Consume the player bullet — start its disappear puff + deactivate, the
+        // same end-of-life path a natural-expiry / despawn bullet takes. The
+        // mirror takes NO damage (we return before the normal hit path).
+        if (typeof bullet.startDying === 'function') bullet.startDying(bullet.x, bullet.y);
+        else bullet.active = false;
         return true;
     }
     return false;

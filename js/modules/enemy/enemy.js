@@ -25,6 +25,12 @@ import { createCloak, tickCloak, cloakAlpha } from './abilities/cloak.js';
 // are read-only telegraph reads used to draw the "about to blink" tell.
 import { createBlink, tickBlink, isVanished } from './abilities/blink-burrow.js';
 import { telegraphPhase, telegraphProgress } from './telegraph.js';
+// ENMY-04 — projectile reflection. Default-safe: every wiring below is gated on
+// `this.reflects`, which only PRISM_MIRROR (config.reflect) ever gets. Non-mirror
+// enemies behave byte-for-byte as before. The reflect helper lives in
+// collision-system's bullet pre-pass; here we only attach the state + keep the
+// mirror's front-arc `facingRad` pointed at the player each frame.
+import { REFLECT_DEFAULTS } from './abilities/reflect.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
 // `isMobile` toggles the lateral weave decoration in update().
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
@@ -161,6 +167,17 @@ export class Enemy {
         // collision-system.applySuppressAura → applySuppression. No created
         // state — it's a plain read-only config the helper consumes.
         this.suppressAura = this.config.suppressAura || null;
+        // ENMY-04 — projectile reflection (PRISM_MIRROR). Attach a fresh reflect
+        // config (REFLECT_DEFAULTS merged with the type's `reflectOpts`) when the
+        // type marks it; otherwise NULL it out so a pooled enemy recycled into a
+        // non-mirror type can't carry a stale mirror. `reflects` is the fast gate
+        // the collision pre-pass + shouldReflect check; `reflect.facingRad` (the
+        // front-arc center, pointed at the player each frame in update) starts at
+        // 0 and is upkept while alive. Read-only config — no created tick state.
+        this.reflect = this.config.reflect
+            ? { ...REFLECT_DEFAULTS, ...this.config.reflectOpts, facingRad: 0 }
+            : null;
+        this.reflects = !!this.config.reflect;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
@@ -752,6 +769,20 @@ export class Enemy {
         // Gated on `this.blink`, so this is a no-op for every non-WRAITHWORM
         // enemy. `targetPlayer` is the burrow re-emerge anchor.
         if (this.blink) tickBlink(this, this.targetPlayer, frameClock.now);
+
+        // ── ENMY-04 reflect facing upkeep ──
+        // A front-arc mirror should face the threat so its arc covers incoming
+        // player fire. Point `reflect.facingRad` from the enemy TOWARD the player
+        // each frame (the direction shouldReflect/bulletInReflectArc center the
+        // arc on). Done AFTER movement integration so x/y are this frame's final
+        // positions. Gated on `this.reflect`, so a no-op for every non-mirror
+        // enemy. If there's no player target, the facing is simply held.
+        if (this.reflect && this.targetPlayer) {
+            this.reflect.facingRad = Math.atan2(
+                this.targetPlayer.y - this.y,
+                this.targetPlayer.x - this.x,
+            );
+        }
 
         // Death check (tolerance for floating-point precision).
         if (this.health <= 0.001 && this.active) {
