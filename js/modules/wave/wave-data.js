@@ -25,6 +25,7 @@
 //   PHANTOM      (Void cloak)    : 19(1), 23(2), 28(1), 29(1)
 //   DEVOURER     (Void absorb)   : 22(1), 26(1), 28(1)
 //   PRISM_MIRROR (Radiant reflect): 23(1), 28(1)         — count 1 only
+//   CONDUIT_NODE (Volt heal-aura) : 25(1)                — count 1 only; debut
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
@@ -220,15 +221,19 @@ export const WAVE_DATA = {
         ],
     },
 
-    // ── Stage 9: Apocalypse (peak density; new-type roster at full ramp) ──
+    // ── Stage 9: Apocalypse (peak density; new-type roster at full ramp; CONDUIT_NODE debut) ──
     // The new types reach their late-game presence here: WRAITHWORM
     // (blink) on 25-2, then DEVOURER (absorb) + NULL_DRONE (suppress) +
     // LEECH (strip) layered across 26. Counts stay 1-2 each — the
     // Adaptive Difficulty Director carries the scaling — but every new
     // mechanic is now live in the player's face at peak density.
+    // CONDUIT_NODE (Volt HEAL-aura support) makes its FIRST appearance on
+    // 25-2 as a SINGLE accent — it sits among the Volt-flavored WRAITHWORM
+    // and a beefy SENTINEL/PROWLER escort whose HP its aura can meaningfully
+    // mend, so killing the node first becomes the priority. Count 1 only.
     25: { asteroids: 4, subWaves: [
         [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WRAITHWORM', count: 1 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WRAITHWORM', count: 1 }, { type: 'CONDUIT_NODE', count: 1 }],
         [{ type: 'TANGERINE', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 3 }],
     ] },
     26: { asteroids: 4, subWaves: [

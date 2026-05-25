@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.192.0] - 2026-05-25
+
+### Added — Conduit Node enemy: Volt heal-aura support (ENMY-08)
+
+- **`CONDUIT_NODE`** (`enemy/enemy-data.js`) — a slow, standoff **Volt SUPPORT**
+  enemy that channels energy to **mend nearby allies**: it projects a SYS-7 ally
+  **HEAL aura** (`aura: { kind:'heal', radius:170, amount:1, intervalMs:650 }` —
+  ~1.5 HP/s to escort enemies in range). It's the HEAL counterpart to the Lumen
+  Drone's SHIELD aura, and distinct from the Null Drone's Volt *anti-player*
+  suppress aura — kill the node first or its escort keeps regenerating. Beefy
+  (10 HP, a priority target), keeps its distance, electric-cyan. Volt-resistant
+  with a Cryo weakness (freezing the channel shut stops the mend). The heal aura
+  auto-ticks from the existing `runAura` path (no new combat code).
+- **Roster** (`wave/wave-data.js`) — debuts as a single 1-count accent on **wave
+  25** (Stage 9), backing a SENTINEL×3 / PROWLER×2 / Wraithworm escort whose HP
+  it can meaningfully mend. Conservative single-debut placement; the difficulty
+  director absorbs the added support pressure. Earlier waves and the default
+  10×3 cadence are otherwise unchanged.
+- Render: `enemy/shapes.js` draws the node with the shield-turret silhouette.
+- Tests: `tests/unit/enemy/conduit-node.test.js` (+5 — config/heal-aura validity,
+  VOLT element + affinity, live `runAura` heals in-radius allies / caps at
+  maxHealth / skips self+out-of-range+inactive) + `tests/qa/32-conduit-heal.spec.js`
+  (+4 — live spawn with heal aura + VOLT wired, wave-25 non-boss debut, a wounded
+  ally mended in-radius, no fatal errors over live frames). Full unit suite **1611**.
+
+---
+
 ## [6.191.1] - 2026-05-25
 
 ### Fixed — non-default run shapes now spawn bosses + stay non-trivial past wave 30 (H2)

@@ -598,6 +598,37 @@ export const ENEMY_TYPES = {
         ai: { evasion: 0.5, preferredRange: 340, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
 
+    // ENMY-08 — CONDUIT_NODE: a slow, stationary-ish Volt SUPPORT that channels
+    // energy to MEND nearby allies — the HEAL counterpart to LUMEN_DRONE's SHIELD
+    // aura (both ride the SYS-7 ally-aura path in support-aura.js). It projects an
+    // `aura: { kind:'heal', ... }` field, so every cadence tick (runAura, ticked
+    // from enemy.update) it regenerates the HP of escort enemies inside its
+    // radius (clamped to maxHealth). The escort dynamic: "kill the node first or
+    // its allies keep mending." A bit beefy (HP 10) so it reads as a priority
+    // target; slow + standoff so it hangs back and channels rather than rams. The
+    // plain `aura` field is all it needs — initializeEnemy copies config.aura onto
+    // the instance (no per-enemy marker/flag) and the update loop auto-ticks it.
+    // Volt-themed (electric cyan); resists Volt, weak to Cryo (a freeze locks the
+    // channel). A normal killable enemy.
+    CONDUIT_NODE: {
+        name: 'Conduit Node',
+        color: '#5fe0ff',
+        health: 10,
+        speed: 1.4,
+        size: 34,
+        shootPattern: 'hunter_single',
+        shootRate: 0.15,
+        movePattern: 'keep_distance',
+        points: 230,
+        // HEAL aura: +1 HP per ~650ms tick (~1.5 HP/s) to allies within 170px —
+        // a noticeable mend that rewards killing the node, not an escort-lock.
+        aura: { radius: 170, kind: 'heal', amount: 1, intervalMs: 650 },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.08, rotationSpeed: { min: -0.01, max: 0.01 }, preferredDistance: 340 },
+        firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 5600 } },
+        visual: { shape: 'shield_turret', glowColor: '#8af0ff', trailLength: 14 },
+        ai: { evasion: 0.4, preferredRange: 340, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
+
     // ENMY-03 — PHANTOM: light/fast Void skirmisher that runs a visible↔cloaked
     // cycle (cloak.js). While cloaked it fades out + drops off homing/auto-aim
     // targeting; a MARK status or an AoE reveal pins it back onto the target
@@ -778,6 +809,7 @@ const ENEMY_ELEMENTS = {
     PLAGUEBEARER: 'TOXIC', // E8c — toxic area-denier
     SPORE_CARRIER: 'TOXIC', // E8c — toxic drone spawner
     LUMEN_DRONE: 'RADIANT', // E8d — radiant ally-shield support
+    CONDUIT_NODE: 'VOLT',   // ENMY-08 — volt ally-HEAL support (channels energy)
     PHANTOM:     'VOID',    // ENMY-03 — cloaking Void skirmisher
     WRAITHWORM:  'VOLT',    // ENMY-07 — blink/burrow Volt skirmisher
     NULL_DRONE:  'VOLT',    // ENMY-10 — skill-suppress Volt support drone
@@ -809,6 +841,7 @@ const ENEMY_RESISTS = {
     PLAGUEBEARER: { TOXIC: 0.60, RADIANT: -0.40 },             // E8c — toxic-tough; purge it w/ Radiant
     SPORE_CARRIER: { TOXIC: 0.50, RADIANT: -0.40 },            // E8c — toxic-tough spawner; Radiant clears it
     LUMEN_DRONE: { RADIANT: 0.50, VOID: -0.40 },               // E8d — radiant-tough support; Void snuffs it
+    CONDUIT_NODE: { VOLT: 0.45, CRYO: -0.50 },                 // ENMY-08 — Volt-tough heal-channel node; CRYO freezes the channel shut so it can't mend its escort
     PHANTOM:     { VOID: 0.40, RADIANT: -0.50 },               // ENMY-03 — Void-tough cloaker; Radiant lights it up
     WRAITHWORM:  { VOLT: 0.40, CRYO: -0.50 },                  // ENMY-07 — Volt-tough burrower; Cryo CHILLs it so it can't blink away
     NULL_DRONE:  { VOLT: 0.40, RADIANT: -0.50 },               // ENMY-10 — Volt-tough support drone; Radiant snuffs the suppress aura

@@ -413,6 +413,11 @@ export function drawEnemyShape(ctx) {
             // E8d support — reuses the shield-turret silhouette (it shields allies).
             this.drawShieldTurret(drawCtx);
             break;
+        case 'CONDUIT_NODE':
+            // ENMY-08 support — reuses the shield-turret silhouette (it channels
+            // a HEAL aura to allies, the Volt counterpart to LUMEN_DRONE's shield).
+            this.drawShieldTurret(drawCtx);
+            break;
         default:
             this.drawTriangle(drawCtx);
     }

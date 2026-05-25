@@ -131,7 +131,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 ## P4 — ENMY: remaining types + uniqueness *(systems all live; this is roster breadth)*
 | ID | FILE | DOES |
 |----|----|----|
-| ENMY-08 | `enemy/enemy-data.js` + AI | Conduit Node (Volt support, SYS-7) |
+| ~~ENMY-08~~ ✅ | `enemy/enemy-data.js` + `wave/wave-data.js` + `enemy/shapes.js` | **DONE (6.192.0)** — Conduit Node: Volt SUPPORT, SYS-7 ally **HEAL** aura (mends escort HP; counterpart to Lumen Drone's shield + distinct from Null Drone's suppress). Debuts 1-count on wave 25. 5 unit + 4 QA. |
 | ENMY-09b | `enemy/enemy-data.js` + AI | Remaining batch-4 type: **Beacon** (the other 3 — Phantom/Prism-Mirror/Devourer — shipped) |
 | ENMY-10b | `enemy/enemy-data.js` + AI | Remaining batch-5: **Juggernaut** (telegraphed ram, uses SYS-11), **Thornback**, artillery/controllers (Pyrewing/Hailmother/Storm-Diver/Bile-Mortar/Singularity-Mite). Wraithworm/Null-Drone/Leech shipped |
 | ENMY-11 | per-type AI modules | Distinct movement/attack AI for the new types (currently use generic chase/keep_distance) — feel-polish, better with user's eye |
