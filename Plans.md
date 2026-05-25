@@ -37,7 +37,7 @@ Chassis pure-cores SHIPPED (`boss-phases.js` 6.159.0 · `boss-parts.js` 6.160.0 
 ### Chassis remainder *(old D.B0)* — do before any boss
 | ID | FILES (owned) | DOES | DEPENDS | ∥group | Status |
 |----|----|----|----|----|----|
-| BOSS-01 | NEW `js/modules/hud/boss-healthbar.js` + 1 draw hook in `hud/overlays.js` | Always-visible boss healthbar: name · segmented HP · phase pips · element tint; reads boss state. QA: spawn a stub boss → bar renders name/phase/element | boss-phases (shipped) | A | TODO |
+| ~~BOSS-01~~ | `js/modules/hud/boss-healthbar.js` + hook in `hud/status.js` | Boss healthbar (name·segmented-HP·phase-pips·element tint) + pure layout helper + 13 unit tests | boss-phases | A | ✅ 6.162.0 |
 | BOSS-02 | `js/modules/combat/collision-system.js` | Route player bullets → boss weak-points (`boss-parts.js`): hits on a live part damage it, core invuln while parts live. Unit test the hit-routing decision | boss-parts (shipped) | — (serialize) | TODO |
 | BOSS-03 | `js/modules/enemy/boss-intro.js` + NEW `js/modules/enemy/boss-fx.js` | Intro/death canvas FX: name-card sweep, death detonation, camera-shake; driven by the shipped intro/death runner. QA: stub boss plays intro→death | boss-intro (shipped) | A | TODO |
 | BOSS-04 | NEW `js/modules/enemy/bosses/index.js` + spawn hook in `wave/wave-manager.js` | Boss registry + "spawn the stage's boss on its last wave"; `isFinalBoss` flag wiring. Unit test registry lookup by stage | BOSS-01/02/03 | — | TODO |
@@ -46,7 +46,7 @@ Chassis pure-cores SHIPPED (`boss-phases.js` 6.159.0 · `boss-parts.js` 6.160.0 
 All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + weak-point parts (uses `boss-parts.js`) + element. DoD per boss: spawns w/ name-card + healthbar, weak-point/armor gating works, enrage fires, killable 45–120s, **boss smoke test green**.
 | ID | FILE (owned) `js/modules/enemy/bosses/…` | Boss | ∥group |
 |----|----|----|----|
-| BOSS-05 | `harbinger.js` | THE HARBINGER (1-3, Kinetic — rotating bolt-head weak-points) | B |
+| ~~BOSS-05~~ | `harbinger.js` | ✅ **6.163.0** — THE HARBINGER (1-3, Kinetic — rotating bolt-head weak-points); established the `enemy/bosses/` descriptor pattern + chassis-API usage for BOSS-06..14 | B |
 | BOSS-06 | `aegis.js` | THE AEGIS (2-6, armor — rotating plate-gap, CORRODE-bypass, plate-shed) | B |
 | BOSS-07 | `lumen.js` | LUMEN THE PRISM SOVEREIGN (3-9, Radiant — reflect-ring, shield drones, DISJUNCTION) | B |
 | BOSS-08 | `gemini.js` | GEMINI (4-12, Pyro+Cryo twins — opposite resists, tether, partner-enrage) | B |
