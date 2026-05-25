@@ -16,6 +16,9 @@ import { EnemyBullet } from './enemy/enemy-bullet.js';
 // ENMY-03 — cloak de-targeting for the auto-aim picker. No-op for cloak-less
 // objects; only ever filters a cloaked-and-unrevealed PHANTOM.
 import { isTargetable } from './enemy/abilities/cloak.js';
+// ENMY-07 — blink/burrow de-targeting for the auto-aim picker. No-op for
+// blink-less objects; only ever filters a WRAITHWORM that's mid-blink/underground.
+import { isVanished } from './enemy/abilities/blink-burrow.js';
 import { FormationManager } from './enemy/formations.js';
 import { bossFxCameraShake } from './enemy/boss-fx.js';
 import { Particle, drawParticlesBatched } from './world/particle.js';
@@ -2717,6 +2720,25 @@ export class GameEngine {
         return wave.requestEnemySpawn.call(this, 'PHANTOM', cx, cy, { cap: 9999 });
     }
 
+    // ENMY-07 — DEBUG HOOK. Force-spawn a WRAITHWORM (blink/burrow enemy) on
+    // demand for QA + manual testing, mirroring spawnPhantom. Spawns ~260px off
+    // the player (or viewport center), no warp, instantly fightable. Returns the
+    // enemy (carrying a `blink` state), or null if the pool is dry.
+    //   gameEngine.spawnWraithworm()  or  gameEngine.spawnWraithworm({ x, y })
+    spawnWraithworm(opts = {}) {
+        // Default to ~260px off the player (or viewport center) so the freshly
+        // spawned Wraithworm doesn't immediately ram the ship and die before QA
+        // can observe its blink cycle. Explicit opts.x/opts.y override.
+        const baseX = this.player ? this.player.x
+            : (this.camera ? this.camera.x + this.width / 2 : (this.gameField ? this.gameField.width / 2 : 600));
+        const baseY = this.player ? this.player.y
+            : (this.camera ? this.camera.y + this.height / 2 : (this.gameField ? this.gameField.height / 2 : 400));
+        const cx = (opts.x != null) ? opts.x : baseX + 260;
+        const cy = (opts.y != null) ? opts.y : baseY - 180;
+        // Bypass the concurrent-spawn cap for the debug hook (huge cap).
+        return wave.requestEnemySpawn.call(this, 'WRAITHWORM', cx, cy, { cap: 9999 });
+    }
+
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }
@@ -4822,6 +4844,9 @@ export class GameEngine {
             // ENMY-03 — auto-aim skips a cloaked-and-unrevealed enemy (no-op for
             // cloak-less objects like asteroids / mines).
             if (!isTargetable(obj, frameClock.now)) return;
+            // ENMY-07 — auto-aim skips a vanished (mid-blink/underground) enemy
+            // (no-op for blink-less objects; isVanished → false without config).
+            if (isVanished(obj, frameClock.now)) return;
             const dx = obj.x - fromX;
             const dy = obj.y - fromY;
             const d2 = dx * dx + dy * dy;

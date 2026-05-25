@@ -19,6 +19,12 @@ import { runAura } from './support-aura.js';
 // `this.cloak`, which only PHANTOM (config.cloak) ever gets. Cloak-less enemies
 // behave byte-for-byte as before.
 import { createCloak, tickCloak, cloakAlpha } from './abilities/cloak.js';
+// ENMY-07 — blink / burrow teleport. Default-safe: every wiring below is gated
+// on `this.blink`, which only WRAITHWORM (config.blink) ever gets. Blink-less
+// enemies behave byte-for-byte as before. `telegraphPhase`/`telegraphProgress`
+// are read-only telegraph reads used to draw the "about to blink" tell.
+import { createBlink, tickBlink, isVanished } from './abilities/blink-burrow.js';
+import { telegraphPhase, telegraphProgress } from './telegraph.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
 // `isMobile` toggles the lateral weave decoration in update().
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
@@ -143,6 +149,11 @@ export class Enemy {
         // the AoE/MARK reveal stamp read by cloak's isTargetable; reset here.
         this.cloak = this.config.cloak ? createCloak(this.config.cloakOpts) : null;
         this._revealedUntil = 0;
+        // ENMY-07 — blink/burrow teleport (WRAITHWORM). Attach a fresh blink
+        // cycle when the type marks it; otherwise NULL it out so a pooled enemy
+        // recycled into a non-blink type can't carry a stale blink. The config
+        // may carry `blinkOpts` (kind/range/interval/telegraph timings).
+        this.blink = this.config.blink ? createBlink(this.config.blinkOpts) : null;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
@@ -311,6 +322,10 @@ export class Enemy {
         this.corrodeUntil = 0;
         this.chillUntil = 0;
         this.freezeUntil = 0;
+        // ENMY-07 — blink-burrow's isFrozen reads `_frozenUntil`; applyChill /
+        // applyFreeze mirror the live freeze window into it. Reset so a pooled
+        // enemy can't carry a stale freeze that would block a fresh blink.
+        this._frozenUntil = 0;
         this.conductUntil = 0;
         this.oilUntil = 0;
         this.markUntil = 0;
@@ -720,6 +735,16 @@ export class Enemy {
             if (this.y < -this.radius) this.y = fieldHeight + this.radius;
             if (this.y > fieldHeight + this.radius) this.y = -this.radius;
         }
+
+        // ── ENMY-07 blink / burrow cycle ──
+        // Driven AFTER the movement integration + boundary handling so that on a
+        // telegraph STRIKE the teleport is the enemy's FINAL position this frame
+        // (it overwrites the just-integrated x/y and wins over wraparound). The
+        // helper telegraphs first (windup → strike), relocates exactly once on
+        // the strike, and is freeze-guarded (CHILL/FREEZE mirror `_frozenUntil`).
+        // Gated on `this.blink`, so this is a no-op for every non-WRAITHWORM
+        // enemy. `targetPlayer` is the burrow re-emerge anchor.
+        if (this.blink) tickBlink(this, this.targetPlayer, frameClock.now);
 
         // Death check (tolerance for floating-point precision).
         if (this.health <= 0.001 && this.active) {
@@ -1378,14 +1403,47 @@ export class Enemy {
         }
 
 
+        // ── ENMY-07 blink / burrow render ──
+        // While the enemy is mid-blink/underground (telegraph windup + strike,
+        // i.e. isVanished true) the normal shape must NOT render — it's gone.
+        // During the WINDUP specifically we draw a small pulsing telegraph ring
+        // at its current position so the impending vanish is TELEGRAPHED, not a
+        // surprise; the STRIKE window draws nothing (it's already jumping). We
+        // then return early, skipping the light trail + shape below. The
+        // death-FX/debris branch returned far earlier, so this never touches it.
+        // No-op for blink-less enemies (isVanished → false). Gated on this.blink.
+        if (this.blink && isVanished(this, frameClock.now)) {
+            const phase = telegraphPhase(this.blink.telegraph, frameClock.now);
+            if (phase === 'windup') {
+                const p = telegraphProgress(this.blink.telegraph, frameClock.now);
+                const now = frameClock.now;
+                const pulse = 0.5 + 0.5 * Math.sin(now * 0.03);
+                // Ring contracts inward as the windup completes — a "charging to
+                // vanish" tell. Fades out toward the strike.
+                const ringR = this.radius * (1.6 - p * 0.7);
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.globalAlpha = (1 - p) * (0.45 + 0.35 * pulse);
+                ctx.strokeStyle = (this.color && this.color[0] === '#') ? this.color : '#9b6bff';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, ringR, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
+            return;
+        }
+
         // Draw light trail first (behind enemy)
         this.drawLightTrail(ctx);
-        
+
         // Draw targeting effect if this enemy is currently targeted (clicked)
         if (this.gameEngine && this.gameEngine.targetedEntity === this) {
             this.drawTargetingEffect(ctx);
         }
-        
+
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.faceAngle); // Rotate to face direction

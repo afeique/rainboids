@@ -2151,12 +2151,18 @@ export function applyCorrode(enemy, durationMs = 4000, maxStacks = 3, _spread = 
 export function applyChill(enemy, durationMs = 2000) {
     if (!_statusGuard(enemy)) return;
     enemy.chillUntil = Math.max(enemy.chillUntil || 0, frameClock.now + durationMs * conduitFactor(this));
+    // ENMY-07 — blink-burrow's isFrozen reads `_frozenUntil`; mirror the live
+    // CHILL window into it so a chilled Wraithworm can't blink/burrow away
+    // (design: the slow holds it in place). Tiny, side-effect-free.
+    enemy._frozenUntil = Math.max(enemy._frozenUntil || 0, enemy.chillUntil);
 }
 
 // FREEZE — full halt + no firing (OR'd into the stun gate) + brittle. Refresh.
 export function applyFreeze(enemy, durationMs = 1500) {
     if (!_statusGuard(enemy)) return;
     enemy.freezeUntil = Math.max(enemy.freezeUntil || 0, frameClock.now + durationMs * conduitFactor(this));
+    // ENMY-07 — same mirror as applyChill: a hard FREEZE also blocks blink.
+    enemy._frozenUntil = Math.max(enemy._frozenUntil || 0, enemy.freezeUntil);
 }
 
 // CONDUCT — +50% VOLT damage taken (applied in applyDamageToEnemy). Refresh.

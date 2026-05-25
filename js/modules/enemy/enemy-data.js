@@ -619,6 +619,30 @@ export const ENEMY_TYPES = {
         visual: { shape: 'stalker_sword', glowColor: '#bb99ff', trailLength: 15 },
         ai: { evasion: 0.6, preferredRange: 240, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
+
+    // ENMY-07 — WRAITHWORM: a Volt burrower (blink-burrow.js). It periodically
+    // TELEGRAPHS a wind-up (a contracting ring tell), VANISHES underground, and
+    // RE-EMERGES near the player ('burrow'). While vanished it's invisible and
+    // drops off homing/auto-aim; on recover/idle it's a normal killable enemy.
+    // The `blink: true` marker tells initializeEnemy to attach a fresh
+    // createBlink(blinkOpts) state. It can't blink while CHILLED/FROZEN.
+    WRAITHWORM: {
+        name: 'Wraithworm',
+        color: '#5fe0ff',
+        health: 9,
+        speed: 2.4,
+        size: 36,
+        shootPattern: 'hunter_single',
+        shootRate: 0.30,
+        movePattern: 'keep_distance',
+        points: 175,
+        blink: true,                // → initializeEnemy attaches createBlink(blinkOpts)
+        blinkOpts: { kind: 'burrow', intervalMs: 3500, range: 200, windupMs: 520, strikeMs: 120, recoverMs: 340 },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.10, rotationSpeed: { min: -0.02, max: 0.02 } },
+        firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1400, max: 4800 } },
+        visual: { shape: 'spiked_circle', glowColor: '#8af0ff', trailLength: 16 },
+        ai: { evasion: 0.5, preferredRange: 300, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -644,6 +668,7 @@ const ENEMY_ELEMENTS = {
     SPORE_CARRIER: 'TOXIC', // E8c — toxic drone spawner
     LUMEN_DRONE: 'RADIANT', // E8d — radiant ally-shield support
     PHANTOM:     'VOID',    // ENMY-03 — cloaking Void skirmisher
+    WRAITHWORM:  'VOLT',    // ENMY-07 — blink/burrow Volt skirmisher
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -670,6 +695,7 @@ const ENEMY_RESISTS = {
     SPORE_CARRIER: { TOXIC: 0.50, RADIANT: -0.40 },            // E8c — toxic-tough spawner; Radiant clears it
     LUMEN_DRONE: { RADIANT: 0.50, VOID: -0.40 },               // E8d — radiant-tough support; Void snuffs it
     PHANTOM:     { VOID: 0.40, RADIANT: -0.50 },               // ENMY-03 — Void-tough cloaker; Radiant lights it up
+    WRAITHWORM:  { VOLT: 0.40, CRYO: -0.50 },                  // ENMY-07 — Volt-tough burrower; Cryo CHILLs it so it can't blink away
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

@@ -5,6 +5,11 @@ import { wrap, random, bakedBulletSpriteCache } from '../core/utils.js';
 // no `cloak` config, so this is a no-op for asteroids/mines/non-PHANTOM enemies;
 // it only ever filters a PHANTOM that's currently cloaked-and-unrevealed.
 import { isTargetable } from '../enemy/abilities/cloak.js';
+// ENMY-07 — blink/burrow de-targeting. `isVanished` returns false for any
+// object with no `blink` config, so this is a no-op for asteroids/mines/
+// non-WRAITHWORM enemies; it only ever filters a WRAITHWORM that's currently
+// mid-blink/underground (telegraph windup + strike).
+import { isVanished } from '../enemy/abilities/blink-burrow.js';
 import { frameClock } from '../core/frame-clock.js';
 
 // Cluster bombs launch fast and decelerate (friction), so a single frame's
@@ -603,6 +608,9 @@ export class Bullet {
                 // ENMY-03 — skip a cloaked-and-unrevealed enemy so homing slips
                 // past it. No-op for cloak-less targets (always targetable).
                 if (!isTargetable(target, frameClock.now)) continue;
+                // ENMY-07 — skip a vanished (mid-blink/underground) enemy so
+                // homing can't lock the spot it just left. No-op for blink-less.
+                if (isVanished(target, frameClock.now)) continue;
 
                 const dx = target.x - this.x;
                 const dy = target.y - this.y;

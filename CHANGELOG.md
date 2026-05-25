@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.181.0] - 2026-05-25
+
+### Added — Blinking burrowers: the WRAITHWORM (ENMY blink-burrow slice)
+
+A second enabling-system helper goes live — and it composes a third, so this
+slice pays off **two** dormant helpers (blink-burrow + telegraph). A new
+**Wraithworm** enemy (Volt, Cryo-weak) periodically **telegraphs, vanishes, and
+re-emerges near the player** — a burrow-blink it can't perform while frozen.
+
+- Wired `enemy/abilities/blink-burrow.js` into the live paths, all **gated on
+  `enemy.blink`** (default-safe): `tickBlink` after movement in `enemy.update`
+  (relocates on the telegraph strike), a windup **telegraph tell** (contracting
+  pulse ring) + skip-render-while-vanished in `enemy.draw`, and an `isVanished`
+  skip in **both** target pickers (`bullet.applyHoming` + `findNearestTarget`).
+- **CHILL/FREEZE now blocks the blink:** `combat-manager` `applyChill`/
+  `applyFreeze` mirror `chillUntil`/`freezeUntil` → `_frozenUntil` (the field the
+  helper's freeze-guard reads) — additive, no change to existing chill/freeze.
+- New **WRAITHWORM** type (`enemy-data.js`, Volt, `blinkOpts:{kind:'burrow'}`) +
+  `gameEngine.spawnWraithworm()` debug hook. (Joins the live wave roster with
+  ENMY-10.)
+
+Coverage: 5 Playwright QA tests (`tests/qa/23-blink.spec.js`: relocation, vanish
++ de-target, freeze-blocks-blink, no fatal errors); full unit suite (1442) +
+cloak/bosses QA regression green.
+
 ## [6.180.0] - 2026-05-25
 
 ### Added — Cloaking enemies: the PHANTOM (ENMY cloak slice)
