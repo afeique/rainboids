@@ -4130,7 +4130,8 @@ body.mobile-portrait .shop-help-icon {
     background: rgba(120, 255, 150, 0.12);
     text-shadow: 0 0 6px rgba(120, 255, 150, 0.4);
 }
-.shop-runsetup-step:disabled {
+.shop-runsetup-step:disabled,
+.shop-runsetup-btn:disabled {
     opacity: 0.35;
     cursor: not-allowed;
 }

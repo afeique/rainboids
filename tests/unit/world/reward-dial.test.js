@@ -1,23 +1,34 @@
 // RUN-03 / X3 — Reward Dial unit tests (pure, no DOM, no globals).
+// DIR-08 — §14.4 mode + performance reward terms.
 //
-// The CRITICAL guarantee under test: the DEFAULT 10×3 campaign is
-// reward-identical to today — rewardMultiplier() === EXACTLY 1.0 at every
-// wave. Richer runs (wps ≥ 6) compound a flat waves-per-stage factor with a
-// gentle stage-depth endurance curve.
+// The CRITICAL guarantee under test: the DEFAULT 10×3 NORMAL campaign with no
+// performance bonus is reward-identical to today — rewardMultiplier() ===
+// EXACTLY 1.0 at every wave. Richer runs (wps ≥ 6) compound a flat
+// waves-per-stage factor with a gentle stage-depth endurance curve; DIR-08
+// layers the difficulty MODE term and a per-clear PERFORMANCE bonus on top.
 import {
     WAVES_PER_STAGE_REWARD_MULT,
     DEFAULT_WAVES_PER_STAGE,
     WPS_REWARD_SLOPE,
     STAGE_DEPTH_MAX_BONUS,
+    PERF_FLAWLESS_BONUS,
+    PERF_FAST_CLEAR_BONUS,
+    PERF_DIRECTOR_WEIGHT,
     wavesPerStageRewardMult,
     wavesPerStageRewardMultForWps,
     stageDepthRewardMult,
+    perfBonus,
     rewardMultiplier,
 } from '../../../js/modules/world/reward-dial.js';
+import { modeReward } from '../../../js/modules/wave/difficulty-constants.js';
 
-// A game-like object carrying just a runConfig (or none → default 10×3).
+// A game-like object carrying just a runConfig (or none → default 10×3 NORMAL).
 const gameWith = (stages, wavesPerStage) =>
     (stages == null) ? {} : { runConfig: { stages, wavesPerStage } };
+
+// As above, but also pins the difficulty MODE (DIR-08).
+const gameWithMode = (stages, wavesPerStage, mode) =>
+    ({ runConfig: { stages, wavesPerStage, mode } });
 
 describe('wavesPerStageRewardMult', () => {
     test('table hits: 3 → 1.0, 6 → 1.3, 9 → 1.6', () => {
@@ -145,6 +156,122 @@ describe('rewardMultiplier — richer runs', () => {
     });
 });
 
+describe('modeReward term (DIR-08 / §14.4)', () => {
+    test('the §14.4 mode table values', () => {
+        expect(modeReward('EASY')).toBeCloseTo(0.8, 10);
+        expect(modeReward('NORMAL')).toBe(1.0);
+        expect(modeReward('HARD')).toBeCloseTo(1.3, 10);
+        expect(modeReward('EPIC')).toBeCloseTo(1.7, 10);
+        expect(modeReward('LEGENDARY')).toBeCloseTo(2.2, 10);
+    });
+
+    test('NORMAL mode leaves a default run at exactly 1.0', () => {
+        const game = gameWithMode(10, 3, 'NORMAL');
+        for (const wave of [1, 5, 15, 30]) {
+            expect(rewardMultiplier(game, wave)).toBe(1.0);
+        }
+    });
+
+    test('mode scales a DEFAULT-shape (3 wps) run with no perf', () => {
+        // wps + stage-depth are 1.0 for a 3-wps run, so the factor is purely
+        // the mode term — proving mode applies at the default shape.
+        expect(rewardMultiplier(gameWithMode(10, 3, 'HARD'), 5)).toBeCloseTo(1.3, 10);
+        expect(rewardMultiplier(gameWithMode(10, 3, 'LEGENDARY'), 5)).toBeCloseTo(2.2, 10);
+        expect(rewardMultiplier(gameWithMode(10, 3, 'EASY'), 5)).toBeCloseTo(0.8, 10);
+        expect(rewardMultiplier(gameWithMode(10, 3, 'EPIC'), 5)).toBeCloseTo(1.7, 10);
+    });
+});
+
+describe('perfBonus term (DIR-08 / §14.4)', () => {
+    test('the §14.4 addend tunables', () => {
+        expect(PERF_FLAWLESS_BONUS).toBeCloseTo(0.25, 10);
+        expect(PERF_FAST_CLEAR_BONUS).toBeCloseTo(0.15, 10);
+        expect(PERF_DIRECTOR_WEIGHT).toBeCloseTo(0.30, 10);
+    });
+
+    test('{} (and undefined / null) → exactly 1.0 (neutral)', () => {
+        expect(perfBonus({})).toBe(1.0);
+        expect(perfBonus()).toBe(1.0);
+        expect(perfBonus(null)).toBe(1.0);
+    });
+
+    test('flawless → 1.25', () => {
+        expect(perfBonus({ flawless: true })).toBeCloseTo(1.25, 10);
+    });
+
+    test('fastClear → 1.15', () => {
+        expect(perfBonus({ fastClear: true })).toBeCloseTo(1.15, 10);
+    });
+
+    test('flawless + fastClear → 1.40', () => {
+        expect(perfBonus({ flawless: true, fastClear: true })).toBeCloseTo(1.40, 10);
+    });
+
+    test('directorMult 2.0 → 1 + (2-1)×0.30 = 1.30', () => {
+        expect(perfBonus({ directorMult: 2.0 })).toBeCloseTo(1.30, 10);
+    });
+
+    test('directorMult ≤ 1 (or missing) contributes nothing', () => {
+        expect(perfBonus({ directorMult: 1.0 })).toBe(1.0);
+        expect(perfBonus({ directorMult: 0.5 })).toBe(1.0); // never subtracts
+    });
+
+    test('combined: flawless + fastClear + directorMult 2.0 → 1.70', () => {
+        // 1 + 0.25 + 0.15 + (2-1)×0.30 = 1.70
+        expect(perfBonus({ flawless: true, fastClear: true, directorMult: 2.0 }))
+            .toBeCloseTo(1.70, 10);
+    });
+});
+
+describe('rewardMultiplier — perf arg (DIR-08)', () => {
+    test('default perf arg is neutral (omitted === {} === 1.0 perf)', () => {
+        const game = gameWith(10, 6);
+        for (const wave of [6, 30, 60]) {
+            expect(rewardMultiplier(game, wave)).toBe(rewardMultiplier(game, wave, {}));
+        }
+    });
+
+    test('perf bonus multiplies through on a DEFAULT-shape NORMAL run', () => {
+        const game = gameWithMode(10, 3, 'NORMAL');
+        // shape = 1.0, mode = 1.0, so factor === perfBonus alone.
+        expect(rewardMultiplier(game, 5, { flawless: true })).toBeCloseTo(1.25, 10);
+        expect(rewardMultiplier(game, 5, { fastClear: true })).toBeCloseTo(1.15, 10);
+        expect(rewardMultiplier(game, 5, { flawless: true, fastClear: true }))
+            .toBeCloseTo(1.40, 10);
+    });
+});
+
+describe('rewardMultiplier — all four factors compound (DIR-08)', () => {
+    test('6 wps + HARD + flawless at a deep wave multiplies all four terms', () => {
+        const game = gameWithMode(10, 6, 'HARD'); // 60 waves, 10 stages
+        const wave = 60; // final stage → full stage-depth bonus
+        const perf = { flawless: true };
+        const expected =
+            wavesPerStageRewardMult(game)        // 1.3 (6 wps)
+            * stageDepthRewardMult(wave, game)   // 1.40 (final stage)
+            * modeReward('HARD')                 // 1.3
+            * perfBonus(perf);                   // 1.25
+        expect(rewardMultiplier(game, wave, perf)).toBeCloseTo(expected, 10);
+        // sanity: numerically 1.3 × 1.4 × 1.3 × 1.25 = 2.9575
+        expect(rewardMultiplier(game, wave, perf)).toBeCloseTo(2.9575, 10);
+        // strictly larger than any single factor alone
+        expect(rewardMultiplier(game, wave, perf))
+            .toBeGreaterThan(rewardMultiplier(game, wave));
+    });
+
+    test('full term breakdown: shape × mode × perf', () => {
+        const game = gameWithMode(8, 9, 'LEGENDARY');
+        const wave = 18;
+        const perf = { flawless: true, fastClear: true, directorMult: 1.5 };
+        const expected =
+            wavesPerStageRewardMult(game)
+            * stageDepthRewardMult(wave, game)
+            * modeReward('LEGENDARY')
+            * perfBonus(perf);
+        expect(rewardMultiplier(game, wave, perf)).toBeCloseTo(expected, 10);
+    });
+});
+
 describe('purity', () => {
     test('same inputs → same output (no hidden state / randomness)', () => {
         const game = gameWith(10, 6);
@@ -160,9 +287,16 @@ describe('purity', () => {
     test('does not mutate the game object', () => {
         const game = gameWith(10, 6);
         const snapshot = JSON.stringify(game);
-        rewardMultiplier(game, 42);
+        rewardMultiplier(game, 42, { flawless: true, directorMult: 2.0 });
         stageDepthRewardMult(42, game);
         wavesPerStageRewardMult(game);
         expect(JSON.stringify(game)).toBe(snapshot);
+    });
+
+    test('perfBonus does not mutate its perf arg', () => {
+        const perf = { flawless: true, fastClear: true, directorMult: 1.5 };
+        const snapshot = JSON.stringify(perf);
+        perfBonus(perf);
+        expect(JSON.stringify(perf)).toBe(snapshot);
     });
 });

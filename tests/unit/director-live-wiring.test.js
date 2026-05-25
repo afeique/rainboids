@@ -19,7 +19,9 @@ import {
     createDirector,
     tickWave,
     getDifficulty,
+    setDirectorContext,
 } from '../../js/modules/wave/difficulty-director.js';
+import { computePWR, PWR_REF, starterStub } from '../../js/modules/wave/power-level.js';
 
 // Mirror of the live "resolve a multiplier, default 1.0 without a director"
 // guard used at BOTH chokepoints (directorHpMult in wave-manager.js and
@@ -118,6 +120,107 @@ describe('RUN-05a — buildDirectorOutcome (pure outcome builder)', () => {
         for (let i = 0; i < 7; i++) tickWave(dir, neutral());
         expect(dir.wave).toBe(7);
         expect(getDifficulty(dir).D_hp).toBeCloseTo(1.0, 6);
+    });
+});
+
+// ── DIR-05 — PWR + mode → director context feed ─────────────────────────────
+// Mirror of the live engine.recomputePlayerPWR() feed (game-engine.js): compute
+// the build PWR defensively (fallback PWR_REF on throw / non-finite), cache it on
+// the game-like object, then feed the §14 context into the director if present.
+// Kept here as the unit-of-truth for the feed contract, exactly like resolveMult
+// above mirrors the chokepoint guard. (Instantiating the full GameEngine is too
+// heavy for a unit test; the feed logic itself is the integration surface.)
+function recomputePlayerPWR(game, player, mode = 'NORMAL') {
+    let pwr;
+    try {
+        pwr = computePWR(player);
+    } catch (_e) {
+        pwr = PWR_REF;
+    }
+    if (!Number.isFinite(pwr)) pwr = PWR_REF;
+    game.playerPWR = pwr;
+    const dir = game.difficultyDirector;
+    if (dir && dir.cfg) setDirectorContext(dir, { pwr, mode });
+    return pwr;
+}
+
+describe('DIR-05 — PWR + mode wired into the live director context', () => {
+    test('the feed caches a finite numeric game.playerPWR', () => {
+        const game = { difficultyDirector: createDirector() };
+        const pwr = recomputePlayerPWR(game, starterStub());
+        expect(typeof game.playerPWR).toBe('number');
+        expect(Number.isFinite(game.playerPWR)).toBe(true);
+        expect(game.playerPWR).toBe(pwr);
+        // a fresh starter anchors at PWR_REF
+        expect(game.playerPWR).toBe(PWR_REF);
+    });
+
+    test('a starter at NORMAL leaves the director default-safe (effective D unchanged)', () => {
+        const dir = createDirector();
+        const before = getDifficulty(dir); // cold-start neutral 1/1
+        recomputePlayerPWR({ difficultyDirector: dir }, starterStub(), 'NORMAL');
+        const after = getDifficulty(dir);
+        expect(after.D_hp).toBeCloseTo(before.D_hp, 10);
+        expect(after.D_thr).toBeCloseTo(before.D_thr, 10);
+        expect(after.D_hp).toBe(1);
+        expect(after.D_thr).toBe(1);
+        // the feed set the context to the neutral anchor
+        expect(dir.pwr).toBe(PWR_REF);
+        expect(dir.mode).toBe('NORMAL');
+    });
+
+    test('a strong build raises effective difficulty vs a starter (pre-load active)', () => {
+        // A build well above the starter: more health, faster fire, more shots,
+        // bigger crits → PWR ≫ PWR_REF, so pwrPreload = sqrt(PWR/ref) > 1.
+        const strong = {
+            ...starterStub(),
+            getEffectivePrimaryDamage: () => 6.0,    // 5× starter
+            getEffectivePrimaryFireRate: () => 150,  // ~2.7× faster
+            getEffectiveMaxHealth: () => 200,        // 5× starter
+            getEffectiveCritChance: () => 40,
+            getEffectiveCritDamage: () => 300,
+            multishotStacks: 3,
+            getEffectiveRegen: () => 5,
+        };
+        const starterPWR = computePWR(starterStub());
+        const strongPWR = computePWR(strong);
+        expect(strongPWR).toBeGreaterThan(starterPWR);
+
+        // Feed BOTH into fresh cold-start directors and compare effective D.
+        const dStarter = createDirector();
+        const dStrong = createDirector();
+        recomputePlayerPWR({ difficultyDirector: dStarter }, starterStub(), 'NORMAL');
+        recomputePlayerPWR({ difficultyDirector: dStrong }, strong, 'NORMAL');
+
+        const effStarter = getDifficulty(dStarter);
+        const effStrong = getDifficulty(dStrong);
+        // The pre-load folds onto the effective output, so the strong build faces
+        // higher D on both axes immediately — even at cold-start (reactive D=1).
+        expect(effStrong.D_hp).toBeGreaterThan(effStarter.D_hp);
+        expect(effStrong.D_thr).toBeGreaterThan(effStarter.D_thr);
+        // starter stays exactly neutral (default-safe)
+        expect(effStarter.D_hp).toBe(1);
+        expect(effStarter.D_thr).toBe(1);
+    });
+
+    test('feed is defensive: a throwing player falls back to PWR_REF (run never breaks)', () => {
+        const hostile = {
+            get getEffectivePrimaryDamage() { throw new Error('boom'); },
+        };
+        const game = { difficultyDirector: createDirector() };
+        // recompute must not throw and must cache the safe anchor.
+        expect(() => recomputePlayerPWR(game, hostile)).not.toThrow();
+        expect(game.playerPWR).toBe(PWR_REF);
+        expect(getDifficulty(game.difficultyDirector).D_hp).toBe(1);
+    });
+
+    test('feed is guarded: a missing/malformed director still caches playerPWR', () => {
+        const g1 = { difficultyDirector: undefined };
+        expect(() => recomputePlayerPWR(g1, starterStub())).not.toThrow();
+        expect(g1.playerPWR).toBe(PWR_REF);
+        const g2 = { difficultyDirector: {} }; // no .cfg
+        expect(() => recomputePlayerPWR(g2, starterStub())).not.toThrow();
+        expect(g2.playerPWR).toBe(PWR_REF);
     });
 });
 

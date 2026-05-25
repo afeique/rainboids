@@ -1,24 +1,27 @@
-// RUN-03 / X3 — the Reward Dial.
+// RUN-03 / X3 — the Reward Dial.  DIR-08 — §14.4 mode + performance terms.
 //
 // Run rewards scale with the player's chosen RUN SHAPE (more waves-per-stage
 // = richer per-clear rewards) plus a gentle stage-depth ENDURANCE curve so
-// long runs stay worthwhile. This module is PURE plumbing: no DOM, no
-// globals, no Date.now / no Math.random. Every function is deterministic in
-// its inputs and unit-testable in isolation.
+// long runs stay worthwhile. DIR-08 layers two MORE multiplicative terms on
+// top: the run's difficulty MODE (§14.4) and a per-clear PERFORMANCE bonus
+// (flawless / fast-clear / director pressure). This module is PURE plumbing:
+// no DOM, no globals, no Date.now / no Math.random. Every function is
+// deterministic in its inputs and unit-testable in isolation.
 //
 // ─── DEFAULT-RUN GUARANTEE (critical) ───────────────────────────────────
-// The canonical campaign is the DEFAULT 10 × 3 run (wavesPerStage = 3). To
-// guarantee ZERO behavior change for current play — and keep the entire
-// existing test suite green by construction — `rewardMultiplier()` returns
-// EXACTLY 1.0 whenever `runWavesPerStage(game) <= 3` (the default). BOTH the
-// waves-per-stage factor AND the stage-depth endurance curve only activate
-// for richer runs (wps ≥ 6), which the not-yet-built RUN-06 setup UI will
-// let players opt into. Until then the dial is inert at every reward site.
+// The canonical campaign is the DEFAULT 10 × 3 NORMAL run. To guarantee ZERO
+// behavior change for current play — and keep the entire existing test suite
+// green by construction — `rewardMultiplier()` returns EXACTLY 1.0 for the
+// default run shape: wavesPerStage ≤ 3 (so the wps + stage-depth factors are
+// both 1.0), NORMAL mode (modeReward = 1.0), and no performance bonus
+// (perf = {} → perfBonus = 1.0). Each of the four terms is independently
+// neutral at its default, so they multiply to exactly 1.0.
 //
-// The two factors combine MULTIPLICATIVELY into one reward factor that the
+// The four factors combine MULTIPLICATIVELY into one reward factor that the
 // four reward sites (gold, drop chance, rarity bias, Cores) multiply through.
 
-import { getRunConfig, runWavesPerStage } from '../core/constants.js';
+import { getRunConfig, runWavesPerStage, getRunMode } from '../core/constants.js';
+import { modeReward } from '../wave/difficulty-constants.js';
 
 // ─── Tunables (exported so tests + future tuning can reference them) ──────
 
@@ -107,22 +110,65 @@ export function stageDepthRewardMult(wave, game, opts = {}) {
     return 1.0 + maxBonus * progress;
 }
 
+// ─── DIR-08 / §14.4 — performance bonus tunables ─────────────────────────
+// Per-clear PERFORMANCE bonus addends. A clear earns extra reward for taking
+// no damage (flawless), clearing under par (fastClear), and for fighting
+// through high director pressure (directorMult > 1). All neutral by default.
+export const PERF_FLAWLESS_BONUS = 0.25;
+export const PERF_FAST_CLEAR_BONUS = 0.15;
+export const PERF_DIRECTOR_WEIGHT = 0.30;
+
 /**
- * Combined reward factor = wavesPerStageRewardMult × stageDepthRewardMult.
+ * §14.4 performance bonus — a pure additive-then-summed multiplier.
  *
- * DEFAULT-RUN GUARANTEE: returns EXACTLY 1.0 whenever
- * `runWavesPerStage(game) <= DEFAULT_WAVES_PER_STAGE` (3). This means a
- * default 10 × 3 campaign is reward-identical to today at EVERY wave — the
- * dial is a pure opt-in that only activates once a richer run shape (wps ≥ 6)
- * is selected via the future RUN-06 setup UI. For richer runs BOTH curves
- * apply and compound multiplicatively.
+ *   perfBonus = 1
+ *             + (flawless  ? PERF_FLAWLESS_BONUS   : 0)   // +0.25
+ *             + (fastClear ? PERF_FAST_CLEAR_BONUS : 0)   // +0.15
+ *             + max(0, directorMult - 1) × PERF_DIRECTOR_WEIGHT
+ *
+ * Default-safe: an empty/absent `perf` object → exactly 1.0 (neutral). A
+ * directorMult ≤ 1 (or missing) contributes nothing, so it can only ever ADD
+ * reward, never subtract.
+ *
+ * @param {object} perf  { flawless?, fastClear?, directorMult? }
+ * @returns {number}     ≥ 1.0; exactly 1.0 for the neutral {} default
+ */
+export function perfBonus(perf = {}) {
+    const p = perf || {};
+    const directorMult = (typeof p.directorMult === 'number' && isFinite(p.directorMult))
+        ? p.directorMult
+        : 1.0;
+    return 1.0
+        + (p.flawless ? PERF_FLAWLESS_BONUS : 0)
+        + (p.fastClear ? PERF_FAST_CLEAR_BONUS : 0)
+        + Math.max(0, directorMult - 1) * PERF_DIRECTOR_WEIGHT;
+}
+
+/**
+ * Combined reward factor =
+ *   wavesPerStageRewardMult × stageDepthRewardMult
+ *   × modeReward(getRunMode(game)) × perfBonus(perf).
+ *
+ * DEFAULT-RUN GUARANTEE: returns EXACTLY 1.0 for the default run shape —
+ * wavesPerStage ≤ 3 (wps + stage-depth factors are both 1.0), NORMAL mode
+ * (modeReward = 1.0), and no performance bonus (perf = {} → 1.0). Each term
+ * is independently neutral at its default, so a default 10 × 3 NORMAL run
+ * with no perf is reward-identical to today at EVERY wave.
+ *
+ * The wps + stage-depth pair are still gated behind the richer-run shape
+ * (wps ≥ 6); the mode + perf terms apply at ANY wps, so a HARD or flawless
+ * DEFAULT-shape run now correctly rewards more.
  *
  * @param {object} game  game-like object carrying `runConfig`
  * @param {number} wave  1-based current wave number
- * @returns {number}     1.0 for default runs; > 1.0 for richer runs
+ * @param {object} perf  { flawless?, fastClear?, directorMult? } (default {})
+ * @returns {number}     1.0 for default NORMAL no-perf runs; > 1.0 otherwise
  */
-export function rewardMultiplier(game, wave) {
+export function rewardMultiplier(game, wave, perf = {}) {
     const wps = runWavesPerStage(game);
-    if (wps <= DEFAULT_WAVES_PER_STAGE) return 1.0;
-    return wavesPerStageRewardMult(game) * stageDepthRewardMult(wave, game);
+    // wps + stage-depth pair stay gated behind the richer-run shape.
+    const shapeMult = (wps <= DEFAULT_WAVES_PER_STAGE)
+        ? 1.0
+        : wavesPerStageRewardMult(game) * stageDepthRewardMult(wave, game);
+    return shapeMult * modeReward(getRunMode(game)) * perfBonus(perf);
 }

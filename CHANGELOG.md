@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.190.0] - 2026-05-25
+
+### Added — §14 director levers go live: PWR feed + mode rewards + mode selector (DIR-05 / 08 / 09)
+
+Activates the §14 machinery DIR-04 added — still **default-safe** (a starter at
+NORMAL is unchanged; the levers scale for stronger builds / chosen modes):
+
+- **DIR-05** (`game-engine.js`) — computes + caches `game.playerPWR` via
+  `computePWR(player)` at run start, profile apply, and **each wave start**, and
+  feeds the director (`setDirectorContext({ pwr, mode })`). This makes the **PWR
+  pre-load live** — a strong build pre-faces tougher enemies immediately
+  (eliminating the ~9.7-wave reactive ramp lag the stress analysis measured).
+  Defensive (try/catch → PWR_REF fallback).
+- **DIR-08** (`world/reward-dial.js`) — `rewardMultiplier(game, wave, perf)` now
+  folds in `modeReward(mode)` × a `perfBonus` (flawless +25% · fast-clear +15% ·
+  (directorMult−1)·30%). Default run (≤3 wps · NORMAL · no perf) still returns
+  exactly 1.0; the shape gate was narrowed so mode/perf apply at any waves/stage.
+- **DIR-09** (`ui/static-dom.js` + `shop/shop-dom.js`) — RUN SETUP gains a 5-mode
+  selector (Easy→Legendary) writing `runConfig.mode`; Epic/Legendary gated by
+  `maxModeCleared` (§14.7) via the pure `isModeUnlocked` helper (locked modes
+  greyed). The unlock-on-clear *write* is a noted follow-up (needs a run-complete
+  hook).
+
+Coverage: +32 unit tests (1591 total) + director-live & run-setup QA green.
+Next: DIR-07 (reference-dependent expected-clear) + DIR-10 (apply `enemyPower`
+across spawn count — the bullet-sponge-avoiding deep-run escalation) + RUN-07
+calibration.
+
 ## [6.189.0] - 2026-05-25
 
 ### Added — Director §14 control-loop augmentation: PWR pre-load + mode bias (DIR-04)

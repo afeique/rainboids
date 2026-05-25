@@ -906,8 +906,32 @@ function _buildShopOverlay() {
     stagesGroup.append(decBtn, stagesVal, incBtn);
     runSetup.appendChild(stagesGroup);
 
-    // Live readout: "N waves · rewards ×M".
-    runSetup.appendChild(el('div', { id: 'shop-runsetup-readout', className: 'shop-runsetup-readout', text: '30 waves · rewards ×1.0' }));
+    // ── Difficulty MODE selector (DIR-09) ─────────────────────────
+    // Five segmented buttons Easy→Legendary that bias the adaptive
+    // Director (§14). shop-dom wires the clicks (sets _preRunRunConfig.mode),
+    // greys out gated EPIC/LEGENDARY (§14.7), and refreshes the readout.
+    // Default selection is NORMAL; the choice rides into game.runConfig on
+    // START RUN. Matches the WAVES/STAGE segmented styling.
+    const modeGroup = el('div', { id: 'shop-runsetup-mode', className: 'shop-runsetup-group' });
+    modeGroup.append(el('span', { className: 'shop-runsetup-label', text: 'MODE' }));
+    const MODE_BTNS = [
+        { id: 'easy', mode: 'EASY', label: 'EASY' },
+        { id: 'normal', mode: 'NORMAL', label: 'NORMAL' },
+        { id: 'hard', mode: 'HARD', label: 'HARD' },
+        { id: 'epic', mode: 'EPIC', label: 'EPIC' },
+        { id: 'legendary', mode: 'LEGENDARY', label: 'LEGENDARY' },
+    ];
+    for (const m of MODE_BTNS) {
+        const b = el('button', { id: `shop-runsetup-mode-${m.id}`, className: 'shop-runsetup-btn', text: m.label });
+        b.type = 'button';
+        b.dataset.mode = m.mode;
+        modeGroup.appendChild(b);
+    }
+    runSetup.appendChild(modeGroup);
+
+    // Live readout: "N waves · MODE · rewards ×W ×M" (DIR-09 adds the mode +
+    // its per-mode reward multiplier; shop-dom keeps it in sync on every edit).
+    runSetup.appendChild(el('div', { id: 'shop-runsetup-readout', className: 'shop-runsetup-readout', text: '30 waves · NORMAL · rewards ×1.0 ×1.0' }));
 
     preFooter.append(
         el('button', { id: 'shop-prerun-back', className: 'armory-btn armory-btn--back', text: '← BACK' }),

@@ -37,7 +37,7 @@ import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout } from './shop/armory.js';
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
-import { MAX_STAGES, WAVES_PER_STAGE, DEFAULT_RUN_CONFIG, runMaxWaves } from './core/constants.js';
+import { MAX_STAGES, WAVES_PER_STAGE, DEFAULT_RUN_CONFIG, runMaxWaves, getRunMode } from './core/constants.js';
 // DIR-03 — canonical difficulty mode list + fallback (the DIR-02 table is the
 // single source of truth; imported directly so game-engine doesn't depend on a
 // re-export from core/constants.js).
@@ -68,7 +68,14 @@ import * as wave from './wave/wave-manager.js';
 // (wave-manager.js) and read at the two difficulty chokepoints (enemy HP +
 // incoming player damage). Absent director ⇒ ×1.0 everywhere (cold-start +
 // clamps bound all risk). Baselines are first-pass estimates (RUN-07 calibrates).
-import { createDirector } from './wave/difficulty-director.js';
+import { createDirector, setDirectorContext } from './wave/difficulty-director.js';
+// DIR-05 — Power Level (PWR) estimator: a one-scalar build-strength prior the
+// director pre-loads from (a strong build pre-faces tougher enemies immediately
+// instead of waiting ~10 reactive waves to ramp). computePWR reads the LIVE
+// player defensively; PWR_REF (≈100) is the fresh-starter anchor + the safe
+// fallback if a read ever throws. Default-safe: a starter reads ≈ PWR_REF so the
+// pre-load is ≈1.0 (no behavior change). Wired into recomputePlayerPWR().
+import { computePWR, PWR_REF } from './wave/power-level.js';
 import * as col from './combat/collision-system.js';
 import * as combat from './combat/combat-manager.js';
 import * as lifecycle from './player/lifecycle.js';
@@ -1219,6 +1226,12 @@ export class GameEngine {
         // Storing it here auto-lights the CD-16 threat HUD, which resolves
         // this.game.difficultyDirector in drawThreatLevelHook.
         this.game.difficultyDirector = createDirector();
+        // DIR-05 — compute the run's starting build PWR and feed the §14 context
+        // (PWR pre-load + difficulty-mode bias) into the freshly-created director.
+        // Default-safe: a starter reads ≈ PWR_REF → pre-load ≈1.0 at NORMAL ⇒ the
+        // director's effective output is unchanged. Recomputed at each wave start
+        // (spawnWaveEntities) so a build that comes online mid-run is reflected.
+        this.recomputePlayerPWR();
         // RUN-05a — per-wave hit counter the director reads as `hitsSurvived`.
         // Incremented in takeDamage, reset at each wave start (wave-manager).
         this.game._waveHits = 0;
@@ -1629,6 +1642,9 @@ export class GameEngine {
             p.setOwnedPassives(getUnlockedSet('passives', meta));
         }
         if (!meta) {
+            // DIR-05 — reflect the (base-kit) loadout in the build PWR + feed the
+            // director. Guarded internally if the director isn't created yet.
+            this.recomputePlayerPWR();
             if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
             return;
         }
@@ -1658,6 +1674,10 @@ export class GameEngine {
             p.maxHealth = mh;
             p.health = mh;
         }
+        // DIR-05 — the equipped loadout / gear / passives are now applied, so the
+        // build PWR reflects them. Recompute + feed the director (guarded if the
+        // director isn't created yet — init() recomputes again right after it is).
+        this.recomputePlayerPWR();
         if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
     }
 
@@ -2695,7 +2715,41 @@ export class GameEngine {
     
     startNextWave() { return wave.startNextWave.call(this); }
 
-    spawnWaveEntities() { return wave.spawnWaveEntities.call(this); }
+    spawnWaveEntities() {
+        // DIR-05 — recompute the build PWR right BEFORE the wave spawns so a build
+        // that came online mid-run (new gear / passive / weapon swap) is reflected
+        // in the director's pre-load for the wave the player is about to face.
+        // Fires for wave 1 (init's spawn timer) AND every subsequent wave
+        // (startNextWave → spawnWaveEntities). Default-safe: a starter ≈ PWR_REF.
+        this.recomputePlayerPWR();
+        return wave.spawnWaveEntities.call(this);
+    }
+
+    // DIR-05 — compute + cache the player's Power Level (PWR) and feed the §14
+    // context (PWR pre-load + difficulty mode) into the live director. PWR is a
+    // single build-strength scalar (~PWR_REF for a fresh starter) that activates
+    // the director's pre-load lever (DIR-04): a genuinely stronger build pre-faces
+    // tougher enemies immediately instead of waiting ~10 reactive waves to ramp.
+    //
+    // Default-safe: a starter reads ≈ PWR_REF and the run mode defaults to NORMAL,
+    // so pwrPreload ≈ 1.0 × modeBase 1.0 ⇒ the director's effective output is
+    // unchanged. computePWR is wrapped in try/catch (it reads the live player
+    // defensively, but a bad read can never break the run) → fallback PWR_REF.
+    // Exposed on `game.playerPWR` for the HUD (DIR-06 reads it).
+    recomputePlayerPWR() {
+        let pwr;
+        try {
+            pwr = computePWR(this.player);
+        } catch (_e) {
+            pwr = PWR_REF;
+        }
+        if (!Number.isFinite(pwr)) pwr = PWR_REF;
+        this.game.playerPWR = pwr;
+        const dir = this.game.difficultyDirector;
+        if (dir && dir.cfg) {
+            setDirectorContext(dir, { pwr, mode: getRunMode(this.game) });
+        }
+    }
 
     spawnAsteroids(count) { return wave.spawnAsteroids.call(this, count); }
 

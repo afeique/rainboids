@@ -40,6 +40,9 @@ import { PASSIVES, getSlotPassives, maxPassiveSlots } from '../combat/passive-da
 import { MAX_STAGES, DEFAULT_RUN_CONFIG } from '../core/constants.js';
 // RUN-06 — the reward-dial helper drives the RUN SETUP readout multiplier.
 import { wavesPerStageRewardMultForWps } from '../world/reward-dial.js';
+// DIR-09 — difficulty MODE selector: the canonical mode list + per-mode
+// reward multiplier feed the RUN SETUP mode control + its readout.
+import { MODES, DEFAULT_MODE, modeReward } from '../wave/difficulty-constants.js';
 // 2026-05-23 — pre-run BUILD mode reuses the loadout-selection helpers so the
 // tree can act as the start-of-run weapon/ability picker (see _preRun below).
 import { toggleSelection, getUnlockedSet, unlockCost, LOADOUT_SLOTS } from './armory.js';
@@ -136,19 +139,55 @@ export function clampRunWps(n) {
     }
     return best;
 }
+// DIR-09 — pure: resolve a difficulty mode to a canonical MODES member.
+// Upper-cases + validates against MODES; anything else → DEFAULT_MODE (NORMAL).
+export function clampRunMode(m) {
+    if (typeof m === 'string') {
+        const up = m.toUpperCase();
+        if (MODES.includes(up)) return up;
+    }
+    return DEFAULT_MODE;
+}
 // RUN-06 — pure: clamp a whole runConfig into the valid run-shape grid.
+// DIR-09 — also carries+validates `mode` (a valid MODES member, else NORMAL).
 export function clampRunConfig(rc) {
     const stages = clampRunStages(rc && rc.stages);
     const wavesPerStage = clampRunWps(rc && rc.wavesPerStage);
-    return { stages, wavesPerStage };
+    const mode = clampRunMode(rc && rc.mode);
+    return { stages, wavesPerStage, mode };
+}
+// DIR-09 — §14.7 gating: is `mode` unlocked given `maxModeCleared` (the highest
+// mode the player has cleared ≥ stage 5 on)? EASY/NORMAL/HARD are ALWAYS open.
+// EPIC needs Hard-cleared (maxModeCleared ≥ HARD); LEGENDARY needs Epic-cleared
+// (maxModeCleared ≥ EPIC). A default/absent meta (maxModeCleared undefined) →
+// EPIC/LEGENDARY locked. Pure; exported for unit tests.
+export function isModeUnlocked(mode, maxModeCleared) {
+    const m = clampRunMode(mode);
+    if (m === 'EASY' || m === 'NORMAL' || m === 'HARD') return true;
+    // maxModeCleared is the deepest mode cleared; rank it on the MODES order.
+    const clearedRank = MODES.indexOf(clampRunMode(maxModeCleared));
+    // clampRunMode coerces absent/garbage to NORMAL; treat that as "nothing
+    // proven beyond the always-open tier" so EPIC/LEGENDARY stay locked.
+    const proven = (typeof maxModeCleared === 'string' && MODES.includes(maxModeCleared.toUpperCase()))
+        ? clearedRank : -1;
+    if (m === 'EPIC') return proven >= MODES.indexOf('HARD');
+    if (m === 'LEGENDARY') return proven >= MODES.indexOf('EPIC');
+    return false;
 }
 // RUN-06 — pure: the live readout string for a given run shape, e.g.
 // "50 waves · rewards ×1.3". Uses the shipped reward-dial helper so the
 // multiplier always matches the in-run reward math (×1.0 / ×1.3 / ×1.6).
-export function runSetupReadout(stages, wps) {
+// DIR-09 — when a mode is passed, the readout also shows the mode + its
+// per-mode reward multiplier, e.g. "300 waves · HARD · rewards ×1.3 ×1.3".
+export function runSetupReadout(stages, wps, mode) {
     const total = clampRunStages(stages) * clampRunWps(wps);
     const mult = wavesPerStageRewardMultForWps(clampRunWps(wps));
-    return `${total} waves · rewards ×${mult.toFixed(1)}`;
+    if (mode === undefined) {
+        return `${total} waves · rewards ×${mult.toFixed(1)}`;
+    }
+    const m = clampRunMode(mode);
+    const mr = modeReward(m);
+    return `${total} waves · ${m} · rewards ×${mult.toFixed(1)} ×${mr.toFixed(1)}`;
 }
 
 // Pre-run passive slot cap for THIS run (round-3 §11.A). Pre-Phase-X there's no
@@ -261,12 +300,13 @@ export function getPreRunPassives() {
     return _preRunPassives.slice();
 }
 
-/** Seed the pre-run run shape (called by game-engine before show). */
+/** Seed the pre-run run shape (called by game-engine before show). DIR-09 —
+ * clampRunConfig now carries+validates `mode` too, so a seeded mode survives. */
 export function setPreRunRunConfig(rc) {
     _preRunRunConfig = clampRunConfig(rc || DEFAULT_RUN_CONFIG);
 }
 
-/** The chosen run shape { stages, wavesPerStage }, read by START RUN. */
+/** The chosen run shape { stages, wavesPerStage, mode }, read by START RUN. */
 export function getPreRunRunConfig() {
     return clampRunConfig(_preRunRunConfig);
 }
@@ -303,6 +343,8 @@ export function initShopDom(gameEngine) {
         // RUN-06 — RUN SETUP controls (BUILD footer).
         runSetup:       $('shop-runsetup'),
         runSetupWps:    $('shop-runsetup-wps'),
+        // DIR-09 — difficulty MODE selector group.
+        runSetupMode:   $('shop-runsetup-mode'),
         runSetupStagesVal: $('shop-runsetup-stages-value'),
         runSetupStagesDec: $('shop-runsetup-stages-dec'),
         runSetupStagesInc: $('shop-runsetup-stages-inc'),
@@ -380,6 +422,21 @@ export function initShopDom(gameEngine) {
     if (_elements.runSetupStagesInc) {
         _elements.runSetupStagesInc.addEventListener('click', () => {
             _preRunRunConfig.stages = clampRunStages(_preRunRunConfig.stages + RUN_STAGES_STEP);
+            _renderRunSetup();
+        });
+    }
+
+    // DIR-09 — difficulty MODE selector. Clicking an UNLOCKED mode button sets
+    // _preRunRunConfig.mode + re-renders (active state + readout). Gated modes
+    // (EPIC/LEGENDARY, §14.7) render disabled with an unlock-hint title, so a
+    // click on them never reaches here. No run starts here (that's START RUN).
+    if (_elements.runSetupMode) {
+        _elements.runSetupMode.addEventListener('click', (e) => {
+            const btn = e.target.closest('.shop-runsetup-btn');
+            if (!btn || !btn.dataset.mode || btn.disabled) return;
+            const mode = clampRunMode(btn.dataset.mode);
+            if (!isModeUnlocked(mode, _maxModeCleared())) return; // belt-and-suspenders
+            _preRunRunConfig.mode = mode;
             _renderRunSetup();
         });
     }
@@ -696,9 +753,19 @@ function _updatePreRunStatus() {
     }
 }
 
+// DIR-09 — read maxModeCleared from persistent meta (§14.7 gating source). A
+// default/absent meta yields undefined → EPIC/LEGENDARY stay locked.
+function _maxModeCleared() {
+    const m = loadMeta();
+    return (m && typeof m.maxModeCleared === 'string') ? m.maxModeCleared : undefined;
+}
+
 // RUN-06 — reflect `_preRunRunConfig` into the RUN SETUP controls: the active
 // waves-per-stage button, the stages value, the stepper disabled-at-bounds
 // state, and the live readout (total waves + reward multiplier).
+// DIR-09 — also reflects the difficulty MODE selector: active mode button,
+// gated (EPIC/LEGENDARY) buttons disabled + unlock-hint title, and the readout
+// now carries the mode + its per-mode reward multiplier.
 function _renderRunSetup() {
     if (!_elements) return;
     const rc = clampRunConfig(_preRunRunConfig);
@@ -711,7 +778,24 @@ function _renderRunSetup() {
     if (_elements.runSetupStagesVal) _elements.runSetupStagesVal.textContent = `${rc.stages}`;
     if (_elements.runSetupStagesDec) _elements.runSetupStagesDec.disabled = rc.stages <= RUN_STAGES_MIN;
     if (_elements.runSetupStagesInc) _elements.runSetupStagesInc.disabled = rc.stages >= RUN_STAGES_MAX;
-    if (_elements.runSetupReadout) _elements.runSetupReadout.textContent = runSetupReadout(rc.stages, rc.wavesPerStage);
+    if (_elements.runSetupMode) {
+        const maxCleared = _maxModeCleared();
+        for (const btn of _elements.runSetupMode.querySelectorAll('.shop-runsetup-btn')) {
+            const mode = clampRunMode(btn.dataset.mode);
+            const unlocked = isModeUnlocked(mode, maxCleared);
+            btn.classList.toggle('active', mode === rc.mode);
+            btn.disabled = !unlocked;
+            btn.classList.toggle('shop-runsetup-btn--locked', !unlocked);
+            if (unlocked) {
+                btn.removeAttribute('title');
+            } else {
+                btn.title = mode === 'EPIC'
+                    ? 'Locked — clear ≥ stage 5 on HARD to unlock EPIC'
+                    : 'Locked — clear ≥ stage 5 on EPIC to unlock LEGENDARY';
+            }
+        }
+    }
+    if (_elements.runSetupReadout) _elements.runSetupReadout.textContent = runSetupReadout(rc.stages, rc.wavesPerStage, rc.mode);
 }
 
 // U3 — the ordered, currently-VISIBLE tabs. GEAR + PASSIVES are BUILD-only
