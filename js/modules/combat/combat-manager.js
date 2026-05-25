@@ -9,6 +9,7 @@ import { createItem } from '../world/item-system.js';
 import { rollRarity } from '../world/item-names.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
+import { initBossDeath } from '../enemy/boss-intro.js';
 
 // P6 — Killing Spree passive: doubles the kill-streak damage BONUS (the amount
 // over 1.0), so a tier's +X% becomes +2X%. Pure; exported for unit tests.
@@ -1273,6 +1274,30 @@ export function onEnemyKill(enemy) {
             if (!e.active || e === enemy) continue;
             const dist = Math.hypot(e.x - enemy.x, e.y - enemy.y);
             if (dist <= CASCADE_RADIUS) this.applyStun(e, dur);
+        }
+    }
+
+    // BOSS-04 — modular boss death. A boss spawned from a `bosses/*` descriptor
+    // carries `bossId` + a cached death-script builder. On its kill:
+    //   • arm the chassis DEATH sequence (boss-fx.js reads it → detonation FX +
+    //     camera shake play over the next ~3-4s).
+    //   • if it's THE final boss (Prismarch), route the run to GAME_COMPLETE via
+    //     the existing completeRun path. Guarded so it fires once.
+    if (enemy && enemy.bossId && enemy.isBoss && !enemy._bossDeathArmed) {
+        enemy._bossDeathArmed = true;
+        if (typeof enemy._buildBossDeathScript === 'function') {
+            try { initBossDeath(enemy, enemy._buildBossDeathScript(), this, Date.now()); }
+            catch (err) { console.error('boss death sequence failed', err); }
+        }
+        if (this.game && this.game.stats) this.game.stats.bossesKilled = (this.game.stats.bossesKilled | 0) + 1;
+        if (enemy.isFinalBoss && !this._finalBossDefeated) {
+            this._finalBossDefeated = true;
+            // Mirror the wave-clear→run-complete flow so the GAME_COMPLETE
+            // state + gold banking fire even though the boss died mid-wave
+            // rather than on the wave-clear gate.
+            this.game.waveComplete = true;
+            this.game.state = GAME_STATES.WAVE_TRANSITION;
+            if (typeof this.completeRun === 'function') this.completeRun();
         }
     }
 

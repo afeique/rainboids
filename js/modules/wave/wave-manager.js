@@ -10,6 +10,7 @@ import { passiveSlotsUnlockedAfter } from '../combat/passive-data.js';
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
 import { linkBosses } from '../enemy/boss-rage.js';
+import { getBossForStage, getBossById } from '../enemy/bosses/index.js';
 import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getEnemySpeedMultiplier, getEnemyBulletSpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, BOSS_TIER_STATS, isBossWave } from './wave-data.js';
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
@@ -502,6 +503,9 @@ export function spawnWaveEntities() {
     // Reset sub-wave bookkeeping each wave start.
     this.game.subWaveIndex = 0;
     this.game.lastSubWaveSpawnAt = Date.now();
+    // BOSS-04 — clear the once-per-wave modular-boss guard so this wave's boss
+    // (if any) can spawn when its boss group fires.
+    this._modularBossSpawnedWave = null;
 
     // 5.75.0 — assign this wave's mission and announce it.
     startWaveMission.call(this);
@@ -532,6 +536,14 @@ function spawnSubWave(idx) {
     if (!groups || groups.length === 0) return false;
 
     for (const enemyGroup of groups) {
+        // BOSS-04 — modular boss takes the place of the legacy TITAN-tier boss
+        // on stage finals (gated; defaults ON). The escort groups (non-isBoss)
+        // still spawn normally. spawnStageBoss is self-guarded to fire once per
+        // boss wave, so a multi-boss-group config can't double-spawn.
+        if (enemyGroup.isBoss && this._modularBossesEnabled !== false) {
+            spawnStageBoss.call(this);
+            continue;
+        }
         const opts = { onScreen: true };
         if (enemyGroup.isBoss && enemyGroup.bossTier) opts.bossTier = enemyGroup.bossTier;
         this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count, opts);
@@ -621,6 +633,13 @@ export function tryAdvanceSubWave() {
     let spawnedThisTick = false;
     if (groups && groups.length > 0) {
         for (const group of groups) {
+            // BOSS-04 — modular boss replaces the legacy TITAN-tier boss on
+            // stage finals (gated; defaults ON). Self-guarded to fire once.
+            if (group.isBoss && this._modularBossesEnabled !== false) {
+                spawnStageBoss.call(this);
+                spawnedThisTick = true;
+                continue;
+            }
             const opts = { onScreen: true };
             if (group.bossTier) opts.bossTier = group.bossTier | 0;
             this.spawnLeveledEnemies(group.type, group.count | 0, opts);
@@ -701,6 +720,113 @@ export function requestEnemySpawn(type, x, y, opts = {}) {
     else { enemy.x = x; enemy.y = y; }
     if (typeof opts.onSpawn === 'function') opts.onSpawn(enemy);
     return enemy;
+}
+
+// BOSS-04 — spawn ONE modular boss from a descriptor. Additive + gated: this is
+// the ONLY place a `bosses/*` descriptor becomes a live entity. It does NOT
+// replace the legacy wave spawn — it adds the boss into the same enemy pool,
+// where it participates in wave-clear (active === 0 gate) like any enemy.
+//
+// `which` is a stage number, a boss id ('HARBINGER'), or a descriptor object.
+// opts:
+//   x, y     : world center (default: center of the visible viewport)
+//   warp     : play the warp-in streak (default true; debug/test pass false for
+//              an instantly-fightable boss)
+//   level    : escort level passed to enemy.reset (default game.enemyLevel || 1)
+// Returns the boss enemy, or null if no descriptor / the pool is dry.
+//
+// `this` is the engine.
+export function spawnModularBoss(which, opts = {}) {
+    let desc = null;
+    if (which && typeof which === 'object' && which.id) desc = which;
+    else if (typeof which === 'number') desc = getBossForStage(which);
+    else if (typeof which === 'string') desc = getBossById(which);
+    if (!desc) {
+        console.warn('spawnModularBoss: no boss descriptor for', which);
+        return null;
+    }
+
+    const boss = this.enemyPool.get();
+    if (!boss) return null;
+
+    // Reset to a real enemy type first so all the per-frame movement / firing
+    // code has a valid config (the descriptor overwrites HP/size/element after).
+    // TITAN is the heaviest base chassis — closest in spirit to a boss.
+    const level = (opts.level != null) ? opts.level : ((this.game && this.game.enemyLevel) || 1);
+    const baseType = (ENEMY_TYPES && ENEMY_TYPES.TITAN) ? 'TITAN' : 'HUNTER';
+    boss.reset(0, 0, baseType, level, this);
+
+    // Target position: explicit, else center of the visible viewport.
+    const cx = (opts.x != null) ? opts.x
+        : (this.camera ? this.camera.x + this.width / 2 : (this.gameField ? this.gameField.width / 2 : 600));
+    const cy = (opts.y != null) ? opts.y
+        : (this.camera ? this.camera.y + this.height / 2 : (this.gameField ? this.gameField.height / 2 : 400));
+
+    // Stamp descriptor identity + run the descriptor's init (seeds HP/phases/
+    // parts/intro over the shipped chassis). The chassis init reads `boss.x/y`
+    // for the initial part-orbit positions, so set them first.
+    boss.x = cx;
+    boss.y = cy;
+    boss.angle = 0;
+    const now = Date.now();
+    try {
+        if (typeof desc.initBoss === 'function') desc.initBoss(boss, this, now);
+    } catch (err) {
+        console.error('spawnModularBoss: initBoss failed', err);
+        this.enemyPool.release(boss);
+        return null;
+    }
+
+    // Carry the descriptor's display fields onto the enemy so the HUD healthbar,
+    // boss-FX hook, and the generic renderer all read them. initBoss already set
+    // most of these; we make sure the renderer-facing ones are present.
+    boss.isBoss = true;
+    boss.bossId = desc.id;
+    boss.name = desc.name;
+    boss.element = desc.element;
+    boss.color = desc.color || boss.color;
+    boss.glowColor = desc.glowColor || boss.glowColor;
+    boss.size = desc.size || boss.size || 96;
+    boss.radius = boss.size / 2;
+    boss.baseRadius = boss.radius;
+    boss.phaseCount = desc.phaseCount || boss.phaseCount;
+    boss.isFinalBoss = !!desc.isFinalBoss;
+    // The per-frame driver enemy.update() calls (BOSS-04 wiring in enemy.js).
+    boss._bossDriver = desc.updateBoss;
+    // Cache the descriptor's death-script builder so the kill path can arm the
+    // death detonation sequence (boss-fx reads it).
+    boss._buildBossDeathScript = desc.buildDeathScript;
+    // Recompute mass for the heavier collider.
+    boss.mass = Math.PI * boss.radius * boss.radius * 0.8;
+
+    // Warp the boss in from off-target (live game) or place it instantly (debug
+    // / test). The intro sequence plays during the warp either way.
+    const warp = opts.warp !== false;
+    if (warp) {
+        // Start just off the top edge of the viewport, streak down to center.
+        boss.x = cx;
+        boss.y = cy - Math.max(280, this.height * 0.5 + boss.radius + 60);
+        boss.startWarpIn(cx, cy);
+    } else {
+        boss.warping = false;
+        boss.x = cx;
+        boss.y = cy;
+    }
+
+    return boss;
+}
+
+// BOSS-04 — spawn the boss for the CURRENT stage on its boss wave. Gated so it
+// only fires once per boss wave (guarded by `_modularBossSpawnedWave`). Called
+// from the boss-wave spawn path; a no-op on non-boss waves. `this` is the engine.
+export function spawnStageBoss() {
+    const wave = this.game.currentWave | 0;
+    if (!isBossWave(wave)) return null;
+    if (this._modularBossSpawnedWave === wave) return null; // already spawned this wave
+    const stage = getStage(wave);
+    const boss = spawnModularBoss.call(this, stage, { warp: true });
+    if (boss) this._modularBossSpawnedWave = wave;
+    return boss;
 }
 
 export function spawnLeveledAsteroids(count, opts = {}) {

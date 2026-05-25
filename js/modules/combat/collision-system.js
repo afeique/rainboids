@@ -5,7 +5,7 @@ import { random, collision, starCollision, triggerHapticFeedback } from '../core
 import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
 import { phaseBlocksDamage } from '../enemy/boss-phases.js';
-import { coreBlocksDamage } from '../enemy/boss-parts.js';
+import { coreBlocksDamage, bossPartAt, damageBossPart } from '../enemy/boss-parts.js';
 import { introBlocksDamage } from '../enemy/boss-intro.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
@@ -667,6 +667,11 @@ export function handleCollisions() {
         // apply per-tick contact damage). Same for sub-bomblets — they
         // detonate on contact via the proximity block below.
         if (bullet.cluster || bullet.subBomb) continue;
+        // BOSS-02 — weak-point pre-pass. Boss parts orbit OUTSIDE the core
+        // radius, so the spatial-grid core test below would miss them. Route
+        // the bullet to a live weak-point first; if it lands on one, the bullet
+        // is consumed there and we move to the next bullet.
+        if (routeBulletToBossPart.call(this, bullet)) continue;
         const nearbyEn = this.spatialGrid.retrieve(bullet);
         for (let j = nearbyEn.length - 1; j >= 0; j--) {
             const enemy = nearbyEn[j];
@@ -2518,6 +2523,92 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     _triggerStatusReactions.call(this, enemy, damage, opts);
 
     return { blocked: false, destroyed };
+}
+
+// BOSS-02 — route a player bullet onto a boss WEAK-POINT.
+//
+// Weak-point parts (boss-parts.js) orbit OUTSIDE the boss core radius, so the
+// standard core-radius collision in the bullet loop never reaches them. This
+// pre-pass tests the bullet position against every active modular boss's live
+// parts (`bossPartAt`) and, on a hit:
+//   • resolves the bullet's element(s) vs the part's resist (same multiplier
+//     helper the core damage path uses), so a part can be resistant / weak.
+//   • damages the PART via `damageBossPart`. While any SHIELDING part lives the
+//     core stays invulnerable (`coreBlocksDamage` in applyDamageToEnemy already
+//     enforces this) — clearing the parts is what unlocks the core.
+//   • paints localized hit FX + a destroy burst when the part falls.
+//
+// Returns true when the bullet hit a part (the caller consumes/pierces the
+// bullet and skips the normal enemy hit for it). `this` is the engine.
+export function routeBulletToBossPart(bullet) {
+    const pool = this.enemyPool;
+    if (!pool || !pool.activeObjects || !bullet || !bullet.active) return false;
+    for (const boss of pool.activeObjects) {
+        // Only modular bosses with live parts; skip warping / dying / intro.
+        if (!boss || !boss.bossId || !boss.isBoss || !boss.active) continue;
+        if (boss.warping || boss._deathFlash > 0) continue;
+        if (introBlocksDamage(boss)) continue;       // can't hit parts during intro
+        if (phaseBlocksDamage(boss)) continue;       // phase-transition invuln
+        if (!boss._partsState) continue;
+        const part = bossPartAt(boss, bullet.x, bullet.y);
+        if (!part) continue;
+
+        // Resolve element multiplier vs the part's own resist (falls back to no
+        // resist → ×1). Single- or multi-element bullets both handled.
+        let dmg = this.cheats && this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage || 1);
+        const els = (bullet.elements && bullet.elements.length) ? bullet.elements : [bullet.element || 'KINETIC'];
+        if (part.resist) {
+            const m = multiElementMultiplier(part.resist, els);
+            if (m !== 1) dmg *= m;
+        }
+        // P6 — global outgoing damage mult applies to weak-points too.
+        if (this.player && typeof this.player.getPassiveDamageMult === 'function') {
+            const pm = this.player.getPassiveDamageMult();
+            if (pm !== 1) dmg *= pm;
+        }
+
+        const res = damageBossPart(boss, part, dmg, this);
+        if (this.game && this.game.stats) {
+            this.game.stats.shotsHit = (this.game.stats.shotsHit | 0) + 1;
+            this.game.stats.totalDamageDealt = (this.game.stats.totalDamageDealt || 0) + dmg;
+        }
+
+        // Surface the boss in the target info panel + register the hit.
+        this._setLastHit(boss);
+        if (this.player && typeof this.player.registerHit === 'function') this.player.registerHit();
+
+        // Damage number on the part.
+        if (typeof this.createDamageNumber === 'function') {
+            this.createDamageNumber(part.x, part.y - (part.radius || 16) - 6, dmg,
+                { isCrit: !!(bullet.isCrit || bullet.isCritical), target: boss });
+        }
+
+        // Hit FX — shrapnel at the impact, brighter burst when the part dies.
+        if (this.particlePool) {
+            const c = boss.glowColor || boss.color || '#ffffff';
+            const n = res && res.destroyed ? 14 : 6;
+            for (let p = 0; p < n; p++) {
+                const a = Math.random() * Math.PI * 2;
+                const sp = random(2, res && res.destroyed ? 9 : 6);
+                this.particlePool.get(part.x, part.y, 'explosionShrapnel', a, sp, p < 3 ? '#ffffff' : c);
+            }
+            if (res && res.destroyed) {
+                this.particlePool.get(part.x, part.y, 'explosionRingColored', (part.radius || 16) * 3, c);
+            }
+        }
+        if (res && res.destroyed && this.isEntityOnScreen && this.isEntityOnScreen(boss)) {
+            this.events.emit('audio:enemy-destroy', 'TITAN');
+        }
+
+        // Consume the bullet through the standard hit path: piercing records
+        // the boss + decrements (so it won't re-hit the same parts this frame),
+        // a non-piercing bullet starts dying. Ricochet caroms expire on parts
+        // (they re-seek on the next enemy hit), matching "boss eats the shot".
+        if (bullet.explosive) bullet.explode(this);
+        bullet.onHit(boss);
+        return true;
+    }
+    return false;
 }
 
 // ─── E4 — Elemental synergy reactions ───────────────────────────────────────

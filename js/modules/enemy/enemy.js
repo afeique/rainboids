@@ -12,6 +12,7 @@ import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBoss
 import { updateBossPhases, phaseBlocksDamage } from './boss-phases.js';
 import { updateBossParts, coreBlocksDamage } from './boss-parts.js';
 import { updateBossIntro, updateBossDeath, introBlocksDamage } from './boss-intro.js';
+import { drawModularBoss } from './boss-render.js';
 import { decayResistMap, ELEMENTS, weaknessElement } from '../combat/elements.js';
 import { runAura } from './support-aura.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
@@ -541,19 +542,35 @@ export class Enemy {
             }
         }
 
-        // Boss rage + per-tier mechanics (HP-threshold telegraph, invuln,
-        // tantrum, tier-4 phase cycling, tier-2 partner-death flags).
-        if (this.isBoss) updateBossRage(this, gameEngine);
-        // D.B0 — declarative phase-script runner (no-op unless this boss was
-        // given a phaseScript via initBossPhases).
-        if (this.isBoss) updateBossPhases(this, gameEngine);
-        // D.B0 — weak-point sub-entities: track part positions (no-op unless
-        // this boss was given a partsScript via initBossParts).
-        if (this.isBoss) updateBossParts(this, gameEngine);
-        // D.B0 — time-gated intro/death sequences (no-op unless this boss was
-        // given a sequence via initBossIntro / initBossDeath). NOT gated by
-        // dying/warping: an intro plays during warp-in, a death while dying.
-        if (this.isBoss) { updateBossIntro(this, gameEngine); updateBossDeath(this, gameEngine); }
+        // BOSS-04 — modular boss driver. A boss spawned from a `bosses/*`
+        // descriptor carries `_bossDriver` (the descriptor's updateBoss). It
+        // owns the per-frame intro→parts→phases order + stashes `_now`, so we
+        // run IT instead of the four generic chassis calls below (which would
+        // otherwise double-advance the runners). The death sequence is NOT
+        // ticked by updateBoss, so we still run updateBossDeath for it. Wrapped
+        // in try/catch so a buggy boss module can never break the game loop.
+        if (this.isBoss && typeof this._bossDriver === 'function') {
+            try { this._bossDriver(this, gameEngine, Date.now()); }
+            catch (err) { console.error('boss updateBoss failed', err); }
+            updateBossDeath(this, gameEngine);
+        } else if (this.isBoss) {
+            // Legacy tier-boss path (boss-rage.js) + any boss given the chassis
+            // runners directly. Unchanged.
+            // Boss rage + per-tier mechanics (HP-threshold telegraph, invuln,
+            // tantrum, tier-4 phase cycling, tier-2 partner-death flags).
+            updateBossRage(this, gameEngine);
+            // D.B0 — declarative phase-script runner (no-op unless this boss was
+            // given a phaseScript via initBossPhases).
+            updateBossPhases(this, gameEngine);
+            // D.B0 — weak-point sub-entities: track part positions (no-op unless
+            // this boss was given a partsScript via initBossParts).
+            updateBossParts(this, gameEngine);
+            // D.B0 — time-gated intro/death sequences (no-op unless this boss was
+            // given a sequence via initBossIntro / initBossDeath). NOT gated by
+            // dying/warping: an intro plays during warp-in, a death while dying.
+            updateBossIntro(this, gameEngine);
+            updateBossDeath(this, gameEngine);
+        }
 
         // Late-wave AI throttle: in waves 15+, run the heavy spatial scans
         // on alternating frames per enemy.
@@ -1241,6 +1258,19 @@ export class Enemy {
         // Draw warp streak effect (behind everything)
         if (this.warping) {
             this.drawWarpEffect(ctx);
+        }
+
+        // BOSS-04 — modular boss body. A boss spawned from a `bosses/*`
+        // descriptor (carries `bossId`) is drawn by the generic boss renderer
+        // (core disc + living weak-points), NOT the per-type enemy silhouette.
+        // The renderer no-ops while warping/dying so the warp streak above + the
+        // death-flash branch earlier keep ownership of those moments. Drawn in
+        // world space (the enemy draw pass is already inside the camera
+        // transform), then we return so drawEnemyShape never runs for a boss.
+        if (this.bossId && this.isBoss && !this.warping && !this._deathFlash) {
+            try { drawModularBoss(ctx, this); }
+            catch (err) { console.error('drawModularBoss failed', err); }
+            return;
         }
 
         // 5.78.0 — mini-boss visual marker (P1). Mini-bosses (5.75.0

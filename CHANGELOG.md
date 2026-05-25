@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.168.0] - 2026-05-24
+
+### Added — Bosses are playable: spawn integration (BOSS-02 / BOSS-04 / BOSS-15)
+
+The 10 boss modules are now wired into the live game — **stage finals spawn a
+unique multi-phase boss** instead of the generic TITAN tier:
+- **Registry** (`enemy/bosses/index.js`) maps stage → descriptor (1 Harbinger …
+  10 Prismarch). **Spawn** on each stage's boss wave via `wave-manager`
+  (`spawnStageBoss`), additive + gated so normal waves are untouched.
+- **Generic boss renderer** (`enemy/boss-render.js`) — element-tinted core +
+  living weak-points with HP arcs + phase/enrage tint; driven each frame by the
+  descriptor's update (intro → parts → phases).
+- **Weak-point hit-routing** (BOSS-02, `collision-system.js`) — player bullets
+  hitting a live weak-point damage the part (element/resist resolved); the core
+  is invulnerable while any shielding part lives.
+- **Final boss → run-complete** (`combat-manager.js`) — an `isFinalBoss` death
+  routes to GAME_COMPLETE + plays the death sequence; **boss camera-shake** now
+  sums into the engine shake loop.
+- **Debug hook** `gameEngine.spawnBoss(idOrStage)` for testing/QA.
+- **7 Playwright smoke tests** (`tests/qa/17-bosses.spec.js`): spawn, healthbar,
+  core-invuln gating, killable, no fatal errors, final-boss → GAME_COMPLETE.
+
+Completes the BOSS track. Unit suite 1115 green; boss QA 7/7.
+
+---
+
 ## [6.167.0] - 2026-05-24
 
 ### Added — Boss intro/death FX (BOSS-03)

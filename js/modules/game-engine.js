@@ -14,6 +14,7 @@ import { Asteroid } from './world/asteroid.js';
 import { Enemy } from './enemy/enemy.js';
 import { EnemyBullet } from './enemy/enemy-bullet.js';
 import { FormationManager } from './enemy/formations.js';
+import { bossFxCameraShake } from './enemy/boss-fx.js';
 import { Particle, drawParticlesBatched } from './world/particle.js';
 import { WebGLParticleRenderer } from './performance/webgl-particle-renderer.js';
 import { WebGLStarfieldRenderer } from './performance/webgl-starfield-renderer.js';
@@ -2618,6 +2619,18 @@ export class GameEngine {
     // egg-sacs). Concurrent-capped; returns the enemy or null.
     requestEnemySpawn(type, x, y, opts) { return wave.requestEnemySpawn.call(this, type, x, y, opts); }
 
+    // BOSS-04 — modular boss spawn bindings.
+    //   spawnModularBoss(which, opts) — spawn ONE boss from a descriptor (by
+    //     stage number, boss id, or descriptor object). opts: {x,y,warp,level}.
+    //   spawnStageBoss()              — spawn the current stage's boss on a boss
+    //     wave (gated once per wave). Used by the wave spawn path.
+    //   spawnBoss(idOrStage)          — DEBUG HOOK. Force-spawn a boss on demand
+    //     (no warp, instantly fightable) for QA + manual testing, e.g.
+    //     `gameEngine.spawnBoss('HARBINGER')` or `gameEngine.spawnBoss(1)`.
+    spawnModularBoss(which, opts) { return wave.spawnModularBoss.call(this, which, opts); }
+    spawnStageBoss() { return wave.spawnStageBoss.call(this); }
+    spawnBoss(idOrStage, opts = {}) { return wave.spawnModularBoss.call(this, idOrStage, { warp: false, ...opts }); }
+
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }
@@ -3850,6 +3863,21 @@ export class GameEngine {
         // ── Camera kick (directional impact lurch) ──
         let kickX = this._cameraKickX || 0;
         let kickY = this._cameraKickY || 0;
+
+        // ── BOSS-04 — boss intro/death camera shake ──
+        // Sum the per-frame shake contribution from any active modular-boss
+        // intro/death sequence (boss-fx.bossFxCameraShake) into the camera kick
+        // so the warp-in rumble + death detonation shake the whole frame
+        // (playfield + bullets). Additive — zero when no boss FX is active.
+        if (this.enemyPool && this.enemyPool.activeObjects) {
+            const fxNow = Date.now();
+            for (const e of this.enemyPool.activeObjects) {
+                if (!e || !e.isBoss || !e.bossId) continue;
+                const s = bossFxCameraShake(e, fxNow);
+                if (s.magnitude > 0) { kickX += s.dx; kickY += s.dy; }
+            }
+        }
+
         // 5.79.2 — track the per-frame total screen offset (shake + kick)
         //   in screen pixels so the WebGL bullet renderer can apply the
         //   same translation to its draw call. Without this, bullets
