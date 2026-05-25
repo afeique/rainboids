@@ -21,10 +21,20 @@ export function affixCount(item) {
     return 1;
 }
 
+// META-04 — flat Cores bonus when a salvaged item carries a gear passive
+// (the discrete `item.passive` rule-modifier on Exceptional+ gear). A passive-
+// bearing item is meaningfully scarcer than its plain twin, so it salvages for
+// a chunky flat premium on TOP of its rarity×affix×level base. Added AFTER the
+// reward-dial multiply (a fixed value of the passive itself, not scaled by run
+// richness) and AFTER the final round, so a passive always adds exactly this.
+export const PASSIVE_SALVAGE_BONUS = 12;
+
 /**
  * Cores granted by salvaging one item: rarity-rank × affix-count, scaled
  * up gently by item level. Floored at 1 so even a common L1 is worth
  * something. Traited items (C.I3*) add a flat bonus per trait (R8.9).
+ * META-04 — a passive-bearing item (`item.passive` set) adds a flat
+ * PASSIVE_SALVAGE_BONUS on top.
  *
  * RUN-03 — optional `rewardMult` (the Reward Dial factor) scales the Cores
  * granted. DEFAULTS TO 1.0 so every existing call site is byte-for-byte
@@ -35,10 +45,11 @@ export function affixCount(item) {
 export function salvageValue(item, rewardMult = 1.0) {
     if (!item) return 0;
     const traits = (item && Array.isArray(item.traits)) ? item.traits.length : 0;
+    const passiveBonus = (item && item.passive) ? PASSIVE_SALVAGE_BONUS : 0;
     const lvl = Math.max(1, item.level | 0);
     const mult = (typeof rewardMult === 'number' && isFinite(rewardMult) && rewardMult > 0) ? rewardMult : 1.0;
     const base = rarityRank(item) * affixCount(item) * (1 + lvl * 0.1) * mult;
-    return Math.max(1, Math.round(base) + traits * 3);
+    return Math.max(1, Math.round(base) + traits * 3 + passiveBonus);
 }
 
 /** Total Cores from salvaging a list of items. */
@@ -81,6 +92,24 @@ export function resistTargetCost(item) {
 
 export function canAffordResistTarget(item, cores) {
     return (cores | 0) >= resistTargetCost(item);
+}
+
+// META-04 — Cores cost to REROLL an item's gear passive (the discrete
+// `item.passive` rule-modifier carried by Exceptional+ gear). A targeted-ish
+// passive reroll is the most valuable craft on an item (it swaps a build-
+// defining rule, and on a Transcendental can chase a keystone), so it sits
+// ABOVE a targeted-resist swap but still scales with the same two levers:
+//   passiveRerollCost = rarityRank × 5 + level × 2 (floored at 6)
+// An Exceptional-L1 ≈ 17, a Transcendental-L30 ≈ 100 — a clear premium over
+// resistTargetCost (rank×4 + lvl) and reroll (rank×3), as a passive reroll is
+// the richest payoff. Floor at 6 so it's never trivially cheap.
+export function passiveRerollCost(item) {
+    const lvl = item ? Math.max(1, item.level | 0) : 1;
+    return Math.max(6, rarityRank(item) * 5 + lvl * 2);
+}
+
+export function canAffordPassiveReroll(item, cores) {
+    return (cores | 0) >= passiveRerollCost(item);
 }
 
 /**

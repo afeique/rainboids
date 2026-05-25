@@ -97,7 +97,7 @@ All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + 
 | META-01 | `js/modules/shop/shop-manager.js` (+ HUD shop button) | Remove the mid-wave gold UPGRADES shop entirely (upgrades are cards now) *(R2.4-full)*; rework `07-weapons` shop tests | — |
 | META-02 | `shop/*` PASSIVE-tab path | Stat passives SP-only — remove the gold PASSIVE-tab path *(R7.4)* | — |
 | ~~META-03~~ | `world/cores.js` + `item-system.js` + ARMORY | ✅ **6.179.0** — Cores resist targeting: `applyResistTarget(item,element)` ADD(under cap)/SWAP(at cap), rejects tier-locked/duplicate/invalid; `resistTargetCost`; ARMORY TARGET RESIST row w/ 6-element picker + cap readout. 11 unit + 3 QA | ITEM-01 ✅ |
-| META-04 | `world/item-system.js` + ARMORY | Trait reroll (gear passive-affix) + traited-item salvage value *(R8.9)* | — |
+| ~~META-04~~ | `world/item-system.js` + `cores.js` + ARMORY | ✅ **6.186.0** — `rerollItemPassive` (reroll the gear `item.passive`, eligibility-gated, different-id-preferred, roll-onto-none) + `passiveRerollCost`/`canAffordPassiveReroll` + `salvageValue` PASSIVE_SALVAGE_BONUS + ARMORY REROLL PASSIVE row. (NOTE: `item.traits` array is vestigial — the "trait" is `item.passive`.) 14 unit + 3 QA | — |
 | META-05 | `combat/card-draft.js` + `weapon-data.js` + ARMORY | W7: **global efficacy card = 5th draft slot** (1 primary+1 power+1 global+2 ability); flat per-item unlock cost; per-attunement VFX/tooltips; gold→Cores exchange | CD-01 (data) |
 | META-06 | `world/` mastery system + `cores.js` | W8: per-item Mastery tracks (infinite, exponential gold, diminishing power) + gold→Cores sink | META-05 |
 | ~~META-07~~ | — | *(R-BAL1)* | **FOLDED into RUN-07** (single balance pass over meta power + adaptive director) |

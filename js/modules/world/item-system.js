@@ -323,6 +323,42 @@ export function applyResistTarget(item, element) {
     return { ok: true, item, mode };
 }
 
+// META-04 — pay Cores to REROLL the discrete gear PASSIVE (`item.passive`) on
+// an Exceptional+ item. PURE w.r.t. Cores/DOM (the caller spends Cores); only
+// randomness is the new-passive pick from eligibleItemPassives(rarity).
+//
+// Semantics:
+//   • TIER-LOCKED — if the item's rarity has NO eligible passive pool (below
+//     Exceptional → eligibleItemPassives empty), reject {ok:false,'tier-locked'}.
+//   • DIFFERENT-ID PREFERENCE — with ≥2 eligible options, exclude the current
+//     `item.passive` from the candidate set so the reroll always LANDS on a
+//     different id (a reroll should feel like it did something).
+//   • SINGLE-OPTION — if the pool has exactly 1 eligible passive AND the item
+//     already carries it, there's nothing else to roll → reject
+//     {ok:false,'no-alternatives'} (Cores untouched). If that lone passive is
+//     NOT yet on the item, the reroll ADDS it.
+//   • ADD-IF-NONE — an eligible item with NO passive yet (rolled null at
+//     creation but tier ≥ Exceptional) gets one rolled on. This doubles as
+//     "roll a passive onto eligible gear".
+//   • Mutates `item.passive` in place and returns { ok:true, item, from, to }.
+export function rerollItemPassive(item) {
+    if (!item) return { ok: false, reason: 'tier-locked' };
+    const pool = eligibleItemPassives(item.rarity);
+    if (pool.length === 0) return { ok: false, reason: 'tier-locked' };
+
+    const from = item.passive || null;
+    // Prefer a DIFFERENT id when alternatives exist; only fall back to the full
+    // pool when the current passive is the sole eligible option.
+    let candidates = pool.filter((p) => p.id !== from);
+    if (candidates.length === 0) {
+        // The lone eligible passive is already on the item → nothing to change.
+        return { ok: false, reason: 'no-alternatives' };
+    }
+    const to = candidates[(Math.random() * candidates.length) | 0].id;
+    item.passive = to;
+    return { ok: true, item, from, to };
+}
+
 /**
  * Unified score for cross-rarity / cross-affix comparison.
  *   hp:        1 HP = 1 pt

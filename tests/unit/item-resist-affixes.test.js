@@ -43,9 +43,12 @@ import { ITEM_AFFIX_POOL, AFFIX_SCORE_WEIGHT, RARITY_TIERS, RARITY_ORDER } from 
 import { ELEMENTS } from '../../js/modules/combat/elements.js';
 import {
     maxResistAffixes, isResistAffix, rollAffixSet, createItem,
-    applyResistTarget,
+    applyResistTarget, eligibleItemPassives, rerollItemPassive,
 } from '../../js/modules/world/item-system.js';
-import { resistTargetCost, canAffordResistTarget, rerollCost } from '../../js/modules/world/cores.js';
+import {
+    resistTargetCost, canAffordResistTarget, rerollCost,
+    passiveRerollCost, canAffordPassiveReroll,
+} from '../../js/modules/world/cores.js';
 
 // The six non-Kinetic elements that should each carry a resist affix.
 // KINETIC is the physical baseline and has NO resist affix.
@@ -390,5 +393,120 @@ describe('META-03 — applyResistTarget', () => {
         const it = makeItem('epic', [HP, TOUGH]);
         applyResistTarget(it, 'PYRO');
         expect(it.bonusLabel).toContain('PYRO RESIST');
+    });
+});
+
+describe('META-04 — passiveRerollCost / canAffordPassiveReroll', () => {
+    test('cost scales with rarity rank', () => {
+        const exceptional = createItem('hull', 5, 'exceptional');
+        const legendary = createItem('hull', 5, 'legendary');
+        const transcendental = createItem('hull', 5, 'transcendental');
+        expect(passiveRerollCost(legendary)).toBeGreaterThan(passiveRerollCost(exceptional));
+        expect(passiveRerollCost(transcendental)).toBeGreaterThan(passiveRerollCost(legendary));
+    });
+
+    test('cost scales with item level', () => {
+        const lo = createItem('hull', 1, 'exceptional');
+        const hi = createItem('hull', 30, 'exceptional');
+        expect(passiveRerollCost(hi)).toBeGreaterThan(passiveRerollCost(lo));
+    });
+
+    test('a passive reroll is the richest craft (above a targeted resist on the same item)', () => {
+        const it = createItem('hull', 10, 'transcendental');
+        // Premium over a targeted-resist swap, which is itself above a blind reroll.
+        expect(passiveRerollCost(it)).toBeGreaterThan(resistTargetCost(it));
+        expect(resistTargetCost(it)).toBeGreaterThan(rerollCost(it));
+    });
+
+    test('cost floors at 6 and is finite for every rarity', () => {
+        for (const rarity of RARITY_ORDER) {
+            const it = createItem('hull', 1, rarity);
+            expect(passiveRerollCost(it)).toBeGreaterThanOrEqual(6);
+            expect(Number.isFinite(passiveRerollCost(it))).toBe(true);
+        }
+    });
+
+    test('canAffordPassiveReroll boundary', () => {
+        const it = createItem('hull', 10, 'legendary');
+        const cost = passiveRerollCost(it);
+        expect(canAffordPassiveReroll(it, cost)).toBe(true);
+        expect(canAffordPassiveReroll(it, cost - 1)).toBe(false);
+        expect(canAffordPassiveReroll(it, 0)).toBe(false);
+    });
+});
+
+describe('META-04 — rerollItemPassive', () => {
+    // Deterministic items (bypass createItem's RNG passive roll).
+    function makeItem(rarity, passive = null) {
+        return {
+            slot: 'hull', level: 10, rarity, name: 'Test',
+            affixes: [{ type: 'hp', value: 50, label: '+50 MAX HP' }],
+            ...(passive ? { passive } : {}),
+        };
+    }
+
+    test('rejects below Exceptional (no eligible passive pool → tier-locked)', () => {
+        for (const rarity of ['common', 'rare']) {
+            const it = makeItem(rarity);
+            expect(eligibleItemPassives(rarity)).toHaveLength(0);
+            const res = rerollItemPassive(it);
+            expect(res.ok).toBe(false);
+            expect(res.reason).toBe('tier-locked');
+            expect(it.passive).toBeUndefined(); // no mutation
+        }
+    });
+
+    test('null item → tier-locked (defensive)', () => {
+        const res = rerollItemPassive(null);
+        expect(res.ok).toBe(false);
+        expect(res.reason).toBe('tier-locked');
+    });
+
+    test('on an eligible item with NO passive, ADDS one from the eligible pool', () => {
+        const it = makeItem('transcendental'); // big pool, no passive yet
+        const eligible = new Set(eligibleItemPassives('transcendental').map((p) => p.id));
+        const res = rerollItemPassive(it);
+        expect(res.ok).toBe(true);
+        expect(res.from).toBeNull();
+        expect(eligible.has(res.to)).toBe(true);
+        expect(it.passive).toBe(res.to);
+    });
+
+    test('always lands on an id inside the eligible pool (never outside)', () => {
+        const eligible = new Set(eligibleItemPassives('transcendental').map((p) => p.id));
+        for (let i = 0; i < 200; i++) {
+            const it = makeItem('transcendental', 'GLASS_CANNON');
+            const res = rerollItemPassive(it);
+            expect(res.ok).toBe(true);
+            expect(eligible.has(it.passive)).toBe(true);
+        }
+    });
+
+    test('prefers a DIFFERENT id — never re-lands on the current passive when ≥2 options', () => {
+        const pool = eligibleItemPassives('transcendental');
+        expect(pool.length).toBeGreaterThanOrEqual(2); // sanity: alternatives exist
+        const start = pool[0].id;
+        for (let i = 0; i < 200; i++) {
+            const it = makeItem('transcendental', start);
+            const res = rerollItemPassive(it);
+            expect(res.ok).toBe(true);
+            // With ≥2 eligible options the current id is excluded, so the result
+            // ALWAYS differs from the starting passive.
+            expect(it.passive).not.toBe(start);
+            expect(res.from).toBe(start);
+            expect(res.to).toBe(it.passive);
+        }
+    });
+
+    test('returns from/to reflecting the change', () => {
+        const it = makeItem('exceptional', 'CATALYST');
+        const res = rerollItemPassive(it);
+        if (res.ok) {
+            expect(res.from).toBe('CATALYST');
+            expect(res.to).toBe(it.passive);
+        } else {
+            // Only reachable if Exceptional had a single eligible passive == CATALYST.
+            expect(res.reason).toBe('no-alternatives');
+        }
     });
 });

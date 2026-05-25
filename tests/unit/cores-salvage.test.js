@@ -1,13 +1,14 @@
 // Phase R8.5 — Cores salvage economy unit tests (pure, no DOM).
 import {
     RARITY_RANK, rarityRank, affixCount, salvageValue, totalSalvage,
-    partitionBulkSalvage,
+    partitionBulkSalvage, PASSIVE_SALVAGE_BONUS,
 } from '../../js/modules/world/cores.js';
 
-const item = (rarity, level, nAffix, traits = 0) => ({
+const item = (rarity, level, nAffix, traits = 0, passive = null) => ({
     slot: 'cockpit', rarity, level,
     affixes: Array.from({ length: nAffix }, (_, i) => ({ type: 'hp', value: 10, label: `+10 HP` })),
     traits: Array.from({ length: traits }, (_, i) => ({ id: `t${i}` })),
+    ...(passive ? { passive } : {}),
 });
 
 describe('Cores — salvage value', () => {
@@ -40,6 +41,32 @@ describe('Cores — salvage value', () => {
         const plain = salvageValue(item('epic', 10, 4, 0));
         const traited = salvageValue(item('epic', 10, 4, 2));
         expect(traited).toBe(plain + 6); // +3 per trait
+    });
+
+    // META-04 — a passive-bearing item salvages for a flat bonus on top of its
+    // rarity×affix×level base (no-passive items unchanged).
+    test('passive-bearing items are worth a flat bonus more', () => {
+        const plain = salvageValue(item('exceptional', 10, 2, 0, null));
+        const withPassive = salvageValue(item('exceptional', 10, 2, 0, 'GLASS_CANNON'));
+        expect(withPassive).toBe(plain + PASSIVE_SALVAGE_BONUS);
+        expect(PASSIVE_SALVAGE_BONUS).toBeGreaterThan(0);
+    });
+
+    test('no-passive items are unchanged by the passive bonus', () => {
+        // A bare item (no `passive` key) salvages identically to one with passive:null.
+        const bare = salvageValue(item('legendary', 12, 3, 0));
+        const explicitNull = salvageValue({ ...item('legendary', 12, 3, 0), passive: null });
+        expect(explicitNull).toBe(bare);
+    });
+
+    test('the passive bonus stacks with traits and the rewardMult still applies', () => {
+        const plain = salvageValue(item('epic', 10, 4, 1, null));               // base + 1 trait
+        const passiveTraited = salvageValue(item('epic', 10, 4, 1, 'PREDATOR')); // + passive bonus
+        expect(passiveTraited).toBe(plain + PASSIVE_SALVAGE_BONUS);
+        // rewardMult scales the rarity×affix×level base BEFORE the flat passive
+        // bonus is added, so a richer dial still yields strictly more.
+        const dialed = salvageValue(item('epic', 10, 4, 1, 'PREDATOR'), 2.0);
+        expect(dialed).toBeGreaterThan(passiveTraited);
     });
 
     test('totalSalvage sums a list', () => {

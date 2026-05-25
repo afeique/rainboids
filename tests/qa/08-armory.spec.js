@@ -658,6 +658,66 @@ test.describe('QA-08d: Cores crafting — reroll + tier-up (Phase R8.6/R8.8)', (
         expect(r.coresAfterBroke).toBe(1);    // untouched when unaffordable
     });
 
+    test('rerolling a gear passive consumes Cores and lands a valid eligible passive (META-04)', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            // A transcendental hull carrying a known passive → reroll should
+            // land a DIFFERENT eligible id (the big pool guarantees alternatives).
+            const item = { slot: 'hull', level: 10, rarity: 'transcendental', name: 'Chaser',
+                affixes: [{ type: 'hp', value: 50, label: '+50 MAX HP' }], passive: 'GLASS_CANNON' };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 200, stash: [item] }));
+            ge.openArmory();
+            const before = ge.game.cores;
+            const ok = ge._armoryOverlay.rerollPassive(0);
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            const out = meta.stash[0];
+            return { ok, before, after: ge.game.cores, passive: out.passive };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.after).toBeLessThan(r.before);   // Cores spent
+        expect(typeof r.passive).toBe('string');  // an id is set
+        expect(r.passive).not.toBe('GLASS_CANNON'); // changed (≥2 options → different id)
+    });
+
+    test('rolling a passive onto eligible gear with none yet (META-04)', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            // Exceptional gear with NO passive → reroll ADDS one.
+            const item = { slot: 'hull', level: 8, rarity: 'exceptional', name: 'Blank',
+                affixes: [{ type: 'hp', value: 30, label: '+30 MAX HP' }] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 200, stash: [item] }));
+            ge.openArmory();
+            const before = ge.game.cores;
+            const ok = ge._armoryOverlay.rerollPassive(0);
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            return { ok, before, after: ge.game.cores, passive: meta.stash[0].passive };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.after).toBeLessThan(r.before);
+        expect(typeof r.passive).toBe('string'); // a passive was rolled on
+    });
+
+    test('passive reroll is rejected on a common (tier-locked) and leaves Cores untouched (META-04)', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const common = { slot: 'hull', level: 10, rarity: 'common', name: 'Cheap', affixes: [{ type: 'hp', value: 5, label: '+5' }] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 999, stash: [common] }));
+            ge.openArmory();
+            const tierLocked = ge._armoryOverlay.rerollPassive(0); // below Exceptional → reject
+            const coresAfterLocked = ge.game.cores;
+            // An exceptional item but with only 1 Core → unaffordable reject.
+            const exc = { slot: 'hull', level: 10, rarity: 'exceptional', name: 'Rich', affixes: [{ type: 'hp', value: 5, label: '+5' }] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 1, stash: [exc] }));
+            ge.openArmory();
+            const broke = ge._armoryOverlay.rerollPassive(0);
+            return { tierLocked, coresAfterLocked, broke, coresAfterBroke: ge.game.cores };
+        });
+        expect(r.tierLocked).toBe(false);
+        expect(r.coresAfterLocked).toBe(999); // untouched on a tier-locked reject
+        expect(r.broke).toBe(false);
+        expect(r.coresAfterBroke).toBe(1);    // untouched when unaffordable
+    });
+
     test('no fatal JS errors through the crafting flow', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
@@ -667,6 +727,7 @@ test.describe('QA-08d: Cores crafting — reroll + tier-up (Phase R8.6/R8.8)', (
             ge._armoryOverlay.tierUp(0);
             ge._armoryOverlay.reroll(0);
             ge._armoryOverlay.targetResist(0, 'PYRO');
+            ge._armoryOverlay.rerollPassive(0);
         });
         const fatal = page._jsErrors.filter(m =>
             !m.includes('sfxr') && !m.includes('Audio') && !m.includes('audio') &&

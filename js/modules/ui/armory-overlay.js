@@ -16,14 +16,17 @@ import {
     salvageValue, partitionBulkSalvage,
     rerollCost, tierUpCost, canAffordReroll, canAffordTierUp,
     resistTargetCost, canAffordResistTarget,
+    passiveRerollCost, canAffordPassiveReroll,
 } from '../world/cores.js';
 import {
     scoreItem, rerollItemAffixes, tierUpItem,
     applyResistTarget, maxResistAffixes, isResistAffix,
+    eligibleItemPassives, rerollItemPassive,
 } from '../world/item-system.js';
 import { getEquipped, stashForSlot, equipFromStash, unequipSlot, equipDelta } from '../world/inventory.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { ELEMENTS } from '../combat/elements.js';
+import { getPassive } from '../combat/passive-data.js';
 
 // META-03 — the 6 targetable (non-Kinetic) elements, in taxonomy order.
 const RESIST_TARGET_ELEMENTS = Object.keys(ELEMENTS).filter((id) => id !== 'KINETIC');
@@ -227,6 +230,29 @@ export class ArmoryOverlay {
         // Operate on a copy so a rejected mutation never half-edits the stash.
         const copy = { ...item, affixes: (item.affixes || []).map((a) => ({ ...a })) };
         const res = applyResistTarget(copy, element);
+        if (!res || !res.ok) return false;
+        stash[index] = copy;
+        const remaining = cores - cost;
+        saveMeta({ stash, cores: remaining });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = remaining;
+        this.render();
+        return true;
+    }
+
+    // META-04 — pay Cores to REROLL the gear passive on the stash item at
+    // `index`. Mirrors targetResist: affordability + a clean mutation rejection
+    // (tier-locked / no-alternatives) both leave Cores untouched.
+    rerollPassive(index) {
+        const meta = loadMeta() || {};
+        const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
+        const item = stash[index];
+        if (!item) return false;
+        const cores = this._cores();
+        const cost = passiveRerollCost(item);
+        if (cores < cost) return false;
+        // Operate on a copy so a rejected mutation never half-edits the stash.
+        const copy = { ...item, affixes: (item.affixes || []).map((a) => ({ ...a })) };
+        const res = rerollItemPassive(copy);
         if (!res || !res.ok) return false;
         stash[index] = copy;
         const remaining = cores - cost;
@@ -503,6 +529,10 @@ export class ArmoryOverlay {
             // META-03 — TARGET RESIST: a sub-row with the current resist count
             // vs the rarity cap + a tinted element picker that spends Cores.
             list.appendChild(this._buildResistTargetRow(it, i, cores));
+
+            // META-04 — REROLL PASSIVE: a sub-row showing the item's current
+            // gear passive (or "no passive") + a Cores-bearing reroll button.
+            list.appendChild(this._buildPassiveRerollRow(it, i, cores));
         }
         section.appendChild(list);
         body.appendChild(section);
@@ -558,6 +588,51 @@ export class ArmoryOverlay {
             picker.appendChild(chip);
         }
         sub.appendChild(picker);
+        return sub;
+    }
+
+    // META-04 — the REROLL PASSIVE control for one stash item: shows the
+    // current gear passive's name (or "no passive yet") + a cost-bearing
+    // button. Greyed/disabled when the item's rarity is tier-locked (no
+    // eligible passive pool — below Exceptional) or Cores are short, mirroring
+    // how reroll/tier-up/target-resist disable. Reads "ROLL PASSIVE" when the
+    // eligible item carries none yet, "REROLL PASSIVE" otherwise.
+    _buildPassiveRerollRow(item, index, cores) {
+        const sub = document.createElement('div');
+        sub.className = 'armory-row armory-row--candidate';
+
+        const pool = eligibleItemPassives(item.rarity);
+        const locked = pool.length === 0;
+        const cost = passiveRerollCost(item);
+        const affordable = canAffordPassiveReroll(item, cores);
+        const current = item.passive ? getPassive(item.passive) : null;
+        const currentName = current ? (current.name || item.passive) : (item.passive || null);
+
+        const lbl = document.createElement('span');
+        lbl.className = 'armory-row-name';
+        if (locked) {
+            lbl.textContent = `  ↳ PASSIVE — tier-locked (${item.rarityLabel || item.rarity})`;
+            lbl.style.opacity = '0.5';
+            sub.appendChild(lbl);
+            return sub;
+        }
+        lbl.textContent = currentName
+            ? `  ↳ PASSIVE: ${currentName} · ${cost} ✦`
+            : `  ↳ PASSIVE: — none — · ${cost} ✦`;
+        sub.appendChild(lbl);
+
+        const actions = document.createElement('span');
+        actions.className = 'armory-row-actions';
+        const btn = document.createElement('button');
+        btn.className = 'armory-buy';
+        // No passive yet → "ROLL"; otherwise → "REROLL". Disabled when broke or
+        // when the lone eligible passive is already on the item (no-alternatives).
+        const onlyOption = pool.length === 1 && item.passive === pool[0].id;
+        btn.disabled = !affordable || onlyOption;
+        btn.textContent = currentName ? `REROLL PASSIVE · ${cost} ✦` : `ROLL PASSIVE · ${cost} ✦`;
+        btn.addEventListener('click', () => this.rerollPassive(index));
+        actions.appendChild(btn);
+        sub.appendChild(actions);
         return sub;
     }
 }

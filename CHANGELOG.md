@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.186.0] - 2026-05-25
+
+### Added — Gear passive (trait) reroll for Cores (META-04)
+
+Players can now spend **Cores** in the ARMORY to **reroll the modular passive**
+carried by top-tier gear, and passive-bearing items salvage for more Cores.
+
+- `item-system.js`: `rerollItemPassive(item)` — rerolls `item.passive` to a
+  different eligible passive (`eligibleItemPassives`), preferring a new id when
+  ≥2 options; rolls one onto eligible gear that has none; rejects below
+  Exceptional (`tier-locked`) or when no alternative exists. Pure.
+- `cores.js`: `passiveRerollCost(item)` (`max(6, rank×5 + level×2)` — the richest
+  craft, above resist-target/reroll) + `canAffordPassiveReroll`; `salvageValue`
+  adds a flat `PASSIVE_SALVAGE_BONUS = 12` for a passive-bearing item (after the
+  reward-dial multiply; no-passive items + the `rewardMult` default unchanged).
+- ARMORY UI: a per-item **REROLL PASSIVE** row (reads "ROLL PASSIVE" when none),
+  showing the current passive + cost, greyed when tier-locked / unaffordable —
+  mirroring the reroll / tier-up / target-resist controls.
+
+(Note: the legacy `item.traits` array is vestigial — never assigned — so the
+"trait" here is the implemented `item.passive` affix.) Coverage: +14 unit tests
+(1456 total) + 3 armory QA tests (38 total in `08-armory.spec.js`).
+
+---
+
 ## [6.185.0] - 2026-05-25
 
 ### Added — Buff-stripping harrier: the LEECH (ENMY buff-strip slice — all 7 helpers now live)
