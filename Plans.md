@@ -149,7 +149,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 |----|----|----|
 | SKILL-01 | `ui/` loadout-assign | Assign any owned ability → specific slot 1-4 (selection-order already controls slots, so this is QoL — low value) |
 | UI-01 | `css/styles.css` + `shop/shop-dom.js` | BUILD-tree polish: spacing/contrast/responsive, hover/active, tooltip completeness, mobile, legend states — subjective, better with user's eye |
-| UI-02 | `tests/qa/07-weapons.spec.js` + new BUILD-flow spec | QA: open→review each tab→select loadout→START; pre-run seeding round-trips | 
+| ~~UI-02~~ ✅ | `tests/qa/31-build-flow.spec.js` (NEW) | **DONE** — 7-test end-to-end BUILD/RUN-SETUP QA: open→review every cluster tab→select loadout→configure run shape+mode→START round-trips into `game.runConfig` + live player loadout; `meta.loadout` seeds next open; no fatal JS errors. Test-only (no version bump). | 
 
 ---
 
