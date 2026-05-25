@@ -13,6 +13,9 @@ import { Bullet } from './player/bullet.js';
 import { Asteroid } from './world/asteroid.js';
 import { Enemy } from './enemy/enemy.js';
 import { EnemyBullet } from './enemy/enemy-bullet.js';
+// ENMY-03 — cloak de-targeting for the auto-aim picker. No-op for cloak-less
+// objects; only ever filters a cloaked-and-unrevealed PHANTOM.
+import { isTargetable } from './enemy/abilities/cloak.js';
 import { FormationManager } from './enemy/formations.js';
 import { bossFxCameraShake } from './enemy/boss-fx.js';
 import { Particle, drawParticlesBatched } from './world/particle.js';
@@ -2695,6 +2698,25 @@ export class GameEngine {
     spawnStageBoss() { return wave.spawnStageBoss.call(this); }
     spawnBoss(idOrStage, opts = {}) { return wave.spawnModularBoss.call(this, idOrStage, { warp: false, ...opts }); }
 
+    // ENMY-03 — DEBUG HOOK. Force-spawn a PHANTOM (cloaking enemy) on demand for
+    // QA + manual testing, mirroring spawnBoss. Spawns at the viewport center
+    // (or explicit opts.x/opts.y), no warp, instantly fightable. Returns the
+    // enemy (carrying a `cloak` state), or null if the pool is dry.
+    //   gameEngine.spawnPhantom()  or  gameEngine.spawnPhantom({ x, y })
+    spawnPhantom(opts = {}) {
+        // Default to ~260px off the player (or viewport center) so the freshly
+        // spawned Phantom doesn't immediately ram the ship and die before QA can
+        // observe its cloak cycle. Explicit opts.x/opts.y override.
+        const baseX = this.player ? this.player.x
+            : (this.camera ? this.camera.x + this.width / 2 : (this.gameField ? this.gameField.width / 2 : 600));
+        const baseY = this.player ? this.player.y
+            : (this.camera ? this.camera.y + this.height / 2 : (this.gameField ? this.gameField.height / 2 : 400));
+        const cx = (opts.x != null) ? opts.x : baseX + 260;
+        const cy = (opts.y != null) ? opts.y : baseY - 180;
+        // Bypass the concurrent-spawn cap for the debug hook (huge cap).
+        return wave.requestEnemySpawn.call(this, 'PHANTOM', cx, cy, { cap: 9999 });
+    }
+
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }
@@ -4797,6 +4819,9 @@ export class GameEngine {
         let bestDistSq = maxDist * maxDist;
         const consider = (obj) => {
             if (!obj || !obj.active) return;
+            // ENMY-03 — auto-aim skips a cloaked-and-unrevealed enemy (no-op for
+            // cloak-less objects like asteroids / mines).
+            if (!isTargetable(obj, frameClock.now)) return;
             const dx = obj.x - fromX;
             const dy = obj.y - fromY;
             const d2 = dx * dx + dy * dy;

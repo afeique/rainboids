@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.180.0] - 2026-05-25
+
+### Added — Cloaking enemies: the PHANTOM (ENMY cloak slice)
+
+The first enemy enabling-system helper goes live in-game. A new **Phantom** enemy
+(Void, fast, fragile) periodically **cloaks** — fading out of sight and dropping
+off the player's homing + auto-aim — then re-appears to strike, unless **MARK**ed.
+
+- Wired the shipped `enemy/abilities/cloak.js` helper into the live paths, all
+  **gated on `enemy.cloak`** (every existing enemy is untouched — default-safe):
+  `tickCloak` in `enemy.update`, `cloakAlpha` fade on the normal shape render
+  (death FX unaffected), and an `isTargetable` skip in **both** target pickers —
+  `bullet.applyHoming` and the engine's `findNearestTarget` auto-aim.
+- Fixed a MARK field mismatch so marking reveals a cloaked enemy
+  (`combat-manager.applyMark` now mirrors `markUntil → _markUntil`).
+- New **PHANTOM** type (`enemy-data.js`, Void element, Void-resist/Radiant-weak)
+  + `gameEngine.spawnPhantom()` debug hook. (Phantom enters the live wave roster
+  with ENMY-09; for now it's spawn-hook + QA reachable.)
+
+Coverage: 5 Playwright QA tests (`tests/qa/22-cloak.spec.js`: cloak cycle,
+de-targeting while cloaked, MARK reveal, no fatal errors); full unit suite (1442)
++ bosses/director QA regression green.
+
 ## [6.179.0] - 2026-05-25
 
 ### Added — Cores-based resist targeting (META-03)

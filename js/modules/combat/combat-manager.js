@@ -2175,6 +2175,10 @@ export function applyOil(enemy, durationMs = 5000) {
 export function applyMark(enemy, durationMs = 6000) {
     if (!_statusGuard(enemy)) return;
     enemy.markUntil = Math.max(enemy.markUntil || 0, frameClock.now + durationMs);
+    // ENMY-03 — cloak's isTargetable reads `_markUntil`; mirror the live mark
+    // window into it so MARKing a cloaked PHANTOM reveals it (keeps it on the
+    // homing/auto-aim target list). Tiny, side-effect-free normalization.
+    enemy._markUntil = enemy.markUntil;
 }
 
 // BLEED — DoT, 300 ms ticks, NO refresh (duration fixed at first apply),

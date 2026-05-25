@@ -597,6 +597,28 @@ export const ENEMY_TYPES = {
         visual: { shape: 'shield_turret', glowColor: '#fff0b0', trailLength: 14 },
         ai: { evasion: 0.5, preferredRange: 340, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
+
+    // ENMY-03 — PHANTOM: light/fast Void skirmisher that runs a visible↔cloaked
+    // cycle (cloak.js). While cloaked it fades out + drops off homing/auto-aim
+    // targeting; a MARK status or an AoE reveal pins it back onto the target
+    // list. The `cloak: true` marker tells initializeEnemy to attach a fresh
+    // createCloak() state. A normal killable enemy while visible.
+    PHANTOM: {
+        name: 'Phantom',
+        color: '#9966ff',
+        health: 6,
+        speed: 3.4,
+        size: 34,
+        shootPattern: 'hunter_single',
+        shootRate: 0.35,
+        movePattern: 'arc',
+        points: 150,
+        cloak: true,                // → initializeEnemy attaches createCloak()
+        movement: { pattern: 'arc', turnSpeed: 0.12, rotationSpeed: { min: -0.015, max: 0.015 } },
+        firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1200, max: 4500 } },
+        visual: { shape: 'stalker_sword', glowColor: '#bb99ff', trailLength: 15 },
+        ai: { evasion: 0.6, preferredRange: 240, dodgeBullets: true, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -621,6 +643,7 @@ const ENEMY_ELEMENTS = {
     PLAGUEBEARER: 'TOXIC', // E8c — toxic area-denier
     SPORE_CARRIER: 'TOXIC', // E8c — toxic drone spawner
     LUMEN_DRONE: 'RADIANT', // E8d — radiant ally-shield support
+    PHANTOM:     'VOID',    // ENMY-03 — cloaking Void skirmisher
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -646,6 +669,7 @@ const ENEMY_RESISTS = {
     PLAGUEBEARER: { TOXIC: 0.60, RADIANT: -0.40 },             // E8c — toxic-tough; purge it w/ Radiant
     SPORE_CARRIER: { TOXIC: 0.50, RADIANT: -0.40 },            // E8c — toxic-tough spawner; Radiant clears it
     LUMEN_DRONE: { RADIANT: 0.50, VOID: -0.40 },               // E8d — radiant-tough support; Void snuffs it
+    PHANTOM:     { VOID: 0.40, RADIANT: -0.50 },               // ENMY-03 — Void-tough cloaker; Radiant lights it up
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit

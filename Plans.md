@@ -73,7 +73,7 @@ All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + 
 | ~~ENMY-06~~ | `…/suppress-aura.js` + test | ✅ **6.170.0** — Null Drone aura stalls cooldown regen / blocks activation (linger-stamped, player-facing mirror of SYS-7); 26 tests | D |
 | ~~ENMY-07~~ | `…/blink-burrow.js` + test | ✅ **6.170.0** — periodic teleport/burrow composing the ENMY-01 telegraph; relocate-on-strike, frozen-blocks, vanish-mid-blink; 25 tests | D |
 | ENMY-08 | `enemy/enemy-data.js` + AI | Conduit Node (Volt support) *(A.E8c)* | ENMY-S7(shipped) | — (serialize w/ 09/10) |
-| ENMY-09 | `enemy/enemy-data.js` + AI | Batch-4 types: Devourer/Phantom/Prism-Mirror/Beacon *(A.E8d)* | ENMY-02/03/04 | — (serialize) |
+| ENMY-09 | `enemy/enemy-data.js` + AI | Batch-4 types: Devourer/Phantom/Prism-Mirror/Beacon *(A.E8d)* | ENMY-02/03/04 | 🟡 **PARTIAL 6.180.0** — **PHANTOM** shipped: cloak helper wired LIVE (tick/draw-fade/de-target in homing+auto-aim, gated on `enemy.cloak`, default-safe) + MARK-reveal fix + `spawnPhantom` debug hook. **TODO:** Devourer(ENMY-02)/Prism-Mirror(ENMY-04)/Beacon + add all to WAVE_DATA roster |
 | ENMY-10 | `enemy/enemy-data.js` + AI | Batch-5: Leech/Null-Drone/Juggernaut/Thornback/Wraithworm + artillery *(A.E8e)* | ENMY-01/05/06/07 | — (serialize) |
 | ENMY-11 | per-type AI modules | Distinct behaviors for the 10 new types *(A.E10-U2)* | ENMY-08/09/10 | — |
 | ENMY-12 | per-type AI modules | Deferred flourishes (Glacier shatter, TANGERINE oil, TITAN demote, …) *(A.E10-U3)* | ENMY-07/01 | — |

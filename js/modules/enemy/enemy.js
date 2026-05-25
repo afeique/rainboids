@@ -15,6 +15,10 @@ import { updateBossIntro, updateBossDeath, introBlocksDamage } from './boss-intr
 import { drawModularBoss } from './boss-render.js';
 import { decayResistMap, ELEMENTS, weaknessElement } from '../combat/elements.js';
 import { runAura } from './support-aura.js';
+// ENMY-03 — cloak/invisibility. Default-safe: every wiring below is gated on
+// `this.cloak`, which only PHANTOM (config.cloak) ever gets. Cloak-less enemies
+// behave byte-for-byte as before.
+import { createCloak, tickCloak, cloakAlpha } from './abilities/cloak.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
 // `isMobile` toggles the lateral weave decoration in update().
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
@@ -133,6 +137,12 @@ export class Enemy {
         this._nextAuraAt = 0;
         this._allyShieldUntil = 0;
         this._allyShieldAmount = 0;
+        // ENMY-03 — cloak/invisibility (PHANTOM). Attach a fresh cloak cycle when
+        // the type marks it; otherwise NULL it out so a pooled enemy recycled
+        // into a non-cloak type can't carry a stale cloak. `_revealedUntil` is
+        // the AoE/MARK reveal stamp read by cloak's isTargetable; reset here.
+        this.cloak = this.config.cloak ? createCloak(this.config.cloakOpts) : null;
+        this._revealedUntil = 0;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
@@ -304,6 +314,9 @@ export class Enemy {
         this.conductUntil = 0;
         this.oilUntil = 0;
         this.markUntil = 0;
+        // ENMY-03 — mirror of markUntil that cloak's isTargetable reads (kept in
+        // sync by applyMark). Reset so a pooled enemy can't carry a stale mark.
+        this._markUntil = 0;
         this.bleedStacks = 0;
         this.bleedUntil = 0;
         this.bleedTickAt = 0;
@@ -495,6 +508,12 @@ export class Enemy {
         // `active` flips off and the rest of the tick short-circuits.
         this._processStatusEffects();
         if (!this.active) return;
+
+        // ── ENMY-03 cloak cycle ──
+        // Advance the visible↔cloaked cycle so cloaked-ness (read by draw +
+        // homing/auto-aim targeting) stays current. Gated on `this.cloak`, so
+        // this is a no-op for every non-PHANTOM enemy.
+        if (this.cloak) tickCloak(this.cloak, frameClock.now);
 
         // STUN: zero velocity here so the per-pattern movement dispatch
         // below starts from a stopped state. We re-zero AFTER movement too
@@ -1377,7 +1396,14 @@ export class Enemy {
 
         // Health-based transparency
         const healthRatio = this.health / this.maxHealth;
-        const baseAlpha = 0.7 + (healthRatio * 0.3);
+        let baseAlpha = 0.7 + (healthRatio * 0.3);
+        // ── ENMY-03 cloak fade ──
+        // Multiply the cloak's 0..1 render alpha into the base alpha so a
+        // cloaking PHANTOM fades toward invisible across the cycle. Wraps ONLY
+        // this normal shape render (death-flash/debris is the earlier branch
+        // that already returned, so a cloaked enemy still shows its death FX).
+        // No-op for cloak-less enemies (a stays 1).
+        if (this.cloak) baseAlpha *= cloakAlpha(this.cloak, frameClock.now);
         ctx.globalAlpha = baseAlpha;
 
         // Draw distinct geometric shape based on enemy type

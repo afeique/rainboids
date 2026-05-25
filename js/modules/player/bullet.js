@@ -1,6 +1,11 @@
 // Bullet projectile entity
 import { GAME_CONFIG } from '../core/constants.js';
 import { wrap, random, bakedBulletSpriteCache } from '../core/utils.js';
+// ENMY-03 — cloak de-targeting. `isTargetable` returns true for any object with
+// no `cloak` config, so this is a no-op for asteroids/mines/non-PHANTOM enemies;
+// it only ever filters a PHANTOM that's currently cloaked-and-unrevealed.
+import { isTargetable } from '../enemy/abilities/cloak.js';
+import { frameClock } from '../core/frame-clock.js';
 
 // Cluster bombs launch fast and decelerate (friction), so a single frame's
 // movement can exceed an enemy's contact radius. Movement is sub-stepped in
@@ -595,6 +600,9 @@ export class Bullet {
             for (const target of targets.activeObjects) {
                 if (!target.active) continue;
                 if (filter && !filter(target)) continue;
+                // ENMY-03 — skip a cloaked-and-unrevealed enemy so homing slips
+                // past it. No-op for cloak-less targets (always targetable).
+                if (!isTargetable(target, frameClock.now)) continue;
 
                 const dx = target.x - this.x;
                 const dy = target.y - this.y;
