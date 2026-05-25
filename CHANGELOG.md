@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.171.0] - 2026-05-24
+
+### Added — Adaptive Difficulty Director (RUN-04)
+
+New pure, unit-tested module `wave/difficulty-director.js` — the keystone of the
+auto-tuned-difficulty pillar (difficulty is never player-chosen). It watches
+per-wave performance and adjusts **two decoupled axes** so every build lands in
+a "challenged but winning" flow channel:
+
+- **`D_hp`** ∈ [0.6, 3.0] — offense outlet (more / tankier targets to kill).
+- **`D_thr`** ∈ [0.6, 1.8] — threat (enemy damage / density / cadence).
+
+Each axis is driven by a normalized composite estimate (`Po` offense, `Pd`
+defense; 1.0 = on-design) smoothed by an EMA (α 0.4). Update logic: cold-start
+(waves 1–2 held at 1.0), ±12% deadband, ≤12%/wave rate limit, exponent steps
+(Po^0.5 / Pd^0.4), a **cross-term mastery gate** (D_thr only climbs past 1.4
+when both Po>1.3 *and* Pd>1.3), a **mercy band** (deaths / low HP ease threat,
+never raise it — the glass cannon is carried by offense, not punished), and an
+**escalation band** (full-HP fast clears bump D_hp). Decoupling is the point:
+a Glass Nuke gets more targets but not more threat; a Pure Tank gets more threat
+but not more trash.
+
+Stable API for downstream consumers: `createDirector`, `recordWave`,
+`updateDifficulty`, `tickWave`, `getDifficulty`, **`getThreatLevel`** (1–5 pip,
+for the CD-16 HUD meter), **`lockForBoss`** (freeze D at boss spawn — no
+mid-fight rubber-band). Pure: no globals/Date.now/random/DOM/imports; driven
+entirely by caller-fed wave outcomes. Bounds/exponents from Balance Model §6/§8.
+
+Coverage: +26 unit tests (1319 total). Unblocks RUN-05 (wave composer) and
+CD-16 (threat-level HUD).
+
 ## [6.170.0] - 2026-05-24
 
 ### Added — Enemy enabling-system helpers, batch 2 (ENMY-05 / 06 / 07)
