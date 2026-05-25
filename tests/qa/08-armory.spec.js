@@ -579,6 +579,85 @@ test.describe('QA-08d: Cores crafting — reroll + tier-up (Phase R8.6/R8.8)', (
         expect(r.cores).toBe(1); // untouched
     });
 
+    test('targeting a resist ADDs it, consumes Cores, and keeps the total affix count (META-03)', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            // An epic hull (cap 2 resists) with two NON-resist affixes → ADD.
+            const item = { slot: 'hull', level: 10, rarity: 'epic', name: 'Targetable',
+                affixes: [
+                    { type: 'hp', value: 50, label: '+50 MAX HP' },
+                    { type: 'toughness', value: 5, label: '+5% DEF' },
+                ] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 100, stash: [item] }));
+            ge.openArmory();
+            const before = ge.game.cores;
+            const ok = ge._armoryOverlay.targetResist(0, 'PYRO');
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            const out = meta.stash[0];
+            return {
+                ok, before, after: ge.game.cores,
+                hasPyro: out.affixes.some((a) => a.type === 'pyroResist'),
+                affixCount: out.affixes.length,
+                resistCount: out.affixes.filter((a) => /Resist$/.test(a.type)).length,
+            };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.after).toBeLessThan(r.before); // Cores spent
+        expect(r.hasPyro).toBe(true);           // the targeted element landed
+        expect(r.affixCount).toBe(2);           // TOTAL affix count unchanged (ADD)
+        expect(r.resistCount).toBe(1);
+    });
+
+    test('targeting a resist SWAPs at cap (resist count unchanged, new element present)', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            // epic cap 2, already at 2 resists → SWAP the oldest for the target.
+            const item = { slot: 'hull', level: 10, rarity: 'epic', name: 'Capped',
+                affixes: [
+                    { type: 'pyroResist', value: 8, label: '+8% PYRO RESIST' },
+                    { type: 'cryoResist', value: 8, label: '+8% CRYO RESIST' },
+                ] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 100, stash: [item] }));
+            ge.openArmory();
+            const ok = ge._armoryOverlay.targetResist(0, 'VOLT');
+            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            const out = meta.stash[0];
+            return {
+                ok,
+                affixCount: out.affixes.length,
+                resistCount: out.affixes.filter((a) => /Resist$/.test(a.type)).length,
+                hasVolt: out.affixes.some((a) => a.type === 'voltResist'),
+                hasPyro: out.affixes.some((a) => a.type === 'pyroResist'),
+            };
+        });
+        expect(r.ok).toBe(true);
+        expect(r.affixCount).toBe(2);   // total count unchanged
+        expect(r.resistCount).toBe(2);  // resist count unchanged (SWAP)
+        expect(r.hasVolt).toBe(true);   // targeted element present
+        expect(r.hasPyro).toBe(false);  // oldest resist swapped out
+    });
+
+    test('resist targeting is rejected on a common (tier-locked) and without enough Cores', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const common = { slot: 'hull', level: 10, rarity: 'common', name: 'Cheap', affixes: [{ type: 'hp', value: 5, label: '+5' }] };
+            const epic = { slot: 'hull', level: 10, rarity: 'epic', name: 'Rich', affixes: [{ type: 'hp', value: 5, label: '+5' }, { type: 'toughness', value: 2, label: '+2%' }] };
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 999, stash: [common] }));
+            ge.openArmory();
+            const tierLocked = ge._armoryOverlay.targetResist(0, 'PYRO'); // cap 0 → reject
+            const coresAfterLocked = ge.game.cores;
+            // Now an epic but with only 1 Core → unaffordable reject.
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ cores: 1, stash: [epic] }));
+            ge.openArmory();
+            const broke = ge._armoryOverlay.targetResist(0, 'PYRO');
+            return { tierLocked, coresAfterLocked, broke, coresAfterBroke: ge.game.cores };
+        });
+        expect(r.tierLocked).toBe(false);
+        expect(r.coresAfterLocked).toBe(999); // untouched on a tier-locked reject
+        expect(r.broke).toBe(false);
+        expect(r.coresAfterBroke).toBe(1);    // untouched when unaffordable
+    });
+
     test('no fatal JS errors through the crafting flow', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
@@ -587,6 +666,7 @@ test.describe('QA-08d: Cores crafting — reroll + tier-up (Phase R8.6/R8.8)', (
             ge.openArmory();
             ge._armoryOverlay.tierUp(0);
             ge._armoryOverlay.reroll(0);
+            ge._armoryOverlay.targetResist(0, 'PYRO');
         });
         const fatal = page._jsErrors.filter(m =>
             !m.includes('sfxr') && !m.includes('Audio') && !m.includes('audio') &&

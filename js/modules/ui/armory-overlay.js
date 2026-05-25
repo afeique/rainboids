@@ -15,10 +15,18 @@ import {
 import {
     salvageValue, partitionBulkSalvage,
     rerollCost, tierUpCost, canAffordReroll, canAffordTierUp,
+    resistTargetCost, canAffordResistTarget,
 } from '../world/cores.js';
-import { scoreItem, rerollItemAffixes, tierUpItem } from '../world/item-system.js';
+import {
+    scoreItem, rerollItemAffixes, tierUpItem,
+    applyResistTarget, maxResistAffixes, isResistAffix,
+} from '../world/item-system.js';
 import { getEquipped, stashForSlot, equipFromStash, unequipSlot, equipDelta } from '../world/inventory.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
+import { ELEMENTS } from '../combat/elements.js';
+
+// META-03 — the 6 targetable (non-Kinetic) elements, in taxonomy order.
+const RESIST_TARGET_ELEMENTS = Object.keys(ELEMENTS).filter((id) => id !== 'KINETIC');
 
 const CATEGORY_DEFS = {
     primaries: { label: 'PRIMARY WEAPONS', defs: () => PRIMARY_WEAPONS },
@@ -199,6 +207,29 @@ export class ArmoryOverlay {
         const cost = tierUpCost(item);
         stash[index] = tierUpItem(item);
         const remaining = this._cores() - cost;
+        saveMeta({ stash, cores: remaining });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = remaining;
+        this.render();
+        return true;
+    }
+
+    // META-03 — pay Cores to ADD or SWAP a targeted elemental resist on the
+    // stash item at `index`. Mirrors reroll/tierUp: affordability + a clean
+    // mutation rejection both leave Cores untouched.
+    targetResist(index, element) {
+        const meta = loadMeta() || {};
+        const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
+        const item = stash[index];
+        if (!item) return false;
+        const cores = this._cores();
+        const cost = resistTargetCost(item);
+        if (cores < cost) return false;
+        // Operate on a copy so a rejected mutation never half-edits the stash.
+        const copy = { ...item, affixes: (item.affixes || []).map((a) => ({ ...a })) };
+        const res = applyResistTarget(copy, element);
+        if (!res || !res.ok) return false;
+        stash[index] = copy;
+        const remaining = cores - cost;
         saveMeta({ stash, cores: remaining });
         if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = remaining;
         this.render();
@@ -468,8 +499,65 @@ export class ArmoryOverlay {
 
             row.append(name, actions);
             list.appendChild(row);
+
+            // META-03 — TARGET RESIST: a sub-row with the current resist count
+            // vs the rarity cap + a tinted element picker that spends Cores.
+            list.appendChild(this._buildResistTargetRow(it, i, cores));
         }
         section.appendChild(list);
         body.appendChild(section);
+    }
+
+    // META-03 — the TARGET RESIST control for one stash item: a small element
+    // picker (6 tinted chips) + a cost-bearing label. Greyed out when the
+    // item's rarity is tier-locked (cap 0) or Cores are short, mirroring how
+    // reroll/tier-up disable.
+    _buildResistTargetRow(item, index, cores) {
+        const sub = document.createElement('div');
+        sub.className = 'armory-row armory-row--candidate';
+
+        const cap = maxResistAffixes(item.rarity);
+        const current = Array.isArray(item.affixes)
+            ? item.affixes.filter((a) => isResistAffix(a.type)).length : 0;
+        const cost = resistTargetCost(item);
+        const affordable = canAffordResistTarget(item, cores);
+        const locked = cap === 0;
+
+        const lbl = document.createElement('span');
+        lbl.className = 'armory-row-name';
+        lbl.textContent = locked
+            ? `  ↳ TARGET RESIST — tier-locked (${item.rarityLabel || item.rarity})`
+            : `  ↳ TARGET RESIST · ${cost} ✦  (RESIST ${current}/${cap})`;
+        if (locked) lbl.style.opacity = '0.5';
+        sub.appendChild(lbl);
+
+        if (locked) return sub;
+
+        const picker = document.createElement('span');
+        picker.className = 'armory-row-actions';
+        const have = new Set(
+            (item.affixes || [])
+                .filter((a) => isResistAffix(a.type))
+                .map((a) => a.type),
+        );
+        for (const el of RESIST_TARGET_ELEMENTS) {
+            const def = ELEMENTS[el];
+            const resistType = `${el.toLowerCase()}Resist`;
+            const owns = have.has(resistType);
+            const chip = document.createElement('button');
+            chip.className = 'armory-buy';
+            chip.dataset.element = el;
+            // First letter of the element name as a compact, color-tinted chip.
+            chip.textContent = (def && def.name ? def.name[0] : el[0]).toUpperCase();
+            chip.title = `${def ? def.name : el} resist`;
+            chip.style.color = (def && def.color) || '#fff';
+            // Already on the item (duplicate) or can't afford → disabled.
+            chip.disabled = owns || !affordable;
+            if (owns) chip.style.outline = `1px solid ${(def && def.color) || '#fff'}`;
+            chip.addEventListener('click', () => this.targetResist(index, el));
+            picker.appendChild(chip);
+        }
+        sub.appendChild(picker);
+        return sub;
     }
 }

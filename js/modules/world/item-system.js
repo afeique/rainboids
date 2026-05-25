@@ -162,15 +162,22 @@ export function rollAffixSet(level, rarity, count, excludeTypes = []) {
         chosen.push(def);
         if (isResistAffix(def.type)) resistTaken++;
     }
-    return chosen.map((def) => {
-        const raw = (def.base + (L - 1) * def.perWave) * _rollMult(rarity);
-        const value = def.pct
-            ? Math.max(def.min, Math.round(raw * 10) / 10)
-            : (def.type === 'regen'
-                ? Math.max(def.min, Math.round(raw * 100) / 100)
-                : Math.max(def.min, Math.round(raw)));
-        return { type: def.type, value, label: def.label(value) };
-    });
+    return chosen.map((def) => _buildAffixFromDef(def, L, rarity));
+}
+
+// Build a single affix `{ type, value, label }` from a pool def at a given
+// wave-level + rarity. Shared by rollAffixSet AND applyResistTarget (META-03)
+// so the value formula — wave-scaled base × an independent rarity-mult roll,
+// then pct/regen/flat rounding + min floor — lives in exactly one place.
+function _buildAffixFromDef(def, level, rarity) {
+    const L = Math.max(1, level | 0);
+    const raw = (def.base + (L - 1) * def.perWave) * _rollMult(rarity);
+    const value = def.pct
+        ? Math.max(def.min, Math.round(raw * 10) / 10)
+        : (def.type === 'regen'
+            ? Math.max(def.min, Math.round(raw * 100) / 100)
+            : Math.max(def.min, Math.round(raw)));
+    return { type: def.type, value, label: def.label(value) };
 }
 
 // Build the full item object (name, derived fields, rarity styling) from a
@@ -243,6 +250,77 @@ export function tierUpItem(item) {
     const out = _finalizeItem(item.slot, item.level, next, [...oldAffixes, ...extra]);
     if (item.traits) out.traits = item.traits;
     return out;
+}
+
+// META-03 — recompute the affix-derived display/score fields after the
+// affix list is mutated in place (without re-randomizing the item's name).
+function _refreshDerivedFromAffixes(item) {
+    const list = Array.isArray(item.affixes) && item.affixes.length
+        ? item.affixes : [{ type: 'hp', value: 1, label: '+1 HP' }];
+    item.affixes = list;
+    item.bonusLabel = list.map((a) => a.label).join(' · ');
+    item.bonus = list[0].value;
+    item.bonusType = list[0].type;
+    item.regenBonus = list.filter((a) => a.type === 'regen').reduce((s, a) => s + a.value, 0);
+    return item;
+}
+
+// META-03 — pay Cores to ADD or SWAP a targeted elemental resist on `item`,
+// tier-capped by rarity. `element` may be an element id ('PYRO') or already
+// lowercased ('pyro'); it's normalized either way. PURE w.r.t. RNG only via
+// the shared rarity-mult roll on the new affix value.
+//
+// Returns one of:
+//   { ok:false, reason:'invalid-element' }  — not one of the 6 resistables
+//   { ok:false, reason:'duplicate' }        — item already has that resist
+//   { ok:false, reason:'tier-locked' }      — cap is 0 (e.g. common)
+//   { ok:true, item, mode:'add' }           — replaced a NON-resist affix
+//   { ok:true, item, mode:'swap' }          — replaced the oldest resist affix
+//
+// Invariants: never two resists of the same element; never exceeds
+// maxResistAffixes(rarity); ADD/SWAP keep the TOTAL affix count unchanged.
+export function applyResistTarget(item, element) {
+    if (!item || !Array.isArray(item.affixes)) {
+        return { ok: false, reason: 'invalid-element' };
+    }
+    // Normalize 'PYRO' / 'pyro' / 'Pyro' → 'pyroResist' and validate against
+    // the actual resist defs in the pool (so a bogus element is rejected).
+    const elKey = String(element || '').toLowerCase();
+    const resistType = `${elKey}Resist`;
+    const def = ITEM_AFFIX_POOL.find((d) => d.type === resistType && isResistAffix(d.type));
+    if (!def) return { ok: false, reason: 'invalid-element' };
+
+    const cap = maxResistAffixes(item.rarity);
+    if (cap === 0) return { ok: false, reason: 'tier-locked' };
+
+    // Already carrying this element's resist → nothing to buy.
+    if (item.affixes.some((a) => a.type === resistType)) {
+        return { ok: false, reason: 'duplicate' };
+    }
+
+    const newAffix = _buildAffixFromDef(def, item.level, item.rarity);
+    const resistIdx = item.affixes
+        .map((a, i) => ({ a, i }))
+        .filter((x) => isResistAffix(x.a.type))
+        .map((x) => x.i);
+
+    let mode;
+    if (resistIdx.length < cap) {
+        // ADD — keep TOTAL count stable by REPLACING the first NON-resist
+        // affix (deterministic: lowest index). If the item is somehow all
+        // resists (and we're under cap), append instead.
+        mode = 'add';
+        const nonResistIdx = item.affixes.findIndex((a) => !isResistAffix(a.type));
+        if (nonResistIdx >= 0) item.affixes[nonResistIdx] = newAffix;
+        else item.affixes.push(newAffix);
+    } else {
+        // SWAP — at cap: replace the FIRST/oldest resist affix (lowest index).
+        mode = 'swap';
+        item.affixes[resistIdx[0]] = newAffix;
+    }
+
+    _refreshDerivedFromAffixes(item);
+    return { ok: true, item, mode };
 }
 
 /**

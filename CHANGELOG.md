@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.179.0] - 2026-05-25
+
+### Added — Cores-based resist targeting (META-03)
+
+Spend **Cores** in the ARMORY to **add or swap a specific elemental resist** on a
+gear item, tier-capped by ITEM-01's resist limits:
+
+- `cores.js`: `resistTargetCost(item)` (curve `max(4, rank×4 + level)` — premium
+  over a blind reroll, below a tier-up) + `canAffordResistTarget`.
+- `item-system.js`: `applyResistTarget(item, element)` — **ADD** (under the
+  rarity's resist cap: replaces a non-resist affix, total count unchanged) or
+  **SWAP** (at cap: replaces the oldest resist), rejecting tier-locked (common),
+  duplicate-element, and invalid-element cases. Refactored the affix-value build
+  into a shared `_buildAffixFromDef` (reused by `rollAffixSet`).
+- ARMORY UI: a `TARGET RESIST` row per stash item with a 6-element tinted picker
+  + cost + a `RESIST current/cap` readout; chips for owned elements / tier-locked
+  / unaffordable states are disabled, mirroring the reroll/tier-up controls.
+
+Lets players steer gear defenses toward a run's threats instead of relying on RNG
+resist rolls. Coverage: +11 unit (1442 total) + 3 armory QA tests (35 total in
+`08-armory.spec.js`).
+
 ## [6.178.0] - 2026-05-25
 
 ### Added — Tier-gated gear resists + grouped resist readout (ITEM-01)

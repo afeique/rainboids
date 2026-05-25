@@ -67,6 +67,22 @@ export function canAffordTierUp(item, cores) {
     return c !== Infinity && (cores | 0) >= c;
 }
 
+// META-03 — Cores cost to ADD or SWAP a targeted elemental resist on an item.
+// Targeting a specific resist is a premium operation (you pick the exact
+// element you want), so it sits ABOVE a blind reroll but BELOW a full tier-up:
+//   resistTargetCost = rarityRank × 4 + level (floored at 4)
+// A common-L1 ≈ 5, a transcendental-L30 ≈ 62 — same ballpark as reroll
+// (rank×3) / tier-up ((rank+1)×12), scaling with both rarity and the item's
+// wave-level (so deeper-run gear costs more to retune).
+export function resistTargetCost(item) {
+    const lvl = item ? Math.max(1, item.level | 0) : 1;
+    return Math.max(4, rarityRank(item) * 4 + lvl);
+}
+
+export function canAffordResistTarget(item, cores) {
+    return (cores | 0) >= resistTargetCost(item);
+}
+
 /**
  * Bulk-salvage filter: items strictly worse (by score) than the best
  * equipped item in their slot are safe to mass-salvage. `equippedBySlot`

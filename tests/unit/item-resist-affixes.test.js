@@ -43,7 +43,9 @@ import { ITEM_AFFIX_POOL, AFFIX_SCORE_WEIGHT, RARITY_TIERS, RARITY_ORDER } from 
 import { ELEMENTS } from '../../js/modules/combat/elements.js';
 import {
     maxResistAffixes, isResistAffix, rollAffixSet, createItem,
+    applyResistTarget,
 } from '../../js/modules/world/item-system.js';
+import { resistTargetCost, canAffordResistTarget, rerollCost } from '../../js/modules/world/cores.js';
 
 // The six non-Kinetic elements that should each carry a resist affix.
 // KINETIC is the physical baseline and has NO resist affix.
@@ -242,5 +244,151 @@ describe('ITEM-01 — tier-gated resist counts in the roll', () => {
             if (countResists(createItem('hull', 12, 'rare').affixes) === 1) sawResist = true;
         }
         expect(sawResist).toBe(true);
+    });
+});
+
+describe('META-03 — resistTargetCost / canAffordResistTarget', () => {
+    test('cost scales with rarity rank', () => {
+        const common = createItem('hull', 5, 'common');
+        const epic = createItem('hull', 5, 'epic');
+        const transcendental = createItem('hull', 5, 'transcendental');
+        expect(resistTargetCost(epic)).toBeGreaterThan(resistTargetCost(common));
+        expect(resistTargetCost(transcendental)).toBeGreaterThan(resistTargetCost(epic));
+    });
+
+    test('cost scales with item level', () => {
+        const lo = createItem('hull', 1, 'epic');
+        const hi = createItem('hull', 30, 'epic');
+        expect(resistTargetCost(hi)).toBeGreaterThan(resistTargetCost(lo));
+    });
+
+    test('cost is in the same ballpark as a reroll (above it, below a tier-up)', () => {
+        const it = createItem('hull', 10, 'epic');
+        // Premium over a blind reroll on the same item.
+        expect(resistTargetCost(it)).toBeGreaterThan(rerollCost(it));
+    });
+
+    test('cost floors at 4 and is finite for every rarity', () => {
+        for (const rarity of RARITY_ORDER) {
+            const it = createItem('hull', 1, rarity);
+            expect(resistTargetCost(it)).toBeGreaterThanOrEqual(4);
+            expect(Number.isFinite(resistTargetCost(it))).toBe(true);
+        }
+    });
+
+    test('canAffordResistTarget boundary', () => {
+        const it = createItem('hull', 10, 'epic');
+        const cost = resistTargetCost(it);
+        expect(canAffordResistTarget(it, cost)).toBe(true);
+        expect(canAffordResistTarget(it, cost - 1)).toBe(false);
+        expect(canAffordResistTarget(it, 0)).toBe(false);
+    });
+});
+
+describe('META-03 — applyResistTarget', () => {
+    // Build a deterministic item with a known affix mix (bypass RNG).
+    function makeItem(rarity, affixes) {
+        return {
+            slot: 'hull', level: 10, rarity, name: 'Test',
+            affixes: affixes.map((a) => ({ ...a })),
+        };
+    }
+    const HP = { type: 'hp', value: 50, label: '+50 MAX HP' };
+    const TOUGH = { type: 'toughness', value: 5, label: '+5% DEF' };
+    const PYRO = { type: 'pyroResist', value: 8, label: '+8% PYRO RESIST' };
+    const CRYO = { type: 'cryoResist', value: 8, label: '+8% CRYO RESIST' };
+
+    test('rejects an invalid element (no mutation)', () => {
+        const it = makeItem('epic', [HP, TOUGH]);
+        const before = JSON.stringify(it.affixes);
+        const res = applyResistTarget(it, 'PLASMA');
+        expect(res.ok).toBe(false);
+        expect(res.reason).toBe('invalid-element');
+        expect(JSON.stringify(it.affixes)).toBe(before);
+    });
+
+    test('rejects on a common (cap 0 → tier-locked)', () => {
+        const it = makeItem('common', [HP]);
+        const before = JSON.stringify(it.affixes);
+        const res = applyResistTarget(it, 'PYRO');
+        expect(res.ok).toBe(false);
+        expect(res.reason).toBe('tier-locked');
+        expect(JSON.stringify(it.affixes)).toBe(before);
+    });
+
+    test('rejects a duplicate element already on the item', () => {
+        const it = makeItem('epic', [HP, PYRO]); // already has pyroResist
+        const res = applyResistTarget(it, 'PYRO');
+        expect(res.ok).toBe(false);
+        expect(res.reason).toBe('duplicate');
+    });
+
+    test('accepts lowercase element id', () => {
+        const it = makeItem('epic', [HP, TOUGH]);
+        const res = applyResistTarget(it, 'pyro');
+        expect(res.ok).toBe(true);
+        expect(it.affixes.some((a) => a.type === 'pyroResist')).toBe(true);
+    });
+
+    test('ADD under cap: replaces a NON-resist affix, total count unchanged', () => {
+        const it = makeItem('epic', [HP, TOUGH]); // cap 2, 0 resists → ADD
+        const res = applyResistTarget(it, 'PYRO');
+        expect(res.ok).toBe(true);
+        expect(res.mode).toBe('add');
+        expect(it.affixes).toHaveLength(2); // TOTAL count unchanged
+        // Exactly one new resist of the targeted element.
+        expect(it.affixes.filter((a) => a.type === 'pyroResist')).toHaveLength(1);
+        expect(countResists(it.affixes)).toBe(1);
+        // The first non-resist (HP) was replaced; TOUGH survived.
+        expect(it.affixes.some((a) => a.type === 'hp')).toBe(false);
+        expect(it.affixes.some((a) => a.type === 'toughness')).toBe(true);
+    });
+
+    test('SWAP at cap: replaces the oldest resist, count unchanged, element present', () => {
+        // epic cap 2; already at 2 resists → SWAP the oldest (pyro) for volt.
+        const it = makeItem('epic', [PYRO, CRYO]);
+        const res = applyResistTarget(it, 'VOLT');
+        expect(res.ok).toBe(true);
+        expect(res.mode).toBe('swap');
+        expect(it.affixes).toHaveLength(2); // TOTAL count unchanged
+        expect(countResists(it.affixes)).toBe(2); // resist count unchanged
+        expect(it.affixes.some((a) => a.type === 'voltResist')).toBe(true);
+        expect(it.affixes.some((a) => a.type === 'pyroResist')).toBe(false); // oldest swapped out
+        expect(it.affixes.some((a) => a.type === 'cryoResist')).toBe(true);  // newer kept
+    });
+
+    test('never exceeds maxResistAffixes(rarity) across many targets', () => {
+        // rare cap 1: repeatedly target different elements → never 2 resists.
+        const it = makeItem('rare', [HP, TOUGH]);
+        for (const el of ['PYRO', 'CRYO', 'VOLT', 'TOXIC']) {
+            applyResistTarget(it, el);
+            expect(countResists(it.affixes)).toBeLessThanOrEqual(maxResistAffixes('rare'));
+        }
+        expect(countResists(it.affixes)).toBe(1);
+        // The last targeted element is the one present (SWAP semantics).
+        expect(it.affixes.some((a) => a.type === 'toxicResist')).toBe(true);
+    });
+
+    test('never produces two resists of the same element', () => {
+        const it = makeItem('godlike', [HP, TOUGH, { type: 'speed', value: 4, label: '+4% SPEED' }]);
+        applyResistTarget(it, 'PYRO');
+        applyResistTarget(it, 'PYRO'); // duplicate → rejected, no second pyro
+        expect(it.affixes.filter((a) => a.type === 'pyroResist')).toHaveLength(1);
+    });
+
+    test('appends when the item is all resists but under cap', () => {
+        // godlike cap 3; 1 resist + 0 non-resist (degenerate) → append, count grows.
+        const it = makeItem('godlike', [PYRO]);
+        const res = applyResistTarget(it, 'CRYO');
+        expect(res.ok).toBe(true);
+        expect(res.mode).toBe('add');
+        expect(countResists(it.affixes)).toBe(2);
+        expect(it.affixes).toHaveLength(2);
+    });
+
+    test('refreshes derived fields (bonusLabel includes the new resist)', () => {
+        const it = makeItem('epic', [HP, TOUGH]);
+        applyResistTarget(it, 'PYRO');
+        expect(it.bonusLabel).toContain('PYRO RESIST');
     });
 });
