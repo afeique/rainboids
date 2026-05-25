@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.165.0] - 2026-05-24
+
+### Added — Three more boss modules (BOSS-10 / 11 / 13)
+
+Three standalone bosses on the shipped chassis (Harbinger pattern); headless
+unit-tested (59 tests), not yet spawn-wired (BOSS-04):
+- **THE HIVEMOTHER** (`bosses/hivemother.js`, stage 6-18, Toxic) — egg-sac
+  weak-points that hatch adds on a cadence (destroy a sac to halt its spawns);
+  telegraphed CORRODE clouds; sacs re-arm fewer/tougher each phase.
+- **THE IRON THRONE** (`bosses/iron-throne.js`, stage 7-21) — four per-element
+  turrets, each weak to a different element (forces element-cycling); core
+  invuln while ANY turret lives; turret set rotates weaknesses each phase.
+- **NULLMAW THE DEVOURER** (`bosses/nullmaw.js`, stage 9-27, Void) — a
+  projectile-eat maw cone (feeding it raises its shield — punishes spraying),
+  telegraphed gravity pull + IMPLOSION; maw re-shields each phase.
+
+All three: 3 HP-gated phases, core-invuln-while-parts-live, final-phase enrage.
+
+---
+
 ## [6.164.0] - 2026-05-24
 
 ### Added — Three more boss modules (BOSS-06 / 07 / 09)
