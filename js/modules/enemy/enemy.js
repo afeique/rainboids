@@ -31,6 +31,14 @@ import { telegraphPhase, telegraphProgress } from './telegraph.js';
 // collision-system's bullet pre-pass; here we only attach the state + keep the
 // mirror's front-arc `facingRad` pointed at the player each frame.
 import { REFLECT_DEFAULTS } from './abilities/reflect.js';
+// SYS-4 / ENMY-09 — projectile absorption. Default-safe: every wiring below is
+// gated on `this.eatsProjectiles` / `this.maw`, which only DEVOURER (config.maw)
+// ever gets. Non-devourer enemies behave byte-for-byte as before. The absorb
+// helper lives in collision-system's bullet pre-pass (routeBulletToAbsorb) +
+// the damage-path soak (consumeAbsorbShield); here we only attach the state +
+// keep the maw's `facingRad` pointed at the player each frame (it eats incoming
+// fire, so its cone faces the threat).
+import { MAW_DEFAULTS } from './abilities/projectile-absorb.js';
 // `isPortrait` drives the per-spawn enemy-radius shrink on phone-portrait;
 // `isMobile` toggles the lateral weave decoration in update().
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
@@ -178,6 +186,22 @@ export class Enemy {
             ? { ...REFLECT_DEFAULTS, ...this.config.reflectOpts, facingRad: 0 }
             : null;
         this.reflects = !!this.config.reflect;
+        // SYS-4 / ENMY-09 — projectile absorption (DEVOURER). Attach a fresh maw
+        // config (MAW_DEFAULTS merged with the type's `mawOpts`) when the type
+        // marks it; otherwise NULL it out so a pooled enemy recycled into a
+        // non-devourer type can't carry a stale maw. `eatsProjectiles` is the
+        // fast gate the collision pre-pass + shouldAbsorb check; `maw.facingRad`
+        // (the cone center, pointed at the player each frame in update) starts
+        // at 0 and is upkept while alive. `_absorbShield` / `_absorbShieldUntil`
+        // are the banked-shield accumulator + lapse stamp the damage-path soak
+        // reads — ALWAYS reset here (even for non-devourers) so a recycled enemy
+        // can never keep a stale shield from a prior DEVOURER life.
+        this.maw = this.config.maw
+            ? { ...MAW_DEFAULTS, ...this.config.mawOpts, facingRad: 0 }
+            : null;
+        this.eatsProjectiles = !!this.config.maw;
+        this._absorbShield = 0;
+        this._absorbShieldUntil = 0;
 
         // Calculate mass based on radius (for collision physics)
         this.mass = Math.PI * Math.pow(this.radius, 2) * 0.8; // Slightly denser than player
@@ -779,6 +803,20 @@ export class Enemy {
         // enemy. If there's no player target, the facing is simply held.
         if (this.reflect && this.targetPlayer) {
             this.reflect.facingRad = Math.atan2(
+                this.targetPlayer.y - this.y,
+                this.targetPlayer.x - this.x,
+            );
+        }
+
+        // ── ENMY-09 maw facing upkeep ──
+        // A devourer EATS incoming player fire, so its maw cone should face the
+        // threat. Point `maw.facingRad` from the enemy TOWARD the player each
+        // frame (the direction shouldAbsorb/bulletInMawCone center the cone on).
+        // Done AFTER movement integration so x/y are this frame's final
+        // positions. Gated on `this.maw`, so a no-op for every non-devourer
+        // enemy. If there's no player target, the facing is simply held.
+        if (this.maw && this.targetPlayer) {
+            this.maw.facingRad = Math.atan2(
                 this.targetPlayer.y - this.y,
                 this.targetPlayer.x - this.x,
             );

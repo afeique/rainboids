@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.184.0] - 2026-05-25
+
+### Added — Bullet-eating enemy: the DEVOURER (ENMY projectile-absorb slice)
+
+A sixth enabling-system helper goes live. A new **Devourer** (Void, beefy)
+opens a **maw cone** that swallows player bullets striking its front — banking a
+temporary shield instead of taking damage. Flank it, beam it, or overwhelm the
+shield to break it.
+
+- Wired `enemy/abilities/projectile-absorb.js` into the collision path,
+  **default-safe**: `routeBulletToAbsorb` (a bullet pre-pass beside the reflect /
+  boss-weak-point pre-passes) consumes a maw-cone bullet + banks shield via
+  `absorbBullet`; and `applyDamageToEnemy` soaks incoming damage through
+  `consumeAbsorbShield` right before HP — both gated on `enemy.eatsProjectiles`,
+  and the soak returns damage unchanged (no-op) when no shield is banked. Beams/
+  melee bypass; the maw tracks the player (`enemy.maw.facingRad` in update).
+- New **DEVOURER** type (`enemy-data.js`, Void-resist / Radiant-weak, maw
+  `range 140 · shieldPerBullet 3 · maxShield 40`) + `gameEngine.spawnDevourer()`
+  debug hook. (Joins the live wave roster with ENMY-09.)
+
+Coverage: 5 Playwright QA tests (`tests/qa/26-absorb.spec.js`: absorb+bank,
+shield soaks damage, outside-cone/beam bypass, no fatal errors); full unit suite
+(1442) + reflect/cloak/bosses QA regression green.
+
+---
+
 ## [6.183.0] - 2026-05-25
 
 ### Added — Bullet-reflecting enemy: the PRISM MIRROR (ENMY reflect slice)

@@ -22,6 +22,13 @@ import { applySuppression } from '../enemy/abilities/suppress-aura.js';
 // original is consumed. Gated on `enemy.reflects`, so this is a no-op for every
 // other enemy. Mirrors the routeBulletToBossPart weak-point pre-pass precedent.
 import { shouldReflect, makeReflectedBullet } from '../enemy/abilities/reflect.js';
+// SYS-4 / ENMY-09 — projectile absorption (DEVOURER). A bullet-vs-enemy pre-pass
+// (routeBulletToAbsorb, below) EATS a player bullet that flies into a devourer's
+// maw cone — the bullet deals NO damage, is consumed, and the enemy banks a
+// temporary shield. `consumeAbsorbShield` soaks incoming damage in the damage
+// path (alongside allyShieldMult). Gated on `enemy.eatsProjectiles` / `enemy.maw`,
+// so this is a no-op for every other enemy. Mirrors the reflect pre-pass.
+import { shouldAbsorb, absorbBullet, consumeAbsorbShield } from '../enemy/abilities/projectile-absorb.js';
 
 // 5.95.0 — Local mirror of MOBILE_ASTEROID_MAX_RADIUS from wave-manager.js.
 //   Duplicated here (rather than imported) because wave-manager.js bundles
@@ -691,6 +698,15 @@ export function handleCollisions() {
         // `enemy.reflects`, so for every non-mirror enemy the scan finds nothing
         // and returns false — a byte-for-byte no-op for today's roster.
         if (routeBulletToReflect.call(this, bullet)) continue;
+        // ENMY-09 — absorb pre-pass (DEVOURER). Runs AFTER boss-part + reflect
+        // routing; the three are disjoint (a boss part / a mirror / a devourer
+        // are different enemies). If a devourer's maw cone eats this bullet, it's
+        // consumed here (the devourer banks a shield, NO new bullet spawned) and
+        // we move to the next bullet, so the normal enemy-damage path below is
+        // skipped. Gated on `enemy.eatsProjectiles`, so for every non-devourer
+        // enemy the scan finds nothing and returns false — a byte-for-byte no-op
+        // for today's roster.
+        if (routeBulletToAbsorb.call(this, bullet)) continue;
         const nearbyEn = this.spatialGrid.retrieve(bullet);
         for (let j = nearbyEn.length - 1; j >= 0; j--) {
             const enemy = nearbyEn[j];
@@ -2521,6 +2537,16 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
         }
     }
 
+    // ENMY-09 — DEVOURER banked ABSORB SHIELD. Soak the FINAL post-resist /
+    // post-armor / post-frontalShield / post-allyShield `damage` against any
+    // active banked shield BEFORE it hits HP: only the leftover passthrough
+    // wounds the enemy. Placed last so the shield drains in true (already-
+    // mitigated) damage units — no double-counting with the multipliers above.
+    // consumeAbsorbShield returns `damage` UNCHANGED when there is no live shield
+    // (expired or absent), so this is a no-op for every non-devourer enemy and
+    // for a devourer whose shield has lapsed.
+    damage = consumeAbsorbShield(enemy, damage, frameClock.now);
+
     enemy.health -= damage;
     enemy.health = Math.max(0, Math.min(enemy.health, enemy.maxHealth));
 
@@ -2732,6 +2758,78 @@ export function routeBulletToReflect(bullet) {
         // Consume the player bullet — start its disappear puff + deactivate, the
         // same end-of-life path a natural-expiry / despawn bullet takes. The
         // mirror takes NO damage (we return before the normal hit path).
+        if (typeof bullet.startDying === 'function') bullet.startDying(bullet.x, bullet.y);
+        else bullet.active = false;
+        return true;
+    }
+    return false;
+}
+
+// ENMY-09 — route a player bullet onto an absorbing enemy (DEVOURER).
+//
+// A "devourer" enemy holds a MAW CONE (`enemy.maw`) and the
+// `enemy.eatsProjectiles` flag. This pre-pass — modeled on routeBulletToReflect
+// — scans active enemies and, for the FIRST one whose maw cone this bullet sits
+// inside (`shouldAbsorb`, which also rejects beams / melee / bypass shots), EATS
+// the shot:
+//   • banks a temporary shield onto the enemy via absorbBullet (clamped to
+//     maw.maxShield, stamped to lapse after SHIELD_DURATION_MS). The shield is
+//     soaked against incoming damage in applyDamageToEnemy (consumeAbsorbShield).
+//   • paints a small absorb-spark FX — a few sparks pulled IN toward the maw
+//     (reuses particlePool like routeBulletToReflect / routeBulletToBossPart),
+//     reading as the bullet being "swallowed" rather than a bounce-out.
+//   • CONSUMES the player bullet (startDying → disappear puff + deactivate) and
+//     returns true so the caller skips the normal enemy-damage path — the
+//     devourer takes NO damage from a shot that flew into its mouth, and (unlike
+//     reflect) NO new bullet is spawned: the shot is simply eaten.
+// A bullet from OUTSIDE the maw cone (or a beam/melee) is NOT absorbed → false →
+// the normal damage path runs, so the devourer is killable from the flank, by
+// beams, or once its banked shield is depleted. Gated on `enemy.eatsProjectiles`,
+// so with no devourer on the field the scan finds nothing and returns false
+// (byte-for-byte no-op for the current roster).
+//
+// ORDER among the three bullet pre-passes (boss-part → reflect → absorb): they
+// are mutually disjoint — a boss weak-point, a PRISM_MIRROR reflector, and a
+// DEVOURER are three different enemies, so a bullet can match at most one. Absorb
+// runs LAST simply as the newest slice; placement among the three doesn't change
+// behavior because no enemy is two of the three at once.
+export function routeBulletToAbsorb(bullet) {
+    const pool = this.enemyPool;
+    if (!pool || !pool.activeObjects || !bullet || !bullet.active) return false;
+    const now = frameClock.now;
+    // Beams/melee never enter the bullet pool, but guard defensively anyway:
+    // shouldAbsorb rejects them too (and bypass shots).
+    for (const enemy of pool.activeObjects) {
+        // Only live, fightable devourers — skip warping / dying / intro, same
+        // exclusions the normal hit loop + reflect pre-pass use for an Enemy.
+        if (!enemy || !enemy.eatsProjectiles || !enemy.active) continue;
+        if (enemy.warping || enemy._deathFlash > 0) continue;
+        if (introBlocksDamage(enemy)) continue;
+        if (!shouldAbsorb(enemy, bullet, now)) continue;
+
+        // Eat the bullet → bank a temporary shield (clamped to maw.maxShield,
+        // lapse stamp set). No reflected bullet is spawned — the shot is simply
+        // swallowed; the banked shield is the payoff the damage path reads.
+        absorbBullet(enemy, bullet, now);
+
+        // Absorb-spark FX — a few sparks pulled IN toward the maw (the bullet
+        // being swallowed). Same particlePool path as the reflect spark, but the
+        // sparks are seeded at the bullet and aimed back at the enemy so they
+        // read as inhaled rather than bounced.
+        if (this.particlePool) {
+            const c = enemy.glowColor || enemy.color || '#a060ff';
+            const toMaw = Math.atan2(enemy.y - bullet.y, enemy.x - bullet.x);
+            for (let p = 0; p < 5; p++) {
+                const a = toMaw + random(-0.5, 0.5);
+                const sp = random(2, 5);
+                this.particlePool.get(bullet.x, bullet.y, 'explosionShrapnel', a, sp,
+                    p < 2 ? '#ffffff' : c);
+            }
+        }
+
+        // Consume the player bullet — start its disappear puff + deactivate, the
+        // same end-of-life path a natural-expiry / despawn bullet takes. The
+        // devourer takes NO damage (we return before the normal hit path).
         if (typeof bullet.startDying === 'function') bullet.startDying(bullet.x, bullet.y);
         else bullet.active = false;
         return true;

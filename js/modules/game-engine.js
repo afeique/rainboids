@@ -2777,6 +2777,26 @@ export class GameEngine {
         return wave.requestEnemySpawn.call(this, 'PRISM_MIRROR', cx, cy, { cap: 9999 });
     }
 
+    // ENMY-09 — DEBUG HOOK. Force-spawn a DEVOURER (maw-cone projectile-eater /
+    // shield-soaker) on demand for QA + manual testing, mirroring spawnPrismMirror.
+    // Spawns ~260px off the player (or viewport center), no warp, instantly
+    // fightable. Returns the enemy (carrying a `maw` config + `eatsProjectiles`
+    // flag), or null if the pool is dry.
+    //   gameEngine.spawnDevourer()  or  gameEngine.spawnDevourer({ x, y })
+    spawnDevourer(opts = {}) {
+        // Default to ~260px off the player (or viewport center) so the freshly
+        // spawned devourer doesn't immediately ram the ship and die before QA can
+        // observe its maw absorb. Explicit opts.x/opts.y override.
+        const baseX = this.player ? this.player.x
+            : (this.camera ? this.camera.x + this.width / 2 : (this.gameField ? this.gameField.width / 2 : 600));
+        const baseY = this.player ? this.player.y
+            : (this.camera ? this.camera.y + this.height / 2 : (this.gameField ? this.gameField.height / 2 : 400));
+        const cx = (opts.x != null) ? opts.x : baseX + 260;
+        const cy = (opts.y != null) ? opts.y : baseY - 180;
+        // Bypass the concurrent-spawn cap for the debug hook (huge cap).
+        return wave.requestEnemySpawn.call(this, 'DEVOURER', cx, cy, { cap: 9999 });
+    }
+
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }

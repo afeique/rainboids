@@ -695,6 +695,36 @@ export const ENEMY_TYPES = {
         visual: { shape: 'shield_turret', glowColor: '#ffb0ee', trailLength: 14 },
         ai: { evasion: 0.4, preferredRange: 300, dodgeBullets: true, microMovements: true, fishMotion: true },
     },
+
+    // SYS-4 / ENMY-09 — DEVOURER: a slow, beefy Void DAMAGE-SOAKER with a MAW
+    // CONE (projectile-absorb.js). Player bullets that fly into its maw (a wide
+    // cone, ~120°, facing the player each frame) are EATEN — they deal NO damage
+    // and the devourer banks a small TEMPORARY shield (clamped to maxShield) that
+    // soaks incoming damage in the damage path until it lapses. So feeding it
+    // shots only walls it harder; the player must instead flank it / hit it from
+    // outside the maw cone, melt it with a BEAM (beams BYPASS the maw), or burst
+    // it down faster than its banked shield can soak. The `maw: true` marker
+    // tells initializeEnemy to attach a fresh MAW_DEFAULTS-merged config; the
+    // cone faces the player each frame (enemy.update). High HP + slow standoff so
+    // it lumbers in and presents its mouth rather than darting.
+    DEVOURER: {
+        name: 'Devourer',
+        color: '#a060ff',
+        health: 28,
+        speed: 1.3,
+        size: 44,
+        shootPattern: 'hunter_single',
+        shootRate: 0.14,
+        movePattern: 'keep_distance',
+        points: 240,
+        maw: true,                 // → initializeEnemy attaches the maw config
+        // ~60° half-angle (120° mouth), 140px reach, +3 shield/bullet up to 40.
+        mawOpts: { halfAngleRad: Math.PI / 3, range: 140, shieldPerBullet: 3, maxShield: 40 },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.06, rotationSpeed: { min: -0.008, max: 0.008 }, preferredDistance: 280 },
+        firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 5800 } },
+        visual: { shape: 'shield_turret', glowColor: '#c08aff', trailLength: 16 },
+        ai: { evasion: 0.25, preferredRange: 280, dodgeBullets: false, microMovements: true, fishMotion: true },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -723,6 +753,7 @@ const ENEMY_ELEMENTS = {
     WRAITHWORM:  'VOLT',    // ENMY-07 — blink/burrow Volt skirmisher
     NULL_DRONE:  'VOLT',    // ENMY-10 — skill-suppress Volt support drone
     PRISM_MIRROR: 'RADIANT', // ENMY-04 — front-arc Radiant reflector
+    DEVOURER:    'VOID',     // ENMY-09 — maw-cone Void projectile-eater / soaker
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -752,6 +783,7 @@ const ENEMY_RESISTS = {
     WRAITHWORM:  { VOLT: 0.40, CRYO: -0.50 },                  // ENMY-07 — Volt-tough burrower; Cryo CHILLs it so it can't blink away
     NULL_DRONE:  { VOLT: 0.40, RADIANT: -0.50 },               // ENMY-10 — Volt-tough support drone; Radiant snuffs the suppress aura
     PRISM_MIRROR: { RADIANT: 0.50, VOID: -0.50 },              // ENMY-04 — Radiant-tough mirror (bounces its own light back); Void shatters the glass
+    DEVOURER:    { VOID: 0.50, RADIANT: -0.50 },               // ENMY-09 — Void-tough maw (it IS the hungry dark); RADIANT light burns through the throat
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit
