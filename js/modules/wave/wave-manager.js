@@ -158,9 +158,10 @@ export function updateWaveSystem() {
         // never actually fired in-game. Now it always does, on every
         // wave clear, before the shop opens.
         const clearedWave = this.game.currentWave;
-        // 6.1.0 — Stage clears (every 3rd wave) get a meaty gold bonus
-        // AND the survivor card. Mid-stage waves get a smaller bonus
-        // and no card so the stage clear feels meaningfully bigger.
+        // 6.1.0 — Stage clears (every Nth wave, N = wavesPerStage) get a
+        // meaty gold bonus; non-final stage clears ALSO get the survivor
+        // card (see isCardStage). Mid-stage waves get a smaller bonus and
+        // no card so the stage clear feels meaningfully bigger.
         const stageClear = isStageClear(clearedWave, runWavesPerStage(this.game));
         // P3 — unlock passive slots progressively on stage clears. maxSlots +
         // the unlock cadence scale with the run length (round-3 §11.A).
@@ -175,10 +176,11 @@ export function updateWaveSystem() {
         this.player.gainExperience(bonusXP);
         this.game.money += bonusCoins;
         const _mob = isMobile();
-        // Phase R3 — the card draft now fires on 5 stages per run (every 2nd
-        // stage clear: waves 6/12/18/24/30), not on every stage. Odd stage
-        // clears still grant the bigger gold bonus + the boss, just no card.
-        const survivorWave = isCardStage(clearedWave);
+        // RUN-01b — the card draft fires on EVERY stage clear EXCEPT the final
+        // stage (runConfig-aware → default 10×3 run: waves 3,6,…,27 but NOT
+        // wave 30, the run-ending boss). Cards-per-run = stages − 1 (default 9).
+        // The final stage clear still grants the gold bonus + boss, just no card.
+        const survivorWave = isCardStage(clearedWave, this.game);
 
         // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
         // the bonus gold + pick info to the message renderer.
@@ -200,8 +202,8 @@ export function updateWaveSystem() {
         this.showWaveComplete();
 
         // 5.74.2 — wave clear no longer auto-opens the shop. Instead the
-        // survivor-card overlay (every 3rd wave, 5.101.0) opens for the
-        // pick. 2.7s gap lets the WAVE COMPLETE banner read first.
+        // survivor-card overlay (on card stages — see isCardStage) opens for
+        // the pick. 2.7s gap lets the WAVE COMPLETE banner read first.
         // 5.101.0 — Off-cadence waves auto-advance into the next wave
         // without interrupting the player. The pause-menu POWERUPS tab
         // is still reachable any time via ESC for SP spending.

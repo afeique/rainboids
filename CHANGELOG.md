@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.174.0] - 2026-05-25
+
+### Changed — Card draft fires on every stage except the last (RUN-01b)
+
+The per-run card draft now appears on **every stage clear except the final
+stage** (the last stage ends the run), instead of every 2nd stage. Cards-per-run
+= `stages − 1`, and the cadence is **runConfig-aware** (RUN-01a):
+
+- Default 10×3 run: cards on stage clears at waves 3, 6, 9, … 27 (9 cards),
+  **not** wave 30. (Was 5 cards on waves 6/12/18/24/30.)
+- A longer run yields proportionally more cards (e.g. a 20-stage run → 19).
+- `isCardStage(wave, game)` and new `cardsPerRun(game)` read `getRunConfig`;
+  `CARDS_PER_RUN` updated to the new default (9).
+
+More frequent cards is intentional — it leans into the no-downsides power-fantasy
+pillar, with the Adaptive Difficulty Director (RUN-04) compensating for the extra
+player power. Elite-wave injection (the other half of the original RUN-01 line)
+is deferred to the wave composer — no elite mechanic exists yet.
+
 ## [6.173.0] - 2026-05-25
 
 ### Added — Configurable run length: `runConfig` plumbing (RUN-01a)

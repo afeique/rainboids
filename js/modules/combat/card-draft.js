@@ -1,7 +1,11 @@
-// Phase R3 / W4 — the per-run CARD draft. A relevance-filtered powerup pick
-// shown at 5 stage-clears per run (every 2nd of the 10 stages). Each draft
-// offers 1 PRIMARY + 1 POWER + 2 ABILITY cards, filtered to the equipped
-// loadout, so a card is never offered for a weapon/ability you aren't carrying.
+// Phase R3 / W4 / RUN-01b — the per-run CARD draft. A relevance-filtered
+// powerup pick shown on EVERY stage clear EXCEPT the final stage (the last
+// stage ends the run, so there's no point drafting after it). Cards-per-run
+// therefore = stages − 1 (default 10×3 run → 9 cards, on stage clears at
+// waves 3,6,9,…,27 but NOT wave 30). The cadence is runConfig-aware: a longer
+// run (e.g. 20×6) simply yields more cards (19). Each draft offers 1 PRIMARY +
+// 1 POWER + 2 ABILITY cards, filtered to the equipped loadout, so a card is
+// never offered for a weapon/ability you aren't carrying.
 //
 // W4 — cards are EFFICACY-ONLY: mechanic mods (pierce/explode/home/stun/knock +
 // capstones) are excluded here because they're upfront BUILD-tree picks (W3/W5).
@@ -10,10 +14,14 @@
 // Pure helpers (no DOM) so the pool-building + composition are unit-testable;
 // wave-manager renders the chosen cards via the existing #wave-pick-overlay.
 
-import { getStage, isStageClear } from '../core/constants.js';
+import { getStage, isStageClear, getRunConfig } from '../core/constants.js';
 import { isMechanicMod } from './weapon-data.js';
 
-export const CARDS_PER_RUN = 5;
+// Default cards-per-run alias = stages − 1 for the canonical 10×3 run.
+// RUN-01b: prefer cardsPerRun(game) for the real, runConfig-aware total;
+// this const is just the documented default (was 5 under the old "every
+// 2nd stage" cadence, now 9 under "every stage except the last").
+export const CARDS_PER_RUN = getRunConfig(undefined).stages - 1; // 9
 export const CARD_PRIMARY_COUNT = 1;
 export const CARD_POWER_COUNT = 1;
 export const CARD_ABILITY_COUNT = 2;
@@ -21,9 +29,19 @@ export const CARD_TARGET = CARD_PRIMARY_COUNT + CARD_POWER_COUNT + CARD_ABILITY_
 // Back-compat alias (old name) — total weapon cards = primary + power.
 export const CARD_WEAPON_COUNT = CARD_PRIMARY_COUNT + CARD_POWER_COUNT;
 
-/** Card stages = every 2nd stage clear (2,4,6,8,10) → 5 drafts per run. */
-export function isCardStage(wave) {
-    return isStageClear(wave) && (getStage(wave) % 2 === 0);
+/**
+ * Card stages = every stage clear EXCEPT the final stage. runConfig-aware:
+ * with no `game` it resolves to the default 10×3 run (cards on stage clears
+ * at waves 3,6,…,27, NOT wave 30). A 20×6 run fires on stages 1–19, not 20.
+ */
+export function isCardStage(wave, game) {
+    const { stages, wavesPerStage: wps } = getRunConfig(game);
+    return isStageClear(wave, wps) && getStage(wave, wps) < stages;
+}
+
+/** Total card drafts a run offers = stages − 1 (runConfig-aware; default → 9). */
+export function cardsPerRun(game) {
+    return Math.max(0, getRunConfig(game).stages - 1);
 }
 
 function notMaxed(player, id, cfg) {

@@ -2,7 +2,7 @@
 // W4: cards are EFFICACY-ONLY (mechanic mods excluded — they're upfront) and
 // the draft is 1 primary + 1 power + 2 ability.
 import {
-    isCardStage, weaponCards, primaryCards, powerCards, abilityCards,
+    isCardStage, cardsPerRun, weaponCards, primaryCards, powerCards, abilityCards,
     composeDraft, buildDraft,
     CARDS_PER_RUN, CARD_PRIMARY_COUNT, CARD_POWER_COUNT, CARD_ABILITY_COUNT, CARD_TARGET,
 } from '../../js/modules/combat/card-draft.js';
@@ -31,16 +31,46 @@ const player = (over = {}) => ({
     ...over,
 });
 
-describe('Card draft — cadence', () => {
-    test('fires at every 2nd stage clear (waves 6,12,18,24,30 = 5 drafts)', () => {
+describe('Card draft — cadence (RUN-01b: every stage clear except the last)', () => {
+    test('default 10×3 run fires on stage clears 3,6,…,27 but NOT wave 30', () => {
         const fires = [];
         for (let w = 1; w <= 30; w++) if (isCardStage(w)) fires.push(w);
-        expect(fires).toEqual([6, 12, 18, 24, 30]);
+        expect(fires).toEqual([3, 6, 9, 12, 15, 18, 21, 24, 27]); // 9 drafts
         expect(fires.length).toBe(CARDS_PER_RUN);
+        expect(isCardStage(30)).toBe(false); // final stage clear → no card
     });
     test('does not fire mid-stage', () => {
+        expect(isCardStage(1)).toBe(false);
+        expect(isCardStage(2)).toBe(false);
         expect(isCardStage(5)).toBe(false);
         expect(isCardStage(7)).toBe(false);
+    });
+    test('cardsPerRun(default) === 9 (stages − 1) and matches CARDS_PER_RUN', () => {
+        expect(cardsPerRun()).toBe(9);
+        expect(cardsPerRun(undefined)).toBe(9);
+        expect(CARDS_PER_RUN).toBe(9);
+    });
+
+    describe('non-default runConfig (20×6)', () => {
+        const game = { runConfig: { stages: 20, wavesPerStage: 6 } };
+        test('fires on the 19th-stage clear (wave 114) but not the 20th (wave 120)', () => {
+            // Stage clears land on multiples of 6: 6,12,…,114 (stages 1–19), 120 (stage 20).
+            expect(isCardStage(114, game)).toBe(true);  // stage 19 clear → card
+            expect(isCardStage(120, game)).toBe(false); // stage 20 (final) clear → no card
+            expect(isCardStage(6, game)).toBe(true);    // stage 1 clear → card
+            expect(isCardStage(7, game)).toBe(false);   // mid-stage → no card
+        });
+        test('fires on every stage clear except the final one (19 drafts)', () => {
+            const fires = [];
+            for (let w = 1; w <= 120; w++) if (isCardStage(w, game)) fires.push(w);
+            expect(fires.length).toBe(19);
+            expect(fires[0]).toBe(6);
+            expect(fires[fires.length - 1]).toBe(114);
+            expect(fires).not.toContain(120);
+        });
+        test('cardsPerRun(20×6) === 19 (stages − 1)', () => {
+            expect(cardsPerRun(game)).toBe(19);
+        });
     });
 });
 
