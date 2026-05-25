@@ -10,7 +10,29 @@ Task IDs are `DOMAIN-NN`. Domains: **BOSS · ENMY · SKILL · ITEM · META · RU
 
 ---
 
-# ★ DIR — Director & Adaptive Difficulty: full §14 model *(TOP PRIORITY — authoritative)*
+# ▶▶ ADAPTIVE-DIFFICULTY IMPROVEMENT ROADMAP (priority order)
+From the `Director & Codebase Audit – 2026-05-25` report. The core design is validated; these make it *better*. Execute top→bottom:
+0. **FIX** — quick correctness fixes (rate-limit breach, signal guards, reflect range, etc.) — cheap, each its own PATCH, **mostly parallel**. ↓ below.
+1. **DIR ∥J/∥K** — structural core: PWR estimator + absolute baseline + **PWR pre-load** + §14 control-loop refactor (kills the ~9.7-wave ramp lag + deep-run saturation). ↓ DIR section.
+2. **DIR ∥L** — surfacing (PWR HUD, reference-clear, mode + mode-gated rewards) + **density/composer** (RUN-05b / DIR-10: spread pressure across count+elites, not just HP — the channel-coverage fix + the "spectacle not sponges" win).
+3. **Signals & calibration** — CD-17 telemetry + RUN-07 balance pass (calibrate every §14.6 constant against real play) — **after the CD no-downsides track lands** (CD is the prerequisite for safely tuning the threat axis: per-hit cap + Bloodshield).
+
+---
+
+# ★★ FIX — quick correctness fixes *(PRIORITY 0 — do first; cheap; each its own PATCH + test)*
+Audit detail + verified line numbers: `docs/Bug-Pass Audit — Findings & Fixes – 2026-05-25.md` + the synthesis report. **∥group X — all disjoint files, dispatch together.**
+| ID | FILE (owned) | DOES | ∥ |
+|----|----|----|----|
+| FIX-01 | `wave/difficulty-director.js` + `tests/unit/difficulty-director.test.js` | **Rate-limit breach** — `updateDifficulty` rate-limits *per block*, so deadband-step + escalation `stomp` bump (and deadband + mercy ease) compound to ~±25%/wave vs the documented ≤12%. Snapshot `D_hp`/`D_thr` at entry; apply all of deadband/cross-term/mercy/escalation; then clamp the **NET** per-wave change to ±`maxStep` once at the end. Unit-test: no axis moves >maxStep in one `updateDifficulty` under ANY combo (deadband+stomp, deadband+mercy, stomp+cross-term) | X |
+| FIX-02 | `wave/wave-manager.js` (director-feed + boss-gold) | **(M2) Po-spike guard:** in `feedDirectorOnWaveClear`/`buildDirectorOutcome`, if `_waveStartMs` is unset/0, treat as no-signal — default `actualClearTime = targetClearTime` (neutral ratio) instead of clamping to 1 ms. **(M1) boss-gold wps:** line ~1804 `isBossWave(justCleared)` → `isBossWave(justCleared, runWavesPerStage(this.game))`. Unit/QA as feasible | X |
+| FIX-03 | `enemy/abilities/reflect.js` + `enemy/enemy-data.js` + `tests/qa/25-reflect.spec.js` + unit test | **(H1) reflect range gate** — `bulletInReflectArc` tests angle only (the maw sibling gates `range`); a mirror reflects bullets anywhere in its 120° arc across the field. Add `range` to `REFLECT_DEFAULTS` (~120) + `PRISM_MIRROR.reflectOpts`; short-circuit `dist2 > range²` (keep the degenerate on-top check). Add a "far in-arc bullet NOT reflected" QA case + unit test | X |
+| FIX-04 | `player/progression.js` + `enemy/enemy-bullet.js` | **(L3)** `addPowerup` `return true` on the success path (currently `undefined`). **(L5)** add `this.reflected = false;` to `EnemyBullet.reset()` (latent pool-reuse footgun). Tiny hygiene; extend a unit test if a natural one exists | X |
+
+*(H2 run-config boss path → folds into **RUN-05b** composer (P5); interim: RUN SETUP could clamp `runMaxWaves ≤ 30`. L4/L6/D1/D2 → RUN-07 tuning.)*
+
+---
+
+# ★ DIR — Director & Adaptive Difficulty: full §14 model *(PRIORITY 1 — authoritative)*
 
 **Authoritative spec:** `Passive Skills & Run Difficulty – 2026-05-24` **§14** (PWR §14.1 · control loop §14.2 · composer §14.3 · reward §14.4 · baseline §14.5 · constants §14.6 · mode-gating §14.7). Cross-ref Balance Model §6/§6b and `Tuning the Flow Channel`.
 
