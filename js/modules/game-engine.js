@@ -31,7 +31,7 @@ import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout } from './shop/armory.js';
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
-import { MAX_STAGES } from './core/constants.js';
+import { MAX_STAGES, DEFAULT_RUN_CONFIG, runMaxWaves } from './core/constants.js';
 import { GameStateMachine } from './core/game-state.js';
 import { EventBus } from './core/event-bus.js';
 import { GameTimer } from './core/game-timer.js';
@@ -591,6 +591,12 @@ export class GameEngine {
             survivalRecord: parseInt(localStorage.getItem('rainboidsSurvivalRecord')) || 0, // Best survival time
             gameStartTime: 0, // When the current game started
             currentWave: 0,
+            // RUN-01a — run shape (stages × wavesPerStage). Defaults to the
+            // canonical 10 × 3 = 30-wave campaign so all wave math is
+            // behavior-identical until the RUN-06 UI lets players choose.
+            // A new run re-asserts this in init(); CONTINUE restores the
+            // saved value (or this default for pre-RUN-01a saves).
+            runConfig: { ...DEFAULT_RUN_CONFIG },
             screenShakeDuration: 0,
             screenShakeMagnitude: 0,
             enemyLevel: 1,    // Enemy level increases each wave
@@ -1162,6 +1168,10 @@ export class GameEngine {
 
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
+        // RUN-01a — a NEW run always uses the default run shape (10 × 3).
+        // The RUN-06 UI will let players pick other values; for now this
+        // keeps every new run on the canonical 30-wave campaign.
+        this.game.runConfig = { ...DEFAULT_RUN_CONFIG };
         this.game.waveComplete = false;
         // 5.88.0 — `updateLives` removed; tanks are rendered on the canvas.
         this.game.state = GAME_STATES.WAVE_TRANSITION;
@@ -1305,6 +1315,12 @@ export class GameEngine {
         return {
             // Engine-side run fields
             wave: this.game.currentWave | 0,
+            // RUN-01a — persist the run shape so CONTINUE resumes with the
+            // same stages × wavesPerStage the run was started with. Old
+            // saves lack this; restoreRunState defaults them to 10 × 3.
+            runConfig: this.game.runConfig
+                ? { stages: this.game.runConfig.stages | 0, wavesPerStage: this.game.runConfig.wavesPerStage | 0 }
+                : { ...DEFAULT_RUN_CONFIG },
             money: this.game.money | 0,
             // 5.88.0 — `lives` removed; energy tanks are now serialized via
             // `engineTanks` below (the runtime owner is `this.healthTanks`,
@@ -1360,6 +1376,19 @@ export class GameEngine {
         if (!p) return false;
         // Engine-side
         this.game.currentWave = Math.max(1, snap.wave | 0);
+        // RUN-01a — restore the run shape. Pre-RUN-01a saves have no
+        // runConfig → default to the canonical 10 × 3 so CONTINUE still
+        // works for existing saves. Guard stages/wavesPerStage to ≥ 1.
+        if (snap.runConfig
+            && typeof snap.runConfig.stages === 'number'
+            && typeof snap.runConfig.wavesPerStage === 'number') {
+            this.game.runConfig = {
+                stages: Math.max(1, snap.runConfig.stages | 0),
+                wavesPerStage: Math.max(1, snap.runConfig.wavesPerStage | 0),
+            };
+        } else {
+            this.game.runConfig = { ...DEFAULT_RUN_CONFIG };
+        }
         this.game.money = Math.max(0, snap.money | 0);
         // 5.88.3 — energy-tank restore. `engineTanks` is the new field
         // (= spare count, 0..3). Older saves with `lives` (1..3) map 1:1.
@@ -1425,8 +1454,9 @@ export class GameEngine {
         // Realign asteroid+enemy level for the resumed wave.
         try {
             const { getEnemyLevel, getAsteroidLevel } = wave;
-            if (typeof getEnemyLevel === 'function') this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level);
-            if (typeof getAsteroidLevel === 'function') this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
+            const _mw = runMaxWaves(this.game);
+            if (typeof getEnemyLevel === 'function') this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level, _mw);
+            if (typeof getAsteroidLevel === 'function') this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave, _mw);
         } catch {}
         // HUD refresh — tanks render straight from `this.healthTanks` on
         // the canvas, so there's no DOM update to dispatch here.

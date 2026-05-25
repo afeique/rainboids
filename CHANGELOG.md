@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.173.0] - 2026-05-25
+
+### Added — Configurable run length: `runConfig` plumbing (RUN-01a)
+
+Introduces the data model + accessors for player-set run length (stages ×
+waves-per-stage), replacing hardcoded `MAX_WAVES=30` reads throughout the wave
+system. **Behavior-preserving:** the default is the canonical 10 × 3 = 30-wave
+campaign, so a default run is byte-for-byte identical to before (proven by the
+full suite staying green with zero existing-test edits).
+
+- `core/constants.js`: `DEFAULT_RUN_CONFIG` (10 × 3) + pure accessors
+  `getRunConfig`/`runMaxWaves`/`runWavesPerStage` (guard non-numeric/sub-1).
+  Stage helpers (`getStage`/`getSubWaveIndex`/`isStageClear`/`getStageLabel`)
+  gained an optional `wavesPerStage` param; the single-arg form is unchanged.
+- `wave-data.js`: `isBossWave(wave, wavesPerStage)` now derives the boss as the
+  last wave of each stage (`wave % wavesPerStage === 0`); the scaling/curve
+  functions (`getWaveConfig`, `getEnemyLevel`, `getAsteroidLevel`,
+  `getEnemySpeed/BulletSpeedMultiplier`, `getLevelScaledEnemyStats`) gained an
+  optional `maxWaves` param so longer runs stretch the curve over the real run
+  length. All defaults = `MAX_WAVES`.
+- `wave-manager.js`: run-complete now reads `runMaxWaves(game)`; every live
+  caller threads the run-aware `wavesPerStage`/`maxWaves`.
+- `game-engine.js`: `game.runConfig` initialized to the default at construction
+  and on each new run; persisted in the run save and restored on CONTINUE
+  (pre-RUN-01a saves default to 10 × 3).
+
+Card cadence, elite injection, and the RUN SETUP UI are intentionally out of
+scope (RUN-01b / RUN-06). Coverage: +28 unit tests (1372 total); boss + HUD QA
+green.
+
 ## [6.172.0] - 2026-05-24
 
 ### Added — Threat-Level HUD (CD-16 / T15, R-THREATUI)

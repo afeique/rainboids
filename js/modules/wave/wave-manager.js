@@ -5,7 +5,7 @@
  * via `.call(gameEngine)`. This is Phase 3 strangler-fig extraction.
  */
 
-import { GAME_CONFIG, GAME_STATES, MAX_WAVES, MAX_STAGES, WAVES_PER_STAGE, getEnemyFiringCooldown, getStage, getSubWaveIndex, isStageClear, getStageLabel } from '../core/constants.js';
+import { GAME_CONFIG, GAME_STATES, MAX_WAVES, MAX_STAGES, WAVES_PER_STAGE, getEnemyFiringCooldown, getStage, getSubWaveIndex, isStageClear, getStageLabel, getRunConfig, runMaxWaves, runWavesPerStage } from '../core/constants.js';
 import { passiveSlotsUnlockedAfter } from '../combat/passive-data.js';
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
@@ -161,13 +161,13 @@ export function updateWaveSystem() {
         // 6.1.0 — Stage clears (every 3rd wave) get a meaty gold bonus
         // AND the survivor card. Mid-stage waves get a smaller bonus
         // and no card so the stage clear feels meaningfully bigger.
-        const stageClear = isStageClear(clearedWave);
+        const stageClear = isStageClear(clearedWave, runWavesPerStage(this.game));
         // P3 — unlock passive slots progressively on stage clears. maxSlots +
-        // the unlock cadence scale with the run length (round-3 §11.A). Reads
-        // runConfig.stages once Phase X lands; until then the fixed MAX_STAGES.
+        // the unlock cadence scale with the run length (round-3 §11.A).
+        // RUN-01a — totalStages now reads the runConfig (default → MAX_STAGES).
         if (stageClear && this.player && typeof this.player.setPassiveSlotsUnlocked === 'function') {
-            const totalStages = (this.game.runConfig && this.game.runConfig.stages) || MAX_STAGES;
-            this.player.setPassiveSlotsUnlocked(passiveSlotsUnlockedAfter(getStage(clearedWave), totalStages));
+            const totalStages = getRunConfig(this.game).stages;
+            this.player.setPassiveSlotsUnlocked(passiveSlotsUnlockedAfter(getStage(clearedWave, runWavesPerStage(this.game)), totalStages));
         }
         const bonusXP = 40 + clearedWave * 15; // gainExperience is a no-op since 6.0.0; kept for back-compat
         const baseCoins = 50 + clearedWave * 25;
@@ -192,7 +192,7 @@ export function updateWaveSystem() {
             } : null,
         };
 
-        if (this.game.currentWave >= MAX_WAVES) {
+        if (this.game.currentWave >= runMaxWaves(this.game)) {
             this.completeRun();
             return;
         }
@@ -261,7 +261,7 @@ const MISSION_TEMPLATES = [
 export function startWaveMission() {
     // Boss waves get a fixed mission flavor; non-boss roll random.
     const wave = this.game.currentWave;
-    const isBoss = isBossWave(wave);
+    const isBoss = isBossWave(wave, runWavesPerStage(this.game));
     const tpl = isBoss
         ? MISSION_TEMPLATES[0]    // boss waves: take no damage (hard, but iconic)
         : MISSION_TEMPLATES[(Math.random() * MISSION_TEMPLATES.length) | 0];
@@ -370,7 +370,7 @@ export function showWaveComplete() {
     // Stage clears (1-3 / 2-3 / …) say "STAGE 1 CLEAR" with the
     // bigger gold bonus + survivor card hint. Mission ✓ / ✗ tag stays.
     const cleared = this.game.currentWave;
-    const isStage = isStageClear(cleared);
+    const isStage = isStageClear(cleared, runWavesPerStage(this.game));
     const r = this._waveClearRecap || { bonusCoins: 0, picks: 0, mission: null };
     const missionTag = !r.mission
         ? ''
@@ -380,7 +380,7 @@ export function showWaveComplete() {
                 ? ` · MISSION ✗`
                 : ` · MISSION —`;
     const title = isStage
-        ? `STAGE ${getStage(cleared)} CLEAR!`
+        ? `STAGE ${getStage(cleared, runWavesPerStage(this.game))} CLEAR!`
         : `WAVE CLEAR`;
     const subtitle = isStage
         ? `+${r.bonusCoins}G  ·  POWERUP INCOMING${missionTag}`
@@ -438,7 +438,7 @@ export function startNextWave() {
         active: true,
         startTime: Date.now(),
         duration: 2800,
-        title: `STAGE ${getStageLabel(this.game.currentWave)}`,
+        title: `STAGE ${getStageLabel(this.game.currentWave, runWavesPerStage(this.game))}`,
         subtitle: this.getWaveSubtitle(this.game.currentWave),
         phase: 'intro',
     };
@@ -495,10 +495,11 @@ export function startNextWave() {
 // remain (or after a 12s fallback timer). Wave only ends when all
 // sub-waves have been spawned AND the pool is empty.
 export function spawnWaveEntities() {
-    const waveConfig = getWaveConfig(this.game.currentWave);
+    const _mw = runMaxWaves(this.game);
+    const waveConfig = getWaveConfig(this.game.currentWave, _mw);
 
-    this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level);
-    this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
+    this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level, _mw);
+    this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave, _mw);
 
     // Reset sub-wave bookkeeping each wave start.
     this.game.subWaveIndex = 0;
@@ -529,7 +530,7 @@ export function spawnWaveEntities() {
 // Spawn the Nth sub-wave's enemy groups. Bumps `subWaveIndex` so the
 // pacing check in updateWaveSystem advances correctly.
 function spawnSubWave(idx) {
-    const waveConfig = getWaveConfig(this.game.currentWave);
+    const waveConfig = getWaveConfig(this.game.currentWave, runMaxWaves(this.game));
     const subWaves = waveConfig.subWaves
         || (waveConfig.enemies ? [waveConfig.enemies] : []); // back-compat
     const groups = subWaves[idx];
@@ -557,7 +558,7 @@ function spawnSubWave(idx) {
     if (idx > 0 && this.events?.emit) {
         const total = subWaves.length;
         this.events.emit('ui:show-message', {
-            title: `STAGE ${getStageLabel(this.game.currentWave)} · PHASE ${idx + 1} of ${total}`,
+            title: `STAGE ${getStageLabel(this.game.currentWave, runWavesPerStage(this.game))} · PHASE ${idx + 1} of ${total}`,
             subtitle: '',
             duration: 1600,
             position: 'top',
@@ -597,7 +598,7 @@ export function tryAdvanceSubWave() {
     const wave = this._waveState;
     if (wave.phase === 'intro' || wave.phase === 'complete') return false;
 
-    const cfg = getWaveConfig(this.game.currentWave);
+    const cfg = getWaveConfig(this.game.currentWave, runMaxWaves(this.game));
     const subWaves = cfg.subWaves || (cfg.enemies ? [cfg.enemies] : []);
     const totalSubWaves = subWaves.length;
     const enemyCount = this.enemyPool.activeObjects.length;
@@ -647,7 +648,7 @@ export function tryAdvanceSubWave() {
         }
         if (idx > 0 && this.events?.emit) {
             this.events.emit('ui:show-message', {
-                title: `STAGE ${getStageLabel(this.game.currentWave)} · PHASE ${idx + 1} of ${totalSubWaves}`,
+                title: `STAGE ${getStageLabel(this.game.currentWave, runWavesPerStage(this.game))} · PHASE ${idx + 1} of ${totalSubWaves}`,
                 subtitle: '',
                 duration: 1600,
                 position: 'top',
@@ -664,7 +665,7 @@ export function tryAdvanceSubWave() {
 
 // Returns true once every sub-wave for the current wave has been spawned.
 export function allSubWavesSpawned() {
-    const waveConfig = getWaveConfig(this.game.currentWave);
+    const waveConfig = getWaveConfig(this.game.currentWave, runMaxWaves(this.game));
     const subWaves = waveConfig.subWaves
         || (waveConfig.enemies ? [waveConfig.enemies] : []);
     return (this.game.subWaveIndex || 0) >= subWaves.length;
@@ -821,9 +822,10 @@ export function spawnModularBoss(which, opts = {}) {
 // from the boss-wave spawn path; a no-op on non-boss waves. `this` is the engine.
 export function spawnStageBoss() {
     const wave = this.game.currentWave | 0;
-    if (!isBossWave(wave)) return null;
+    const wps = runWavesPerStage(this.game);
+    if (!isBossWave(wave, wps)) return null;
     if (this._modularBossSpawnedWave === wave) return null; // already spawned this wave
-    const stage = getStage(wave);
+    const stage = getStage(wave, wps);
     const boss = spawnModularBoss.call(this, stage, { warp: true });
     if (boss) this._modularBossSpawnedWave = wave;
     return boss;
@@ -932,14 +934,15 @@ export function applyEnemyLevelScaling(enemy, opts = {}) {
     const baseStats = ENEMY_TYPES[enemy.type];
 
     // Apply level scaling
-    const scaledStats = getLevelScaledEnemyStats(baseStats, this.game.enemyLevel);
+    const _mw = runMaxWaves(this.game);
+    const scaledStats = getLevelScaledEnemyStats(baseStats, this.game.enemyLevel, _mw);
 
     // Campaign-wide speed ramps. Enemy MOVEMENT stays gentle on wave 1
     // (helps the player learn); enemy BULLET speed is decoupled and
     // starts at 1.15× — considerably faster than the old shared 0.55×
     // floor.
-    const campaignSpeedMul = getEnemySpeedMultiplier(this.game.currentWave);
-    const bulletSpeedMul = getEnemyBulletSpeedMultiplier(this.game.currentWave);
+    const campaignSpeedMul = getEnemySpeedMultiplier(this.game.currentWave, _mw);
+    const bulletSpeedMul = getEnemyBulletSpeedMultiplier(this.game.currentWave, _mw);
 
     enemy.health = scaledStats.health;
     enemy.maxHealth = scaledStats.health;
@@ -1001,8 +1004,9 @@ export function completeWave() {
     this.wavePhase = 'waiting';
 
     // Use canonical level formulas from wave-data.js
-    this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level);
-    this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave);
+    const _mw = runMaxWaves(this.game);
+    this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level, _mw);
+    this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave, _mw);
 
     // Wave clear bonus: XP + coins scale with wave number, plus a
     // free powerup pick (5.70.0) the player redeems in the shop.
@@ -1012,7 +1016,7 @@ export function completeWave() {
     this.player.gainExperience(bonusXP);
     this.game.money += bonusCoins;
     this.player.skillPoints += 1;
-    this.queueNotification(`STAGE ${getStageLabel(clearedWave)} CLEARED`,
+    this.queueNotification(`STAGE ${getStageLabel(clearedWave, runWavesPerStage(this.game))} CLEARED`,
         `+${bonusCoins} gold`, 2500);
 
     // Phase R2.3 — wave-milestone weapon unlocks RETIRED. Weapons/abilities
@@ -1066,7 +1070,7 @@ export function startNewWave() {
     this.spawnWaveAsteroids();
 
     // Show wave notification
-        this.events.emit('ui:show-message', { title: `STAGE ${getStageLabel(this.game.currentWave)}`, subtitle: '', duration: 7000, position: 'top' });
+        this.events.emit('ui:show-message', { title: `STAGE ${getStageLabel(this.game.currentWave, runWavesPerStage(this.game))}`, subtitle: '', duration: 7000, position: 'top' });
 
 
     } catch (error) {

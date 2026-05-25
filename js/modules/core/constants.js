@@ -345,18 +345,60 @@ export const BOSS_WAVES = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30];
 // produce sensible defaults under the new cadence.
 export const BOSS_WAVE_INTERVAL = WAVES_PER_STAGE;
 
-// Stage / sub-wave helpers — pure functions on wave number.
-export function getStage(wave) {
-    return Math.ceil(Math.max(1, wave | 0) / WAVES_PER_STAGE);
+// RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
+// The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
+// accessor below returns today's values when no runConfig is set.
+// runConfig is plumbing only this phase — the RUN-06 UI will let
+// players pick other values later; for now it is always the default.
+export const DEFAULT_RUN_CONFIG = { stages: MAX_STAGES, wavesPerStage: WAVES_PER_STAGE };
+
+// Pure: read a game-like object's runConfig, falling back to the
+// default. Guards against missing / non-numeric / sub-1 values so the
+// downstream math (runMaxWaves, the stage helpers) never produces NaN
+// or a zero-length run. NO side effects, NO game-state imports.
+export function getRunConfig(game) {
+    const rc = game && game.runConfig;
+    if (rc
+        && typeof rc.stages === 'number' && isFinite(rc.stages)
+        && typeof rc.wavesPerStage === 'number' && isFinite(rc.wavesPerStage)) {
+        return {
+            stages: Math.max(1, rc.stages | 0),
+            wavesPerStage: Math.max(1, rc.wavesPerStage | 0),
+        };
+    }
+    return DEFAULT_RUN_CONFIG;
 }
-export function getSubWaveIndex(wave) {
-    return ((Math.max(1, wave | 0) - 1) % WAVES_PER_STAGE) + 1; // 1..3
+
+// Total waves in the run = stages × wavesPerStage (default → 30).
+export function runMaxWaves(game) {
+    const rc = getRunConfig(game);
+    return rc.stages * rc.wavesPerStage;
 }
-export function isStageClear(wave) {
-    return (wave | 0) > 0 && ((wave | 0) % WAVES_PER_STAGE) === 0;
+
+// Convenience accessor for the per-stage wave count (default → 3).
+export function runWavesPerStage(game) {
+    return getRunConfig(game).wavesPerStage;
 }
-export function getStageLabel(wave) {
-    return `${getStage(wave)}-${getSubWaveIndex(wave)}`;
+
+// Stage / sub-wave helpers — pure functions on wave number. The
+// optional `wavesPerStage` param makes them runConfig-aware: callers
+// that pass `runWavesPerStage(game)` get a run-length-aware stage map.
+// The single-arg form defaults to WAVES_PER_STAGE (3) and is
+// byte-for-byte identical to the pre-RUN-01a behavior.
+export function getStage(wave, wavesPerStage = WAVES_PER_STAGE) {
+    const wps = Math.max(1, wavesPerStage | 0);
+    return Math.ceil(Math.max(1, wave | 0) / wps);
+}
+export function getSubWaveIndex(wave, wavesPerStage = WAVES_PER_STAGE) {
+    const wps = Math.max(1, wavesPerStage | 0);
+    return ((Math.max(1, wave | 0) - 1) % wps) + 1; // 1..wps
+}
+export function isStageClear(wave, wavesPerStage = WAVES_PER_STAGE) {
+    const wps = Math.max(1, wavesPerStage | 0);
+    return (wave | 0) > 0 && ((wave | 0) % wps) === 0;
+}
+export function getStageLabel(wave, wavesPerStage = WAVES_PER_STAGE) {
+    return `${getStage(wave, wavesPerStage)}-${getSubWaveIndex(wave, wavesPerStage)}`;
 }
 
 // 5.71.0 — Speedrun completion tiers. Finishing the 20-wave campaign

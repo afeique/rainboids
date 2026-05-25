@@ -17,7 +17,7 @@
 //   Stage  9 (9-1..9-3)  : Apocalypse      — peak density
 //   Stage 10 (10-1..10-3): The Last Stand  — finale; 10-3 = FINAL BOSS
 
-import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES } from '../core/constants.js';
+import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
 
 // 5.75.0 — Each wave is now a SEQUENCE of sub-waves instead of a single
@@ -309,8 +309,9 @@ function _scaleConfigForMobile(cfg, waveNumber) {
 // override + the live viewport state at module load).
 const _mobileWaveCache = new Map();
 
-export function getWaveConfig(waveNumber) {
-    const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
+export function getWaveConfig(waveNumber, maxWaves = MAX_WAVES) {
+    const mw = Math.max(1, maxWaves | 0);
+    const w = Math.max(1, Math.min(mw, waveNumber | 0));
     const base = WAVE_DATA[w] || WAVE_DATA[1];
     if (!isMobile()) return base;
     if (_mobileWaveCache.has(w)) return _mobileWaveCache.get(w);
@@ -319,9 +320,17 @@ export function getWaveConfig(waveNumber) {
     return scaled;
 }
 
-// Returns true when this wave is a scripted boss wave.
-export function isBossWave(waveNumber) {
-    return BOSS_WAVES.includes(waveNumber);
+// Returns true when this wave is a boss wave — the LAST wave of each
+// stage. RUN-01a: derived from `wavesPerStage` (boss is every multiple
+// of it) instead of the static BOSS_WAVES table, so longer / shorter
+// runs get bosses on their real stage finals. With the default
+// wavesPerStage=3 this yields exactly [3,6,9,...,30] — identical to the
+// BOSS_WAVES membership for waves 1..30. BOSS_WAVES stays exported for
+// any legacy reader; the live check routes through this param form.
+export function isBossWave(waveNumber, wavesPerStage = WAVES_PER_STAGE) {
+    const w = waveNumber | 0;
+    const wps = Math.max(1, wavesPerStage | 0);
+    return w > 0 && w % wps === 0;
 }
 
 // 1 → MAX_WAVES across the campaign so per-wave scaling formulas can
@@ -338,18 +347,21 @@ export function isBossWave(waveNumber) {
 export const ENEMY_LEVEL_BIAS_EARLY = -2; // wave 1: player level − 2
 export const ENEMY_LEVEL_BIAS_LATE  = 4;  // final wave: player level + 4
 const ENEMY_LEVEL_MAX = MAX_WAVES + 15;   // cap so high accounts stay bounded
-export function getEnemyLevel(waveNumber, playerLevel = 1) {
-    const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
-    const t = (w - 1) / Math.max(1, MAX_WAVES - 1);
+export function getEnemyLevel(waveNumber, playerLevel = 1, maxWaves = MAX_WAVES) {
+    const mw = Math.max(1, maxWaves | 0);
+    const w = Math.max(1, Math.min(mw, waveNumber | 0));
+    const t = (w - 1) / Math.max(1, mw - 1);
     const bias = ENEMY_LEVEL_BIAS_EARLY + t * (ENEMY_LEVEL_BIAS_LATE - ENEMY_LEVEL_BIAS_EARLY);
     const lvl = Math.round(Math.max(1, playerLevel | 0 || 1) + bias);
     return Math.max(1, Math.min(ENEMY_LEVEL_MAX, lvl));
 }
 
 // Asteroid level lifts every other wave (1,1,2,2,3,3,...) so rocks
-// don't outpace the player's weapon scaling.
-export function getAsteroidLevel(waveNumber) {
-    const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
+// don't outpace the player's weapon scaling. `maxWaves` clamps the
+// wave number to the real run length.
+export function getAsteroidLevel(waveNumber, maxWaves = MAX_WAVES) {
+    const mw = Math.max(1, maxWaves | 0);
+    const w = Math.max(1, Math.min(mw, waveNumber | 0));
     return Math.max(1, Math.ceil(w / 2));
 }
 
@@ -357,9 +369,10 @@ export function getAsteroidLevel(waveNumber) {
 // late waves climb fast. 5.101.0 — denominator now MAX_WAVES-1 so the
 // curve stretches across the full 30-wave campaign instead of saturating
 // by wave 20. Endpoints unchanged: wave 1 = 0.55×, final wave = 1.75×.
-export function getEnemySpeedMultiplier(waveNumber) {
-    const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
-    const t = (w - 1) / Math.max(1, MAX_WAVES - 1);
+export function getEnemySpeedMultiplier(waveNumber, maxWaves = MAX_WAVES) {
+    const mw = Math.max(1, maxWaves | 0);
+    const w = Math.max(1, Math.min(mw, waveNumber | 0));
+    const t = (w - 1) / Math.max(1, mw - 1);
     return 0.55 + Math.pow(t, 1.5) * 1.2;
 }
 
@@ -368,9 +381,10 @@ export function getEnemySpeedMultiplier(waveNumber) {
 // bullets fly at 1.15× base. Final wave climbs to 3.05×.
 // 5.101.0 — Same stretch as getEnemySpeedMultiplier — denominator is
 // now MAX_WAVES-1.
-export function getEnemyBulletSpeedMultiplier(waveNumber) {
-    const w = Math.max(1, Math.min(MAX_WAVES, waveNumber | 0));
-    const t = (w - 1) / Math.max(1, MAX_WAVES - 1);
+export function getEnemyBulletSpeedMultiplier(waveNumber, maxWaves = MAX_WAVES) {
+    const mw = Math.max(1, maxWaves | 0);
+    const w = Math.max(1, Math.min(mw, waveNumber | 0));
+    const t = (w - 1) / Math.max(1, mw - 1);
     return 1.15 + Math.pow(t, 1.4) * 1.9;
 }
 
@@ -432,12 +446,15 @@ export const WAVE_SUBTITLES_GENERIC = [
 //   HP    1 + ((L-1)/19)^1.0 · 6.5      L1: 1.0  L5: 2.37  L10: 4.08  L15: 5.79  L20: 7.50
 //   pts   1 + ((L-1)/19)^1.4 · 5.5      L1: 1.0  L5: 1.50  L10: 2.55  L15: 4.00  L20: 6.50
 //   spd   1 + ((L-1)/19)^1.4 · 0.4      L1: 1.00 L5: 1.03  L10: 1.11  L15: 1.22  L20: 1.40
-export function getLevelScaledEnemyStats(baseStats, level) {
+export function getLevelScaledEnemyStats(baseStats, level, maxWaves = MAX_WAVES) {
     const L = Math.max(1, level | 0);
     // 5.101.0 — denominator widened from 19 → MAX_WAVES-1 so the stat
     // curve stretches over the 30-wave campaign. End-points unchanged
     // (final-wave multipliers match the old wave-20 values).
-    const t = (L - 1) / Math.max(1, MAX_WAVES - 1);
+    // RUN-01a — `maxWaves` threads the real run length through the
+    // denominator; default MAX_WAVES preserves today's curve exactly.
+    const mw = Math.max(1, maxWaves | 0);
+    const t = (L - 1) / Math.max(1, mw - 1);
     // 5.76.0 — HP curve scaled up to match the post-5.75 player power
     // budget (Twin Cannon / Hailstorm / +120% Lance + crit-rush + Gold
     // Find compounding all stack DPS faster than the old curve handled).
