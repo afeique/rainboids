@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.163.0] - 2026-05-24
+
+### Added — THE HARBINGER, first concrete boss (BOSS-05)
+
+- **THE HARBINGER** (`js/modules/enemy/bosses/harbinger.js`) — the first boss
+  built on the shipped chassis cores (phase runner / weak-point parts / intro &
+  death sequences). Kinetic element, 3 HP-gated phases (1.0 → 0.6 → 0.3) with
+  rotating, counter-rotating **bolt-head weak-points** re-armed each phase
+  (4 → 3 → 2, tougher + faster), **core invulnerable while bolts live**, an
+  enrage latched on the final phase, and 3-beat intro / 4-beat death sequences.
+- Establishes the `enemy/bosses/` module pattern (a descriptor consumed by the
+  forthcoming boss registry) and is fully headless-unit-tested (7 tests:
+  ordered phase gates, core-invuln gating, enrage, killable). Not yet wired into
+  spawning — that lands with the boss registry (BOSS-04).
+
+---
+
 ## [6.162.0] - 2026-05-24
 
 ### Added — Boss healthbar HUD (BOSS-01)
