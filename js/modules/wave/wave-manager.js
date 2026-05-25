@@ -26,6 +26,28 @@ import {
 } from '../world/run-shop.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { rewardMultiplier } from '../world/reward-dial.js';
+// RUN-05a — Adaptive Difficulty Director (RUN-04). Read D_hp at the enemy-HP
+// chokepoint (applyEnemyLevelScaling) and feed the director one outcome per
+// wave clear (tickWave). Absent director ⇒ ×1.0 (default below) and no feed.
+import { getDifficulty, tickWave } from './difficulty-director.js';
+
+// RUN-05a — wave-clear baselines (Balance Model first-pass targets; UNTUNED,
+// calibrated in RUN-07). The director's [0.6,3.0]/[0.6,1.8] clamps + cold-start
+// + ≤12%/wave rate-limit keep these safe even if a baseline is off.
+const DIRECTOR_TARGET_CLEAR_MS = 35000;       // target ~35s/wave
+const DIRECTOR_EXPECTED_HP_RETAINED = 0.6;    // expect ~60% HP retained on clear
+const DIRECTOR_EXPECTED_HITS = 4;             // expect ~4 hits taken per wave
+
+// RUN-05a — read the director's enemy-HP axis (D_hp). Returns 1.0 with no
+// director so untouched runs/tests are byte-identical. NOTE (RUN-05b/RUN-07
+// follow-up): this pass scales enemy HP ONLY — spawn COUNT scaling is deferred
+// to the procedural wave composer (RUN-05b).
+function directorHpMult(game) {
+    const dir = game && game.difficultyDirector;
+    if (!dir || !dir.cfg) return 1;
+    const d = getDifficulty(dir).D_hp;
+    return Number.isFinite(d) && d > 0 ? d : 1;
+}
 
 // Sub-wave advance thresholds — advance to next sub-wave when ≤ 2
 // enemies remain (player has cleared the field) or 12 s of idle time
@@ -198,6 +220,16 @@ export function updateWaveSystem() {
             } : null,
         };
 
+        // RUN-05a — feed the Adaptive Difficulty Director one outcome for the
+        // wave that just cleared, then it re-derives D_hp / D_thr for the NEXT
+        // wave. Runs BEFORE the run-complete check so the final wave still
+        // records. Guarded: a no-op when no director exists. All baselines are
+        // first-pass Balance-Model estimates (UNTUNED — RUN-07 calibrates); the
+        // director's clamps + cold-start keep an off baseline from breaking the
+        // game. The NEXT wave's applyEnemyLevelScaling reads the freshly-updated
+        // D_hp because spawnWaveEntities (post-tick) recomputes enemy stats.
+        feedDirectorOnWaveClear.call(this);
+
         if (this.game.currentWave >= runMaxWaves(this.game)) {
             this.completeRun();
             return;
@@ -247,6 +279,75 @@ export function updateWaveSystem() {
 
     // (Removed) Auto-advance countdown — the shop now gates the next
     // wave. closeShop() calls startNextWave() when the player is ready.
+}
+
+// RUN-05a — PURE outcome builder for the Adaptive Difficulty Director. Given
+// the raw per-wave signals, derive the `outcome` object recordWave/tickWave
+// expects. Pure (no engine refs / Date.now / DOM) so it unit-tests cleanly.
+//
+// Baselines (Balance Model first-pass, UNTUNED — RUN-07 calibrates):
+//   • actualClearTime / targetClearTime drive the clear-speed half of Po. We
+//     use a DPS PROXY: dpsOnTarget = 1/actualClearTime, expectedDps =
+//     1/targetClearTime, so dpsOnTarget/expectedDps == targetClearTime/
+//     actualClearTime (clear faster ⇒ both halves of Po push >1). This is a
+//     stand-in until a real damage-on-target meter exists.
+//   • hpRetainedFrac vs expectedHpRetainedFrac drive the HP-retained half of Pd.
+//   • hitsSurvived vs expectedHits drive the hits half of Pd.
+//   • clearedFullHp + clearTimeFrac feed the director's escalation/mercy gates.
+export function buildDirectorOutcome({
+    actualClearTime,
+    hpRetainedFrac,
+    hitsSurvived = 0,
+    deaths = 0,
+    targetClearTime = DIRECTOR_TARGET_CLEAR_MS,
+    expectedHpRetainedFrac = DIRECTOR_EXPECTED_HP_RETAINED,
+    expectedHits = DIRECTOR_EXPECTED_HITS,
+}) {
+    const clearMs = Math.max(1, actualClearTime || 0);
+    const hpFrac = Math.max(0, Math.min(1, Number.isFinite(hpRetainedFrac) ? hpRetainedFrac : 1));
+    return {
+        // DPS proxy (see header): 1/clearMs vs 1/targetClearTime.
+        dpsOnTarget: 1 / clearMs,
+        expectedDps: 1 / targetClearTime,
+        actualClearTime: clearMs,
+        targetClearTime,
+        hpRetainedFrac: hpFrac,
+        expectedHpRetainedFrac,
+        hitsSurvived: hitsSurvived || 0,
+        expectedHits,
+        deaths: deaths || 0,
+        clearedFullHp: hpFrac >= 0.99,
+    };
+}
+
+// RUN-05a — engine-side glue (`this` = engine). Builds this wave's outcome from
+// the live signals and folds it into the director. No-op without a director.
+// Resets the per-wave hit counter for the next wave.
+export function feedDirectorOnWaveClear() {
+    const dir = this.game && this.game.difficultyDirector;
+    if (!dir || !dir.cfg) {
+        // No director: still clear the hit counter so a later-created director
+        // doesn't inherit a stale count.
+        if (this.game) this.game._waveHits = 0;
+        return;
+    }
+    const actualClearTime = Date.now() - (this._waveStartMs || Date.now());
+    const maxHp = (this.player && typeof this.player.getEffectiveMaxHealth === 'function')
+        ? this.player.getEffectiveMaxHealth()
+        : (this.player && this.player.maxHealth) || 1;
+    const hpRetainedFrac = (this.player && maxHp > 0) ? this.player.health / maxHp : 1;
+    const outcome = buildDirectorOutcome({
+        actualClearTime,
+        hpRetainedFrac,
+        hitsSurvived: this.game._waveHits || 0,
+        // deaths not separately tracked per wave this pass — Pd leans on
+        // hpRetainedFrac (acceptable first pass; RUN-07 may wire real deaths).
+        deaths: 0,
+    });
+    tickWave(dir, outcome);
+    // Reset for the next wave (spawnWaveEntities also resets at wave start;
+    // this is belt-and-suspenders for the wave-clear → next-spawn gap).
+    this.game._waveHits = 0;
 }
 
 export function getWaveSubtitle(waveNumber) {
@@ -510,6 +611,11 @@ export function spawnWaveEntities() {
     // Reset sub-wave bookkeeping each wave start.
     this.game.subWaveIndex = 0;
     this.game.lastSubWaveSpawnAt = Date.now();
+    // RUN-05a — stamp the director's per-wave signals at the moment the wave
+    // actually begins: wave-start time (→ actualClearTime) and the hit counter
+    // (→ hitsSurvived, incremented in lifecycle.takeDamage).
+    this._waveStartMs = Date.now();
+    this.game._waveHits = 0;
     // BOSS-04 — clear the once-per-wave modular-boss guard so this wave's boss
     // (if any) can spawn when its boss group fires.
     this._modularBossSpawnedWave = null;
@@ -950,8 +1056,15 @@ export function applyEnemyLevelScaling(enemy, opts = {}) {
     const campaignSpeedMul = getEnemySpeedMultiplier(this.game.currentWave, _mw);
     const bulletSpeedMul = getEnemyBulletSpeedMultiplier(this.game.currentWave, _mw);
 
-    enemy.health = scaledStats.health;
-    enemy.maxHealth = scaledStats.health;
+    // RUN-05a — Adaptive Difficulty Director HP axis (D_hp). Multiply the base
+    // level-scaled HP by the active D_hp (default 1.0 with no director). Applied
+    // to the BASE scaled HP here, BEFORE the bossTier overlay below, so bosses
+    // scale with D_hp too (boss HP = base × D_hp × tier.hpMul, per the design).
+    // health stays === maxHealth. Cold-start holds D_hp=1 for waves 1–2, so
+    // early-game HP is unchanged; the director's [0.6,3.0] clamp bounds the rest.
+    const dHp = directorHpMult(this.game);
+    enemy.health = scaledStats.health * dHp;
+    enemy.maxHealth = scaledStats.health * dHp;
     enemy.config.speed = scaledStats.speed * campaignSpeedMul;
     enemy.bulletSpeedMul = bulletSpeedMul;
 

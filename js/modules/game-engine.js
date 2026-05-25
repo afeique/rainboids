@@ -53,6 +53,12 @@ import * as cam from './world/camera-manager.js';
 import { recordVFXFrame } from './debug/vfx-telemetry.js';
 import * as shop from './shop/shop-manager.js';
 import * as wave from './wave/wave-manager.js';
+// RUN-05a — Adaptive Difficulty Director (RUN-04). Instantiated fresh on each
+// new-run init and stored on this.game.difficultyDirector; fed at wave-clear
+// (wave-manager.js) and read at the two difficulty chokepoints (enemy HP +
+// incoming player damage). Absent director ⇒ ×1.0 everywhere (cold-start +
+// clamps bound all risk). Baselines are first-pass estimates (RUN-07 calibrates).
+import { createDirector } from './wave/difficulty-director.js';
 import * as col from './combat/collision-system.js';
 import * as combat from './combat/combat-manager.js';
 import * as lifecycle from './player/lifecycle.js';
@@ -1190,6 +1196,16 @@ export class GameEngine {
         } else {
             this.game.runConfig = { ...DEFAULT_RUN_CONFIG };
         }
+        // RUN-05a — fresh Adaptive Difficulty Director per run. Reset on every
+        // new-run init (incl. CONTINUE/restore: we re-create a fresh one rather
+        // than serializing director state — re-warming over the first couple of
+        // waves is acceptable, and cold-start holds D=1 for waves 1–2 anyway).
+        // Storing it here auto-lights the CD-16 threat HUD, which resolves
+        // this.game.difficultyDirector in drawThreatLevelHook.
+        this.game.difficultyDirector = createDirector();
+        // RUN-05a — per-wave hit counter the director reads as `hitsSurvived`.
+        // Incremented in takeDamage, reset at each wave start (wave-manager).
+        this.game._waveHits = 0;
         this.game.waveComplete = false;
         // 5.88.0 — `updateLives` removed; tanks are rendered on the canvas.
         this.game.state = GAME_STATES.WAVE_TRANSITION;

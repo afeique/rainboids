@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.177.0] - 2026-05-25
+
+### Added — Adaptive Difficulty Director is LIVE (RUN-05a)
+
+The Adaptive Difficulty Director (RUN-04) and Threat-Level HUD (CD-16) — shipped
+inert — now **function in-game**. The director watches each wave's outcome and
+gently adapts difficulty along two decoupled axes, so the threat meter finally
+reflects real, earned escalation:
+
+- **Instantiated** per run on `game.difficultyDirector` (fresh each run; the
+  CD-16 threat HUD reads it automatically and now lights up live).
+- **`D_hp` → enemy HP** at the single enemy-scaling chokepoint
+  (`applyEnemyLevelScaling`): base level-scaled HP × D_hp (bosses included).
+- **`D_thr` → incoming player damage** at the single `takeDamage` chokepoint,
+  applied before the per-hit FAILSAFE cap (so the anti-one-shot clamp still
+  protects) and only on the top-level path (burn DoT never double-scaled).
+- **Fed at each wave clear**: per-wave signals (clear time, HP retained, hits
+  taken) → `tickWave`. First-pass baselines from the Balance Model
+  (`targetClearTime` 35s, expected HP-retained 0.6); precise calibration is
+  deferred to RUN-07.
+
+Safety: absent director ⇒ ×1.0 everywhere; cold-start holds D=1 for waves 1–2;
+the director's [0.6,3.0]/[0.6,1.8] clamps + ≤12%/wave rate-limit bound all
+adaptation, so early game and no-director paths are unchanged. The static
+`WAVE_DATA` and spawn counts are untouched (procedural composer = RUN-05b,
+deferred; D_hp scales HP only this pass).
+
+Coverage: +7 unit tests (1414 total) + 5 Playwright QA
+(`tests/qa/20-director-live.spec.js`); bosses QA regression green.
+
 ## [6.176.0] - 2026-05-25
 
 ### Added — RUN SETUP: choose your run length (RUN-06)

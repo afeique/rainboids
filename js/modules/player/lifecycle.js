@@ -33,6 +33,20 @@ import { random } from '../core/utils.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { applyPlayerStatus, playerCorrodeMult } from './player-status.js';
+import { getDifficulty } from '../wave/difficulty-director.js';
+
+// RUN-05a — Adaptive Difficulty Director threat axis (D_thr) read helper.
+// Returns the active D_thr multiplier for incoming player damage, defaulting to
+// 1.0 whenever no director exists (existing tests/saves are unaffected). `ctx`
+// is the engine context (`this` in takeDamage), where the director lives on
+// ctx.game.difficultyDirector. Baseline is first-pass; the director's own
+// [0.6,1.8] clamp + cold-start bound the risk (RUN-07 calibrates).
+function directorThreatMult(ctx) {
+    const dir = ctx && ctx.game && ctx.game.difficultyDirector;
+    if (!dir || !dir.cfg) return 1;
+    const d = getDifficulty(dir).D_thr;
+    return Number.isFinite(d) && d > 0 ? d : 1;
+}
 
 // 6.1.1 — Cap stays at 3 (matches the visible triforce HUD slots).
 // The starting count was lowered from 3 → 1 in game-engine.js so the
@@ -222,8 +236,16 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         }
     }
 
+    // RUN-05a — Adaptive Difficulty Director threat axis. Scale the INCOMING
+    // damage by the active D_thr (default 1.0 with no director — see
+    // directorThreatMult). Applied here, on the top-level incoming-damage path
+    // ONLY (the burn-DoT path returned early above, so DoT ticks are never
+    // double-scaled), and BEFORE the FAILSAFE per-hit cap below so the
+    // anti-one-shot clamp still protects against a scaled-up single blow.
+    const scaledDamage = damageAmount * directorThreatMult(this);
+
     const effectiveShield = this.player.getEffectiveShield();
-    let reducedDamage = damageAmount * (1 - effectiveShield / 100);
+    let reducedDamage = scaledDamage * (1 - effectiveShield / 100);
 
     // E5 — elemental resistance vs the incoming hit's element (the symmetric
     // counterpart to E2's enemy-side resist). Item resist affixes (E7) feed
@@ -307,6 +329,10 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     if (finalDamage > 0) {
         this._breakKillStreak();
         if (this.game && this.game.stats) this.game.stats.totalDamageTaken += finalDamage;
+        // RUN-05a — count this hit for the director's per-wave `hitsSurvived`
+        // signal (reset to 0 at each wave start in wave-manager). Only real
+        // HP-loss hits count; dodged/i-framed/fully-absorbed hits don't.
+        if (this.game) this.game._waveHits = (this.game._waveHits || 0) + 1;
         // Thorns — reflect a fraction back into the damage source
         // (enemy / bullet / asteroid). Only on a real HP loss.
         if (opts.source && typeof this.applyThorns === 'function') {
