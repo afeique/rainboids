@@ -4087,6 +4087,67 @@ body.mobile-portrait .shop-help-icon {
 /* Readiness cues on the BUILD footer status line. */
 .shop-prerun-status--warn  { color: #ffb454; text-shadow: 0 0 8px rgba(255, 180, 84, 0.4); }
 .shop-prerun-status--ready { color: #8effa8; text-shadow: 0 0 8px rgba(142, 255, 168, 0.4); }
+
+/* ── RUN SETUP control group (RUN-06) ───────────────────────────────── */
+/* Compact run-shape picker that sits in the BUILD footer between BACK and
+   the readiness status. Reuses the menu-font var system + the armory blue. */
+.shop-runsetup {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-family: inherit;
+}
+.shop-runsetup-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.shop-runsetup-label {
+    color: #7fb6e6;
+    font-size: calc(10px * var(--font-body-scale, 1));
+    letter-spacing: 0.06em;
+    opacity: 0.85;
+}
+.shop-runsetup-btn,
+.shop-runsetup-step {
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: calc(12px * var(--font-body-scale, 1));
+    letter-spacing: 0.04em;
+    border: 1px solid rgba(80, 140, 220, 0.5);
+    background: transparent;
+    color: #8fd0ff;
+    line-height: 1;
+}
+.shop-runsetup-step { padding: 4px 8px; min-width: 26px; }
+.shop-runsetup-btn:hover:not(:disabled),
+.shop-runsetup-step:hover:not(:disabled) { background: rgba(64, 150, 255, 0.15); }
+.shop-runsetup-btn.active {
+    color: #9affb0;
+    border-color: rgba(120, 255, 150, 0.65);
+    background: rgba(120, 255, 150, 0.12);
+    text-shadow: 0 0 6px rgba(120, 255, 150, 0.4);
+}
+.shop-runsetup-step:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.shop-runsetup-value {
+    min-width: 2.4em;
+    text-align: center;
+    color: #d8eeff;
+    font-size: calc(13px * var(--font-body-scale, 1));
+    letter-spacing: 0.04em;
+}
+.shop-runsetup-readout {
+    color: #ffd98a;
+    font-size: calc(11px * var(--font-body-scale, 1));
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 6px rgba(255, 200, 100, 0.3);
+    white-space: nowrap;
+}
 /* Disabled START (no primary equipped). */
 .armory-btn--disabled,
 .armory-btn:disabled {

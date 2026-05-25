@@ -589,6 +589,11 @@ export class GameEngine {
             cores: 0,        // Phase R8 — item-crafting currency (meta.cores mirror)
             survivalTime: 0, // Time survived in milliseconds
             survivalRecord: parseInt(localStorage.getItem('rainboidsSurvivalRecord')) || 0, // Best survival time
+            // RUN-06 — persisted highest threat level the player has reached
+            // (meta scaffolding). The difficulty director will feed this live
+            // later via updatePeakThreatReached(); for now it just reads the
+            // stored peak (default 0).
+            peakThreatReached: this._loadPeakThreatReached(),
             gameStartTime: 0, // When the current game started
             currentWave: 0,
             // RUN-01a — run shape (stages × wavesPerStage). Defaults to the
@@ -1168,10 +1173,23 @@ export class GameEngine {
 
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
-        // RUN-01a — a NEW run always uses the default run shape (10 × 3).
-        // The RUN-06 UI will let players pick other values; for now this
-        // keeps every new run on the canonical 30-wave campaign.
-        this.game.runConfig = { ...DEFAULT_RUN_CONFIG };
+        // RUN-06 — honor the RUN SETUP choice when the BUILD screen passed one
+        // (loadout.runConfig, already validated + clamped in
+        // beginPreRunFromTree). Absent (direct restart / CONTINUE / tests) →
+        // the canonical default 10 × 3 campaign, so untouched runs are
+        // byte-for-byte identical to before.
+        if (loadout && loadout.runConfig
+            && typeof loadout.runConfig.stages === 'number' && isFinite(loadout.runConfig.stages)
+            && typeof loadout.runConfig.wavesPerStage === 'number' && isFinite(loadout.runConfig.wavesPerStage)) {
+            const stages = Math.max(10, Math.min(100, loadout.runConfig.stages | 0));
+            const wps = [3, 6, 9].includes(loadout.runConfig.wavesPerStage | 0)
+                ? (loadout.runConfig.wavesPerStage | 0)
+                : [3, 6, 9].reduce((b, o) =>
+                    Math.abs(o - loadout.runConfig.wavesPerStage) < Math.abs(b - loadout.runConfig.wavesPerStage) ? o : b, 3);
+            this.game.runConfig = { stages, wavesPerStage: wps };
+        } else {
+            this.game.runConfig = { ...DEFAULT_RUN_CONFIG };
+        }
         this.game.waveComplete = false;
         // 5.88.0 — `updateLives` removed; tanks are rendered on the canvas.
         this.game.state = GAME_STATES.WAVE_TRANSITION;
@@ -4154,6 +4172,9 @@ export class GameEngine {
         shopDom.setPreRunMods((meta.loadout && meta.loadout.mods) || {});
         shopDom.setPreRunAbilityAttune((meta.loadout && meta.loadout.abilityAttune) || {});
         shopDom.setPreRunPassives((meta.loadout && meta.loadout.passives) || []);
+        // RUN-06 — seed the RUN SETUP controls from the last-saved run shape
+        // (falls back to the default 10×3 when none has been chosen yet).
+        shopDom.setPreRunRunConfig((meta.loadout && meta.loadout.runConfig) || DEFAULT_RUN_CONFIG);
         this._preRunTreeOpen = true;
         shopDom.showShopDom(true);
     }
@@ -4255,6 +4276,18 @@ export class GameEngine {
             if (isKey) keystoneCount++;
         }
         loadout.passives = passivesOut;
+        // RUN-06 — carry the chosen RUN SHAPE so the run honors it. Validate +
+        // clamp here so a malformed selection can never produce a NaN-length
+        // run; absent / invalid → undefined, and init() keeps the default 10×3.
+        const rawRc = sel && sel.runConfig;
+        if (rawRc
+            && typeof rawRc.stages === 'number' && isFinite(rawRc.stages)
+            && typeof rawRc.wavesPerStage === 'number' && isFinite(rawRc.wavesPerStage)) {
+            const stages = Math.max(10, Math.min(100, Math.round(rawRc.stages / 10) * 10));
+            const wps = [3, 6, 9].reduce((b, o) =>
+                Math.abs(o - rawRc.wavesPerStage) < Math.abs(b - rawRc.wavesPerStage) ? o : b, 3);
+            loadout.runConfig = { stages, wavesPerStage: wps };
+        }
         try { saveMeta({ loadout }); } catch {}
         this._preRunTreeOpen = false;
         shopDom.hideShopDom();
@@ -4262,6 +4295,28 @@ export class GameEngine {
             try { this._finalizeTitleExit(); } catch {}
         }
         if (typeof this.startNewRun === 'function') this.startNewRun(loadout);
+    }
+
+    // RUN-06 — peakThreatReached persistence scaffolding (localStorage-backed
+    // meta). `_loadPeakThreatReached` reads the stored peak (default 0) at
+    // construction; `updatePeakThreatReached` stores max(existing, level). The
+    // difficulty director will call the setter once wired live — kept minimal
+    // here (no threat tracking, just the persistence helpers).
+    _loadPeakThreatReached() {
+        try {
+            const v = parseFloat(localStorage.getItem('rainboidsPeakThreat'));
+            return (typeof v === 'number' && isFinite(v) && v > 0) ? v : 0;
+        } catch { return 0; }
+    }
+
+    updatePeakThreatReached(level) {
+        const lvl = (typeof level === 'number' && isFinite(level)) ? level : 0;
+        const cur = (this.game && typeof this.game.peakThreatReached === 'number')
+            ? this.game.peakThreatReached : this._loadPeakThreatReached();
+        const next = Math.max(cur, lvl);
+        if (this.game) this.game.peakThreatReached = next;
+        try { localStorage.setItem('rainboidsPeakThreat', String(next)); } catch {}
+        return next;
     }
 
     // BACK / close from the BUILD tree — return to the title screen.

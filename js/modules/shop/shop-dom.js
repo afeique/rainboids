@@ -37,7 +37,9 @@ import {
 import { ELEMENTS } from '../combat/elements.js';
 // Phase P4 — rule-modifier PASSIVES cluster (the equippable build layer).
 import { PASSIVES, getSlotPassives, maxPassiveSlots } from '../combat/passive-data.js';
-import { MAX_STAGES } from '../core/constants.js';
+import { MAX_STAGES, DEFAULT_RUN_CONFIG } from '../core/constants.js';
+// RUN-06 — the reward-dial helper drives the RUN SETUP readout multiplier.
+import { wavesPerStageRewardMultForWps } from '../world/reward-dial.js';
 // 2026-05-23 — pre-run BUILD mode reuses the loadout-selection helpers so the
 // tree can act as the start-of-run weapon/ability picker (see _preRun below).
 import { toggleSelection, getUnlockedSet, unlockCost, LOADOUT_SLOTS } from './armory.js';
@@ -106,6 +108,48 @@ let _unlockedAbilityAttune = null;
 // into player.equippedPassives on START. `_unlockedPassives` caches owned ids.
 let _preRunPassives = [];
 let _unlockedPassives = null;
+// RUN-06 — chosen RUN SHAPE for the run: { stages, wavesPerStage }. Seeded by
+// game-engine before showing BUILD; the footer's RUN SETUP controls mutate it;
+// flows into game.runConfig on START RUN (beginPreRunFromTree).
+let _preRunRunConfig = { ...DEFAULT_RUN_CONFIG };
+
+// RUN-06 — run-shape bounds (UI + apply share these). Stages span 10..100
+// stepping by 10; waves-per-stage is one of 3/6/9.
+export const RUN_STAGES_MIN = 10;
+export const RUN_STAGES_MAX = 100;
+export const RUN_STAGES_STEP = 10;
+export const RUN_WPS_OPTIONS = [3, 6, 9];
+
+// RUN-06 — pure: snap a stages value into [10,100] on the 10-step grid.
+export function clampRunStages(n) {
+    let s = Math.round(((typeof n === 'number' && isFinite(n)) ? n : RUN_STAGES_MIN) / RUN_STAGES_STEP) * RUN_STAGES_STEP;
+    return Math.max(RUN_STAGES_MIN, Math.min(RUN_STAGES_MAX, s));
+}
+// RUN-06 — pure: snap waves-per-stage to the nearest of 3/6/9 (else default 3).
+export function clampRunWps(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return 3;
+    let best = RUN_WPS_OPTIONS[0];
+    let bestD = Infinity;
+    for (const o of RUN_WPS_OPTIONS) {
+        const d = Math.abs(o - n);
+        if (d < bestD) { bestD = d; best = o; }
+    }
+    return best;
+}
+// RUN-06 — pure: clamp a whole runConfig into the valid run-shape grid.
+export function clampRunConfig(rc) {
+    const stages = clampRunStages(rc && rc.stages);
+    const wavesPerStage = clampRunWps(rc && rc.wavesPerStage);
+    return { stages, wavesPerStage };
+}
+// RUN-06 — pure: the live readout string for a given run shape, e.g.
+// "50 waves · rewards ×1.3". Uses the shipped reward-dial helper so the
+// multiplier always matches the in-run reward math (×1.0 / ×1.3 / ×1.6).
+export function runSetupReadout(stages, wps) {
+    const total = clampRunStages(stages) * clampRunWps(wps);
+    const mult = wavesPerStageRewardMultForWps(clampRunWps(wps));
+    return `${total} waves · rewards ×${mult.toFixed(1)}`;
+}
 
 // Pre-run passive slot cap for THIS run (round-3 §11.A). Pre-Phase-X there's no
 // runConfig, so derive from the fixed stage count.
@@ -217,6 +261,16 @@ export function getPreRunPassives() {
     return _preRunPassives.slice();
 }
 
+/** Seed the pre-run run shape (called by game-engine before show). */
+export function setPreRunRunConfig(rc) {
+    _preRunRunConfig = clampRunConfig(rc || DEFAULT_RUN_CONFIG);
+}
+
+/** The chosen run shape { stages, wavesPerStage }, read by START RUN. */
+export function getPreRunRunConfig() {
+    return clampRunConfig(_preRunRunConfig);
+}
+
 // P4 — toggle a passive into/out of the chosen set. Caps at maxSlots(stages)
 // and enforces the keystone budget (≤2 keystones). Returns true if it changed.
 function _togglePassive(id) {
@@ -246,6 +300,13 @@ export function initShopDom(gameEngine) {
         coresAmt:       $('shop-cores-amount'),
         prerunHint:     $('shop-prerun-hint'),
         startBtn:       $('shop-prerun-start'),
+        // RUN-06 — RUN SETUP controls (BUILD footer).
+        runSetup:       $('shop-runsetup'),
+        runSetupWps:    $('shop-runsetup-wps'),
+        runSetupStagesVal: $('shop-runsetup-stages-value'),
+        runSetupStagesDec: $('shop-runsetup-stages-dec'),
+        runSetupStagesInc: $('shop-runsetup-stages-inc'),
+        runSetupReadout:   $('shop-runsetup-readout'),
         tree:           $('shop-tree'),
         tabs:           $('shop-tree-tabs'),
         clusterPrimary: $('shop-tree-primary'),
@@ -283,6 +344,7 @@ export function initShopDom(gameEngine) {
                     mods: getPreRunMods(),
                     abilityAttune: getPreRunAbilityAttune(),
                     passives: getPreRunPassives(),
+                    runConfig: getPreRunRunConfig(),
                 });
             }
         });
@@ -293,6 +355,32 @@ export function initShopDom(gameEngine) {
             if (_engine && typeof _engine.cancelPreRunToTitle === 'function') {
                 _engine.cancelPreRunToTitle();
             }
+        });
+    }
+
+    // RUN-06 — RUN SETUP controls. Waves-per-stage segmented buttons set
+    // _preRunRunConfig.wavesPerStage; the stages stepper bumps stages by 10
+    // clamped to [10,100]. Each change re-renders the controls (active state +
+    // value + readout). All pure-state mutations + a re-render — no run starts
+    // here (that's the START RUN handler).
+    if (_elements.runSetupWps) {
+        _elements.runSetupWps.addEventListener('click', (e) => {
+            const btn = e.target.closest('.shop-runsetup-btn');
+            if (!btn || !btn.dataset.wps) return;
+            _preRunRunConfig.wavesPerStage = clampRunWps(parseInt(btn.dataset.wps, 10));
+            _renderRunSetup();
+        });
+    }
+    if (_elements.runSetupStagesDec) {
+        _elements.runSetupStagesDec.addEventListener('click', () => {
+            _preRunRunConfig.stages = clampRunStages(_preRunRunConfig.stages - RUN_STAGES_STEP);
+            _renderRunSetup();
+        });
+    }
+    if (_elements.runSetupStagesInc) {
+        _elements.runSetupStagesInc.addEventListener('click', () => {
+            _preRunRunConfig.stages = clampRunStages(_preRunRunConfig.stages + RUN_STAGES_STEP);
+            _renderRunSetup();
         });
     }
 
@@ -563,7 +651,13 @@ function _applyPreRunChrome() {
         if (btn) btn.style.display = _preRun ? '' : 'none';
     }
     if (!_preRun && (_activeTab === 'gear' || _activeTab === 'passiveskills')) { _activeTab = 'primary'; _syncActiveTab(); }
-    if (_preRun) _updatePreRunStatus();
+    // RUN-06 — the RUN SETUP group is BUILD-only; refresh its displayed state
+    // when entering BUILD so it reflects the current/last-chosen run shape.
+    if (_elements.runSetup) _elements.runSetup.style.display = _preRun ? '' : 'none';
+    if (_preRun) {
+        _updatePreRunStatus();
+        _renderRunSetup();
+    }
 }
 
 // Pure readiness summary for a pre-run selection. A run is startable once at
@@ -600,6 +694,24 @@ function _updatePreRunStatus() {
         startBtn.classList.toggle('armory-btn--disabled', !r.ready);
         startBtn.textContent = r.ready ? 'START RUN →' : 'SELECT A PRIMARY';
     }
+}
+
+// RUN-06 — reflect `_preRunRunConfig` into the RUN SETUP controls: the active
+// waves-per-stage button, the stages value, the stepper disabled-at-bounds
+// state, and the live readout (total waves + reward multiplier).
+function _renderRunSetup() {
+    if (!_elements) return;
+    const rc = clampRunConfig(_preRunRunConfig);
+    _preRunRunConfig = rc; // keep state on-grid
+    if (_elements.runSetupWps) {
+        for (const btn of _elements.runSetupWps.querySelectorAll('.shop-runsetup-btn')) {
+            btn.classList.toggle('active', parseInt(btn.dataset.wps, 10) === rc.wavesPerStage);
+        }
+    }
+    if (_elements.runSetupStagesVal) _elements.runSetupStagesVal.textContent = `${rc.stages}`;
+    if (_elements.runSetupStagesDec) _elements.runSetupStagesDec.disabled = rc.stages <= RUN_STAGES_MIN;
+    if (_elements.runSetupStagesInc) _elements.runSetupStagesInc.disabled = rc.stages >= RUN_STAGES_MAX;
+    if (_elements.runSetupReadout) _elements.runSetupReadout.textContent = runSetupReadout(rc.stages, rc.wavesPerStage);
 }
 
 // U3 — the ordered, currently-VISIBLE tabs. GEAR + PASSIVES are BUILD-only

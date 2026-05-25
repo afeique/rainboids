@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.176.0] - 2026-05-25
+
+### Added — RUN SETUP: choose your run length (RUN-06)
+
+The pre-run BUILD screen now has a **RUN SETUP** control group in its footer,
+making the runConfig + Reward Dial plumbing player-usable:
+
+- **Waves-per-stage** selector: 3 / 6 / 9 (default 3).
+- **Stages** stepper: 10–100 in steps of 10 (default 10).
+- A live readout of **total waves** (`stages × wavesPerStage`) and the **reward
+  multiplier** for the chosen waves/stage (×1.0 / ×1.3 / ×1.6).
+
+START RUN threads the choice into `game.runConfig`; it persists with the saved
+loadout so reopening BUILD restores it. Picking 6 or 9 waves/stage stretches the
+run and activates the Reward Dial (richer gold/drops/rarity/Cores). An untouched
+RUN SETUP yields the canonical 10×3 = 30-wave campaign, identical to before. Also
+adds `peakThreatReached` persistence scaffolding (localStorage) for the upcoming
+live difficulty director.
+
+Coverage: +13 unit tests (1407 total) + 7 Playwright QA tests
+(`tests/qa/19-run-setup.spec.js`); BUILD/armory QA regression green.
+
 ## [6.175.0] - 2026-05-25
 
 ### Added — Reward Dial: rewards scale with run shape (RUN-03)

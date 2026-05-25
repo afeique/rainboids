@@ -873,8 +873,45 @@ function _buildShopOverlay() {
         display: 'none', alignItems: 'center', justifyContent: 'space-between',
         gap: '16px', padding: '10px 24px', width: '100%', boxSizing: 'border-box',
     });
+
+    // ── RUN SETUP control group (RUN-06) ──────────────────────────
+    // Lets the player pick the run shape — waves-per-stage (3/6/9) +
+    // stage count (10-100, step 10). A live readout shows total waves +
+    // the reward multiplier. shop-dom wires the controls + the readout
+    // and threads the choice into game.runConfig on START RUN. Lives
+    // inside the BUILD-only footer, so it inherits its visibility gate.
+    const runSetup = el('div', { id: 'shop-runsetup', className: 'shop-runsetup' });
+
+    // Waves-per-stage segmented selector (3 / 6 / 9).
+    const wpsGroup = el('div', { id: 'shop-runsetup-wps', className: 'shop-runsetup-group' });
+    wpsGroup.append(el('span', { className: 'shop-runsetup-label', text: 'WAVES/STAGE' }));
+    for (const v of [3, 6, 9]) {
+        const b = el('button', { id: `shop-runsetup-wps-${v}`, className: 'shop-runsetup-btn', text: `${v}` });
+        b.type = 'button';
+        b.dataset.wps = `${v}`;
+        wpsGroup.appendChild(b);
+    }
+    runSetup.appendChild(wpsGroup);
+
+    // Stages stepper (− value + ), step 10, clamped [10,100].
+    const stagesGroup = el('div', { id: 'shop-runsetup-stages', className: 'shop-runsetup-group' });
+    stagesGroup.append(el('span', { className: 'shop-runsetup-label', text: 'STAGES' }));
+    const decBtn = el('button', { id: 'shop-runsetup-stages-dec', className: 'shop-runsetup-step', text: '−' });
+    decBtn.type = 'button';
+    decBtn.setAttribute('aria-label', 'fewer stages');
+    const stagesVal = el('span', { id: 'shop-runsetup-stages-value', className: 'shop-runsetup-value', text: '10' });
+    const incBtn = el('button', { id: 'shop-runsetup-stages-inc', className: 'shop-runsetup-step', text: '+' });
+    incBtn.type = 'button';
+    incBtn.setAttribute('aria-label', 'more stages');
+    stagesGroup.append(decBtn, stagesVal, incBtn);
+    runSetup.appendChild(stagesGroup);
+
+    // Live readout: "N waves · rewards ×M".
+    runSetup.appendChild(el('div', { id: 'shop-runsetup-readout', className: 'shop-runsetup-readout', text: '30 waves · rewards ×1.0' }));
+
     preFooter.append(
         el('button', { id: 'shop-prerun-back', className: 'armory-btn armory-btn--back', text: '← BACK' }),
+        runSetup,
         el('div', { id: 'shop-prerun-status', className: 'shop-prerun-status', text: '' }),
         el('button', { id: 'shop-prerun-start', className: 'armory-btn armory-btn--start', text: 'START RUN →' }),
     );
