@@ -9,6 +9,16 @@
 import { GAME_STATES } from '../core/constants.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { drawItemGlyph } from '../hud/item-feed.js';
+import { ELEMENTS, isElement } from '../combat/elements.js';
+
+// ITEM-01 — map a `<element>Resist` affix type back to its ELEMENTS entry, so a
+// resist readout can show the element's themed name + color. e.g.
+// 'pyroResist' → ELEMENTS.PYRO. Returns null for non-resist / unknown types.
+function _elementForResistType(type) {
+    if (typeof type !== 'string' || !type.endsWith('Resist')) return null;
+    const id = type.slice(0, -'Resist'.length).toUpperCase();
+    return isElement(id) ? ELEMENTS[id] : null;
+}
 
 // Render a crystalline item glyph into a small standalone canvas so the
 // DOM overlay can reuse the exact canvas geometry from the loot feed.
@@ -86,6 +96,42 @@ export class InventoryOverlay {
         return affixes.map((a) => a.label).join('  ·  ') || (item && item.bonusLabel) || '';
     }
 
+    // ITEM-01 — a compact grouped readout of an item's elemental resists, so a
+    // player can read defensive coverage at a glance instead of hunting the
+    // raw affix list. Returns a DOM node (RESIST  PYRO+8%  CRYO+5%) with each
+    // element tinted its taxonomy color, or null if the item carries no
+    // resist affixes. Display-only; the raw labels still show in _affixLine.
+    _resistReadout(item) {
+        const affixes = (item && Array.isArray(item.affixes)) ? item.affixes : [];
+        const resists = [];
+        for (const a of affixes) {
+            const el = _elementForResistType(a.type);
+            if (el) resists.push({ el, value: a.value });
+        }
+        if (resists.length === 0) return null;
+        const wrap = document.createElement('div');
+        wrap.className = 'inv-item-resists';
+        // Inline styling keeps the readout consistent with the affix line
+        // without requiring a new CSS rule (matches .inv-item-affix sizing).
+        wrap.style.fontSize = 'calc(11px * var(--font-body-scale, 1))';
+        wrap.style.lineHeight = '1.5';
+        const tag = document.createElement('span');
+        tag.className = 'inv-resist-tag';
+        tag.textContent = 'RESIST';
+        tag.style.color = '#8895ad';
+        tag.style.marginRight = '6px';
+        wrap.appendChild(tag);
+        for (const { el, value } of resists) {
+            const chip = document.createElement('span');
+            chip.className = 'inv-resist-chip';
+            chip.style.color = el.color;
+            chip.style.marginRight = '6px';
+            chip.textContent = `${el.name}+${value}%`;
+            wrap.appendChild(chip);
+        }
+        return wrap;
+    }
+
     render() {
         const ge = this.gameEngine;
         const body = this.elements.body;
@@ -129,6 +175,10 @@ export class InventoryOverlay {
             affix.className = 'inv-item-affix';
             affix.textContent = it ? this._affixLine(it) : '';
             info.appendChild(affix);
+            if (it) {
+                const resists = this._resistReadout(it);
+                if (resists) info.appendChild(resists);
+            }
             cell.appendChild(info);
             grid.appendChild(cell);
         }
@@ -174,6 +224,8 @@ export class InventoryOverlay {
             affix.className = 'inv-drop-affix';
             affix.textContent = this._affixLine(it);
             info.appendChild(affix);
+            const resists = this._resistReadout(it);
+            if (resists) info.appendChild(resists);
             row.appendChild(info);
 
             const tag = document.createElement('div');

@@ -85,7 +85,7 @@ All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + 
 |----|----|----|----|----|
 | SKILL-01 | `js/modules/ui/` loadout-assign UI | Assign any owned ability → slots 1-4 *(B.S4)* | — | |
 | ~~SKILL-02~~ | — | *(B.S5 new-skills batch)* | — | **SUPERSEDED** — its skills (Bloodlust/Designator/Blink/Gravity-Snare/Elemental-Infusion) are shipped or now in **CD** (Attune/new abilities). Dropped. |
-| ITEM-01 | `world/item-system.js` + `shop/*` display | Resist-roll display + tier-gated resist counts *(C.I2)* | — | unblocks META-03 |
+| ~~ITEM-01~~ | `world/item-system.js` + `ui/inventory-overlay.js` | ✅ **6.178.0** — tier-gated resist counts (common 0 / rare ≤1 / epic ≤2 / godlike+ ≤3 via `maxResistAffixes`+`isResistAffix` in `rollAffixSet`, total count preserved) + grouped element-tinted RESIST readout on item cards. 13 unit + 3 QA | — | **unblocks META-03** |
 
 ---
 

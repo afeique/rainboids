@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.178.0] - 2026-05-25
+
+### Added — Tier-gated gear resists + grouped resist readout (ITEM-01)
+
+Per-element resistances (Pyro/Cryo/Volt/Toxic/Void/Radiant) are now a
+**tier-gated** gear reward and clearly surfaced:
+
+- **Tier-gated resist counts** (`item-system.js`): a per-rarity cap on how many
+  resist affixes an item can roll — common **0**, rare **≤1**, epic **≤2**,
+  godlike+ **≤3** — enforced in `rollAffixSet` (resist types are skipped once the
+  cap is hit; the total affix count is unchanged — only the type mix is
+  constrained). Tier-up respects the cap (pre-existing resists count toward it).
+  New pure helpers `maxResistAffixes(rarity)` + `isResistAffix(type)`.
+- **Grouped resist readout** (`inventory-overlay.js`): item cards (EQUIPPED grid
+  + RECENT DROPS) now show a compact element-tinted `RESIST  Pyro+8%  Cryo+5%`
+  line so defensive coverage reads at a glance.
+
+Unblocks META-03 (Cores-based resist targeting). Coverage: +13 unit tests
+(1427 total) + 3 Playwright QA (`tests/qa/21-inventory-resists.spec.js`); armory
+QA regression green.
+
 ## [6.177.0] - 2026-05-25
 
 ### Added — Adaptive Difficulty Director is LIVE (RUN-05a)

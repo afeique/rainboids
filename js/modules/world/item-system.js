@@ -73,6 +73,39 @@ function _pick(arr) {
     return arr[(Math.random() * arr.length) | 0];
 }
 
+// ITEM-01 — resist affixes are a "better gear" reward, so how many a single
+// item may carry is gated by its rarity tier. The TOTAL affix count per item
+// is unchanged (still tier.affixCount) — this only constrains the TYPE mix so
+// a common can't be a wall of resists. Caps:
+//   common      → 0  (no resist affixes at all)
+//   rare        → ≤1
+//   epic        → ≤2
+//   any higher  → ≤3
+// (exceptional/legendary sit between rare and epic on the ladder, so they get
+//  the rare cap; godlike+ get the top cap.) Pure + exported for unit testing.
+const _RESIST_CAP_BY_RANK = {
+    common: 0,
+    rare: 1,
+    exceptional: 1,
+    legendary: 2,
+    epic: 2,
+    godlike: 3,
+    divine: 3,
+    transcendental: 3,
+};
+export function maxResistAffixes(rarity) {
+    const cap = _RESIST_CAP_BY_RANK[rarity];
+    // Unknown rarity → a safe conservative default (treat like common: none).
+    return (typeof cap === 'number') ? cap : 0;
+}
+
+// ITEM-01 — true for the six per-element `*Resist` affix types (pyroResist,
+// cryoResist, voltResist, toxicResist, voidResist, radiantResist) and any
+// future element resist that follows the `<element>Resist` convention.
+export function isResistAffix(type) {
+    return typeof type === 'string' && type.endsWith('Resist');
+}
+
 function _rollMult(rarityKey) {
     const tier = RARITY_TIERS[rarityKey] || RARITY_TIERS.common;
     return tier.multMin + Math.random() * (tier.multMax - tier.multMin);
@@ -111,7 +144,24 @@ export function rollAffixSet(level, rarity, count, excludeTypes = []) {
         const j = (Math.random() * (i + 1)) | 0;
         [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    const chosen = pool.slice(0, Math.max(0, count | 0));
+    // ITEM-01 — tier-gate the resist-type mix. Walk the shuffled pool and take
+    // affixes until we have `count`, but stop accepting resist affixes once the
+    // rarity's resist cap is reached (the remaining resist types are simply
+    // skipped — non-resist affixes are unaffected, so the TOTAL count is
+    // preserved). `excludeTypes` already in `ex` (e.g. from tier-up) still
+    // counts toward the cap if those types were resists, so a tier-up can't
+    // exceed the cap by adding to existing resists.
+    const want = Math.max(0, count | 0);
+    const resistCap = maxResistAffixes(rarity);
+    let resistTaken = 0;
+    for (const t of ex) if (isResistAffix(t)) resistTaken++;
+    const chosen = [];
+    for (const def of pool) {
+        if (chosen.length >= want) break;
+        if (isResistAffix(def.type) && resistTaken >= resistCap) continue;
+        chosen.push(def);
+        if (isResistAffix(def.type)) resistTaken++;
+    }
     return chosen.map((def) => {
         const raw = (def.base + (L - 1) * def.perWave) * _rollMult(rarity);
         const value = def.pct
