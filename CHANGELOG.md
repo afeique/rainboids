@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.187.0] - 2026-05-25
+
+### Added — The 6 new enemy types now appear in live waves (ENMY roster)
+
+The six new enabling-system enemies — previously debug-spawn-only — now spawn in
+the actual campaign, so their mechanics are finally part of real runs:
+
+- **LEECH** (Toxic, buff-strip) debuts ~stage 4 and ramps; **WRAITHWORM** (Volt,
+  blink) + **NULL_DRONE** (Volt, suppress-aura, always solo) mid-late;
+  **PHANTOM** (Void, cloak) + **DEVOURER** (Void, absorb) late; **PRISM_MIRROR**
+  (Radiant, reflect) latest and sparest (count 1).
+- Inserted into **non-boss** mid/late `WAVE_DATA` waves only, in small counts
+  (1–3), mostly replacing existing trash so spawn density stays roughly flat.
+  **Boss waves and the teaching waves (1–10) are untouched** (verified: zero new
+  types on any stage-final). The live Adaptive Difficulty Director absorbs the
+  difficulty shift (its purpose: scale to the player's performance).
+- Stage-roster comments updated to document each type's debut.
+
+Coverage: +6 Playwright QA tests (`tests/qa/28-roster.spec.js`: new types spawn
+from the wave roster with abilities wired, no fatal errors across new-type
+waves); full unit suite (1456) + bosses QA green.
+
+> Note: 3 pre-existing failures in `tests/e2e/08-waves.spec.js` assert wave 1 is
+> "asteroids-only" — stale (wave 1 has shipped with HUNTER+WASP for many
+> versions); wave 1 is untouched by this change, so these are not a regression.
+
+---
+
 ## [6.186.0] - 2026-05-25
 
 ### Added — Gear passive (trait) reroll for Cores (META-04)

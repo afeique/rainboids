@@ -9,13 +9,22 @@
 //   Stage  1 (1-1..1-3)  : Iron Scout      — HUNTER + WASP, boss TITAN T1
 //   Stage  2 (2-1..2-3)  : Iron Sentinel   — adds GUARDIAN
 //   Stage  3 (3-1..3-3)  : Iron Vanguard   — adds STALKER (sniper line)
-//   Stage  4 (4-1..4-3)  : Twin Iron       — adds DRIFTER + TANGERINE
-//   Stage  5 (5-1..5-3)  : Triple Threat   — adds WEAVER + SENTINEL
-//   Stage  6 (6-1..6-3)  : Iron Quartet    — adds PROWLER (full roster)
-//   Stage  7 (7-1..7-3)  : Iron Crown      — combined arms, dense
-//   Stage  8 (8-1..8-3)  : The Long Walk   — compounding pressure
-//   Stage  9 (9-1..9-3)  : Apocalypse      — peak density
-//   Stage 10 (10-1..10-3): The Last Stand  — finale; 10-3 = FINAL BOSS
+//   Stage  4 (4-1..4-3)  : Twin Iron       — adds DRIFTER + TANGERINE; LEECH debut
+//   Stage  5 (5-1..5-3)  : Triple Threat   — adds WEAVER + SENTINEL; WRAITHWORM debut
+//   Stage  6 (6-1..6-3)  : Iron Quartet    — adds PROWLER (full roster); NULL_DRONE debut
+//   Stage  7 (7-1..7-3)  : Iron Crown      — combined arms, dense; PHANTOM debut
+//   Stage  8 (8-1..8-3)  : The Long Walk   — compounding pressure; DEVOURER + PRISM_MIRROR debut
+//   Stage  9 (9-1..9-3)  : Apocalypse      — peak density; new-type roster at full ramp
+//   Stage 10 (10-1..10-3): The Last Stand  — finale; new-type showcase; 10-3 = FINAL BOSS
+//
+// New-type roster insertion (non-boss waves only; the live Adaptive
+// Difficulty Director is the safety net for the difficulty shift):
+//   LEECH        (Toxic strip)   : 11(1), 13(2), 22(2), 26(2)
+//   WRAITHWORM   (Volt blink)    : 14(1), 19(2), 25(1)
+//   NULL_DRONE   (Volt suppress) : 17(1), 20(1), 26(1)   — always solo
+//   PHANTOM      (Void cloak)    : 19(1), 23(2), 28(1), 29(1)
+//   DEVOURER     (Void absorb)   : 22(1), 26(1), 28(1)
+//   PRISM_MIRROR (Radiant reflect): 23(1), 28(1)         — count 1 only
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
@@ -92,7 +101,10 @@ export const WAVE_DATA = {
         ],
     },
 
-    // ── Stage 4: Twin Iron (adds DRIFTER + TANGERINE) ──
+    // ── Stage 4: Twin Iron (adds DRIFTER + TANGERINE; LEECH debut) ──
+    // 11-3 introduces the LEECH (Toxic harrier) as a 1-count accent — a
+    // low-HP nuisance that strips player buffs. It debuts here in the
+    // toxic-flavored stage (alongside PLAGUEBEARER) before ramping later.
     10: { asteroids: 4, subWaves: [
         [{ type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
         [{ type: 'TANGERINE', count: 2 }, { type: 'CINDER', count: 2 }],
@@ -101,7 +113,7 @@ export const WAVE_DATA = {
     11: { asteroids: 4, subWaves: [
         [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }],
         [{ type: 'TANGERINE', count: 2 }, { type: 'CINDER', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'TESLA_WRAITH', count: 2 }, { type: 'PLAGUEBEARER', count: 1 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'TESLA_WRAITH', count: 2 }, { type: 'PLAGUEBEARER', count: 1 }, { type: 'LEECH', count: 1 }],
     ] },
     // 4-3 BOSS — Twin Iron: 2× TITAN T2.
     12: {
@@ -112,16 +124,19 @@ export const WAVE_DATA = {
         ],
     },
 
-    // ── Stage 5: Triple Threat (adds WEAVER + SENTINEL) ──
+    // ── Stage 5: Triple Threat (adds WEAVER + SENTINEL; LEECH ramps, WRAITHWORM debut) ──
+    // LEECH (Toxic) steps up to 2 here. WRAITHWORM (Volt blink-burrow)
+    // makes its first appearance on 14-3 as a single accent — it warps
+    // around the field, so it shows up sparingly before ramping in Stage 7+.
     13: { asteroids: 4, subWaves: [
         [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
         [{ type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'GLACIER', count: 2 }, { type: 'STALKER', count: 1 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'GLACIER', count: 2 }, { type: 'STALKER', count: 1 }, { type: 'LEECH', count: 2 }],
     ] },
     14: { asteroids: 4, subWaves: [
         [{ type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
         [{ type: 'SENTINEL', count: 2 }, { type: 'GLACIER', count: 2 }, { type: 'WEAVER', count: 1 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'FROST_LANCE', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'FROST_LANCE', count: 2 }, { type: 'WEAVER', count: 1 }, { type: 'WRAITHWORM', count: 1 }],
     ] },
     // 5-3 BOSS — Triple Threat: 3× TITAN T3.
     15: {
@@ -132,7 +147,11 @@ export const WAVE_DATA = {
         ],
     },
 
-    // ── Stage 6: Iron Quartet (adds PROWLER — full roster) ──
+    // ── Stage 6: Iron Quartet (adds PROWLER — full roster; NULL_DRONE debut) ──
+    // NULL_DRONE (Volt suppress-aura) debuts on 17-3 as a SINGLE escort —
+    // its aura damps the player's fire rate, so it's introduced one at a
+    // time and always solo, never stacked. Pair it with the support-style
+    // units (HYDRA/WARDEN) that already anchor this stage.
     16: { asteroids: 4, subWaves: [
         [{ type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
         [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'SPORE_CARRIER', count: 1 }],
@@ -141,7 +160,7 @@ export const WAVE_DATA = {
     17: { asteroids: 4, subWaves: [
         [{ type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
         [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'HYDRA', count: 1 }, { type: 'GUARDIAN', count: 1 }, { type: 'WASP', count: 3 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'HYDRA', count: 1 }, { type: 'NULL_DRONE', count: 1 }, { type: 'WASP', count: 2 }],
     ] },
     // 6-3 BOSS — Iron Quartet: 3× TITAN T3 + PROWLER escort.
     18: {
@@ -152,15 +171,19 @@ export const WAVE_DATA = {
         ],
     },
 
-    // ── Stage 7: Iron Crown (combined arms, dense) ──
+    // ── Stage 7: Iron Crown (combined arms, dense; PHANTOM debut, WRAITHWORM/NULL_DRONE ramp) ──
+    // PHANTOM (Void cloak) makes its first appearance on 19-3 as a single
+    // accent — it phases off auto-aim/homing, so it slips in among the
+    // dense roster. WRAITHWORM steps up to 2 (mid-wave). NULL_DRONE
+    // reappears solo on 20-2 to keep the suppress pressure occasional.
     19: { asteroids: 4, subWaves: [
         [{ type: 'HUNTER', count: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'LUMEN_DRONE', count: 1 }, { type: 'DRIFTER', count: 1 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'TANGERINE', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'LUMEN_DRONE', count: 1 }, { type: 'WRAITHWORM', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'PHANTOM', count: 1 }, { type: 'TANGERINE', count: 1 }],
     ] },
     20: { asteroids: 4, subWaves: [
         [{ type: 'STALKER', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'NULL_DRONE', count: 1 }, { type: 'HUNTER', count: 1 }],
         [{ type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }],
     ] },
     // 7-3 BOSS — Iron Crown: 4× TITAN T4 + STALKER escort.
@@ -172,16 +195,21 @@ export const WAVE_DATA = {
         ],
     },
 
-    // ── Stage 8: The Long Walk (compounding pressure) ──
+    // ── Stage 8: The Long Walk (compounding pressure; DEVOURER + PRISM_MIRROR debut) ──
+    // DEVOURER (Void projectile-absorb) debuts on 22-3 as a single accent —
+    // it eats incoming shots, rewarding repositioning. LEECH ramps to 2
+    // here. PRISM_MIRROR (Radiant reflect) makes its FIRST appearance on
+    // 23-3 as a single unit only — reflection is potent, so it stays at 1.
+    // PHANTOM steps up to 2 (cloak pressure in the late game).
     22: { asteroids: 4, subWaves: [
         [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'LEECH', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'DEVOURER', count: 1 }, { type: 'WASP', count: 2 }],
     ] },
     23: { asteroids: 4, subWaves: [
         [{ type: 'HUNTER', count: 5 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }],
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 1 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'PHANTOM', count: 2 }],
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'PRISM_MIRROR', count: 1 }, { type: 'DRIFTER', count: 1 }],
     ] },
     // 8-3 BOSS — Iron Quintet: 4× TITAN T4 + TANGERINE.
     24: {
@@ -192,16 +220,21 @@ export const WAVE_DATA = {
         ],
     },
 
-    // ── Stage 9: Apocalypse (peak density) ──
+    // ── Stage 9: Apocalypse (peak density; new-type roster at full ramp) ──
+    // The new types reach their late-game presence here: WRAITHWORM
+    // (blink) on 25-2, then DEVOURER (absorb) + NULL_DRONE (suppress) +
+    // LEECH (strip) layered across 26. Counts stay 1-2 each — the
+    // Adaptive Difficulty Director carries the scaling — but every new
+    // mechanic is now live in the player's face at peak density.
     25: { asteroids: 4, subWaves: [
         [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WRAITHWORM', count: 1 }],
         [{ type: 'TANGERINE', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 3 }],
     ] },
     26: { asteroids: 4, subWaves: [
-        [{ type: 'PROWLER', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'TANGERINE', count: 2 }],
-        [{ type: 'WEAVER', count: 3 }, { type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
-        [{ type: 'HUNTER', count: 4 }, { type: 'WASP', count: 3 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'PROWLER', count: 3 }, { type: 'NULL_DRONE', count: 1 }, { type: 'TANGERINE', count: 2 }],
+        [{ type: 'WEAVER', count: 3 }, { type: 'LEECH', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+        [{ type: 'HUNTER', count: 4 }, { type: 'DEVOURER', count: 1 }, { type: 'DRIFTER', count: 2 }],
     ] },
     // 9-3 BOSS — Iron Tide: 5× TITAN T4 + WEAVER escort.
     27: {
@@ -212,16 +245,20 @@ export const WAVE_DATA = {
         ],
     },
 
-    // ── Stage 10: The Last Stand (finale) ──
+    // ── Stage 10: The Last Stand (finale; new-type showcase) ──
+    // The finale waves showcase the new mechanics one last time before the
+    // final boss: DEVOURER + PHANTOM on 28, a second (and final) lone
+    // PRISM_MIRROR on 28-3, and a single PHANTOM cloaker escorting the
+    // 29-3 TITAN mini-boss. Reflection stays at count 1 throughout the run.
     28: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 3 }],
-        [{ type: 'TANGERINE', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'WEAVER', count: 3 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'DEVOURER', count: 1 }, { type: 'WASP', count: 2 }],
+        [{ type: 'TANGERINE', count: 3 }, { type: 'PHANTOM', count: 1 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'PRISM_MIRROR', count: 1 }, { type: 'DRIFTER', count: 2 }],
     ] },
     29: { asteroids: 4, subWaves: [
         [{ type: 'HUNTER', count: 4 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 3 }],
         [{ type: 'STALKER', count: 3 }, { type: 'WEAVER', count: 3 }, { type: 'PROWLER', count: 2 }],
-        [{ type: 'TITAN', count: 1 }, { type: 'SENTINEL', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'TITAN', count: 1 }, { type: 'SENTINEL', count: 2 }, { type: 'PHANTOM', count: 1 }, { type: 'DRIFTER', count: 2 }],
     ] },
     // 10-3 FINAL BOSS — The Last Stand: 5× TITAN T4 + full escort.
     30: {
