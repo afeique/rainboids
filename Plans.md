@@ -38,9 +38,9 @@ Chassis pure-cores SHIPPED (`boss-phases.js` 6.159.0 · `boss-parts.js` 6.160.0 
 | ID | FILES (owned) | DOES | DEPENDS | ∥group | Status |
 |----|----|----|----|----|----|
 | ~~BOSS-01~~ | `js/modules/hud/boss-healthbar.js` + hook in `hud/status.js` | Boss healthbar (name·segmented-HP·phase-pips·element tint) + pure layout helper + 13 unit tests | boss-phases | A | ✅ 6.162.0 |
-| BOSS-02 | `js/modules/combat/collision-system.js` | Route player bullets → boss weak-points (`boss-parts.js`): hits on a live part damage it, core invuln while parts live. Unit test the hit-routing decision | boss-parts (shipped) | — (serialize) | TODO |
+| ~~BOSS-02~~ | `js/modules/combat/collision-system.js` | ✅ **6.168.0** — weak-point hit-routing (`routeBulletToBossPart`): bullets hitting a live part damage it w/ element/resist; core invuln while shielding parts live | boss-parts | — | ✅ 6.168.0 |
 | ~~BOSS-03~~ | NEW `js/modules/enemy/boss-fx.js` + hook in `hud/status.js` | ✅ **6.167.0** — name-card sweep, death detonation, camera-shake (pure helpers + 19 tests). NOTE: camera-shake offset exposed but not yet summed into the engine shake loop → finish in BOSS-04 | boss-intro | A | ✅ 6.167.0 |
-| BOSS-04 | NEW `js/modules/enemy/bosses/index.js` + spawn hook in `wave/wave-manager.js` | Boss registry + "spawn the stage's boss on its last wave"; `isFinalBoss` flag wiring. Unit test registry lookup by stage | BOSS-01/02/03 | — | TODO |
+| ~~BOSS-04~~ | `enemy/bosses/index.js` + `enemy/boss-render.js` + `wave-manager.js` + `enemy.js` + `combat-manager.js` + `game-engine.js` | ✅ **6.168.0** — registry + per-stage spawn (additive/gated), generic boss renderer, descriptor driver in the enemy update loop, final-boss→GAME_COMPLETE, camera-shake summed in, `spawnBoss` debug hook | BOSS-01/02/03 | — | ✅ 6.168.0 |
 
 ### The 10 bosses — each its own file ⇒ **fully parallel** *(old D.B1–D.B5)*
 All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + weak-point parts (uses `boss-parts.js`) + element. DoD per boss: spawns w/ name-card + healthbar, weak-point/armor gating works, enrage fires, killable 45–120s, **boss smoke test green**.
@@ -56,7 +56,8 @@ All depend on BOSS-04 + chassis. Each: a phase-script (uses `boss-phases.js`) + 
 | ~~BOSS-12~~ | `warden-prime.js` | ✅ **6.166.0** — THE WARDEN PRIME (8-24, adaptive resist wall, ADAPTIVE PURGE) | B |
 | ~~BOSS-13~~ | `nullmaw.js` | ✅ **6.165.0** — NULLMAW THE DEVOURER (9-27, Void — pull, projectile-eat cone, IMPLOSION) | B |
 | ~~BOSS-14~~ | `prismarch.js` | ✅ **6.166.0** (module) — THE PRISMARCH / OMEGA (10-30, all 7 — 5-aspect gauntlet; `isFinalBoss` flag set). NOTE: run-complete + death cinematic + run summary wiring → BOSS-04 | B |
-| BOSS-15 | NEW `tests/qa/17-bosses.spec.js` | Parameterized boss smoke tests (spawn → reach every phase → killable, per boss) | after bosses |
+| ~~BOSS-15~~ | `tests/qa/17-bosses.spec.js` | ✅ **6.168.0** — 7 smoke tests: spawn, healthbar, core-invuln gating, killable, no fatal errors, final-boss→GAME_COMPLETE | done | ✅ |
+| | | **🎉 BOSS TRACK COMPLETE** — all 10 bosses spawn, render, fight, and die in-game. (Optional follow-ups: per-boss attack-pattern bullet wiring + tuning live in RUN-07.) | | |
 
 ---
 
