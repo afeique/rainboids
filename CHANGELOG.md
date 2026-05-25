@@ -11,6 +11,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.196.0] - 2026-05-25
+
+### Added — Director telemetry for balance tuning (CD-17)
+
+- **`wave/director-telemetry.js`** (NEW) — read-only per-run instrumentation that
+  captures one snapshot of the adaptive-difficulty director's state + wave outcome
+  on each wave-clear (`wave`, `mode`, `pwr`, `Po`, `Pd`, `D_hp`, `D_thr`,
+  `threatLevel`, `clearTimeMs`, `hpRetainedFrac`, `hitsSurvived`, `nearDeath`),
+  bounded to the last 200 waves. Pure helpers: `createDirectorTelemetry`,
+  `recordDirectorWave`, `summarizeDirectorTelemetry`, `dumpDirectorTelemetryJSON`.
+  Feeds the upcoming RUN-07 balance calibration.
+- Captured in `wave-manager.js` `feedDirectorOnWaveClear` **after** the director
+  processes the wave — purely additive, guarded on `game.directorTelemetry`, and
+  wrapped in a defensive try/catch so a telemetry error can never perturb the
+  director or break the run. Exposed via `game.directorTelemetry` +
+  `gameEngine.dumpDirectorTelemetry()`; reset fresh per run.
+- **`tools/analyze-director-telemetry.mjs`** (NEW) — standalone node analyzer that
+  reads a dumped telemetry JSON and prints the summary + a compact per-wave table.
+- Tests: `tests/unit/wave/director-telemetry.test.js` + `tests/qa/35-director-telemetry.spec.js`
+  (records accrue per wave-clear; dump round-trips; the director's live D still
+  moves — telemetry didn't perturb it). Verified live alongside the 6.195.0
+  controls/UI overhaul: full unit suite **1664** green; QA director + telemetry +
+  build-flow smoke 16/16.
+
+---
+
+## [6.195.0] - 2026-05-25
+
+### Added — Controls/UI foundation, Co-Pilot assists, and graphical item cards
+
+- Added the shared input binding registry and controller glyph helpers used by gamepad controls, loadout chips, and touch `AUTO` hints.
+- Added the Assist System foundation for mobile Co-Pilot play: threat sensing, role-based ability/power decisions, conservative auto-dodge scoring, and mobile wiring before player update.
+- Added first-class Pro gamepad combat mapping: `RB/R1` dash, face buttons for ability slots 1-4, Classic layout fallback, and steer/away-from-threat dash direction.
+- Added a reusable `ItemCard` component, item stat comparison helpers, stat sheet panel, and inventory overlay card rendering with recent-drop upgrade badges.
+- Added a reusable `GamepadFocusController` skeleton for menu focus traversal.
+- Added focused Jest coverage for bindings, Pro/Classic gamepad mapping, assist decisions, dodge scoring, and item stat deltas.
+
+### Changed
+
+- Mobile auto-fire no longer bluntly spends power energy as soon as any target is in cone; smart power timing now comes from the Assist System.
+- Loadout selection rows now reuse ItemCards and show binding chips for equipped weapons and ability slots.
+- README controls, mobile Co-Pilot behavior, and project structure now match the new runtime systems.
+
 ## [6.194.0] - 2026-05-25
 
 ### Added — Thornback enemy: counter-attacking Kinetic bruiser (ENMY-10b)

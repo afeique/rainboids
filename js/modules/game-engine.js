@@ -69,6 +69,12 @@ import * as wave from './wave/wave-manager.js';
 // incoming player damage). Absent director ⇒ ×1.0 everywhere (cold-start +
 // clamps bound all risk). Baselines are first-pass estimates (RUN-07 calibrates).
 import { createDirector, setDirectorContext } from './wave/difficulty-director.js';
+// CD-17 — director telemetry (READ-ONLY). A per-run buffer that accrues one
+// snapshot of the director's state + wave outcome on each wave-clear (captured
+// in wave-manager's feedDirectorOnWaveClear). Feeds the future RUN-07 balance
+// pass. Reset fresh per run alongside the director; dumpDirectorTelemetry()
+// serializes it for a console / playtest harness. Purely observational.
+import { createDirectorTelemetry, dumpDirectorTelemetryJSON } from './wave/director-telemetry.js';
 // DIR-05 — Power Level (PWR) estimator: a one-scalar build-strength prior the
 // director pre-loads from (a strong build pre-faces tougher enemies immediately
 // instead of waiting ~10 reactive waves to ramp). computePWR reads the LIVE
@@ -85,6 +91,7 @@ import { showHint, updateHintDimming } from './ui/hint-system.js';
 import { RadialMenu } from './ui/radial-menu.js';
 import { MobileTouchHandler } from './ui/mobile-touch.js';
 import { GamepadHandler } from './ui/gamepad-handler.js';
+import { AssistSystem, ASSIST_LEVELS } from './assist/assist-system.js';
 import { isMobile, isPortrait } from './platform/platform-detect.js';
 import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './core/storage.js';
 import { StatsOverlay } from './ui/stats-overlay.js';
@@ -548,6 +555,13 @@ export class GameEngine {
         // this.uiManager.hideTitleScreen();
         
         this.initializePools();
+        this.assistSystem = new AssistSystem(this, {
+            level: this.mobile ? ASSIST_LEVELS.CO_PILOT : ASSIST_LEVELS.MANUAL_TOUCH,
+            autoDodge: this.mobile ? 'conservative' : 'off',
+            autoCastAbilities: this.mobile,
+            autoCastPower: this.mobile,
+            autoAim: this.mobile,
+        });
         this.setupEventListeners();
         // Set the initial ASSISTS / GAMEPAD tab visibility now that the UI
         // exists. On mobile this hides the ASSISTS tab until a gamepad
@@ -1226,6 +1240,12 @@ export class GameEngine {
         // Storing it here auto-lights the CD-16 threat HUD, which resolves
         // this.game.difficultyDirector in drawThreatLevelHook.
         this.game.difficultyDirector = createDirector();
+        // CD-17 — fresh per-run director telemetry buffer (READ-ONLY instrumentation).
+        // Reset on every new-run init so records never leak across runs. Each
+        // wave-clear pushes one snapshot (wave-manager); dumpDirectorTelemetry()
+        // serializes it. Stamp runStartedAt so dumps can compute wall-clock spans.
+        this.game.directorTelemetry = createDirectorTelemetry();
+        this.game.directorTelemetry.runStartedAt = Date.now();
         // DIR-05 — compute the run's starting build PWR and feed the §14 context
         // (PWR pre-load + difficulty-mode bias) into the freshly-created director.
         // Default-safe: a starter reads ≈ PWR_REF → pre-load ≈1.0 at NORMAL ⇒ the
@@ -2751,6 +2771,17 @@ export class GameEngine {
         }
     }
 
+    // CD-17 — serialize the per-run director telemetry buffer to a JSON string
+    // (summary + per-wave records) for a console / playtest harness. Also logs it
+    // for convenience when called interactively. READ-ONLY: it never mutates the
+    // director or the buffer. Returns the JSON string (or an empty-buffer dump if
+    // telemetry hasn't been initialized yet).
+    dumpDirectorTelemetry() {
+        const json = dumpDirectorTelemetryJSON(this.game && this.game.directorTelemetry);
+        try { console.log(json); } catch (_e) { /* console may be unavailable */ }
+        return json;
+    }
+
     spawnAsteroids(count) { return wave.spawnAsteroids.call(this, count); }
 
     spawnEnemies(count) { return wave.spawnEnemies.call(this, count); }
@@ -3330,6 +3361,14 @@ export class GameEngine {
             // player reads it — left stick → movement, right stick → aim,
             // triggers → fire/power, A → dash, B/X → ability.
             if (this.gamepad) this.gamepad.poll(input);
+            if (this.assistSystem && (this.controlScheme === 'touch' || this.assists?.autoCastAbilities || this.assists?.autoFire)) {
+                const cfg = this.assistSystem.config;
+                cfg.level = this.controlScheme === 'touch' ? ASSIST_LEVELS.CO_PILOT : ASSIST_LEVELS.MANUAL_TOUCH;
+                cfg.autoDodge = this.controlScheme === 'touch' ? 'conservative' : 'off';
+                cfg.autoCastAbilities = this.controlScheme === 'touch' || !!this.assists?.autoCastAbilities;
+                cfg.autoCastPower = this.controlScheme === 'touch' || !!this.assists?.autoFire;
+                this.assistSystem.tick(input);
+            }
             // Add the update method to the input object so player can call it
             input.updateAimForPlayerMovement = this._boundAimForPlayerMovement;
 
@@ -4923,8 +4962,8 @@ export class GameEngine {
     // nearest), and Auto Fire (auto-trigger primary + power). Read by
     // player.update each tick.
     _loadAssists() {
-        // 6.1.1 — `autoPower` retired. `autoFire` now drives BOTH
-        // primary AND power weapon firing — one toggle, both barrels.
+        // 6.195.0 — `autoFire` drives primary fire. Smart power timing
+        // is handled by AssistSystem so power energy is spent deliberately.
         // Defaults are opt-in (all off) on every platform; the player
         // chooses via the ASSISTS tab. The mobile TOUCH model (no gamepad)
         // still force-bakes Aim Assist / Auto Aim / Auto Fire ON, but that
@@ -4940,6 +4979,7 @@ export class GameEngine {
             aimAssist: false,
             autoAim: false,
             autoFire: false,
+            autoCastAbilities: false,
             laserSight: !mobile,
         };
         try {

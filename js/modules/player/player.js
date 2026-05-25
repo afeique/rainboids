@@ -689,8 +689,8 @@ export class Player {
         // ── Aim resolution (5.74) ──
         // Priority: Auto Aim > Arrow-key rotation > Aim Assist (cursor snap) > Mouse.
         const ge = window.gameEngine;
-        // 6.1.1 — autoPower assist retired. autoFire now controls BOTH
-        // primary and power weapon firing — one toggle, both barrels.
+        // 6.195.0 — Auto Fire owns primary fire only. Smart power timing
+        // is supplied by the Assist System so energy is not spent bluntly.
         // The TOUCH control scheme FORCES autoAim+autoFire (no toggle) so
         // the player only has to dodge; auto-aim picks targets, auto-fire
         // hammers them, and tapping the canvas triggers a DASH (see
@@ -702,7 +702,7 @@ export class Player {
         let assists;
         const scheme = (ge && ge.controlScheme) ? ge.controlScheme : (isMobile() ? 'touch' : 'keyboard');
         if (scheme === 'touch') {
-            assists = { autoAim: true, autoFire: true, aimAssist: false };
+            assists = { autoAim: true, autoFire: true, autoPower: false, aimAssist: false };
         } else {
             assists = (ge && ge.assists) ? ge.assists : null;
         }
@@ -773,11 +773,10 @@ export class Player {
         // aim. Holding fire when nothing's hittable wastes ammo (visually,
         // and for charged weapons it interrupts charging) and feels noisy.
         //
-        // 6.1.1 — Unified assist. autoFire now drives BOTH primary AND
-        // power weapon firing (was split via autoPower pre-6.1.1).
-        // One toggle, both barrels. Mobile forces this true so the
+        // 6.195.0 — Auto Fire drives primary fire. Mobile forces this true so the
         // player only has to dodge; auto-aim picks targets, auto-fire
-        // hammers them, and tapping the canvas triggers a dash.
+        // hammers them, smart power comes from AssistSystem, and tapping
+        // the canvas triggers a dash.
         if (assists && assists.autoFire) {
             const primaryCfg = this.getActivePrimaryConfig && this.getActivePrimaryConfig();
             const baseRange = primaryCfg ? (primaryCfg.range || 1) * 2000 : 2000;
@@ -806,7 +805,7 @@ export class Player {
                 // Unified energy-gated model (incl. CHARGE_SHOT): auto-fire
                 // the power weapon as soon as enough energy is banked.
                 const pcfg = this.getActivePowerConfig && this.getActivePowerConfig();
-                if (pcfg && this.isPowerReady && this.isPowerReady()) {
+                if (assists.autoPower === true && pcfg && this.isPowerReady && this.isPowerReady()) {
                     input.fireSecondary = true;
                 }
             }
@@ -1111,7 +1110,14 @@ export class Player {
                     dashWorldY = w.y;
                 }
             }
+            if (input.gamepadActive && input.stickInput && input.stickInput.magnitude > 0.05) {
+                this._dashInputAngle = Math.atan2(input.stickInput.y, input.stickInput.x);
+            } else {
+                this._dashInputAngle = null;
+            }
             this._triggerDash(audioManager, dashWorldX, dashWorldY);
+            this._assistDashAngle = null;
+            this._dashInputAngle = null;
             input.dashPulse = false; // consume one-shot pulse
             input.dashTargetScreenX = null;
             input.dashTargetScreenY = null;
@@ -1370,6 +1376,17 @@ export class Player {
             } else {
                 angle = Math.atan2(dy, dx);
             }
+        } else if (typeof this._assistDashAngle === 'number') {
+            angle = this._assistDashAngle;
+            this._assistDashAngle = null;
+        } else if (typeof this._dashInputAngle === 'number') {
+            angle = this._dashInputAngle;
+            this._dashInputAngle = null;
+        } else if (this.gameEngine && this.gameEngine.controlScheme === 'gamepad') {
+            const target = typeof this.gameEngine.findNearestTarget === 'function'
+                ? this.gameEngine.findNearestTarget(this.x, this.y) : null;
+            if (target) angle = Math.atan2(this.y - target.y, this.x - target.x);
+            else angle = this.angle + Math.PI;
         } else {
             // Desktop SHIFT path: prefer aim angle, fall back to
             // velocity direction when actively moving so a mid-strafe
@@ -1541,4 +1558,4 @@ export class Player {
         const subtitle = `YOUR SCORE: ${roundedScore}\nHIGH SCORE: ${roundedHighScore}\n\nPress Enter to Restart`;
         uiManager.showMessage('GAME OVER', subtitle);
     }
-} 
+}

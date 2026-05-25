@@ -8,6 +8,8 @@ import { GAME_STATES } from '../core/constants.js';
 import { loadMeta, saveMeta } from '../core/storage.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from '../combat/weapon-data.js';
 import { getUnlockedSet, toggleSelection, normalizeLoadout, LOADOUT_SLOTS } from '../shop/armory.js';
+import { createItemCard } from './item-card.js';
+import { ACTIONS, abilityAction, getBinding } from './bindings.js';
 
 const CATS = {
     primaries: { label: 'PRIMARY', defs: () => PRIMARY_WEAPONS },
@@ -143,18 +145,28 @@ export class LoadoutOverlay {
                 const def = defs[id];
                 if (!def) continue;
                 const isPicked = picked.includes(id);
-                const row = document.createElement('div');
-                row.className = 'armory-row' + (isPicked ? ' armory-row--owned' : '');
-                const name = document.createElement('span');
-                name.className = 'armory-row-name';
-                name.textContent = def.name || id;
+                const pickedIndex = picked.indexOf(id);
+                const action = category === 'primaries' ? ACTIONS.FIRE_PRIMARY
+                    : category === 'powers' ? ACTIONS.FIRE_POWER
+                    : (pickedIndex >= 0 ? abilityAction(pickedIndex) : null);
+                const device = this.gameEngine?.controlScheme === 'touch'
+                    ? 'touch' : (this.gameEngine?.controlScheme === 'gamepad' ? 'gamepad' : 'keyboard');
+                const binding = action ? getBinding(device, action, { layout: this.gameEngine?.gamepad?.getLayout?.() || 'pro' }) : null;
+                const row = createItemCard({ ...def, type: cat.label }, {
+                    variant: 'compact',
+                    binding: isPicked ? binding : null,
+                    focusable: true,
+                    badge: isPicked ? `SLOT ${pickedIndex + 1}` : null,
+                });
+                row.classList.add('armory-row');
+                if (isPicked) row.classList.add('armory-row--owned');
                 const btn = document.createElement('button');
                 btn.className = 'armory-buy loadout-pick' + (isPicked ? ' loadout-pick--on' : '');
                 // Disable selecting more once at the cap (but allow deselect).
                 btn.disabled = !isPicked && picked.length >= LOADOUT_SLOTS;
                 btn.textContent = isPicked ? '✓ EQUIPPED' : 'EQUIP';
                 btn.addEventListener('click', () => this.toggle(category, id));
-                row.append(name, btn);
+                row.appendChild(btn);
                 list.appendChild(row);
             }
             section.appendChild(list);

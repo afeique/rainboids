@@ -29,7 +29,12 @@ import { rewardMultiplier } from '../world/reward-dial.js';
 // RUN-05a — Adaptive Difficulty Director (RUN-04). Read D_hp at the enemy-HP
 // chokepoint (applyEnemyLevelScaling) and feed the director one outcome per
 // wave clear (tickWave). Absent director ⇒ ×1.0 (default below) and no feed.
-import { getDifficulty, tickWave } from './difficulty-director.js';
+import { getDifficulty, getThreatLevel, tickWave } from './difficulty-director.js';
+// CD-17 — director telemetry (READ-ONLY). Capture a per-wave snapshot of the
+// director's post-feed state + wave outcome for the future RUN-07 balance pass.
+// Purely additive: a no-op when game.directorTelemetry is absent, and wrapped in
+// a defensive try/catch so a telemetry error can NEVER break gameplay.
+import { recordDirectorWave } from './director-telemetry.js';
 // DIR-07 — PWR_REF anchors the reference-dependent expected clear time. The
 // flat DIRECTOR_TARGET_CLEAR_MS below is scaled by the player's PWR relative to
 // this anchor so a strong build is judged against ITS OWN expected pace, not a
@@ -405,6 +410,43 @@ export function feedDirectorOnWaveClear() {
         deaths: 0,
     });
     tickWave(dir, outcome);
+
+    // CD-17 — READ-ONLY telemetry capture. AFTER the director has processed the
+    // wave (so Po/Pd/D reflect the just-cleared wave), snapshot its state + this
+    // wave's outcome into the per-run buffer for the future RUN-07 balance pass.
+    // Guarded on game.directorTelemetry existing (no-op otherwise) and wrapped in
+    // a defensive try/catch — telemetry must NEVER perturb the director or break
+    // gameplay (it reads, it never writes director state). All pulls are reads:
+    //   • Po/Pd        ← dir.Po / dir.Pd (the EMA-folded estimates recordWave set)
+    //   • D_hp/D_thr   ← getDifficulty(dir) (the EFFECTIVE difficulty the game reads)
+    //   • threatLevel  ← getThreatLevel(dir) (CD-16's 1..5 HUD pip)
+    //   • outcome fields ← the `outcome` object already built above
+    if (this.game && this.game.directorTelemetry) {
+        try {
+            const D = getDifficulty(dir);
+            const hpFrac = outcome.hpRetainedFrac;
+            recordDirectorWave(this.game.directorTelemetry, {
+                wave: this.game.currentWave,
+                mode: dir.mode,
+                pwr: this.game.playerPWR,
+                Po: dir.Po,
+                Pd: dir.Pd,
+                D_hp: D.D_hp,
+                D_thr: D.D_thr,
+                threatLevel: getThreatLevel(dir),
+                clearTimeMs: actualClearTime,
+                hpRetainedFrac: hpFrac,
+                hitsSurvived: outcome.hitsSurvived,
+                expectedHits: outcome.expectedHits,
+                // near-death heuristic for RUN-07: cleared with ≤10% HP retained.
+                nearDeath: Number.isFinite(hpFrac) && hpFrac <= 0.1,
+                capturedAt: Date.now(),
+            });
+        } catch (_telemetryErr) {
+            // Swallow: telemetry is non-critical and must never break the run.
+        }
+    }
+
     // Reset for the next wave (spawnWaveEntities also resets at wave start;
     // this is belt-and-suspenders for the wave-clear → next-spawn gap).
     this.game._waveHits = 0;

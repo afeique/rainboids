@@ -968,6 +968,24 @@ export const POWER_WEAPONS = {
     },
 };
 
+const AUTO_CAST_BY_POWER = {
+    CHARGE_SHOT:    { role: 'snipe', targeting: 'nearest', minThreatLevel: 1 },
+    MINE_LAYER:     { role: 'zone', targeting: 'self', aoeRadius: 180, minThreatLevel: 1 },
+    NOVA_BLAST:     { role: 'cc', targeting: 'self', aoeRadius: 320, minThreatLevel: 2 },
+    MISSILE_SALVO:  { role: 'snipe', targeting: 'boss', minThreatLevel: 2 },
+    LANCE_BEAM:     { role: 'snipe', targeting: 'nearest', minThreatLevel: 2 },
+    LIGHTNING_ARC:  { role: 'snipe', targeting: 'nearest', minThreatLevel: 1 },
+    SINGULARITY:    { role: 'nuke', targeting: 'cluster', aoeRadius: 280, minThreatLevel: 2 },
+    PRISM_BEAM:     { role: 'nuke', targeting: 'cluster', aoeRadius: 220, minThreatLevel: 2 },
+    ORBITAL_STRIKE: { role: 'nuke', targeting: 'cluster', aoeRadius: 150, minThreatLevel: 2 },
+    CRYO_BURST:     { role: 'cc', targeting: 'self', aoeRadius: 300, minThreatLevel: 2 },
+    OVERDRIVE:      { role: 'buff', targeting: 'self', minThreatLevel: 3 },
+};
+
+for (const [id, meta] of Object.entries(AUTO_CAST_BY_POWER)) {
+    if (POWER_WEAPONS[id]) POWER_WEAPONS[id].autoCast = meta;
+}
+
 // ─── ELEMENT TAGS (E1 — Element & Resistance System) ────────────────────────
 // The element of each weapon's damage. Assigned in one auditable table rather
 // than inline on each config; anything not listed defaults to KINETIC. The
@@ -1589,6 +1607,27 @@ export const ABILITIES = {
         cost: 4, unlockWave: 0, upgrades: [],
     },
 };
+
+const AUTO_CAST_BY_ABILITY = {
+    BULWARK:            { role: 'mitigate', targeting: 'self', minThreatLevel: 1 },
+    FIELD_MEDIC:        { role: 'heal', targeting: 'self', minThreatLevel: 1 },
+    DEFLECTOR_ORBS:     { role: 'mitigate', targeting: 'self', minThreatLevel: 1 },
+    EMP_PULSE:          { role: 'cc', targeting: 'self', aoeRadius: 200, minThreatLevel: 2 },
+    SENTRY_DRONE:       { role: 'summon', targeting: 'self', minThreatLevel: 1 },
+    BLINK:              { role: 'escape', targeting: 'away', minThreatLevel: 1 },
+    GRAVITY_SNARE:      { role: 'cc', targeting: 'self', aoeRadius: 320, minThreatLevel: 2 },
+    DESIGNATOR:         { role: 'nuke', targeting: 'self', aoeRadius: 360, minThreatLevel: 2 },
+    SECOND_WIND:        { role: 'heal', targeting: 'self', minThreatLevel: 1 },
+    ELEMENTAL_INFUSION: { role: 'buff', targeting: 'self', minThreatLevel: 3 },
+    CRYO_FIELD:         { role: 'zone', targeting: 'cluster', aoeRadius: 180, minThreatLevel: 2 },
+    STASIS_FIELD:       { role: 'zone', targeting: 'cluster', aoeRadius: 210, minThreatLevel: 2 },
+    STORM_CELL:         { role: 'zone', targeting: 'cluster', aoeRadius: 200, minThreatLevel: 2 },
+    PYRE_AURA:          { role: 'zone', targeting: 'cluster', aoeRadius: 190, minThreatLevel: 2 },
+};
+
+for (const [id, meta] of Object.entries(AUTO_CAST_BY_ABILITY)) {
+    if (ABILITIES[id]) ABILITIES[id].autoCast = meta;
+}
 
 // ─── ABILITY UPGRADES ───────────────────────────────────────────────────────
 

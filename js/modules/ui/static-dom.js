@@ -82,10 +82,10 @@ function _buildTutorialOverlay() {
     const body = el('div', { className: 'tutorial-body' });
     body.appendChild(section('CONTROLS', [
         'Move — WASD / arrow keys (drag to move on mobile).',
-        'Aim — mouse (auto-aim on mobile).',
+        'Aim — mouse (Co-Pilot auto-aims on mobile).',
         'Primary weapon — hold LEFT CLICK to fire continuously.',
         'Power weapon — RIGHT CLICK / SPACE (costs energy — see below).',
-        'Defense ability — TAB when charged.   Dash — SHIFT.',
+        'Abilities — 1 / 2 / 3 / 4.   Dash — SHIFT.',
         'Weapon radials — hold F (primary), E (power), R (defense ability).',
         'Pause — ESC.   Stats — backtick (`).',
     ]));
@@ -95,9 +95,9 @@ function _buildTutorialOverlay() {
     const gamepadSection = section('GAMEPAD (DUALSHOCK 4 / XBOX)', [
         'Move — left stick.   Aim — right stick (twin-stick).',
         'Fire primary — R2.   Fire / charge power — L2.',
-        'Primary radial — hold R1.   Power radial — hold L1.',
-        'Defense ability radial — hold Triangle/Y.   Activate ability — Circle/B.',
-        'Dash — Cross/A.   Pause — Options / Start.',
+        'Dash — R1/RB.   Abilities — Cross/A, Circle/B, Square/X, Triangle/Y.',
+        'Classic layout keeps dash on Cross/A and the old held radials.',
+        'Pause — Options / Start.',
         'Choose Gamepad vs Mouse + Keyboard / Touch in pause → GAMEPAD tab.',
     ]);
     gamepadSection.id = 'tutorial-gamepad-section';
@@ -347,11 +347,9 @@ function _buildGamepadTab() {
         { control: 'D-Pad',              action: 'Move ship (digital fallback)' },
         { control: 'R2 (right trigger)', action: 'Fire primary weapon' },
         { control: 'L2 (left trigger)',  action: 'Fire / charge power weapon' },
-        { control: 'R1 - hold',          action: 'Primary weapon radial (stick picks, release equips)' },
-        { control: 'L1 - hold',          action: 'Power weapon radial (stick picks, release equips)' },
-        { control: 'Triangle / Y - hold', action: 'Defense ability radial (stick picks, release equips)' },
-        { control: 'Cross / A',          action: 'Dash' },
-        { control: 'Circle / B',         action: 'Activate defense ability' },
+        { control: 'R1 / RB',            action: 'Dash in steer direction; when still, dash away from nearest threat' },
+        { control: 'Cross/A · Circle/B · Square/X · Triangle/Y', action: 'Activate ability slots 1-4' },
+        { control: 'Classic layout',     action: 'Keeps Cross/A dash and the old held radials' },
         { control: 'Options / Start',    action: 'Pause / resume' },
     ];
 
@@ -387,6 +385,15 @@ function _buildGamepadTab() {
         style: { marginBottom: '14px', justifyContent: 'center' },
         children: [gpBtn, altBtn],
     });
+    const proBtn = el('button', { id: 'gamepad-layout-pro', className: 'pause-tab active', text: 'PRO' });
+    proBtn.dataset.layout = 'pro';
+    const classicBtn = el('button', { id: 'gamepad-layout-classic', className: 'pause-tab', text: 'CLASSIC' });
+    classicBtn.dataset.layout = 'classic';
+    const layoutRow = el('div', {
+        className: 'pause-tabs',
+        style: { marginBottom: '14px', justifyContent: 'center' },
+        children: [proBtn, classicBtn],
+    });
 
     return el('div', {
         id: 'gamepad-tab',
@@ -398,14 +405,19 @@ function _buildGamepadTab() {
                 text: 'Play with:',
             }),
             schemeRow,
+            el('div', {
+                style: { marginBottom: '10px', color: '#aaa', fontSize: 'calc(13px * var(--font-body-scale, 1))', textAlign: 'center' },
+                text: 'Layout:',
+            }),
+            layoutRow,
             list,
         ],
     });
 }
 
 function _buildAssistsTab() {
-    // 6.1.1 — Auto Power assist retired. Auto Fire now drives BOTH
-    // primary and power weapon firing — one toggle, both barrels.
+    // 6.195.0 — Auto Fire drives primary fire. Smart power timing lives
+    // in the Assist System so power energy is spent deliberately.
     // The same toggle set serves desktop AND mobile-with-gamepad (a
     // gamepad turns mobile into a twin-stick experience where the player
     // chooses their own assists). Touch-only mobile never sees this tab
@@ -417,7 +429,9 @@ function _buildAssistsTab() {
         { id: 'assist-auto-aim', title: 'Auto Aim',
           desc: 'Automatically aim at the nearest target.' },
         { id: 'assist-auto-fire', title: 'Auto Fire',
-          desc: 'Fire primary AND power weapon automatically.' },
+          desc: 'Fire primary automatically; power timing is handled by Smart Power.' },
+        { id: 'assist-auto-cast-abilities', title: 'Auto-Cast Abilities',
+          desc: 'Let the Co-Pilot trigger defensive and crowd-control abilities when danger spikes.' },
         // 6.2.3 — Laser Sight toggle. Renders the muzzle laser / cone-
         // of-fire wedge so the player can read aim + spread at a glance.
         { id: 'assist-laser-sight', title: 'Laser Sight',

@@ -8,8 +8,9 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
-import { drawItemGlyph } from '../hud/item-feed.js';
 import { ELEMENTS, isElement } from '../combat/elements.js';
+import { createItemCard, createStatPanel, compareItemStats } from './item-card.js';
+import { GamepadFocusController } from './gamepad-focus.js';
 
 // ITEM-01 — map a `<element>Resist` affix type back to its ELEMENTS entry, so a
 // resist readout can show the element's themed name + color. e.g.
@@ -18,20 +19,6 @@ function _elementForResistType(type) {
     if (typeof type !== 'string' || !type.endsWith('Resist')) return null;
     const id = type.slice(0, -'Resist'.length).toUpperCase();
     return isElement(id) ? ELEMENTS[id] : null;
-}
-
-// Render a crystalline item glyph into a small standalone canvas so the
-// DOM overlay can reuse the exact canvas geometry from the loot feed.
-function glyphCanvas(slot, rarityColor, px = 30) {
-    const c = document.createElement('canvas');
-    c.width = px; c.height = px;
-    c.className = 'inv-glyph';
-    const g = c.getContext('2d');
-    if (g) {
-        g.translate(px / 2, px / 2);
-        drawItemGlyph(g, slot, rarityColor, px / 2 - 3);
-    }
-    return c;
 }
 
 export class InventoryOverlay {
@@ -54,6 +41,7 @@ export class InventoryOverlay {
                 if (e.target === this.elements.overlay) this.close();
             });
         }
+        this.focus = new GamepadFocusController(this.elements.body, { onBack: () => (this.close(), true) });
     }
 
     setGameEngine(ge) { this.gameEngine = ge; }
@@ -71,6 +59,8 @@ export class InventoryOverlay {
         this.elements.overlay.style.display = 'flex';
         if (pauseDom) pauseDom.style.display = 'none';
         this.render();
+        this.focus.setRoot(this.elements.body);
+        this.focus.focusFirst();
         return true;
     }
 
@@ -139,50 +129,41 @@ export class InventoryOverlay {
         const player = ge.player;
         body.replaceChildren();
 
+        const shell = document.createElement('div');
+        shell.className = 'inv-armory-shell';
+        body.appendChild(shell);
+
+        const left = document.createElement('div');
+        left.className = 'inv-armory-main';
+        shell.appendChild(left);
+
+        const right = document.createElement('div');
+        right.className = 'inv-armory-side';
+        shell.appendChild(right);
+
         // ── EQUIPPED ──
         const eqTitle = document.createElement('div');
         eqTitle.className = 'inv-section-title';
         eqTitle.textContent = 'EQUIPPED';
-        body.appendChild(eqTitle);
+        left.appendChild(eqTitle);
 
         const grid = document.createElement('div');
         grid.className = 'inv-equipped-grid';
         for (const slot of SLOT_ORDER) {
             const it = player.equippedItems ? player.equippedItems[slot] : null;
-            const cell = document.createElement('div');
-            cell.className = 'inv-slot' + (it ? '' : ' inv-slot--empty');
-            const rarity = it ? (it.rarityColor || '#cccccc') : '#3a4254';
-            cell.style.setProperty('--inv-rarity', rarity);
-
-            cell.appendChild(glyphCanvas(slot, rarity, 34));
-
-            const info = document.createElement('div');
-            info.className = 'inv-slot-info';
-            const slotLbl = document.createElement('div');
-            slotLbl.className = 'inv-slot-label';
-            slotLbl.textContent = SLOT_LABEL[slot] || slot.toUpperCase();
-            info.appendChild(slotLbl);
-            const nameLbl = document.createElement('div');
-            nameLbl.className = 'inv-item-name';
-            if (it) {
-                nameLbl.textContent = (it.rarityLabel ? it.rarityLabel + ' ' : '') + 'L' + (it.level || 1);
-                nameLbl.style.color = rarity;
-            } else {
-                nameLbl.textContent = '— empty —';
-            }
-            info.appendChild(nameLbl);
-            const affix = document.createElement('div');
-            affix.className = 'inv-item-affix';
-            affix.textContent = it ? this._affixLine(it) : '';
-            info.appendChild(affix);
-            if (it) {
-                const resists = this._resistReadout(it);
-                if (resists) info.appendChild(resists);
-            }
-            cell.appendChild(info);
+            const display = it || {
+                slot,
+                rarityColor: '#3a4254',
+                name: `${SLOT_LABEL[slot] || slot.toUpperCase()} — empty`,
+                affixes: [],
+            };
+            const cell = createItemCard(display, { variant: 'standard', focusable: true });
+            if (!it) cell.classList.add('item-card--empty');
             grid.appendChild(cell);
         }
-        body.appendChild(grid);
+        left.appendChild(grid);
+
+        right.appendChild(createStatPanel(player.equippedItems || {}));
 
         // ── RECENT DROPS ──
         // Phase R8.2/R8.3 — gear is locked during a run; drops just accrue
@@ -191,7 +172,7 @@ export class InventoryOverlay {
         const dropTitle = document.createElement('div');
         dropTitle.className = 'inv-section-title';
         dropTitle.textContent = 'RECENT DROPS — banked to stash at run end · equip in the Armory';
-        body.appendChild(dropTitle);
+        left.appendChild(dropTitle);
 
         const list = document.createElement('div');
         list.className = 'inv-drop-list';
@@ -205,36 +186,27 @@ export class InventoryOverlay {
         for (const entry of feed) {
             const it = entry.item;
             if (!it) continue;
-            const rarity = it.rarityColor || '#cccccc';
-            // Informational only (R8.2 — no mid-run equipping).
-            const row = document.createElement('div');
-            row.className = 'inv-drop-row';
-            row.style.setProperty('--inv-rarity', rarity);
-
-            row.appendChild(glyphCanvas(it.slot, rarity, 30));
-
-            const info = document.createElement('div');
-            info.className = 'inv-drop-info';
-            const name = document.createElement('div');
-            name.className = 'inv-drop-name';
-            name.textContent = (it.rarityLabel ? it.rarityLabel + ' ' : '') + (SLOT_LABEL[it.slot] || it.slot.toUpperCase());
-            name.style.color = rarity;
-            info.appendChild(name);
-            const affix = document.createElement('div');
-            affix.className = 'inv-drop-affix';
-            affix.textContent = this._affixLine(it);
-            info.appendChild(affix);
-            const resists = this._resistReadout(it);
-            if (resists) info.appendChild(resists);
-            row.appendChild(info);
-
-            const tag = document.createElement('div');
-            tag.className = 'inv-drop-tag';
-            tag.textContent = `L${it.level || 1}`;
-            row.appendChild(tag);
+            const equipped = player.equippedItems ? player.equippedItems[it.slot] : null;
+            const deltas = compareItemStats(it, equipped);
+            const upgrade = deltas.some((d) => d.delta > 0) && !deltas.some((d) => d.delta < 0 && Math.abs(d.delta) > 8);
+            const row = createItemCard(it, {
+                variant: 'compact',
+                focusable: true,
+                compareWith: equipped,
+                badge: upgrade ? 'UPGRADE' : `L${it.level || 1}`,
+            });
+            row.addEventListener('focus', () => {
+                right.replaceChildren(createStatPanel(player.equippedItems || {}, it));
+            });
+            row.addEventListener('mouseenter', () => {
+                right.replaceChildren(createStatPanel(player.equippedItems || {}, it));
+            });
+            row.addEventListener('mouseleave', () => {
+                right.replaceChildren(createStatPanel(player.equippedItems || {}));
+            });
 
             list.appendChild(row);
         }
-        body.appendChild(list);
+        left.appendChild(list);
     }
 }

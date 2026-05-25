@@ -26,6 +26,7 @@
 // button commits it (dead-zone release cancels).
 
 import { GAME_STATES } from '../core/constants.js';
+import { ACTIONS, GAMEPAD_BUTTON, GAMEPAD_LAYOUTS, createGamepadBindingState } from './bindings.js';
 
 const MOVE_DEADZONE = 0.22;     // radial deadzone for the left (move) stick
 const AIM_DEADZONE = 0.28;      // radial deadzone for the right (aim) stick
@@ -33,15 +34,18 @@ const TRIGGER_THRESHOLD = 0.4;  // analog trigger press point
 const RADIAL_SELECT_DEADZONE = 0.35; // stick deflection needed to pick a slice
 
 // Button indices (standard mapping).
-const BTN_CROSS = 0;     // dash
-const BTN_CIRCLE = 1;    // activate defense ability
-const BTN_TRIANGLE = 3;  // defense radial (hold)
-const BTN_L1 = 4;        // power radial (hold)
-const BTN_R1 = 5;        // primary radial (hold)
-const BTN_L2 = 6;        // fire power weapon
-const BTN_R2 = 7;        // fire primary weapon
-const BTN_OPTIONS = 9;   // pause
-const BTN_DPAD_UP = 12, BTN_DPAD_DOWN = 13, BTN_DPAD_LEFT = 14, BTN_DPAD_RIGHT = 15;
+const BTN_CROSS = GAMEPAD_BUTTON.A;
+const BTN_CIRCLE = GAMEPAD_BUTTON.B;
+const BTN_SQUARE = GAMEPAD_BUTTON.X;
+const BTN_TRIANGLE = GAMEPAD_BUTTON.Y;
+const BTN_L1 = GAMEPAD_BUTTON.LB;
+const BTN_R1 = GAMEPAD_BUTTON.RB;
+const BTN_L2 = GAMEPAD_BUTTON.LT;
+const BTN_R2 = GAMEPAD_BUTTON.RT;
+const BTN_OPTIONS = GAMEPAD_BUTTON.START;
+const BTN_DPAD_UP = GAMEPAD_BUTTON.DPAD_UP, BTN_DPAD_DOWN = GAMEPAD_BUTTON.DPAD_DOWN,
+    BTN_DPAD_LEFT = GAMEPAD_BUTTON.DPAD_LEFT, BTN_DPAD_RIGHT = GAMEPAD_BUTTON.DPAD_RIGHT;
+const GAMEPAD_LAYOUT_STORAGE_KEY = 'rainboids:gamepad-layout';
 
 // Radial deadzone with re-scaling: inside the deadzone returns a zero
 // vector; outside, magnitude ramps 0→1 from the deadzone edge to full
@@ -62,13 +66,14 @@ export class GamepadHandler {
         this._index = null;
         // Rising-edge trackers for one-shot actions.
         this._prevDash = false;
-        this._prevAbility = false;
+        this._prevAbility = [false, false, false, false];
         this._prevPause = false;
         // U3 — D-pad tab cycling while the BUILD/shop tree is open.
         this._prevTabPrev = false;
         this._prevTabNext = false;
         // Which radial type (if any) the gamepad currently has open.
         this._heldRadial = null;
+        this.layout = this._loadLayout();
         this._onConnect = this._onConnect.bind(this);
         this._onDisconnect = this._onDisconnect.bind(this);
     }
@@ -84,6 +89,20 @@ export class GamepadHandler {
     }
 
     isConnected() { return this._connected; }
+    getLayout() { return GAMEPAD_LAYOUTS[this.layout] ? this.layout : 'pro'; }
+    setLayout(layout) {
+        this.layout = GAMEPAD_LAYOUTS[layout] ? layout : 'pro';
+        try { localStorage.setItem(GAMEPAD_LAYOUT_STORAGE_KEY, this.layout); } catch (_) {}
+    }
+
+    _loadLayout() {
+        try {
+            const saved = localStorage.getItem(GAMEPAD_LAYOUT_STORAGE_KEY);
+            return GAMEPAD_LAYOUTS[saved] ? saved : 'pro';
+        } catch (_) {
+            return 'pro';
+        }
+    }
 
     _schemeIsGamepad() {
         return !!(this.engine && this.engine.controlScheme === 'gamepad');
@@ -183,10 +202,13 @@ export class GamepadHandler {
         // slice, release commits (or cancels in the dead zone).
         const radial = this.engine.radialMenu;
         if (!radial) return;
-        const want = this._pressed(gp, BTN_R1) ? 'primary'
-                   : this._pressed(gp, BTN_L1) ? 'power'
-                   : this._pressed(gp, BTN_TRIANGLE) ? 'ability'
-                   : null;
+        const classic = this.getLayout() === 'classic';
+        const want = classic
+            ? (this._pressed(gp, BTN_R1) ? 'primary'
+                : this._pressed(gp, BTN_L1) ? 'power'
+                : this._pressed(gp, BTN_TRIANGLE) ? 'ability'
+                : null)
+            : null;
         const state = this.engine.game && this.engine.game.state;
         const playable = state === GAME_STATES.PLAYING || state === GAME_STATES.WAVE_TRANSITION;
 
@@ -276,19 +298,31 @@ export class GamepadHandler {
         input.fire = this._pressed(gp, BTN_R2);          // R2 → primary
         input.fireSecondary = this._pressed(gp, BTN_L2); // L2 → power
 
-        const dash = this._pressed(gp, BTN_CROSS);
+        const actions = createGamepadBindingState(gp, this.getLayout());
+        const dash = !!actions[ACTIONS.DASH];
         if (dash && !this._prevDash) {
             input.dashPulse = true;
-            input.dashTargetScreenX = null; // pad dash uses aim/velocity direction
+            input.dashTargetScreenX = null; // pad dash uses steer/assist direction
             input.dashTargetScreenY = null;
         }
         this._prevDash = dash;
 
-        const ability = this._pressed(gp, BTN_CIRCLE);
-        if (ability && !this._prevAbility) {
-            input.activateAbility = true;
+        const abilityButtons = this.getLayout() === 'classic'
+            ? [this._pressed(gp, BTN_CIRCLE), false, false, false]
+            : [
+                !!actions[ACTIONS.ABILITY_1],
+                !!actions[ACTIONS.ABILITY_2],
+                !!actions[ACTIONS.ABILITY_3],
+                !!actions[ACTIONS.ABILITY_4],
+            ];
+        input.activateAbilitySlot = input.activateAbilitySlot || [false, false, false, false];
+        for (let i = 0; i < abilityButtons.length; i++) {
+            if (abilityButtons[i] && !this._prevAbility[i]) {
+                if (this.getLayout() === 'classic' && i === 0) input.activateAbility = true;
+                else input.activateAbilitySlot[i] = true;
+            }
         }
-        this._prevAbility = ability;
+        this._prevAbility = abilityButtons;
     }
 
     // Release any input the pad was driving (scheme switched away or pad
@@ -302,6 +336,6 @@ export class GamepadHandler {
             input.aimStick = ZERO_VEC;
         }
         this._prevDash = false;
-        this._prevAbility = false;
+        this._prevAbility = [false, false, false, false];
     }
 }

@@ -153,6 +153,44 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 
 ---
 
+## P7 — Mobile Controls & AI Co-Pilot Overhaul *(implement LAST — after every track above)*
+> Source: `docs/Mobile Controls — One-Thumb Play & AI Co-Pilot – 2026-05-25.md` (design rationale) + `docs/Controls, Co-Pilot & Inventory UI — Implementation Checklist (Gap-Focused) – 2026-05-25.md` (authoritative "what's left", re-baselined ~v6.194). Scope = the **mobile + Co-Pilot** work (AS/FB/MB); the sibling GP-gamepad / IT-items workstreams from the gap-focused checklist are **out of this track** (fold in separately if wanted). Goal: complete one-thumb play — steer + tap-to-dash while the **AI Co-Pilot** (the mobile front-end of the unified Assist System) handles aim/fire/power/abilities — and make that automation *legible* and *tunable*.
+
+**⚠ RE-BASELINE — already DONE, do NOT rebuild** (verified ~v6.194; supersedes the design doc's "implementation phases"): unified Assist System Sense/Decide/Act (`assist/assist-system.js`, ticked `game-engine.js:3370`); 3 assist levels (MANUAL_TOUCH/CO_PILOT/AUTOPILOT); relative-velocity TTI + homing detection (M2); landing-position dodge scoring (M3); split-rate sense (dodge/frame, cast/100ms, M1); role-based auto-cast for 14/14 abilities + 11/11 powers (M6); autoDodge intensity logic (engine only — no UI); analog stick + tap-dash + forced auto-aim/fire (`mobile-touch.js`, `player.js:694-705`); ability-cooldown slot-bar HUD (`status.js:1753`). The remaining work is **surfacing/persistence/feedback/mobile-polish**, below. *(NOTE: the user has this overhaul in-flight on/around v6.195.0 — re-confirm the re-baseline against the committed tree before starting this track; many rows may already be closed.)*
+
+### ∥group AS — Assist / Co-Pilot UI depth & persistence *(engine supports level/aggression/autoDodge-intensity; none user-settable yet; touch-only mobile can't reach the ASSISTS tab)*
+| ID | FILES | DOES |
+|----|----|----|
+| AS-1 | `game-engine.js` (`_loadAssists` `:4964`, `setAssist` `:5070`, per-frame override `:3365`) | **Persist & honor the richer assist config.** Extend persisted `rainboidsAssists` to include `level`/`aggression`/`autoDodge`; stop unconditionally recomputing them from `controlScheme` each frame (seed from saved; touch defaults = initial only). Unit: load/merge/save. **MINOR.** *(prereq for AS-2..5)* |
+| AS-2 | `static-dom.js` ASSISTS tab + `ui-manager.js` | **Assist LEVEL preset selector** (Co-Pilot/Autopilot/Manual Touch) — segmented control sets `config.level` + applies the preset toggle bundle (e.g. Autopilot ⇒ aggressive auto-dodge + all auto-casts on); persists via AS-1. Unit: preset→config. **MINOR.** |
+| AS-3 | ASSISTS tab → `config.autoDodge` | **Auto-Dodge intensity** (Off/Conservative/Aggressive), mapping to values `decideDodge` already reads (`assist-system.js:191`). Default **Conservative** (manual tap-dodge stays primary); Off disables; Aggressive raises TTI threshold; manual tap always overrides. Unit: `decideDodge` thresholds + survival-sim sanity. **MINOR.** |
+| AS-4 | ASSISTS tab → `config.aggression` (const 0.55 `assist-system.js:11/96`) | **Aggression slider** 0.1–1.0 feeding `roleScore` + heal/mitigate thresholds; persist. Unit: `roleScore(aggression)`. **MINOR.** |
+| AS-5 | mobile UI (ASSISTS tab hidden on touch `game-engine.js:5051`, `static-dom.js:277`) | **Mobile-native Assists screen** (explicit user ask) — touch-reachable Co-Pilot screen (from pause / settings) exposing AS-2/3/4 + auto-cast toggles + stick side; stop force-baking assists so mobile players can tune. **MINOR.** |
+| AS-6 | mobile HUD | *(optional)* **Smart-Cast button** (default hidden) → fires `decideCast`/`decidePower`'s top pick on demand. Unit: best-pick selection. **MINOR.** |
+
+### ∥group FB — Co-Pilot & death feedback *(`_lastAssistCast` written but never read; no auto-cast cue; game-over shows no cause)*
+| ID | FILES | DOES |
+|----|----|----|
+| FB-1 | `assist-system.js:261` (writer), `status.js:1753` slot-bar, toast system | **Surface auto-casts** — on a new `player._lastAssistCast`, flash the matching cooldown slot + brief toast ("BULWARK"/"EMP", reuse pickup-toast). High player-value, cheap, independent. **PATCH.** |
+| FB-2 | ship render | *(optional)* **Auto-dodge cue** — subtle ship glow when `_assistDashAngle` drove the dash. **PATCH.** |
+| FB-3 | record `player.lastDamageSource`; `overlays.js` `drawGameOverScreen` `:1150` | **Death-cause readout** — one-line cause ("Cornered by Hunters"/"Caught in Titan barrage") under the wave/time line, read from the kill event (teach positioning, not blame the Co-Pilot). Unit: cause-string mapping. **MINOR.** |
+
+### ∥group MB — Mobile wiring & polish *(three built modules are dead/never-imported; several polish items absent)*
+| ID | FILES | DOES |
+|----|----|----|
+| MB-1 | `platform/wake-lock.js`, `game-engine.js` state transitions | **Wire wake-lock** — acquire on PLAYING, release on pause/menu/game-over (screen stays awake during mobile play). **PATCH.** |
+| MB-2 | `core/utils.js:115` no-op `triggerHapticFeedback` (called `collision-system.js:213,815`) → `platform/haptic.js` | **Wire real haptics** + Co-Pilot cues (auto-cast=light, auto-dodge=medium, hit=scaled); settings toggle. **PATCH.** |
+| MB-3 | `ui/mobile-tutorial.js` (`shouldShowMobileTutorial`/`markShown`), boot path | **Wire first-run tutorial card** — rewrite copy for one-thumb + Co-Pilot ("Steer to dodge, tap to dash — your Co-Pilot handles the rest"); shows once, dismissible. **PATCH.** |
+| MB-4 | `mobile-touch.js`/camera | **Ship-under-finger offset** — anchor ship ~50px above the touch point so the thumb doesn't occlude it. **PATCH.** |
+| MB-5 | camera | **Mobile camera zoom** — tune (~0.75 portrait / ~0.9 landscape) for a moving ship; verify with deadband-follow. **PATCH.** |
+| MB-6 | crit-flash gating | **Verify crit-flash suppression covers mobile** (5.99.2 `3695b94`); fix if mis-gated → no full crit screen-flash on mobile. **PATCH (or none if correct). Verify-first.** |
+| MB-7 | `hud/combat.js drawDamageNumbers` | **Canvas-space damage numbers on mobile** — stay readable at mobile zoom. **PATCH.** |
+
+**Sequencing (this track):** AS-1 first (persistence/seeding) → unblocks AS-2/3/4/5. FB-1 + MB-1/2/3 are independent cheap wins (wire dead modules + make the Co-Pilot legible). Suggested first sub-sprint = FB-1 + AS-1+AS-3 + MB-1/2/3 (biggest perceived-quality jump for least code). AS-6/FB-2 optional.
+**Verification gate:** unit (new AS-3/4 thresholds, FB cause-mapping); **survival sims** via `tools/ai-qa-bot/` as a *positioning-only* bot across all difficulty MODEs (assert Co-Pilot keeps player alive + watch director thrash since a deterministic Co-Pilot is periodic); **fun-score A/B** (accept only if no dimension regresses >5 pts); **fairness** (an Autopilot run must not farm an un-escalated game for full rewards). Devices: iOS Safari + Android Chrome, portrait/landscape, notch safe-areas, both stick sides.
+
+---
+
 ## Notes / known items
 - **DROPPED/SUPERSEDED:** SKILL-02 (new-skills batch — folded into CD); META-07 (→ RUN-07).
 - **Pre-existing, not regressions:** none open — the 3 stale e2e wave-1 assertions were fixed (6.187.1).

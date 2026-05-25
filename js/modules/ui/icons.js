@@ -288,3 +288,49 @@ function _rasterize(slug, sizePx, color) {
     img.src = url;
     return canvas;
 }
+
+const CONTROLLER_GLYPHS = {
+    xbox: {
+        A: 'A', B: 'B', X: 'X', Y: 'Y',
+        LB: 'LB', RB: 'RB', LT: 'LT', RT: 'RT',
+        L3: 'L3', R3: 'R3', Start: 'Menu', Select: 'View',
+        LS: 'LS', RS: 'RS',
+    },
+    playstation: {
+        A: 'Cross', B: 'Circle', X: 'Square', Y: 'Triangle',
+        LB: 'L1', RB: 'R1', LT: 'L2', RT: 'R2',
+        L3: 'L3', R3: 'R3', Start: 'Options', Select: 'Share',
+        LS: 'LS', RS: 'RS',
+    },
+    switch: {
+        A: 'B', B: 'A', X: 'Y', Y: 'X',
+        LB: 'L', RB: 'R', LT: 'ZL', RT: 'ZR',
+        L3: 'L3', R3: 'R3', Start: '+', Select: '-',
+        LS: 'LS', RS: 'RS',
+    },
+    keyboard: {},
+};
+
+export function detectControllerFamily(gamepadId = '') {
+    const id = String(gamepadId || '').toLowerCase();
+    if (id.includes('dualshock') || id.includes('dualsense') || id.includes('playstation') || id.includes('sony')) return 'playstation';
+    if (id.includes('switch') || id.includes('joy-con') || id.includes('pro controller')) return 'switch';
+    if (id.includes('xbox') || id.includes('xinput')) return 'xbox';
+    return 'xbox';
+}
+
+export function bindingGlyph(binding, opts = {}) {
+    if (!binding) return '';
+    if (binding.kind === 'assist') return 'AUTO';
+    if (binding.kind === 'touch') return binding.label || 'Tap';
+    if (binding.kind === 'key' || binding.kind === 'mouse') return binding.label || binding.code || '';
+    const family = opts.family || opts.controllerFamily || 'xbox';
+    const map = CONTROLLER_GLYPHS[family] || CONTROLLER_GLYPHS.xbox;
+    return map[binding.label] || binding.label || String(binding.code || '');
+}
+
+export function renderBindingChipHTML(binding, opts = {}) {
+    const label = bindingGlyph(binding, opts);
+    const title = opts.title || label;
+    return `<span class="binding-chip binding-chip--${escapeHTML(binding?.kind || 'unknown')}" title="${escapeHTML(title)}">${escapeHTML(label)}</span>`;
+}

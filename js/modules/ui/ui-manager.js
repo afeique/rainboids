@@ -99,6 +99,7 @@ export class UIManager {
             assistAimAssist: document.getElementById('assist-aim-assist'),
             assistAutoAim: document.getElementById('assist-auto-aim'),
             assistAutoFire: document.getElementById('assist-auto-fire'),
+            assistAutoCastAbilities: document.getElementById('assist-auto-cast-abilities'),
             // 6.1.1 — assistAutoPower removed; autoFire drives power too.
             // 6.2.3 — Laser Sight toggle. Default ON, desktop-only.
             assistLaserSight: document.getElementById('assist-laser-sight'),
@@ -1327,6 +1328,7 @@ export class UIManager {
         if (this.elements.assistAimAssist) this.elements.assistAimAssist.checked = !!a.aimAssist;
         if (this.elements.assistAutoAim) this.elements.assistAutoAim.checked = !!a.autoAim;
         if (this.elements.assistAutoFire) this.elements.assistAutoFire.checked = !!a.autoFire;
+        if (this.elements.assistAutoCastAbilities) this.elements.assistAutoCastAbilities.checked = !!a.autoCastAbilities;
         // 6.1.1 — autoPower retired; autoFire drives both barrels.
         // 6.2.3 — Laser Sight toggle. Default ON; falsy → laser hidden.
         if (this.elements.assistLaserSight) this.elements.assistLaserSight.checked = a.laserSight !== false;
@@ -1631,6 +1633,7 @@ export class UIManager {
         wireAssist(this.elements.assistAimAssist, 'aimAssist');
         wireAssist(this.elements.assistAutoAim, 'autoAim');
         wireAssist(this.elements.assistAutoFire, 'autoFire');
+        wireAssist(this.elements.assistAutoCastAbilities, 'autoCastAbilities');
         // 6.1.1 — autoPower wiring removed; merged into autoFire.
         // 6.2.3 — Laser Sight toggle.
         wireAssist(this.elements.assistLaserSight, 'laserSight');
@@ -1646,6 +1649,17 @@ export class UIManager {
         };
         wireScheme(document.getElementById('control-scheme-gamepad'));
         wireScheme(document.getElementById('control-scheme-alt'));
+        const wireLayout = (el) => {
+            if (!el) return;
+            el.addEventListener('click', () => {
+                if (!this.gameEngine?.gamepad) return;
+                this.gameEngine.gamepad.setLayout(el.dataset.layout);
+                document.getElementById('gamepad-layout-pro')?.classList.toggle('active', el.dataset.layout === 'pro');
+                document.getElementById('gamepad-layout-classic')?.classList.toggle('active', el.dataset.layout === 'classic');
+            });
+        };
+        wireLayout(document.getElementById('gamepad-layout-pro'));
+        wireLayout(document.getElementById('gamepad-layout-classic'));
 
         // Music controls
         this.elements.musicPlayPause.addEventListener('click', () => {
@@ -1853,6 +1867,9 @@ export class UIManager {
             if (alt) altBtn.dataset.scheme = alt;
             altBtn.classList.toggle('active', active !== 'gamepad');
         }
+        const layout = this.gameEngine?.gamepad?.getLayout?.() || 'pro';
+        document.getElementById('gamepad-layout-pro')?.classList.toggle('active', layout === 'pro');
+        document.getElementById('gamepad-layout-classic')?.classList.toggle('active', layout === 'classic');
     }
 
     switchTab(tabName) {

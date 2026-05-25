@@ -10,7 +10,7 @@ Elements & resistances, rolled rarity-tiered gear, kill-streak power tiers, and 
 
 [![PLAY NOW at rainboids.com](https://img.shields.io/badge/▶%20PLAY%20NOW-rainboids.com-22c55e?style=for-the-badge&labelColor=14532d)](https://rainboids.com/)
 
-![Version](https://img.shields.io/badge/version-6.83.0-8b5cf6?style=flat-square)
+![Version](https://img.shields.io/badge/version-6.195.0-8b5cf6?style=flat-square)
 &nbsp;![Stack](https://img.shields.io/badge/Canvas2D_+_WebGL2-f59e0b?style=flat-square)
 &nbsp;![Platforms](https://img.shields.io/badge/desktop_·_mobile_·_gamepad-3b82f6?style=flat-square)
 &nbsp;[![License: PolyForm-NC 1.0.0](https://img.shields.io/badge/license-PolyForm--NC_1.0.0-64748b?style=flat-square)](LICENSE)
@@ -29,16 +29,16 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 |---|---|---|
 | Move | `WASD` | Left stick |
 | Aim | Mouse cursor (or `←`/`→`) | Right stick (twin-stick) |
-| Dash (i-frames) | `Shift` | `✕` / `A` |
+| Dash (i-frames) | `Shift` | `R1` / `RB` |
 | Fire primary | Hold `L-click` / `↑` | `R2` |
 | Fire power weapon | `Space` / `R-click` / `↓` | `L2` |
-| Activate abilities (4 slots) | `1` `2` `3` `4` | `◯` / `B` |
-| Primary · Power · Ability radial | hold `F` · `E` · `R` | hold `R1` · `L1` · `△`/`Y` |
+| Activate abilities (4 slots) | `1` `2` `3` `4` | `✕/A` · `◯/B` · `□/X` · `△/Y` |
+| Primary · Power · Ability radial | hold `F` · `E` · `R` | Classic layout only |
 | Inventory · Stats · Pause | `I` · `` ` `` · `Esc` | — · — · `Start` |
 
-**📱 Mobile** runs a *turret-defense* mode: the ship is stationary — press-and-hold to aim + fire, drag to retarget, and the power weapon auto-fires when ready. `PRM`/`PWR` side buttons open the weapon radials.
+**📱 Mobile** is one-thumb play: drag the analog stick to move, tap to dash, and the Co-Pilot handles aim, primary fire, smart power use, and ability timing. Positioning and dash timing are the active verbs.
 
-**Assists** (pause → ASSISTS): aim-snap, auto-aim, auto-fire, laser sight. &nbsp; **Cheats:** `[` +1000 gold · `]` +5 SP · `P` spawn a powerup.
+**Assists** (pause → ASSISTS): aim-snap, auto-aim, auto-fire, auto-cast abilities, laser sight. &nbsp; **Cheats:** `[` +1000 gold · `]` +5 SP · `P` spawn a powerup.
 
 **Fonts** (title **SETTINGS** or pause → DISPLAY): pick the menu typography — separate header/tab and body fonts from a roster of pixel faces (Press Start 2P, Silkscreen, Pixelify Sans, Fira Code) and modern ones (Inter, Roboto, Montserrat, Helvetica Neue, System UI), and **scale header/body text size** (70–160%) for readability. Retro pixel and a large, readable default; choices persist.
 
@@ -54,7 +54,7 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 
 **🔥 Elements & resistances** — 7 elements (Kinetic · Pyro · Cryo · Volt · Toxic · Void · Radiant), each with a signature status (Burn, Corrode, Chill/Freeze, Conduct, Oil, Mark, Bleed). Enemies carry weaknesses and immunities, so bringing the right element matters — and statuses **chain into reactions**: frozen enemies SHATTER into neighbors, oiled enemies hit by fire FLARE. Elemental enemies afflict *you* back.
 
-**💎 Loot, inventory & Cores** — 5 gear slots (cockpit/hull → HP, shielding/chassis → toughness, **nanites** → regen). Drops roll across an **8-tier rarity ladder** (Common → Rare → Exceptional → Legendary → Epic → Godlike → Divine → Transcendental) with multi-affix stats *and* per-element resist rolls. Gear is **reviewed and managed in the pre-run BUILD screen's GEAR tab, locked once a run starts** — mid-run pickups no longer auto-equip; they stream into the loot feed (press `I` for a read-only view) and bank to a **persistent stash** at run end. In the BUILD screen's GEAR tab you equip stash items into the 5 slots (with score deltas) and spend **Cores** (✦) — the item-crafting currency earned by **salvaging** gear — to **reroll** an item's affixes or **tier-up** its rarity (keeping its rolls and adding the new tier's affix slot).
+**💎 Loot, inventory & Cores** — 5 gear slots (cockpit/hull → HP, shielding/chassis → toughness, **nanites** → regen). Drops roll across an **8-tier rarity ladder** (Common → Rare → Exceptional → Legendary → Epic → Godlike → Divine → Transcendental) with multi-affix stats *and* per-element resist rolls. Gear is **reviewed and managed in the pre-run BUILD screen's GEAR tab, locked once a run starts** — mid-run pickups no longer auto-equip; they stream into the loot feed (press `I` for a graphical card/stat-sheet view) and bank to a **persistent stash** at run end. In the BUILD screen's GEAR tab you equip stash items into the 5 slots (with score deltas) and spend **Cores** (✦) — the item-crafting currency earned by **salvaging** gear — to **reroll** an item's affixes or **tier-up** its rarity (keeping its rolls and adding the new tier's affix slot).
 
 **🪙 Gold economy** — two wallets. **Run-gold** starts at **0** each run, accrues from kills, is spent at the **card-draft moment** (paid **reroll**, escalating **Repair Kit** heal, a **6th/7th card**, or a one-per-run **Revive Token** that cheats death), and **banks into account-gold** when the run ends (win or death). **Account-gold** is the persistent wallet you spend in the pre-run **BUILD** screen on permanent weapon/ability unlocks (abilities cost more). Every in-run purchase is gold you don't bank — spend deep or save to grow the account.
 
@@ -121,6 +121,7 @@ js/
     core/               # constants, state machine, pools, event bus, timers, storage
     platform/           # device + viewport detection
     player/             # entity, weapons, abilities, progression, lifecycle, renderer, skins/
+    assist/             # Co-Pilot sense/decide/act helpers for mobile and opt-in assists
     enemy/              # entity, data, movement, firing, AI, shapes, boss phases/parts/intro/rage/fx/render, bosses/ (10 unique)
     combat/             # elements, collision, weapon-data, combat-manager
     hud/ · world/ · shop/ · ui/ · wave/ · audio/ · performance/ · render/
