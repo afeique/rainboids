@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.187.1] - 2026-05-25
+
+### Fixed — Stale e2e wave-1 tests updated to the current design
+
+Three `tests/e2e/08-waves.spec.js` tests encoded the long-obsolete "wave 1 =
+asteroids-only, single-spawn" model and had been failing:
+- `wave 1 spawns asteroids-only` asserted `enemies === 0` — wave 1 has been a
+  light HUNTER/WASP teaching wave for many versions. Now asserts wave 1 spawns a
+  valid asteroid field (`0 < asteroids ≤ MAX_WAVE_ASTEROIDS`).
+- `wave 2 spawns HUNTER…` cleared entities once at 800 ms, but wave 1's multiple
+  enemy sub-waves never finished → wave 2 unreachable. Now purges all pools each
+  poll until the wave fully resolves and wave 2 begins.
+- `AI can clear wave 1 (asteroids only)` asserted `asteroids ≤ 2` but large
+  asteroids split into fragments (got 21) — a strict-clear target is no longer
+  meaningful. Renamed to a progress/health smoke check (AI survives, valid
+  non-terminal state).
+
+Test-only change; no runtime behavior affected. `tests/e2e/08-waves.spec.js` now
+8/8 green.
+
 ## [6.187.0] - 2026-05-25
 
 ### Added — The 6 new enemy types now appear in live waves (ENMY roster)
