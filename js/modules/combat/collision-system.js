@@ -42,6 +42,14 @@ import { shouldAbsorb, absorbBullet, consumeAbsorbShield } from '../enemy/abilit
 // is a no-op for every other enemy's contact. (The helper's activePowerups-based
 // functions stay unused — a known ENMY-05 spec gap vs the live model.)
 import { isBuffSuppressed, STRIP_DURATION_MS } from '../enemy/abilities/buff-strip.js';
+// SYS-11 / ENMY-10b — JUGGERNAUT rear-exposed read. After a charge the bruiser
+// is STUNNED + rear-exposed during the recovery; `isRearExposed` is the
+// read-only telegraph check the damage path uses to apply a vulnerability
+// multiplier. Gated on `enemy.charge` (only JUGGERNAUT carries it), so this is a
+// no-op for every other enemy. Also reads `enemy.charge.ramDamage` as the heavy
+// contact base while the charge is striking.
+import { isRearExposed } from '../enemy/abilities/charge.js';
+import { isStriking as isChargeStriking } from '../enemy/telegraph.js';
 
 // SYS-8 / ENMY-05 — powerups that a Leech must NOT strip (permanent / structural
 // grants whose removal would be a broken / unfair surprise rather than a fun
@@ -2514,6 +2522,14 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
         damage *= 1.2;
     }
 
+    // SYS-11 / ENMY-10b — JUGGERNAUT rear-exposed window: after a charge ends the
+    // bruiser is stunned + rear-exposed during the telegraph's recovery, taking
+    // +50% damage (the punish window the read-the-tell fight rewards). Gated on
+    // `enemy.charge`, so a no-op for every other enemy.
+    if (enemy.charge && isRearExposed(enemy, frameClock.now)) {
+        damage *= 1.5;
+    }
+
     // P6 — rule-modifier PASSIVES on the universal damage path:
     //   • global outgoing-damage multiplier (Glass Cannon +60%, …)
     //   • Opportunist: +15% vs status-afflicted enemies
@@ -3284,7 +3300,14 @@ export function handlePlayerEnemyCollision(player, enemy) {
         // death, and fires the damage number + player-hit FX at the
         // impact point. Returns the HP actually lost (0 if dodged /
         // i-framed) so the screen-shake can scale.
-        const baseDamage = enemy.getLevelScaledDamage(25);
+        // SYS-11 / ENMY-10b — JUGGERNAUT heavy ram: while a charging bruiser is
+        // mid-STRIKE its contact base is the heavier `charge.ramDamage` (vs the
+        // default 25). Gated on `enemy.charge` + the strike window, so every
+        // other enemy's ram (and an idle/recovering Juggernaut's) is unchanged.
+        const ramBase = (enemy.charge && isChargeStriking(enemy.charge, frameClock.now))
+            ? (enemy.charge.ramDamage || 25)
+            : 25;
+        const baseDamage = enemy.getLevelScaledDamage(ramBase);
         const dealt = this.takeDamage(baseDamage, { source: enemy, fxX: enemy.x, fxY: enemy.y, element: enemy.element }); // E5 — ram carries the enemy's element
         if (player.health <= 0) return; // died with no save — skip post-hit FX + bounce
 

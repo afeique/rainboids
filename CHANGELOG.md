@@ -11,6 +11,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.193.0] - 2026-05-25
+
+### Added — Juggernaut enemy: telegraphed charge-and-ram bruiser (ENMY-10b)
+
+- **`JUGGERNAUT`** (`enemy/enemy-data.js`) — a slow Kinetic **bruiser** that fights
+  on a **read-the-tell** loop: it approaches, **winds up a visible charge tell**
+  (SYS-11 telegraph), then **commits a fast ram down a locked lane** (heavy
+  contact damage), and after the charge ends — on hitting the play-area edge or
+  the strike window expiring — it is **STUNNED + rear-exposed for ~1.5s** (a +50%
+  damage punish window). Dodge the lane during the wind-up, then punish during
+  the recovery. Beefy (18 HP), Kinetic-resistant, **weak to Volt**. Can't start a
+  charge while frozen / chilled / stunned.
+- **New ability module** `enemy/abilities/charge.js` — a telegraph-backed
+  charge state machine (`createCharge` / `canCharge` / `lockChargeTarget` /
+  `tickCharge` / `isRearExposed`) mirroring the `blink-burrow.js` pattern; pure
+  and unit-testable. Reuses the existing SYS-11 `telegraph.js` (windup→strike→
+  recover) and the existing `stunUntil` mechanic for the recovery window.
+- **Default-safe**: every wiring point (enemy.js movement override + charge tick,
+  collision-system.js ram-damage + rear-exposed multiplier) is **gated on
+  `enemy.charge`**, which only the Juggernaut carries — charge-less enemies
+  behave byte-for-byte as before (verified: full unit suite + the new-type roster
+  QA pass unchanged). The charge state is NULLed on pool-reuse.
+- **Roster** (`wave/wave-data.js`) — debuts as a single 1-count accent on **wave
+  22** (Stage 8, Kinetic-flavored); the director absorbs the added pressure.
+- Render (`enemy/shapes.js`): a bulky hexagonal ram-wedge that draws a forward
+  charge-lane indicator during wind-up and a cracked rear plate during recovery.
+- Tests: `tests/unit/enemy/juggernaut.test.js` (+18 — config/charge-opts/element,
+  the full idle→windup→strike→recover telegraph drive, lane locked exactly once,
+  CC gate, rear-exposed recover-only) + `tests/qa/33-juggernaut.spec.js` (+4 —
+  live spawn carries charge state, the cycle walks windup→strike→recover with
+  striking only mid-strike, `stunUntil` set after a charge, no fatal errors).
+  Full unit suite **1629** green; QA-28 roster regression 6/6.
+
+---
+
 ## [6.192.0] - 2026-05-25
 
 ### Added — Conduit Node enemy: Volt heal-aura support (ENMY-08)

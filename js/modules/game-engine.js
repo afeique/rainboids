@@ -2889,6 +2889,25 @@ export class GameEngine {
         return wave.requestEnemySpawn.call(this, 'LEECH', cx, cy, { cap: 9999 });
     }
 
+    // SYS-11 / ENMY-10b — DEBUG HOOK. Force-spawn a JUGGERNAUT (telegraphed
+    // charge-and-ram bruiser) on demand for QA + manual testing, mirroring
+    // spawnLeech. Returns the enemy (carrying a `charge` telegraph state), or
+    // null if the pool is dry.
+    //   gameEngine.spawnJuggernaut()  or  gameEngine.spawnJuggernaut({ x, y })
+    spawnJuggernaut(opts = {}) {
+        // Default just inside the charge range (~360px off the player) so the
+        // freshly spawned bruiser can wind up + commit a charge for QA to
+        // observe. Explicit opts.x/opts.y override.
+        const baseX = this.player ? this.player.x
+            : (this.camera ? this.camera.x + this.width / 2 : (this.gameField ? this.gameField.width / 2 : 600));
+        const baseY = this.player ? this.player.y
+            : (this.camera ? this.camera.y + this.height / 2 : (this.gameField ? this.gameField.height / 2 : 400));
+        const cx = (opts.x != null) ? opts.x : baseX + 360;
+        const cy = (opts.y != null) ? opts.y : baseY - 80;
+        // Bypass the concurrent-spawn cap for the debug hook (huge cap).
+        return wave.requestEnemySpawn.call(this, 'JUGGERNAUT', cx, cy, { cap: 9999 });
+    }
+
     initializeLeveledAsteroid(asteroid, opts) { return wave.initializeLeveledAsteroid.call(this, asteroid, opts); }
     
     applyEnemyLevelScaling(enemy, opts = {}) { return wave.applyEnemyLevelScaling.call(this, enemy, opts); }

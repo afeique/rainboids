@@ -7,6 +7,9 @@
 
 import { frameClock } from '../core/frame-clock.js';
 import { rgba } from '../core/color-cache.js';
+// SYS-11 / ENMY-10b — JUGGERNAUT charge tell. Read-only telegraph reads used to
+// flash the body during the wind-up + draw a forward charge-lane indicator.
+import { telegraphPhase, telegraphProgress } from './telegraph.js';
 import {
     drawEnemyHunterShape,
     drawEnemyGuardianShape,
@@ -418,6 +421,11 @@ export function drawEnemyShape(ctx) {
             // a HEAL aura to allies, the Volt counterpart to LUMEN_DRONE's shield).
             this.drawShieldTurret(drawCtx);
             break;
+        case 'JUGGERNAUT':
+            // ENMY-10b bruiser — bulky charge-and-ram wedge with a SYS-11 windup
+            // lane tell + a recover rear-exposed read.
+            drawJuggernautRam.call(this, drawCtx);
+            break;
         default:
             this.drawTriangle(drawCtx);
     }
@@ -741,6 +749,87 @@ export function drawPrismFacet(ctx) {
     ctx.moveTo(-s * 0.65, -s * 0.3);
     ctx.lineTo(s * 0.65, -s * 0.3);     // crown girdle
     ctx.stroke();
+}
+
+/**
+ * JUGGERNAUT — a bulky, blunt-nosed ram bruiser. The hull is a heavy hexagonal
+ * wedge with a reinforced forward ram-plate (forward = +X in local space, since
+ * the enemy faces its charge lane via faceAngle). Reflects the SYS-11 telegraph
+ * tell: during the WINDUP it flashes + draws a forward charge-lane indicator
+ * (the player reads the lane); during the RECOVER it shows a cracked / exposed
+ * rear (the punish window). Drawn centered at the origin; the caller already set
+ * strokeStyle = this.color and fillStyle = this.color + '40'.
+ */
+export function drawJuggernautRam(ctx) {
+    const r = this.radius * 0.85;
+    const now = frameClock.now;
+    const phase = this.charge ? telegraphPhase(this.charge, now) : 'idle';
+    const prog = this.charge ? telegraphProgress(this.charge, now) : 0;
+
+    // Heavy hexagonal hull, elongated forward into a ram-wedge (forward = +X).
+    ctx.beginPath();
+    ctx.moveTo(r * 1.15, 0);            // ram tip (forward)
+    ctx.lineTo(r * 0.45, -r * 0.75);
+    ctx.lineTo(-r * 0.7, -r * 0.7);
+    ctx.lineTo(-r * 0.95, 0);           // rear
+    ctx.lineTo(-r * 0.7, r * 0.7);
+    ctx.lineTo(r * 0.45, r * 0.75);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Reinforced forward ram-plate (the blunt nose that does the damage).
+    ctx.beginPath();
+    ctx.moveTo(r * 1.15, 0);
+    ctx.lineTo(r * 0.5, -r * 0.42);
+    ctx.lineTo(r * 0.5, r * 0.42);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Two armor ridges down the flanks for the bulky read.
+    ctx.beginPath();
+    ctx.moveTo(r * 0.4, -r * 0.55);
+    ctx.lineTo(-r * 0.6, -r * 0.5);
+    ctx.moveTo(r * 0.4, r * 0.55);
+    ctx.lineTo(-r * 0.6, r * 0.5);
+    ctx.stroke();
+
+    // ── WINDUP tell: a forward charge-lane indicator + a pulsing nose flash ──
+    // The lane (a long forward triangle) telegraphs WHERE the ram will commit so
+    // the player can sidestep it. Drawn brighter as the windup completes.
+    if (phase === 'windup') {
+        const laneLen = this.radius * 4.5;
+        const laneHalf = this.radius * 0.7;
+        const a = 0.15 + prog * 0.5;
+        ctx.save();
+        ctx.globalAlpha *= a;
+        ctx.strokeStyle = rgba(this.glowColor || this.color, 1);
+        ctx.fillStyle = rgba(this.glowColor || this.color, 0.12 + prog * 0.18);
+        ctx.beginPath();
+        ctx.moveTo(r * 1.0, -laneHalf);
+        ctx.lineTo(r * 1.0 + laneLen, -laneHalf * (1 + prog));
+        ctx.lineTo(r * 1.0 + laneLen, laneHalf * (1 + prog));
+        ctx.lineTo(r * 1.0, laneHalf);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // ── RECOVER tell: cracked rear plate (the rear-exposed punish window) ──
+    if (phase === 'recover') {
+        ctx.save();
+        ctx.strokeStyle = rgba(this.glowColor || this.color, 0.9);
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.95, 0);
+        ctx.lineTo(-r * 0.45, -r * 0.35);
+        ctx.moveTo(-r * 0.95, 0);
+        ctx.lineTo(-r * 0.45, r * 0.35);
+        ctx.moveTo(-r * 0.95, 0);
+        ctx.lineTo(-r * 0.3, 0);
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 export function drawPulsatingCircle(ctx) {

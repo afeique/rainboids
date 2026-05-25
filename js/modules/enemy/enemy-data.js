@@ -785,6 +785,46 @@ export const ENEMY_TYPES = {
         visual: { shape: 'wasp', glowColor: '#b6ff8a', trailLength: 18 },
         ai: { evasion: 0.2, preferredRange: 0, dodgeBullets: false, microMovements: true, fishMotion: true },
     },
+
+    // SYS-11 / ENMY-10b — JUGGERNAUT: a Kinetic BRUISER built around a
+    // telegraphed CHARGE-AND-RAM (the shared ENMY-01 telegraph helper, the same
+    // wind-up→strike→recover machine the bosses use). It approaches at a slow
+    // base speed; once within `chargeOpts.range` and off cooldown it WINDS UP a
+    // visible tell (the telegraph's `windup`), then COMMITS a fast charge down a
+    // LOCKED lane toward where the player was at charge-start (the `strike`),
+    // dealing heavy ram damage on contact via the EXISTING player-enemy contact
+    // path (enemy.element-on-ram). When the charge ends — it hits the play-area
+    // edge or the strike window lapses — it is STUNNED + rear-exposed for the
+    // `recover` window (`stunUntil` set so velocity zeroes + firing skips, plus a
+    // damage-vulnerability multiplier in applyDamageToEnemy). A read-the-tell
+    // fight: dodge the lane during the wind-up, punish during the recovery. The
+    // `charge: true` marker tells initializeEnemy to attach a fresh
+    // createTelegraph(chargeOpts) on `this.charge`; every AI branch in enemy.js
+    // is gated on `this.charge`, so non-Juggernaut enemies are byte-for-byte
+    // unchanged. It can't start a charge while STUNNED / FROZEN / CHILLED. Beefy
+    // HP (bruiser), moderate size, Kinetic-tough but WEAK to Volt.
+    JUGGERNAUT: {
+        name: 'Juggernaut',
+        color: '#d98c4a',
+        health: 18,
+        speed: 1.6,                 // slow approach — the THREAT is the charge, not the cruise
+        size: 44,
+        shootPattern: 'hunter_single',
+        shootRate: 0.0,             // doesn't shoot — it's a charge-and-ram bruiser
+        movePattern: 'chase',       // base approach (overridden by the charge AI when winding/striking)
+        points: 260,
+        charge: true,               // → initializeEnemy attaches createTelegraph(chargeOpts) on this.charge
+        // windupMs = the visible tell; strikeMs = the committed ram; recoverMs =
+        // the stunned/rear-exposed punish window. chargeSpeed = lane speed during
+        // the strike; range = how close before it commits; intervalMs = min gap
+        // between charges (measured from the last charge start). ramDamage = the
+        // heavy contact base used ONLY while striking (gated in collision-system).
+        chargeOpts: { intervalMs: 4200, windupMs: 700, strikeMs: 450, recoverMs: 1500, chargeSpeed: 9, range: 480, ramDamage: 38 },
+        movement: { pattern: 'chase', turnSpeed: 0.08, rotationSpeed: { min: -0.008, max: 0.008 } },
+        firing: { pattern: 'hunter_single', burstCount: 0, burstDelay: 0, cooldown: { min: 99999, max: 99999 } },
+        visual: { shape: 'juggernaut_ram', glowColor: '#ffb066', trailLength: 12 },
+        ai: { evasion: 0.1, preferredRange: 120, dodgeBullets: false, microMovements: false, fishMotion: false },
+    },
 };
 
 // ── ELEMENT TAGS + RESISTANCE MAPS (E1 — Element & Resistance System) ───────
@@ -816,6 +856,7 @@ const ENEMY_ELEMENTS = {
     PRISM_MIRROR: 'RADIANT', // ENMY-04 — front-arc Radiant reflector
     DEVOURER:    'VOID',     // ENMY-09 — maw-cone Void projectile-eater / soaker
     LEECH:       'TOXIC',    // ENMY-05 — fast contact buff-stripper (it siphons / corrodes)
+    JUGGERNAUT:  'KINETIC',  // ENMY-10b — charge-and-ram bruiser (its ram IS the kinetic threat)
     // HUNTER / GUARDIAN / WASP / PROWLER / TITAN → KINETIC baseline
 };
 // Resistance maps: >0 resists (chip damage wasted), <0 is a weakness (bring
@@ -848,6 +889,7 @@ const ENEMY_RESISTS = {
     PRISM_MIRROR: { RADIANT: 0.50, VOID: -0.50 },              // ENMY-04 — Radiant-tough mirror (bounces its own light back); Void shatters the glass
     DEVOURER:    { VOID: 0.50, RADIANT: -0.50 },               // ENMY-09 — Void-tough maw (it IS the hungry dark); RADIANT light burns through the throat
     LEECH:       { TOXIC: 0.40, PYRO: -0.50 },                 // ENMY-05 — Toxic-tough siphon gnat; PYRO scorches it off you
+    JUGGERNAUT:  { KINETIC: 0.45, VOLT: -0.50 },               // ENMY-10b — Kinetic-tough ram bruiser; VOLT shorts its drive (shock it during the recovery)
     // HUNTER → neutral (no entry)
 };
 // E8a behavior — flat ARMOR floor: a fixed amount subtracted from every hit
@@ -897,4 +939,5 @@ export const SHAPE_DRAW_MAP = {
     arc_node:        'drawArcNode',
     plague_sac:      'drawPlagueSac',
     prism_facet:     'drawPrismFacet',
+    juggernaut_ram:  'drawJuggernautRam', // ENMY-10b — bulky charge bruiser
 };

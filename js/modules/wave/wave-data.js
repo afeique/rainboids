@@ -26,6 +26,7 @@
 //   DEVOURER     (Void absorb)   : 22(1), 26(1), 28(1)
 //   PRISM_MIRROR (Radiant reflect): 23(1), 28(1)         — count 1 only
 //   CONDUIT_NODE (Volt heal-aura) : 25(1)                — count 1 only; debut
+//   JUGGERNAUT   (Kinetic ram)    : 22(1)                — count 1 only; debut (charge-and-ram bruiser)
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
@@ -201,9 +202,12 @@ export const WAVE_DATA = {
     // it eats incoming shots, rewarding repositioning. LEECH ramps to 2
     // here. PRISM_MIRROR (Radiant reflect) makes its FIRST appearance on
     // 23-3 as a single unit only — reflection is potent, so it stays at 1.
-    // PHANTOM steps up to 2 (cloak pressure in the late game).
+    // PHANTOM steps up to 2 (cloak pressure in the late game). JUGGERNAUT
+    // (Kinetic charge-and-ram bruiser) DEBUTS on 22-1 as a single accent
+    // among the Kinetic-flavored TANGERINE/GUARDIAN/HUNTER opener — a
+    // read-the-tell threat that telegraphs a lethal charge.
     22: { asteroids: 4, subWaves: [
-        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }, { type: 'JUGGERNAUT', count: 1 }],
         [{ type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'LEECH', count: 2 }],
         [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'DEVOURER', count: 1 }, { type: 'WASP', count: 2 }],
     ] },

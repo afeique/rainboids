@@ -24,6 +24,13 @@ import { createCloak, tickCloak, cloakAlpha } from './abilities/cloak.js';
 // enemies behave byte-for-byte as before. `telegraphPhase`/`telegraphProgress`
 // are read-only telegraph reads used to draw the "about to blink" tell.
 import { createBlink, tickBlink, isVanished } from './abilities/blink-burrow.js';
+// SYS-11 / ENMY-10b — charge-and-ram (Juggernaut). Default-safe: every wiring
+// below is gated on `this.charge`, which only JUGGERNAUT (config.charge) ever
+// gets, so charge-less enemies behave byte-for-byte as before. `createCharge`
+// attaches the telegraph-backed charge state; `tickCharge` advances the
+// windup→strike→recover cycle + locks the lane (the render reads the telegraph
+// phase directly via telegraphPhase, and the damage path reads isRearExposed).
+import { createCharge, tickCharge } from './abilities/charge.js';
 import { telegraphPhase, telegraphProgress } from './telegraph.js';
 // ENMY-04 — projectile reflection. Default-safe: every wiring below is gated on
 // `this.reflects`, which only PRISM_MIRROR (config.reflect) ever gets. Non-mirror
@@ -168,6 +175,13 @@ export class Enemy {
         // recycled into a non-blink type can't carry a stale blink. The config
         // may carry `blinkOpts` (kind/range/interval/telegraph timings).
         this.blink = this.config.blink ? createBlink(this.config.blinkOpts) : null;
+        // SYS-11 / ENMY-10b — charge-and-ram (JUGGERNAUT). Attach a fresh
+        // telegraph-backed charge cycle when the type marks it; otherwise NULL it
+        // out so a pooled enemy recycled into a non-charge type can't carry a
+        // stale charge. The config may carry `chargeOpts` (interval/range/speed +
+        // windup/strike/recover timings + ramDamage). All AI/render/damage wiring
+        // below is gated on `this.charge`, so this is a no-op for every other type.
+        this.charge = this.config.charge ? createCharge(this.config.chargeOpts) : null;
         // SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE). Carry the type's
         // `suppressAura` config { radius, cooldownScale, blocksActivation } onto
         // the instance (or NULL for every other type, so a pooled enemy recycled
@@ -589,6 +603,26 @@ export class Enemy {
         // this is a no-op for every non-PHANTOM enemy.
         if (this.cloak) tickCloak(this.cloak, frameClock.now);
 
+        // ── SYS-11 / ENMY-10b JUGGERNAUT charge-and-ram ──
+        // Advance the telegraph-backed charge cycle (idle→windup→strike→recover).
+        // Gated on `this.charge`, so this is a no-op for every non-JUGGERNAUT
+        // enemy. Done BEFORE the `stunned` read below so a recover transition's
+        // `stunUntil` (set here) is reflected in this frame's `stunned` — the
+        // recovery's STUN immediately zeroes velocity + skips firing (the
+        // rear-exposed punish window). `_chargeStriking` flags the strike frames
+        // so the movement section drives the locked lane (and skips normal AI).
+        this._chargeStriking = false;
+        if (this.charge) {
+            const cr = tickCharge(this, this.targetPlayer, frameClock.now);
+            this._chargeStriking = cr.striking;
+            if (cr.recovered) {
+                // Charge ended → STUNNED + rear-exposed for the recover window.
+                this.stunUntil = frameClock.now + (this.charge.recoverMs || 1500);
+                this.vel.x = 0;
+                this.vel.y = 0;
+            }
+        }
+
         // STUN: zero velocity here so the per-pattern movement dispatch
         // below starts from a stopped state. We re-zero AFTER movement too
         // (some patterns set velocity directly without reading the current
@@ -675,14 +709,50 @@ export class Enemy {
         this.updateTargetPriority(playerDistance, gameEngine);
         this.updateFaceDirection();
 
-        // Tier-3 (and tier-4 phase 0) formation orbit overrides normal movement.
-        if (!this.isBoss || !bossFormationMovement(this)) {
+        // ── SYS-11 / ENMY-10b JUGGERNAUT charge movement override ──
+        // While the charge telegraph is non-idle this enemy OWNS its movement:
+        //   windup  → hold still (the visible tell; the player reads the lane),
+        //   strike  → drive the LOCKED lane at chargeSpeed (heavy contact ram),
+        //   recover → already stunned (handled above); velocity stays zeroed.
+        // It bypasses normal AI/movement/weave/evasion this frame. Gated on
+        // `this.charge` (and only when the telegraph is non-idle), so every
+        // non-JUGGERNAUT enemy — and an idle Juggernaut — runs the normal path.
+        const chargeActive = !!(this.charge && telegraphPhase(this.charge, frameClock.now) !== 'idle');
+        if (chargeActive) {
+            if (this._chargeStriking) {
+                // Drive the locked lane. End early if the next step would leave
+                // the play area (the charge "hits the edge").
+                const cfg = this.charge;
+                this.vel.x = cfg.dirX * cfg.chargeSpeed;
+                this.vel.y = cfg.dirY * cfg.chargeSpeed;
+                this.faceAngle = Math.atan2(cfg.dirY, cfg.dirX);
+                const fieldW = gameField ? gameField.width : GameDimensions.width;
+                const fieldH = gameField ? gameField.height : GameDimensions.height;
+                const nx = this.x + this.vel.x * GAME_CONFIG.TICK_SCALE;
+                const ny = this.y + this.vel.y * GAME_CONFIG.TICK_SCALE;
+                if (nx - this.radius < 0 || nx + this.radius > fieldW
+                    || ny - this.radius < 0 || ny + this.radius > fieldH) {
+                    // Hit the edge: end the strike now by snapping the telegraph
+                    // straight into recovery (so the punish window opens here).
+                    const t = this.charge;
+                    t.startedAt = frameClock.now - (t.windupMs + t.strikeMs);
+                    this._chargeStriking = false;
+                    this.vel.x = 0;
+                    this.vel.y = 0;
+                }
+            } else {
+                // windup / recover — hold still.
+                this.vel.x = 0;
+                this.vel.y = 0;
+            }
+        } else if (!this.isBoss || !bossFormationMovement(this)) {
+            // Tier-3 (and tier-4 phase 0) formation orbit overrides normal movement.
             this.updateMovement(gameEngine);
         }
 
         // Mobile lateral weave — small sin-phased side-step perpendicular
         // to line-of-sight so enemies READ as actively moving while they shoot.
-        if (isMobile() && !this.isBoss) {
+        if (!chargeActive && isMobile() && !this.isBoss) {
             if (typeof this._weavePhase !== 'number') {
                 this._weavePhase = Math.random() * Math.PI * 2;
             }
@@ -699,7 +769,11 @@ export class Enemy {
             }
         }
 
-        if (!skipHeavyAI) {
+        // The heavy spatial AI (evasion / avoidance / dodge) is skipped while a
+        // JUGGERNAUT is mid-charge (`chargeActive`) so nothing fights the locked
+        // lane / the windup hold / the recovery stun. Gated on `this.charge` via
+        // `chargeActive`, so unchanged for every other enemy.
+        if (!skipHeavyAI && !chargeActive) {
             this.updateEvasiveManeuvers(gameEngine);
             this.avoidAsteroids(gameEngine);
             if (this.currentTarget === 'player') {
@@ -745,8 +819,13 @@ export class Enemy {
             this.shield.currentIntensity = musicIntensity;
         }
 
-        this.addMicroMovements();
-        this.addFishLikeMovement();
+        // Micro / fish-like jitter would perturb the JUGGERNAUT's locked charge
+        // lane, so skip them while a charge is active. Gated on `this.charge`
+        // via `chargeActive`, so unchanged for every other enemy.
+        if (!chargeActive) {
+            this.addMicroMovements();
+            this.addFishLikeMovement();
+        }
 
         // STUN: re-zero velocity AFTER all movement / micro-movement
         // helpers ran. Some patterns set velocity directly (vs.
