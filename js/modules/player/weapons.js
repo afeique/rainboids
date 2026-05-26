@@ -9,6 +9,7 @@ import { resolveBulletElements } from '../combat/elements.js';
 import { prismaticElement } from '../combat/passive-data.js';
 import { autofireDiag } from '../autofire-diag.js';
 import { isMobile } from '../platform/platform-detect.js';
+import { rumble, RUMBLE } from '../platform/rumble.js';
 
 // 5.97.0 — Mobile early-game damage ramp. With a stationary ship, no
 // strafing room, and only a finger for aim, the first few waves are
@@ -411,6 +412,11 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
             // inside firePower / the per-weapon fire fns.
             this.firePower(bulletPool, audioManager, particlePool);
         }
+        // GP-4 — gamepad rumble on a power-weapon fire (HEAVY; once per
+        // activation — both the charge-shot and cooldown branches funnel here,
+        // and Twin Cast's 2nd shot is inside firePower so it doesn't double).
+        // Self-gates on an enabled + connected pad → no-op off-gamepad.
+        rumble(RUMBLE.HEAVY);
         input.fireSecondary = false;
     }
 }

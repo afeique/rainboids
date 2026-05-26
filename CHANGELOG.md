@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.228.2] - 2026-05-26
+
+### Added — gamepad rumble on power-weapon fire (GP-4 cue)
+
+- A HEAVY rumble now fires when a power weapon is activated (`player/weapons.js`,
+  once per activation — both the charge-shot and cooldown branches funnel through
+  the same point, and Twin Cast's second shot is inside `firePower` so it doesn't
+  double-buzz). Self-gates on an enabled + connected actuator pad (off by
+  default) → non-gamepad play is byte-for-byte unchanged. Full unit suite green.
+
 ## [6.228.1] - 2026-05-26
 
 ### Added — gamepad rumble on taking a hit (GP-4 cue)
