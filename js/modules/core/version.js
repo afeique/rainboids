@@ -10,7 +10,7 @@
 // 2026-05-19 — Multiplayer shelved (see /multiplayer/RESTORE.md). The
 // title screen now renders a single gold version tag (no sp/mp prefix);
 // VERSION is the only one displayed.
-export const VERSION = '6.225.0';
+export const VERSION = '6.225.1';
 // VERSION_MP retained (unused while multiplayer is shelved — see
 // /multiplayer/RESTORE.md) so restoring MP doesn't need to re-add it.
 export const VERSION_MP = '0.12.1';

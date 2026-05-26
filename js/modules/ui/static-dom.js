@@ -22,6 +22,7 @@
 
 import { isMobile } from '../platform/platform-detect.js';
 import { buildFontControls } from './font-settings.js';
+import { bindingGlyph } from './icons.js';
 
 /**
  * Public entry point. Walks the document and populates every empty
@@ -341,29 +342,40 @@ function _buildGamepadTab() {
     // connected — the tab button's visibility is toggled by the engine on
     // connect/disconnect. Reuses the assists-row styling (control name as
     // the title, action as the description) so it needs no bespoke CSS.
+    // GP-3 — glyph rows carry their gamepad button labels in `buttons`; the
+    // control column is rendered from the family glyph map (default Xbox at
+    // build time, since no pad is connected yet) and re-rendered to the
+    // connected pad's family when the tab opens (ui-manager.refreshGamepadGlyphs
+    // reads the `data-gp-buttons` marker). Prose rows (sticks / D-pad) have no
+    // family variants.
     const rows = [
-        { control: 'Left Stick',         action: 'Move ship (analog — speed scales with deflection)' },
-        { control: 'Right Stick',        action: 'Aim (twin-stick — points the ship where you push)' },
-        { control: 'D-Pad',              action: 'Move ship (digital fallback)' },
-        { control: 'R2 (right trigger)', action: 'Fire primary weapon' },
-        { control: 'L2 (left trigger)',  action: 'Fire / charge power weapon' },
-        { control: 'R1 / RB',            action: 'Dash in steer direction; when still, dash away from nearest threat' },
-        { control: 'Cross/A · Circle/B · Square/X · Triangle/Y', action: 'Activate ability slots 1-4' },
-        { control: 'Classic layout',     action: 'Keeps Cross/A dash and the old held radials' },
-        { control: 'Options / Start',    action: 'Pause / resume' },
+        { control: 'Left Stick',  action: 'Move ship (analog — speed scales with deflection)' },
+        { control: 'Right Stick', action: 'Aim (twin-stick — points the ship where you push)' },
+        { control: 'D-Pad',       action: 'Move ship (digital fallback)' },
+        { buttons: ['RT'],            action: 'Fire primary weapon' },
+        { buttons: ['LT'],            action: 'Fire / charge power weapon' },
+        { buttons: ['RB'],            action: 'Dash in steer direction; when still, dash away from nearest threat' },
+        { buttons: ['A', 'B', 'X', 'Y'], action: 'Activate ability slots 1-4' },
+        { control: 'Classic layout',  action: 'Keeps the dash on the bottom face button and the old held radials' },
+        { buttons: ['Start'],         action: 'Pause / resume' },
     ];
+
+    const glyphsFor = (labels, family = 'xbox') =>
+        labels.map((l) => bindingGlyph({ kind: 'button', label: l }, { family })).join(' · ');
 
     const list = el('div', { className: 'assists-list' });
     for (const r of rows) {
+        const title = el('div', {
+            className: 'assist-row-title',
+            text: r.buttons ? glyphsFor(r.buttons) : r.control,
+        });
+        if (r.buttons) title.dataset.gpButtons = r.buttons.join(',');
         list.appendChild(el('div', {
             className: 'assist-row',
             children: [
                 el('div', {
                     className: 'assist-row-text',
-                    children: [
-                        el('div', { className: 'assist-row-title', text: r.control }),
-                        el('div', { className: 'assist-row-desc',  text: r.action }),
-                    ],
+                    children: [title, el('div', { className: 'assist-row-desc', text: r.action })],
                 }),
             ],
         }));

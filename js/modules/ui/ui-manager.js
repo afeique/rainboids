@@ -3,7 +3,7 @@ import { MusicPlayer } from '../audio/music-player.js';
 import { POWERUP_TYPES, powerupGoldCost } from '../world/powerup.js';
 import { SPEEDRUN_TIERS, speedrunTierFor } from '../core/constants.js';
 import { loadSettings, saveSettings } from '../core/storage.js';
-import { renderIconHTML } from './icons.js';
+import { renderIconHTML, detectControllerFamily, bindingGlyph } from './icons.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { setRumbleEnabled, isRumbleEnabled } from '../platform/rumble.js';
 import { renderSpAllocation } from './sp-allocation.js';
@@ -1958,6 +1958,24 @@ export class UIManager {
         document.getElementById('gamepad-layout-classic')?.classList.toggle('active', layout === 'classic');
     }
 
+    // GP-3 — re-render the GAMEPAD reference tab's button glyphs for the
+    // connected pad's family (Xbox / PlayStation / Switch). The rows are built
+    // with default-Xbox glyphs at boot (no pad yet); this runs when the tab
+    // opens (a pad is connected by then) + updates each `[data-gp-buttons]`
+    // title in place. Falls back to Xbox if detection fails.
+    refreshGamepadGlyphs() {
+        let family = 'xbox';
+        try {
+            const pads = (typeof navigator !== 'undefined' && navigator.getGamepads) ? (navigator.getGamepads() || []) : [];
+            for (const p of pads) { if (p && p.connected) { family = detectControllerFamily(p.id); break; } }
+        } catch (_) { /* default xbox */ }
+        document.querySelectorAll('[data-gp-buttons]').forEach((el) => {
+            const labels = String(el.dataset.gpButtons || '').split(',').filter(Boolean);
+            if (!labels.length) return;
+            el.textContent = labels.map((l) => bindingGlyph({ kind: 'button', label: l }, { family })).join(' · ');
+        });
+    }
+
     switchTab(tabName) {
         // Guard: `pauseTabs` is every `.pause-tab` element, which now also
         // includes the segmented control-scheme + AS-2/3/4 Co-Pilot buttons
@@ -1986,6 +2004,7 @@ export class UIManager {
         if (tabName === 'assists') this.syncAssistsTab();
         if (tabName === 'gamepad' && this.gameEngine) {
             this.updateControlSchemeSelector(this.gameEngine.controlScheme, this.gameEngine.altControlScheme);
+            this.refreshGamepadGlyphs(); // GP-3 — show glyphs for the connected pad's family
         }
 
         // 6.1.0 — Powerups tab moved to the shop overlay; no

@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.225.1] - 2026-05-26
+
+### Changed — family-aware controller glyphs in the GAMEPAD tab (GP-3)
+
+- The GAMEPAD reference tab's button rows now show **glyphs matching the
+  connected controller's family** (Xbox `A/B/X/Y`, PlayStation
+  `Cross/Circle/Square/Triangle`, Switch's swapped `B/A/Y/X`, family-correct
+  shoulders/triggers/menu) instead of the old fixed "Cross/A · Circle/B …" dual
+  labels. The rows are data-driven (each carries its button labels via
+  `data-gp-buttons`), rendered with default-Xbox glyphs at boot and re-rendered
+  to the detected pad family when the tab opens (`ui-manager.refreshGamepadGlyphs`,
+  using the existing `icons.js` `detectControllerFamily` / `bindingGlyph`).
+
+### Added
+
+- Unit coverage for the previously-untested `icons.js` controller-glyph helpers:
+  +9 tests (`detectControllerFamily` family detection + defaults, `bindingGlyph`
+  per-family mapping + key/mouse/touch/assist pass-through + fallbacks).
+
+Default-safe: prose rows (sticks / D-pad) are unchanged; with no pad the rows
+read as Xbox as before. Full unit suite 1926 green; boot QA clean.
+
 ## [6.225.0] - 2026-05-26
 
 ### Added — gamepad rumble (GP-4)
