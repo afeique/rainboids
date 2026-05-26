@@ -175,6 +175,14 @@ export const PASSIVES = {
         id: 'BLOODLUST', name: 'Bloodlust', desc: 'Each kill grants a stack of Bloodlust: +4% damage per stack (cap +40%), decaying without kills.',
         hooks: ['onKill', 'damage'], tags: ['offense', 'tempo'], slot: true, item: true, itemTierMin: EXC, stack: B,
     },
+    SANGUINE: {
+        id: 'SANGUINE', name: 'Sanguine', desc: 'Each enemy kill heals you for 4% of your max HP.',
+        hooks: ['onKill', 'heal'], tags: ['sustain'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
+    HEMOGLUTTON: {
+        id: 'HEMOGLUTTON', name: 'Hemoglutton', desc: 'Your lifesteal heals double when it lands on a status-afflicted enemy.',
+        hooks: ['onHit', 'heal'], tags: ['sustain', 'element'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
     SALVAGE_PROTOCOL: {
         id: 'SALVAGE_PROTOCOL', name: 'Salvage Protocol', desc: '+1 Core per salvage; better tier-up chance on drops',
         hooks: ['salvage', 'drop'], tags: ['econ'], slot: false, item: true, itemTierMin: EXC, stack: A,
@@ -278,6 +286,7 @@ const _PASSIVE_ICONS = {
     VAMPIRIC_ROUNDS: 'droplet', RICOCHET: 'shuffle', MOMENTUM_ROUNDS: 'rocket',
     CHAIN_REACTION: 'bomb', KINETIC_BATTERY: 'wind', OVERFLOW_SPARK: 'bolt',
     LAST_BASTION: 'medal', GUARDIAN_ECHO: 'thorns', BLOODSHIELD: 'shield', BLOODLUST: 'skull', SALVAGE_PROTOCOL: 'wrench',
+    SANGUINE: 'heart', HEMOGLUTTON: 'droplet',
     SCAVENGER: 'magnet', HOARDERS_GREED: 'money-bag', OVERKILL: 'dizzy', VENDETTA: 'anger',
     CONDUIT: 'chain', AFTERIMAGE: 'ghost', RESONANCE: 'loop', BACKLASH: 'undo',
     HARVEST: 'cart', TRACER_LOCK: 'crosshair', SIEGE: 'chart',

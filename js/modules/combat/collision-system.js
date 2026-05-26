@@ -867,7 +867,16 @@ export function handleCollisions() {
                 // applied to the enemy (clamps overkill so we don't
                 // heal more than we'd dealt to a full-HP target).
                 const enemyApplied = Math.max(0, enemyHpBefore - enemy.health);
-                if (typeof this.applyVampirism === 'function') this.applyVampirism(enemyApplied);
+                // T9 — Hemoglutton: lifesteal lands DOUBLE on a status-afflicted
+                // enemy. Reuses the existing _enemyHasStatus(e) helper. Default-
+                // safe: without the passive (or vs a status-free enemy) we feed
+                // the plain applied amount, byte-for-byte as before. (Doubling a
+                // zero-lifesteal player is still zero, so it's a pure no-op
+                // without Vampirism.)
+                const enemyLifesteal = (this.player && typeof this.player.hasPassive === 'function'
+                    && this.player.hasPassive('HEMOGLUTTON') && _enemyHasStatus(enemy))
+                    ? enemyApplied * 2 : enemyApplied;
+                if (typeof this.applyVampirism === 'function') this.applyVampirism(enemyLifesteal);
                 // P6 — Vampiric Rounds passive: crits heal 2 HP. 6.149.0 — via
                 // gainHealth so the heal banks toward a tank when at full HP.
                 if (_isCrit && this.player && typeof this.player.hasPassive === 'function'

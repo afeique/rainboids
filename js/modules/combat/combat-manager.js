@@ -1175,6 +1175,15 @@ export function splitChildSpec(splitOnDeath, parentMaxHealth, parentRadius, pare
 // abilities recover more absolute time per kill). Pure + in-place so the math
 // unit-tests cleanly; onEnemyKill owns the per-kill trigger.
 export const FLOW_STATE_FRACTION = 0.03;
+
+// T9 — Sanguine: fraction of effective max HP healed per enemy kill (4%). A pure
+// constant + helper so the heal math unit-tests cleanly; onEnemyKill owns the
+// per-kill trigger and gates it on the passive (default-safe).
+export const SANGUINE_HEAL_FRAC = 0.04;
+export function sanguineHealAmount(maxHp, frac = SANGUINE_HEAL_FRAC) {
+    if (!(maxHp > 0)) return 0;
+    return maxHp * frac;
+}
 export function flowStateReduce(cooldowns, maxes, frac = FLOW_STATE_FRACTION) {
     if (!Array.isArray(cooldowns) || !Array.isArray(maxes)) return;
     for (let i = 0; i < cooldowns.length; i++) {
@@ -1206,6 +1215,19 @@ export function onEnemyKill(enemy) {
         this.player.bloodlustStacks = Math.min(
             BLOODLUST_MAX_STACKS, (this.player.bloodlustStacks || 0) + 1);
         this.player._bloodlustRefreshMs = frameClock.now;
+    }
+
+    // T9 — Sanguine: each enemy kill heals 4% of effective max HP. Routed
+    // through gainHealth so over-heal banks toward a spare tank (Bloodshield).
+    // Gated on the passive so a non-Sanguine player does zero extra work here —
+    // default-safe. (overkill×2 is SKIPPED: onEnemyKill fires after the enemy is
+    // already dead and threads no dealt-damage context, so the overkill amount
+    // isn't cleanly available at this hook — ship the flat 4% per the spec.)
+    if (this.player && this.player.hasPassive && this.player.hasPassive('SANGUINE')
+        && typeof this.player.gainHealth === 'function') {
+        const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
+            ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
+        this.player.gainHealth(sanguineHealAmount(maxHp));
     }
 
     // E8b — death flare (ASHEN_DETONATOR and any `deathFlare` enemy): bursts

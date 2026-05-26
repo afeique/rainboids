@@ -100,7 +100,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 | CD-07 | `player/weapons.js` | R-POWERPIPE: route power-weapon dmg through the player damage/crit pipeline; Efficiency+cap; Overclock cooldown-mode | CD-06 |
 | CD-08 ◐ | `player/progression.js` | ~~getEffectiveRegen += Regeneration~~ ✅ **6.198.0** (REGENERATION SP stat, +2 HP/s, shares the 3 HP/s cap, default-safe). **STILL TODO:** cap→5 w/ Regenerator powerup (not built yet). Energy regen tick already uses getEffectiveEnergyRegenMult (6.197.0). | CD-06 |
 | CD-09 ◐ | `player/lifecycle.js` | ~~takeDamage: Bloodshield soak-first~~ ✅ **6.199.0** (soak after FAILSAFE, before HP; over-heal feed in accumulateOverflowToTank; default-safe). **STILL TODO:** per-hit cap 45% (generalize FAILSAFE); remove HOARDERS/FRENZY taxes; Thorns reflect+status | CD-06 |
-| CD-10 ⚠ | `combat/collision-system.js` | applyDamageToEnemy: Bloodlust mult, Hemoglutton, Sanguine on-kill, lifesteal→Bloodshield feed, Designator mark crit/detonate, Sentry targeting, Retribution nova. ⚠ hot hub — serialize | CD-06 |
+| CD-10 ◐⚠ | `combat/collision-system.js` | ~~Bloodlust mult~~ ✅ 6.200.0 · ~~Hemoglutton (lifesteal ×2 vs status)~~ ✅ **6.201.0** · ~~Sanguine on-kill heal (4%)~~ ✅ **6.201.0** (in combat-manager onEnemyKill). **STILL TODO:** lifesteal→Bloodshield feed (currently over-heal feed only), Designator mark crit/detonate, Sentry targeting, Retribution nova. ⚠ hot hub — serialize | CD-06 |
 
 ### CD Phase 2 — abilities *(∥group H)*
 | ID | FILE | DOES | DEP |

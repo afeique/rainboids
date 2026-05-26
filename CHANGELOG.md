@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.201.0] - 2026-05-25
+
+### Added — Sanguine + Hemoglutton blood-sustain passives (CD-02/09 · doc T9)
+
+- **Sanguine** (new no-downside passive) — each enemy **kill heals 4% of max HP**
+  (`SANGUINE_HEAL_FRAC`, `combat/combat-manager.js`), routed through `gainHealth`
+  so over-heal banks toward a spare tank / Bloodshield. Added in the canonical
+  `onEnemyKill` hook beside Bloodlust's stack-gain. (Overkill ×2 from the doc was
+  skipped — `onEnemyKill` fires post-death with no dealt-damage context; shipped
+  flat 4% rather than contort the hook.)
+- **Hemoglutton** (new no-downside passive) — Vampirism **lifesteal lands double
+  on a status-afflicted enemy** (`combat/collision-system.js` enemy lifesteal
+  site, reusing the existing `_enemyHasStatus` helper). Rewards element/CC builds
+  that keep enemies burning/chilled/marked.
+- **Default-safe:** without Sanguine the on-kill heal is skipped; without
+  Hemoglutton (or vs a status-free enemy) lifesteal is exactly as before — and
+  doubling 0 lifesteal stays 0, so a no-Vampirism build is unaffected. The
+  reactive director absorbs the sustain for invested builds.
+- Tests: `tests/unit/cd-blood-sustain.test.js` (+10 — `sanguineHealAmount`
+  scaling/default-safe, the Hemoglutton gate mirror, passive entries) +
+  `tests/qa/39-blood-sustain.spec.js` (+5 — live on-kill heal, doubled lifesteal
+  on a status-afflicted enemy via the real collision pass, default-safe baselines).
+  Full unit suite **1728** green; QA-07 weapons + QA-28 roster regression 25/25.
+
+---
+
 ## [6.200.0] - 2026-05-25
 
 ### Added — Bloodlust: stacking on-kill damage buff (CD-02/11)
