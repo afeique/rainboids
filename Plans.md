@@ -19,7 +19,7 @@ From the `Director & Codebase Audit – 2026-05-25` report. The core design is v
 
 ---
 
-# ★★ FIX — quick correctness fixes *(PRIORITY 0 — do first; cheap; each its own PATCH + test)*
+# ★★ FIX — quick correctness fixes ✅ **COMPLETE (FIX-01..04, verified 2026-05-26 — see COMPLETED)** *(rows below kept for reference)*
 Audit detail + verified line numbers: `docs/Bug-Pass Audit — Findings & Fixes – 2026-05-25.md` + the synthesis report. **∥group X — all disjoint files, dispatch together.**
 | ID | FILE (owned) | DOES | ∥ |
 |----|----|----|----|
@@ -32,7 +32,7 @@ Audit detail + verified line numbers: `docs/Bug-Pass Audit — Findings & Fixes 
 
 ---
 
-# ★ DIR — Director & Adaptive Difficulty: full §14 model *(PRIORITY 1 — authoritative)*
+# ★ DIR — Director & Adaptive Difficulty: full §14 model ✅ **COMPLETE (DIR-01..10, verified 2026-05-26 — see COMPLETED)** *(rows below kept for reference; step 3 CD-17/RUN-07 is playtest-gated)*
 
 **Authoritative spec:** `Passive Skills & Run Difficulty – 2026-05-24` **§14** (PWR §14.1 · control loop §14.2 · composer §14.3 · reward §14.4 · baseline §14.5 · constants §14.6 · mode-gating §14.7). Cross-ref Balance Model §6/§6b and `Tuning the Flow Channel`.
 
@@ -73,7 +73,7 @@ Audit detail + verified line numbers: `docs/Bug-Pass Audit — Findings & Fixes 
 - **RUN — Adaptive Difficulty system LIVE**: Director (RUN-04, 6.171) + Threat HUD (CD-16, 6.172) → **live in-game** (RUN-05a, 6.177); runConfig plumbing (RUN-01a, 6.173) + card-every-stage-except-last (RUN-01b, 6.174); Reward Dial (RUN-03, 6.175); RUN SETUP UI (RUN-06, 6.176).
 - **ITEM/META**: tier-gated gear resists + readout (ITEM-01, 6.178); Cores resist-targeting (META-03, 6.179); gear-passive reroll (META-04, 6.186) — full ARMORY crafting set (reroll/tier-up/target-resist/reroll-passive).
 - Test suite: **1456 unit + Playwright QA + e2e**, all green @ **6.187.1**.
-- **DIR foundation shipped earlier (unrecorded):** `power-level.js` `computePWR` (DIR-01), `difficulty-constants.js` §14.6 + `baseline`/`pwrPreload` (DIR-02), `game.playerPWR` wired (DIR-05). ⚠ J/K/L rows below are stale — reconcile vs. tree; DIR-04/10 live refactors stay playtest-gated.
+- **FIX bug-pass + DIR full §14 director — COMPLETE (shipped prior sessions; verified vs. tree 2026-05-26):** FIX-01 rate-limit NET ±maxStep clamp, FIX-02 Po-spike/boss-gold guards, FIX-03 reflect range gate, FIX-04 addPowerup/EnemyBullet hygiene; DIR-01 `power-level.js` `computePWR`, DIR-02 `difficulty-constants.js` §14.6 + `baseline`/`pwrPreload`, DIR-03 runConfig mode + `getRunMode`, DIR-04 single-pressure loop + `enemyPower`, DIR-05 `game.playerPWR` wiring, DIR-06 HUD PWR badge, DIR-07 reference-dependent expected-clear, DIR-08 reward dial + `rollRarity`/rarityBias, DIR-09 mode selector + `isModeUnlocked` gating, DIR-10 live `applyEnemyLevelScaling` knobs. **Roadmap step 3 (CD-17 telemetry + RUN-07 calibration) is the playtest-gated remainder.**
 - **P7 mobile/Co-Pilot — substantially COMPLETE (6.216.1→6.220.1):** FB-1/2/3, MB-1/2/3, MB-6(verified), AS-1/2/3/4/5-core. **Remaining = device/eye-gated:** MB-4/5/7 (touch camera/offset/damage-numbers), AS-6 (opt), AS-5 deferred (on-touch auto-cast + stick-side).
 
 ---
