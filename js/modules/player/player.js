@@ -759,8 +759,11 @@ export class Player {
         }
 
         // Auto Aim — lock onto nearest threat. Overrides everything below.
+        // GP-2: R3 soft-lock (input.lockOn, held) snaps aim to the nearest
+        // threat too, even when the Auto Aim toggle is off — movement stays
+        // independent so the player keeps steering while locked.
         let autoAimed = false;
-        if (assists && assists.autoAim && ge && ge.findNearestTarget) {
+        if (((assists && assists.autoAim) || input.lockOn) && ge && ge.findNearestTarget) {
             const target = ge.findNearestTarget(this.x, this.y);
             if (target) {
                 input.aimX = target.x;

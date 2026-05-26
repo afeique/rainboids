@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.222.0] - 2026-05-26
+
+### Added — gamepad L3 / R3 bindings now functional (GP-2)
+
+- **L3 (left-stick click) toggles Auto Aim** on the gamepad, persisted via
+  `setAssist` so the HUD + ASSISTS tab reflect it. Rising-edge — one toggle per
+  press.
+- **R3 (right-stick click), held, soft-locks aim** onto the nearest threat
+  (`input.lockOn` → the player aim block snaps aim to `findNearestTarget` while
+  keeping movement steerable), even when the Auto Aim toggle is off.
+
+Both were declared in the binding registry (`bindings.js` TOGGLE_AUTO_AIM / L3,
+LOCK_ON / R3) but never read by the gamepad poll — now wired in
+`gamepad-handler.js`. Default-safe: only active on the gamepad scheme;
+`input.lockOn` is cleared when the scheme leaves gamepad. Tests: +5 unit
+(rising-edge toggle, held-no-retrigger, re-press, R3 set/clear, scheme-switch
+clear). First task of the GP (gamepad) gap-checklist workstream folded in after
+the P7 mobile track.
+
 ## [6.221.0] - 2026-05-26
 
 ### Added — Smart-Cast best-pick logic (mobile P7 · AS-6)

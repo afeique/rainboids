@@ -33,6 +33,7 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 | Fire primary | Hold `L-click` / `↑` | `R2` |
 | Fire power weapon | `Space` / `R-click` / `↓` | `L2` |
 | Activate abilities (4 slots) | `1` `2` `3` `4` | `✕/A` · `◯/B` · `□/X` · `△/Y` |
+| Toggle auto-aim · Lock-on (hold) | — | `L3` · `R3` |
 | Primary · Power · Ability radial | hold `F` · `E` · `R` | Classic layout only |
 | Inventory · Stats · Pause | `I` · `` ` `` · `Esc` | — · — · `Start` |
 

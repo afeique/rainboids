@@ -68,6 +68,9 @@ export class GamepadHandler {
         this._prevDash = false;
         this._prevAbility = [false, false, false, false];
         this._prevPause = false;
+        // GP-2 — L3 (TOGGLE_AUTO_AIM) is a rising-edge toggle; R3 (LOCK_ON) is
+        // a held modifier read each frame (no edge state needed).
+        this._prevToggleAutoAim = false;
         // U3 — D-pad tab cycling while the BUILD/shop tree is open.
         this._prevTabPrev = false;
         this._prevTabNext = false;
@@ -323,6 +326,19 @@ export class GamepadHandler {
             }
         }
         this._prevAbility = abilityButtons;
+
+        // GP-2 — the two stick-click bindings that were declared in bindings.js
+        // but never read. L3 rising-edge toggles Auto Aim (persisted via
+        // setAssist so the HUD + ASSISTS tab reflect it); R3 held soft-locks aim
+        // to the nearest threat (player.js's aim block consumes input.lockOn,
+        // snapping aim while keeping movement steerable).
+        const toggleAutoAim = !!actions[ACTIONS.TOGGLE_AUTO_AIM];
+        if (toggleAutoAim && !this._prevToggleAutoAim && this.engine && typeof this.engine.setAssist === 'function') {
+            const cur = !!(this.engine.assists && this.engine.assists.autoAim);
+            this.engine.setAssist('autoAim', !cur);
+        }
+        this._prevToggleAutoAim = toggleAutoAim;
+        input.lockOn = !!actions[ACTIONS.LOCK_ON];
     }
 
     // Release any input the pad was driving (scheme switched away or pad
@@ -334,8 +350,10 @@ export class GamepadHandler {
             input.fireSecondary = false;
             input.stickInput = ZERO_VEC;
             input.aimStick = ZERO_VEC;
+            input.lockOn = false; // GP-2 — don't leave a stale soft-lock on scheme switch
         }
         this._prevDash = false;
         this._prevAbility = [false, false, false, false];
+        this._prevToggleAutoAim = false;
     }
 }
