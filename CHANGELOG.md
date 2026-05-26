@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.220.0] - 2026-05-26
+
+### Added — touch-reachable Co-Pilot tuning (mobile P7 · AS-5)
+
+- The **ASSISTS pause-menu tab is now reachable on touch-only mobile** (it was
+  hidden there, only revealed by a connected gamepad). One-thumb players can now
+  open it and tune the Co-Pilot's **Level**, **Auto-Dodge intensity**, and
+  **Aggression** (the AS-2/3/4 controls) — previously desktop/gamepad-only.
+- On touch the per-frame reconcile now **honors the saved Co-Pilot Level**
+  (it was hard-pinned to CO-PILOT) so a player can opt into AUTOPILOT-grade
+  auto-dodge. Auto-Dodge + Aggression were already honored on touch (AS-1).
+
+### Changed
+
+- On the touch scheme the ASSISTS tab **hides the inert aim/fire toggles**
+  (Aim Assist / Auto Aim / Auto Fire / Laser Sight, plus Auto-Cast — all floored
+  on one-thumb play), leaving only the meaningful Co-Pilot tuning. They reappear
+  when a gamepad turns the device into a twin-stick.
+
+Default-safe: aim + fire stay floored in `player.js` and ability/power auto-cast
+stay on for touch (no manual fire path), so the run is playable at any setting;
+desktop/gamepad behavior is byte-for-byte unchanged (verified by the
+`52-assists-tuning` QA, 6/6). The touch-screen *feel* (and the deferred
+stick-side toggle + on-touch auto-cast tunability) wants real-device validation.
+
 ## [6.219.0] - 2026-05-26
 
 ### Added — death-cause readout on the GAME OVER screen (mobile P7 · FB-3)

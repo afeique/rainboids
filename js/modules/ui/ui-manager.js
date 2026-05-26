@@ -1350,6 +1350,28 @@ export class UIManager {
             this.elements.assistAggressionSlider.value = String(pct);
             if (this.elements.assistAggressionValue) this.elements.assistAggressionValue.textContent = `${pct}%`;
         }
+        this._refreshAssistRowsForScheme();
+    }
+
+    // AS-5 — on the touch control scheme the per-toggle aim/fire helpers are
+    // inert (player.js force-bakes auto-aim/auto-fire, and ability/power
+    // auto-cast are floored on), so showing their checkboxes would mislead a
+    // one-thumb player. Hide those rows on touch, leaving only the meaningful
+    // Co-Pilot tuning (LEVEL / AUTO-DODGE / AGGRESSION). They reappear the
+    // moment a gamepad turns the device into a twin-stick (scheme != touch).
+    _refreshAssistRowsForScheme() {
+        const touch = this.gameEngine && this.gameEngine.controlScheme === 'touch';
+        const inertOnTouch = [
+            this.elements.assistAimAssist,
+            this.elements.assistAutoAim,
+            this.elements.assistAutoFire,
+            this.elements.assistAutoCastAbilities,
+            this.elements.assistLaserSight,
+        ];
+        for (const cb of inertOnTouch) {
+            const row = cb && cb.closest ? cb.closest('.assist-row') : null;
+            if (row) row.style.display = touch ? 'none' : '';
+        }
     }
 
     setAudioManager(audioManager) {

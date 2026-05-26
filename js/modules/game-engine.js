@@ -3391,7 +3391,12 @@ export class GameEngine {
             if (this.assistSystem && this._assistSystemActive()) {
                 const cfg = this.assistSystem.config;
                 if (this.controlScheme === 'touch') {
-                    cfg.level = ASSIST_LEVELS.CO_PILOT;
+                    // AS-5 — touch players tune the Co-Pilot via the now-reachable
+                    // ASSISTS tab. Honor saved LEVEL + AUTO-DODGE (mobile defaults
+                    // CO_PILOT / conservative). Ability + power auto-cast stay ON —
+                    // one-thumb has no manual fire path — and aim/fire are floored
+                    // in player.js, so the run stays playable at any setting.
+                    cfg.level = this.assists.level || ASSIST_LEVELS.CO_PILOT;
                     cfg.autoDodge = this.assists.autoDodge || 'conservative';
                     cfg.autoCastAbilities = true;
                     cfg.autoCastPower = true;
@@ -5102,9 +5107,13 @@ export class GameEngine {
     // while a gamepad is connected (twin-stick aiming → the player may
     // want to opt into Aim Assist / Auto Aim / Auto Fire / Laser Sight).
     _refreshAssistsTabVisibility() {
-        const visible = !isMobile() || !!(this.gamepad && this.gamepad.isConnected());
+        // AS-5 — the ASSISTS tab is now reachable on every platform, including
+        // touch-only mobile. It used to be hidden on touch (its toggles were
+        // force-baked + inert there), but it now carries the touch-meaningful
+        // Co-Pilot tuning (LEVEL / AUTO-DODGE / AGGRESSION). The inert aim/fire
+        // toggles are hidden per-scheme in ui-manager (_refreshAssistRowsForScheme).
         if (this.uiManager && typeof this.uiManager.setAssistsTabVisible === 'function') {
-            this.uiManager.setAssistsTabVisible(visible);
+            this.uiManager.setAssistsTabVisible(true);
         }
     }
 
