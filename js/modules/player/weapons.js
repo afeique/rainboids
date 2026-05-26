@@ -1,7 +1,8 @@
 // Player weapon system — extracted from Player class
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
-import { GAME_CONFIG, FLUX_MAX_STACKS, CAPACITOR_BANK_DMG_BONUS, OVERCLOCK_COOLDOWN_MS, OVERCLOCK_EFFECT_MULT } from '../core/constants.js';
+import { GAME_CONFIG, FLUX_MAX_STACKS, CAPACITOR_BANK_DMG_BONUS, OVERCLOCK_COOLDOWN_MS, OVERCLOCK_EFFECT_MULT,
+    HEAT_SINK_MAX, HEAT_SINK_RAMP, HEAT_SINK_FIRE_FLOOR_MS, HEAT_SINK_VENT_RADIUS, HEAT_SINK_VENT_DAMAGE } from '../core/constants.js';
 import { frameClock } from '../core/frame-clock.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity, attunementElements } from '../combat/weapon-data.js';
 import { resolveBulletElements } from '../combat/elements.js';
@@ -286,6 +287,15 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
             bulletCreated = bulletPool.activeObjects.length > poolBefore;
         } catch (e) {
             console.error('[FIRE] firePrimary threw:', e.message, e.stack);
+        }
+        // HEAT_SINK keystone — accumulate HEAT per primary shot; VENT at max.
+        // DEFAULT-SAFE: gated on the passive, so non-holders never touch heat.
+        if (typeof this.hasPassive === 'function' && this.hasPassive('HEAT_SINK')) {
+            this.heat = (this.heat || 0) + 1;
+            if (heatSinkShouldVent(this.heat)) {
+                heatSinkVent.call(this, particlePool);
+                this.heat = 0;
+            }
         }
     }
 
@@ -2282,6 +2292,58 @@ export function createChargedBullets(bulletPool, sizeMultiplier = 1, speedMultip
 
 // ── Fire rate / damage / cooldown queries ──────────────────────────────────
 
+// HEAT_SINK — pure ramp helper. Returns the effective fire INTERVAL (ms) given
+// a base interval and the current heat (0..HEAT_SINK_MAX). At heat 0 it returns
+// the base interval unchanged (DEFAULT-SAFE); as heat climbs the interval scales
+// down toward base*(1 - HEAT_SINK_RAMP) — uncapped vs. the normal fire-rate cap
+// — but is HARD-FLOORED at HEAT_SINK_FIRE_FLOOR_MS so the bullet rate can never
+// explode (perf floor). Exported for unit tests; takes no `this`.
+export function heatSinkFireRate(baseRate, heat) {
+    const h = Math.max(0, Math.min(HEAT_SINK_MAX, heat || 0));
+    const frac = HEAT_SINK_MAX > 0 ? h / HEAT_SINK_MAX : 0;
+    const scaled = baseRate * (1 - HEAT_SINK_RAMP * frac);
+    return Math.max(HEAT_SINK_FIRE_FLOOR_MS, scaled);
+}
+
+// HEAT_SINK — vent trigger predicate (pure). True once heat has reached max.
+export function heatSinkShouldVent(heat) {
+    return (heat || 0) >= HEAT_SINK_MAX;
+}
+
+// HEAT_SINK — pure AoE selector. Returns the enemies within HEAT_SINK_VENT_RADIUS
+// of (px,py). The caller applies HEAT_SINK_VENT_DAMAGE to each via the engine's
+// damageEnemy. Skips inactive enemies. No side effects.
+export function heatSinkVentTargets(enemies, px, py) {
+    const out = [];
+    if (!Array.isArray(enemies)) return out;
+    for (const e of enemies) {
+        if (!e || !e.active) continue;
+        if (Math.hypot(e.x - px, e.y - py) <= HEAT_SINK_VENT_RADIUS) out.push(e);
+    }
+    return out;
+}
+
+// HEAT_SINK — fire the vent AoE burst. Called with .call(this) where `this`
+// is the Player; reaches the engine via this.gameEngine for the enemy pool +
+// damageEnemy (same context the RETALIATION pulse in lifecycle.js uses). A
+// bounded radius loop (heatSinkVentTargets) — perf-sane. Rings a colored
+// explosion particle as the visual reward. No firing lockout: this only deals
+// damage + spawns a ring; the fire loop keeps running. Default-safe: only ever
+// called from the HEAT_SINK-gated branch.
+function heatSinkVent(particlePool) {
+    const ge = this.gameEngine;
+    if (!ge || !ge.enemyPool || typeof ge.damageEnemy !== 'function') return;
+    const px = this.x, py = this.y;
+    const targets = heatSinkVentTargets(ge.enemyPool.activeObjects.slice(), px, py);
+    for (const e of targets) {
+        ge.damageEnemy(e, HEAT_SINK_VENT_DAMAGE);
+    }
+    const pp = particlePool || ge.particlePool;
+    if (pp && pp.get) {
+        pp.get(px, py, 'explosionRingColored', HEAT_SINK_VENT_RADIUS, '#ff6622');
+    }
+}
+
 export function getEffectivePrimaryFireRate() {
     const config = this.getActivePrimaryConfig();
     let rate = config.fireRate;
@@ -2315,6 +2377,15 @@ export function getEffectivePrimaryFireRate() {
     // P6 — Gunslinger passive: +30% fire rate (shorter interval).
     if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) {
         rate /= 1.3;
+    }
+
+    // HEAT_SINK keystone — uncapped sustained-fire ramp. While held, the
+    // effective interval shrinks FURTHER with built-up heat, PAST the normal
+    // fire-rate cap, hard-floored at HEAT_SINK_FIRE_FLOOR_MS so the bullet rate
+    // can't explode. Applied LAST so it ramps on top of every other rate hook.
+    // DEFAULT-SAFE: no passive (or heat 0) → rate is byte-for-byte unchanged.
+    if (typeof this.hasPassive === 'function' && this.hasPassive('HEAT_SINK')) {
+        rate = heatSinkFireRate(rate, this.heat || 0);
     }
 
     return Math.round(rate);

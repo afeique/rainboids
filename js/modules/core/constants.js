@@ -444,6 +444,28 @@ export const CAPACITOR_BANK_DMG_BONUS = 1.25;
 export const OVERCLOCK_COOLDOWN_MS = 2500;
 export const OVERCLOCK_EFFECT_MULT = 0.6;
 
+// HEAT_SINK (offense keystone passive) — §6c no-downsides, pure-upside rework.
+// While held, holding primary fire ramps the fire RATE faster over sustained
+// fire — PAST the normal fire-rate cap — building HEAT as shots land. At max
+// HEAT the ship VENTs: a bounded AoE damage burst to nearby enemies (a REWARD,
+// not a lockout — firing never stops), then HEAT resets and the ramp restarts.
+//   - HEAT_SINK_MAX: heat units to a vent (each primary shot adds 1).
+//   - HEAT_SINK_RAMP: max additional fire-rate fraction shaved off the interval
+//     at full heat (0.45 = interval scales down to 55% of base by max heat).
+//   - HEAT_SINK_FIRE_FLOOR_MS: hard perf floor on the effective interval so the
+//     uncapped ramp can NEVER explode the bullet count (≥18ms ⇒ ≤~55 shots/s).
+//   - HEAT_SINK_VENT_RADIUS / _VENT_DAMAGE: the vent's bounded-loop AoE.
+//   - HEAT_SINK_DECAY_PER_SEC: heat bleeds off this fast when NOT firing, so the
+//     build rewards SUSTAINED fire (heat isn't permanent).
+// DEFAULT-SAFE: without the passive none of this runs — fire rate, firing, and
+// heat state are byte-for-byte unchanged (heat stays 0, no vent).
+export const HEAT_SINK_MAX = 100;
+export const HEAT_SINK_RAMP = 0.45;
+export const HEAT_SINK_FIRE_FLOOR_MS = 18;
+export const HEAT_SINK_VENT_RADIUS = 200;
+export const HEAT_SINK_VENT_DAMAGE = 30;
+export const HEAT_SINK_DECAY_PER_SEC = 60;
+
 // RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
 // The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
 // accessor below returns today's values when no runConfig is set.

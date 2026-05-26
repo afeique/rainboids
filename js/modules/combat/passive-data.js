@@ -268,11 +268,12 @@ export const PASSIVES = {
     HEAT_SINK: {
         // §6c no-downsides — completes the no-downside rework of all 11 original
         // keystone downsides. The `downside: 'Over-holding triggers a vent lockout'`
-        // string was removed: HEAT_SINK is currently INERT (its fire-rate-ramp /
-        // HEAT / vent mechanic was never wired), so the lockout doesn't exist in
-        // code. The full HEAT mechanic (uncapped ramp + vent AoE burst, with NO
-        // lockout) is a separate net-new feature — NOT built here.
-        id: 'HEAT_SINK', name: 'Heat Sink', desc: 'Primaries ignore their fire-rate cap and ramp while held, building HEAT; max heat VENTs (brief lockout + AoE burst)',
+        // string was removed. The HEAT mechanic is now wired as a pure-upside
+        // keystone: holding primary fire ramps the fire rate PAST the normal cap
+        // and builds HEAT; at max HEAT the ship VENTs an AoE burst (a reward, NO
+        // lockout — firing never stops), then HEAT resets. See weapons.js
+        // (getEffectivePrimaryFireRate ramp + heatSinkVent) and player.js (heat).
+        id: 'HEAT_SINK', name: 'Heat Sink', desc: 'Primaries ignore their fire-rate cap and ramp while held, building HEAT; max heat VENTs an AoE burst (no lockout)',
         hooks: ['fireRate', 'fire'], tags: ['keystone', 'offense'], slot: true, item: false, stack: B,
     },
 

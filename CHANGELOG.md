@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.216.0] - 2026-05-26
+
+### Added — HEAT_SINK keystone mechanic: uncapped fire-rate ramp + vent AoE (CD-02 · §6c)
+
+- **HEAT_SINK** (previously an inert keystone) is now implemented as a
+  **no-lockout, pure-upside** machine-gun build: holding primary fire **ramps the
+  fire rate past the normal cap** (any primary), building **HEAT**; at max HEAT it
+  **vents an AoE burst** to nearby enemies and resets — **no firing lockout** (the
+  old downside is gone, per §6c).
+- Pure `heatSinkFireRate(baseRate, heat)` ramp (`player/weapons.js`) applied last
+  in `getEffectivePrimaryFireRate`, **hard-floored at 18 ms** so the uncapped rate
+  can't explode the bullet count. HEAT accumulates per shot in the fire path,
+  vents via a bounded radius pulse (`heatSinkVent`, reusing the RETALIATION-pulse
+  pattern through `this.gameEngine`), and decays when not firing. Constants in
+  `core/constants.js`; `this.heat` inits/resets per run (`player/player.js`).
+- **Default-safe:** without HEAT_SINK, `getEffectivePrimaryFireRate` + firing are
+  byte-for-byte unchanged (no ramp, no heat, no vent). This was the last net-new
+  CD feature — **the combat-depth track's mechanics are now fully built.**
+- Tests: `tests/unit/cd-heat-sink.test.js` (+12 — ramp math/floor/clamp/
+  default-safe, vent trigger + target selector) + `tests/qa/50-heat-sink.spec.js`
+  (+5 — ramp beats the cap, sustained fire vents + resets with no lockout,
+  default-safe). Full unit suite **1833** green; QA-07 weapons + QA-14 passives 24+5.
+
+---
+
 ## [6.215.0] - 2026-05-26
 
 ### Added — Overclock keystone: power-economy inversion (CD-02 · R-OVERCLOCK)

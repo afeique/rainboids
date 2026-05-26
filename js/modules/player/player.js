@@ -1,5 +1,5 @@
 // Player ship entity
-import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS, BLOODLUST_DECAY_MS, FLUX_WINDOW_MS, CAPACITOR_BANK_DECAY_PER_SEC } from '../core/constants.js';
+import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS, BLOODLUST_DECAY_MS, FLUX_WINDOW_MS, CAPACITOR_BANK_DECAY_PER_SEC, HEAT_SINK_DECAY_PER_SEC, HEAT_SINK_MAX } from '../core/constants.js';
 import { random, wrap } from '../core/utils.js';
 import * as weapons from './weapons.js';
 import * as abilities from './abilities.js';
@@ -259,6 +259,11 @@ export class Player {
         // Scatter gun shot counter
         this.scatterShotCount = 0;
 
+        // HEAT_SINK keystone — sustained-fire heat accumulator (0..HEAT_SINK_MAX).
+        // Climbs as primaries fire while HEAT_SINK is held, vents + resets at max,
+        // and decays when not firing (see player.update). Inert without the passive.
+        this.heat = 0;
+
         // Deflector orbs state
         this.deflectorOrbs = [];
 
@@ -382,6 +387,7 @@ export class Player {
         this.sentryDrones = [];
         this.needleCount = 0;
         this.scatterShotCount = 0;
+        this.heat = 0; // HEAT_SINK — reset sustained-fire heat per run
         this.lastPrimaryFireTime = 0;
         // Phase B.S1 — reset per-slot cooldowns (keep equipped abilities, like
         // owned weapons). Writing via the arrays keeps the legacy
@@ -1158,6 +1164,18 @@ export class Player {
                 const normalMax = this.getEffectiveMaxEnergy();
                 if ((this.energy || 0) > normalMax) {
                     this.energy = progression.capacitorBankDecayStep(this.energy || 0, normalMax, dtMs);
+                }
+            }
+
+            // HEAT_SINK — heat bleeds off when NOT actively holding fire, so the
+            // ramp/vent rewards SUSTAINED fire rather than being permanent. While
+            // fire is held (_fireHoldTime > 0, updated in updateChargingSystem) the
+            // heat is left alone to keep climbing. Gated on the passive AND a
+            // non-zero heat so non-holders (heat stays 0) do zero work — default-safe.
+            if (dtMs > 0 && (this.heat || 0) > 0
+                && typeof this.hasPassive === 'function' && this.hasPassive('HEAT_SINK')) {
+                if (!(this._fireHoldTime > 0)) {
+                    this.heat = Math.max(0, Math.min(HEAT_SINK_MAX, this.heat) - HEAT_SINK_DECAY_PER_SEC * dtMs / 1000);
                 }
             }
         }
