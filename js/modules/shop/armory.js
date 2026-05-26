@@ -44,6 +44,31 @@ export const UNLOCK_CATEGORIES = {
     passives: { metaKey: 'unlockedPassives', base: ['OPPORTUNIST', 'LAST_BASTION'], cost: 9000 },
 };
 
+// ── New-account starter grant (early-engagement pass) ──────────────────────
+// A brand-new account (no meta in localStorage yet) is seeded ONCE with a small
+// gold head-start + a handful of extra unlocks beyond BASE_LOADOUT, so:
+//   • the run-one LOADOUT screen is a real "opening fork" — 3 primaries / 2
+//     powers / 3 abilities to choose between, not a single forced kit — and
+//   • the first ARMORY unlock is reachable in ~1-2 runs instead of ~15.
+// This does NOT change BASE_LOADOUT (the always-free floor); it only pre-fills
+// the persistent unlock lists for a fresh save. The starter gold sits BELOW the
+// cheapest unlock (mods, 5000) so it can't be spent directly — it just shortens
+// the grind to the first purchase, never trivializes it.
+export const STARTER_ACCOUNT_GOLD = 3000;
+export const STARTER_UNLOCKS = {
+    unlockedPrimaries: ['SCATTER_GUN', 'RAIL_DRIVER'], // + base PULSE_CANNON → rapid / spread / pierce
+    unlockedPowers:    ['MINE_LAYER'],                 // + base CHARGE_SHOT  → burst / area
+    unlockedAbilities: ['DEFLECTOR_ORBS'],             // + base BULWARK + FIELD_MEDIC
+};
+
+/**
+ * The one-time meta blob seeded for a brand-new account (no meta yet). Callers
+ * MUST gate on `!loadMeta()` so an existing player is never re-granted.
+ */
+export function newAccountSeed() {
+    return { accountGold: STARTER_ACCOUNT_GOLD, ...STARTER_UNLOCKS };
+}
+
 /** Cost in account-gold to unlock one item of a category. */
 export function unlockCost(category) {
     const c = UNLOCK_CATEGORIES[category];

@@ -2,6 +2,7 @@
 import {
     BASE_LOADOUT, UNLOCK_CATEGORIES, unlockCost, getUnlockedSet, isUnlocked,
     getLockedIds, canUnlock, applyUnlock, bankRunGold, resolveAccountGold,
+    STARTER_ACCOUNT_GOLD, STARTER_UNLOCKS, newAccountSeed,
 } from '../../js/modules/shop/armory.js';
 
 describe('Armory economy — unlock sets', () => {
@@ -104,7 +105,47 @@ describe('Armory economy — banking + migration', () => {
     });
 
     test('resolveAccountGold defaults to 0', () => {
+        // resolveAccountGold stays a PURE meta read (no implicit starter grant);
+        // the new-account seed is applied explicitly at engine boot, not here.
         expect(resolveAccountGold(null)).toBe(0);
         expect(resolveAccountGold({})).toBe(0);
+    });
+});
+
+describe('Armory economy — new-account starter seed (early-engagement)', () => {
+    test('starter gold sits below the cheapest unlock so it cannot be spent directly', () => {
+        const cheapestUnlock = Math.min(...Object.values(UNLOCK_CATEGORIES).map((c) => c.cost));
+        expect(STARTER_ACCOUNT_GOLD).toBeGreaterThan(0);
+        expect(STARTER_ACCOUNT_GOLD).toBeLessThan(cheapestUnlock);
+    });
+
+    test('newAccountSeed bundles the starter gold + the starter unlocks', () => {
+        const seed = newAccountSeed();
+        expect(seed.accountGold).toBe(STARTER_ACCOUNT_GOLD);
+        expect(seed.unlockedPrimaries).toEqual(STARTER_UNLOCKS.unlockedPrimaries);
+        expect(seed.unlockedPowers).toEqual(STARTER_UNLOCKS.unlockedPowers);
+        expect(seed.unlockedAbilities).toEqual(STARTER_UNLOCKS.unlockedAbilities);
+    });
+
+    test('seeded unlocks are NOT base — they only widen a fresh account', () => {
+        // The always-free floor is unchanged; the seed adds purchasable items on top.
+        for (const id of STARTER_UNLOCKS.unlockedPrimaries) {
+            expect(BASE_LOADOUT.primaries).not.toContain(id);
+            expect(isUnlocked('primaries', id, {})).toBe(false);          // locked with empty meta
+            expect(isUnlocked('primaries', id, newAccountSeed())).toBe(true); // unlocked once seeded
+        }
+        expect(isUnlocked('powers', 'MINE_LAYER', {})).toBe(false);
+        expect(isUnlocked('powers', 'MINE_LAYER', newAccountSeed())).toBe(true);
+        expect(isUnlocked('abilities', 'DEFLECTOR_ORBS', {})).toBe(false);
+        expect(isUnlocked('abilities', 'DEFLECTOR_ORBS', newAccountSeed())).toBe(true);
+    });
+
+    test('a seeded account can choose from a real opening fork (base ∪ seeded)', () => {
+        const meta = newAccountSeed();
+        const primaries = getUnlockedSet('primaries', meta);
+        expect(primaries.has('PULSE_CANNON')).toBe(true); // base
+        expect(primaries.has('SCATTER_GUN')).toBe(true);  // seeded
+        expect(primaries.has('RAIL_DRIVER')).toBe(true);  // seeded
+        expect(primaries.size).toBeGreaterThanOrEqual(3);
     });
 });

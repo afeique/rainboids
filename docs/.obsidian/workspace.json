@@ -214,6 +214,16 @@
   },
   "active": "0dc9aa6f29b57b07",
   "lastOpenFiles": [
+    "Tuning the Flow Channel — Difficulty, Dopamine & Adaptive Balancing – 2026-05-25.md",
+    "Bug-Pass Audit — Findings & Fixes – 2026-05-25.md",
+    "Adaptive Difficulty — Stress-Test Raw Data – 2026-05-25.md",
+    "Director & Codebase Audit — Synthesis & Recommendations – 2026-05-25.md",
+    "_bug-audit-report.md",
+    "_stress-raw-output.md",
+    "Combat Depth — Implementation Plan (consolidated) – 2026-05-24.md",
+    "Balance Model — Build Math, Enemy Tuning & Adaptive Difficulty – 2026-05-24.md",
+    "Energy & Health Systems — Brainstorm + Ability Audit – 2026-05-24.md",
+    "Ability Attunements & New Abilities — Brainstorm – 2026-05-24.md",
     "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.9332163b2e76",
     "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.7139c03107cd",
     "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.f3be86592eec",
@@ -224,7 +234,6 @@
     "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.98dd833830c1",
     "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.8f6ad8140d72",
     "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.f5ac7ecd9239",
-    "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md.tmp.96165.6e37e0def7c0",
     "Passive Skills & Run Difficulty — Design Plan – 2026-05-24.md",
     "Weapon Element Identity & Meta-Progression — Design Plan – 2026-05-23.md",
     "Roguelite Restructure — Phase R progress report – 2026-05-23.md",
@@ -240,15 +249,6 @@
     "Dead Skills & Upgrades – 2026-05-20.md",
     "Solo Bug Fix Plan – 2026-05-18.md",
     "Rust + Bevy Port Plan – 2026-05-20.md",
-    "Native Desktop Port Plan – 2026-05-19.md",
-    "Skill Tree & Combat Overhaul Plan – 2026-05-19.md",
-    "Codebase Improvement Report – 2026-05-18.md",
-    "Gold Drop Overhaul Brainstorm – 2026-05-19.md",
-    "Solo Bug Audit – 2026-05-18.md",
-    "Bullet Stroke Bug – 2026-05-06.md",
-    "Enemy Asteroid Permutations – 2026-03-07.md",
-    "Gameplay Enhancement Plan – 2026-03-22.md",
-    "PERF_BOTTLENECKS_5.79.3.md",
-    "PERF_RUNTIME_5.79.16.md"
+    "Native Desktop Port Plan – 2026-05-19.md"
   ]
 }

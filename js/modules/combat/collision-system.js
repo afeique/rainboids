@@ -2575,17 +2575,29 @@ export function applySuppressAura() {
 export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
-    // Boss rage / phase-transition invuln window — sparkle feedback, drop hit.
-    if (enemy.isBoss && ((enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil) || phaseBlocksDamage(enemy) || coreBlocksDamage(enemy) || introBlocksDamage(enemy))) {
-        if (this.particlePool) {
-            const p = this.particlePool.get(enemy.x, enemy.y, 'starSparkle');
-            if (p) {
-                p.color = '#ff8888';
-                p.vel.x = (Math.random() - 0.5) * 2;
-                p.vel.y = (Math.random() - 0.5) * 2;
+    // Boss invuln handling. A HARD invuln (rage / phase-transition / intro) always
+    // drops the hit with sparkle feedback. A core SHIELDED by living weak-points
+    // normally drops it too — UNLESS the boss opts into a partial chip via
+    // `coreChipFactor` in (0,1], in which case a fraction of the hit trickles to
+    // the core while its parts live (THE HARBINGER, 6.225.7) so fire never feels
+    // wasted. Clearing the parts still removes the penalty + stops their attacks.
+    if (enemy.isBoss) {
+        const hardInvuln = (enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil)
+            || phaseBlocksDamage(enemy) || introBlocksDamage(enemy);
+        const shielded = !hardInvuln && coreBlocksDamage(enemy);
+        const chip = enemy.coreChipFactor;
+        if (hardInvuln || (shielded && !(chip > 0))) {
+            if (this.particlePool) {
+                const p = this.particlePool.get(enemy.x, enemy.y, 'starSparkle');
+                if (p) {
+                    p.color = '#ff8888';
+                    p.vel.x = (Math.random() - 0.5) * 2;
+                    p.vel.y = (Math.random() - 0.5) * 2;
+                }
             }
+            return { blocked: true, destroyed: false };
         }
-        return { blocked: true, destroyed: false };
+        if (shielded) damage *= chip; // partial trickle to the core while parts live
     }
 
     // EMP_OVERLOAD — stunned enemies take +20% damage.

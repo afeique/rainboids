@@ -6,11 +6,19 @@
 // stage's headliners. Meta-goal: 10 survivor-card picks (one per stage
 // clear, free) across the campaign.
 //
-//   Stage  1 (1-1..1-3)  : Iron Scout      — HUNTER + WASP, boss TITAN T1
-//   Stage  2 (2-1..2-3)  : Iron Sentinel   — adds GUARDIAN
-//   Stage  3 (3-1..3-3)  : Iron Vanguard   — adds STALKER (sniper line)
-//   Stage  4 (4-1..4-3)  : Twin Iron       — adds DRIFTER + TANGERINE; LEECH debut
-//   Stage  5 (5-1..5-3)  : Triple Threat   — adds WEAVER + SENTINEL; WRAITHWORM debut
+//   Stage  1 (1-1..1-3)  : First Contact   — HUNTER + WASP, DRIFTER debut; boss Harbinger
+//   Stage  2 (2-1..2-3)  : Iron Wall       — adds GUARDIAN + TANGERINE (bomber); boss Aegis
+//   Stage  3 (3-1..3-3)  : Crossfire       — adds STALKER (sniper) + WEAVER; boss Lumen
+//   Stage  4 (4-1..4-3)  : Twin Iron       — DRIFTER/TANGERINE ramp; LEECH debut
+//   Stage  5 (5-1..5-3)  : Triple Threat   — adds SENTINEL; WRAITHWORM debut
+//
+// 6.x — EARLY-ENGAGEMENT pass: enemy variety is front-loaded across stages 1-3
+// so a new player meets a distinct new threat almost every wave (7 types + 3
+// different bosses by wave 9) instead of grinding HUNTER/WASP for three waves.
+// Only "fair" enemies are pulled forward (DRIFTER arc-lightning, TANGERINE
+// mines, WEAVER spiral-laser); the punishing/mechanic-heavy roster (LEECH strip,
+// PHANTOM cloak, DEVOURER absorb, PRISM_MIRROR reflect, NULL_DRONE suppress, …)
+// stays back-loaded so the opening teaches one readable behavior at a time.
 //   Stage  6 (6-1..6-3)  : Iron Quartet    — adds PROWLER (full roster); NULL_DRONE debut
 //   Stage  7 (7-1..7-3)  : Iron Crown      — combined arms, dense; PHANTOM debut
 //   Stage  8 (8-1..8-3)  : The Long Walk   — compounding pressure; DEVOURER + PRISM_MIRROR debut
@@ -44,62 +52,74 @@ import { isMobile } from '../platform/platform-detect.js';
 // (see wave-manager.spawnLeveledEnemies — the chance is wave-scaled).
 export const WAVE_DATA = {
 
-    // ── Stage 1: First Contact (HUNTER + WASP) ──
+    // ── Stage 1: First Contact (HUNTER + WASP, then DRIFTER) ──
+    // Wave 1 stays the gentlest possible intro (HUNTER/WASP only). DRIFTER
+    // (arc-lightning, wavy mover) debuts on 1-2 as a single accent — a striking
+    // new look and projectile, but low pressure — eight waves earlier than before.
     1: { asteroids: 5, subWaves: [
         [{ type: 'HUNTER', count: 3 }],
         [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
         [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
     ] },
     2: { asteroids: 5, subWaves: [
-        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
-        [{ type: 'WASP', count: 4 }],
-        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 3 }],
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'WASP', count: 3 }, { type: 'DRIFTER', count: 1 }],
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
     ] },
-    // 1-3 BOSS — Iron Scout: introductory TITAN, light escort.
+    // 1-3 BOSS — Harbinger (stage 1): introductory boss, HUNTER/WASP/DRIFTER escort.
     3: {
         asteroids: 3, isBossWave: true, bossTier: 1,
         subWaves: [
-            [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+            [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
             [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
         ],
     },
 
-    // ── Stage 2: Iron Sentinel (adds GUARDIAN heavy) ──
+    // ── Stage 2: Iron Wall (adds GUARDIAN heavy, then TANGERINE bomber) ──
+    // GUARDIAN (slow armored tank) debuts on 2-1; TANGERINE (mine-laying Bomber —
+    // a new area-denial threat) debuts on 2-2. Both are "fair" reads — no
+    // cloak/strip/reflect tricks — so the player learns one new behavior at a
+    // time while the roster visibly widens.
     4: { asteroids: 5, subWaves: [
         [{ type: 'GUARDIAN', count: 2 }],
         [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
     ] },
     5: { asteroids: 5, subWaves: [
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'WASP', count: 4 }, { type: 'GUARDIAN', count: 1 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'TANGERINE', count: 1 }],
+        [{ type: 'WASP', count: 3 }, { type: 'TANGERINE', count: 1 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }, { type: 'TANGERINE', count: 1 }],
     ] },
-    // 2-3 BOSS — Iron Sentinel: TITAN T1 with heavy GUARDIAN escort.
+    // 2-3 BOSS — Aegis (stage 2): armored boss with a GUARDIAN/TANGERINE escort.
     6: {
         asteroids: 3, isBossWave: true, bossTier: 1,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }],
-            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'GUARDIAN', count: 3 }, { type: 'HUNTER', count: 2 }],
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'TANGERINE', count: 1 }],
+            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
         ],
     },
 
-    // ── Stage 3: Iron Vanguard (adds STALKER sniper) ──
+    // ── Stage 3: Crossfire (adds STALKER sniper, then WEAVER) ──
+    // STALKER (charged-laser sniper) debuts on 3-1; WEAVER (spiral-laser spinner)
+    // debuts on 3-2. By the end of Stage 3 the player has met SEVEN distinct enemy
+    // types (HUNTER/WASP/DRIFTER/GUARDIAN/TANGERINE/STALKER/WEAVER) and three
+    // different bosses (Harbinger/Aegis/Lumen) — vs. the old three-types-by-wave-8
+    // opening.
     7: { asteroids: 5, subWaves: [
         [{ type: 'STALKER', count: 2 }],
         [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'DRIFTER', count: 1 }],
     ] },
     8: { asteroids: 5, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 1 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 1 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 1 }, { type: 'GUARDIAN', count: 2 }],
     ] },
-    // 3-3 BOSS — Iron Vanguard: TITAN T2 with STALKER escort.
+    // 3-3 BOSS — Lumen (stage 3): TITAN T2 with a STALKER/WEAVER escort.
     9: {
         asteroids: 3, isBossWave: true, bossTier: 2,
         subWaves: [
-            [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+            [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }],
             [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }],
         ],
     },
@@ -473,13 +493,13 @@ export function getEnemyBulletSpeedMultiplier(waveNumber, maxWaves = MAX_WAVES) 
 // (1-1 / 1-2 / 2-1 / 2-2 / etc.) get pithy combat one-liners.
 export const WAVE_SUBTITLES = {
     1:  "Don't worry, they die easy.",
-    2:  "Okay maybe worry a little.",
+    2:  "Arc-lightning inbound — meet the Drifter.",
     3:  "BOSS — Iron Scout. Aim for the bolts.",
     4:  "Heavies on deck.",
-    5:  "Combined arms. Pick your poison.",
+    5:  "Bombs away — mind the Bomber's mines.",
     6:  "BOSS — Iron Sentinel. Walking armor.",
     7:  "Sniper line. Don't stand still.",
-    8:  "Hold position? No. Move.",
+    8:  "Weavers spinning up. Keep moving.",
     9:  "BOSS — Iron Vanguard. Bring a hammer.",
     10: "Stragglers and squadrons.",
     11: "Heavy weather. Bring a coat.",

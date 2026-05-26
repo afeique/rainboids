@@ -266,7 +266,14 @@ export function setupEventListeners() {
     // and the resume bookmark survive even without a clean wave-clear or
     // death. visibilitychange→hidden is the reliable mobile signal;
     // pagehide covers desktop unload.
-    const flushOnExit = () => { if (this.saveProgress) this.saveProgress(); };
+    const flushOnExit = () => {
+        // 6.226.0 — force an immediate meta flush (commit loot + write the
+        // profile), bypassing the ~1s coalesce throttle, then write the
+        // run-snapshot bookmark. Guarantees gear/powerups/loot/gold are
+        // persisted even on an abrupt tab-hide between coalesced flushes.
+        if (this.flushMeta) { this._metaDirty = false; this.flushMeta(); }
+        if (this.saveProgress) this.saveProgress();
+    };
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') flushOnExit();
     });

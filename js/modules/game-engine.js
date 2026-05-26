@@ -35,7 +35,7 @@ import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
-import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout } from './shop/armory.js';
+import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed } from './shop/armory.js';
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
 import { MAX_STAGES, WAVES_PER_STAGE, DEFAULT_RUN_CONFIG, runMaxWaves, getRunMode } from './core/constants.js';
 // DIR-03 — canonical difficulty mode list + fallback (the DIR-02 table is the
@@ -685,7 +685,13 @@ export class GameEngine {
         // before a run has loaded the profile. applyPersistentProfile re-seeds
         // the same values at run-init.
         try {
-            const _meta = loadMeta();
+            let _meta = loadMeta();
+            // Brand-new account: seed the one-time starter grant (gold + a few
+            // unlocks beyond BASE_LOADOUT) so run one already has a real LOADOUT
+            // fork and the first ARMORY unlock is a couple of runs away. Gated on
+            // `!_meta` + persisted immediately, so an existing player is never
+            // re-granted and the grant can't be farmed.
+            if (!_meta) { saveMeta(newAccountSeed()); _meta = loadMeta(); }
             this.game.accountGold = resolveAccountGold(_meta);
             this.game.cores = (_meta && typeof _meta.cores === 'number') ? Math.max(0, _meta.cores | 0) : 0;
         } catch {}
@@ -1620,6 +1626,62 @@ export class GameEngine {
         this.game.accountGold = bankRunGold(this.game.accountGold, this.game.money);
         this.commitRunLootToStash();
         this.savePersistentProfile();
+        // 6.226.0 — stamp the CONTINUE snapshot so a later cross-session
+        // abandon (close → reopen → NEW GAME) can't re-bank this run's gold.
+        this._stampSaveGoldBanked();
+    }
+
+    // 6.226.0 — Bank un-banked run-gold when a run is ABANDONED (the player
+    // chose NEW GAME over CONTINUE) so leftover run-gold is never silently
+    // lost. bankRunGold() already covers the death/complete path idempotently
+    // via _runGoldBanked; this covers abandon. Two cases:
+    //   • live abandon (mid-run NEW GAME, same session): bank game.money.
+    //   • cross-session abandon (closed mid-run, reopened, NEW GAME): the live
+    //     run is gone, so bank the leftover run-gold straight from the CONTINUE
+    //     snapshot we're about to clear — unless its run already concluded
+    //     (death/complete stamps goldBanked, so we never double-bank).
+    bankAbandonedRunGold() {
+        if (this._runGoldBanked) return; // already banked this session
+        const liveMoney = (this.player && this.game) ? Math.max(0, this.game.money | 0) : 0;
+        if (liveMoney > 0) {
+            this.game.accountGold = bankRunGold(this.game.accountGold, liveMoney);
+            this._runGoldBanked = true;
+            this.game.money = 0;
+            this.savePersistentProfile();
+            return;
+        }
+        try {
+            const snap = loadSave();
+            if (snap && !snap.goldBanked && (snap.money | 0) > 0) {
+                const acct = resolveAccountGold(loadMeta()) + (snap.money | 0);
+                saveMeta({ accountGold: acct });
+            }
+        } catch {}
+    }
+
+    // Mark the persisted CONTINUE snapshot as already-banked so the
+    // cross-session abandon path (bankAbandonedRunGold) can't re-bank it.
+    // Cheap: runs once per run conclusion, not on the hot path.
+    _stampSaveGoldBanked() {
+        try { const s = loadSave(); if (s && !s.goldBanked) writeSave({ ...s, goldBanked: true }); } catch {}
+    }
+
+    // 6.226.0 — Coalesced meta persistence. Mid-run mutations that change the
+    // ACCOUNT (gear equips, permanent powerups, collected loot) call
+    // markMetaDirty(); the game loop drains the flag at most once per second
+    // (see gameLoop) so a burst of pickups collapses into one localStorage
+    // write — the account stays within ~1s of any change without paying a
+    // per-event JSON.stringify on the hot path.
+    markMetaDirty() { this._metaDirty = true; }
+
+    // Persist everything the account owns NOW: commit freshly-collected run
+    // loot into the stash, then write the cross-run profile. Combined so a
+    // single flush is one bounded, infrequent write. Used by the ~1s loop
+    // flush and forced on tab-hide. Safe with no live player (both calls
+    // early-out), so it's a no-op at the title screen.
+    flushMeta() {
+        this.commitRunLootToStash();  // drains player.runCollected → meta.stash
+        this.savePersistentProfile(); // accountGold / level / gear / powerups …
     }
 
     // Phase R8.1/R8.4 — append this run's collected items to the persistent
@@ -1777,6 +1839,9 @@ export class GameEngine {
     }
 
     startNewRun(loadout = null) {
+        // 6.226.0 — never lose gold: bank any un-banked run-gold from the run
+        // being abandoned BEFORE we discard its CONTINUE snapshot below.
+        this.bankAbandonedRunGold();
         clearSave();
         // Phase R5 — the LOADOUT screen passes the chosen 4+4+4
         // ({primaries, powers, abilities}); init() narrows the owned pool to
@@ -4260,6 +4325,17 @@ export class GameEngine {
         if (frameStart - this._lastProgressSaveAt > 15000) {
             this._lastProgressSaveAt = frameStart;
             this.saveProgress();
+        }
+
+        // 6.226.0 — Coalesced meta flush. markMetaDirty() (gear / powerup /
+        // loot changes) sets the flag; we drain it at most once per second so
+        // a burst of pickups becomes a single write, keeping the account ~1s
+        // fresh. This is the cheap, change-driven complement to the 15s
+        // snapshot autosave above.
+        if (this._metaDirty && frameStart - (this._lastMetaFlushAt || 0) >= 1000) {
+            this._lastMetaFlushAt = frameStart;
+            this._metaDirty = false;
+            this.flushMeta();
         }
 
         this.ctx.save();

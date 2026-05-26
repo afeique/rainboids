@@ -892,7 +892,10 @@ button:not([disabled]),
    visually cohesive. */
 
 .pause-tab-content > h2 {
-    font-family: var(--font-body);
+    /* 6.225.2 — pause-tab page titles use the HEADER font (Press Start 2P by
+       default), not the body font. They were inheriting --font-body, so a
+       modern body-font pick (e.g. Helvetica Neue) leaked into the headers. */
+    font-family: var(--font-header);
     font-size: calc(24px * var(--font-header-scale, 1));
     letter-spacing: 5px;
     margin: 0 auto 22px;
@@ -1487,7 +1490,10 @@ button:not([disabled]),
     border: 2px solid color-mix(in srgb, var(--tab-color) 55%, transparent);
     color: white;
     cursor: pointer;
-    font-family: var(--font-body);
+    /* 6.225.2 — tabs are header-class chrome (they already size off
+       --font-header-scale, and the DISPLAY tab promises "headers + tabs use one
+       font"), so they take the HEADER font, not --font-body. */
+    font-family: var(--font-header);
     font-size: calc(18px * var(--font-header-scale, 1));
     border-radius: 5px;
     transition: all 0.2s;
@@ -1515,7 +1521,6 @@ button:not([disabled]),
 .pause-tab[data-tab="abilities"]   { --tab-color: #aa66ff; --tab-glow: rgba(170, 102, 255, 0.40); }
 .pause-tab[data-tab="powerups"] { --tab-color: #ffd700; --tab-glow: rgba(255, 215,   0, 0.40); }
 .pause-tab[data-tab="assists"]  { --tab-color: #66ddcc; --tab-glow: rgba(102, 221, 204, 0.40); }
-.pause-tab[data-tab="timer"]    { --tab-color: #ff66cc; --tab-glow: rgba(255, 102, 204, 0.40); }
 .pause-tab[data-tab="music"]    { --tab-color: #44dd88; --tab-glow: rgba( 68, 221, 136, 0.40); }
 .pause-tab[data-tab="sfx"]      { --tab-color: #ffa500; --tab-glow: rgba(255, 165,   0, 0.40); }
 
@@ -1970,66 +1975,6 @@ button:not([disabled]),
 .shop-help-icon--xp { color: #ff6e6e; border-color: rgba(220, 60, 60, 0.7); }
 .shop-help-icon--picks { color: #ff66cc; border-color: rgba(255, 102, 204, 0.7); font-size: calc(13px * var(--font-body-scale, 1)); }
 
-/* 5.71.0 — TIMER tab: live elapsed-time readout + tier table. */
-.shop-timer-live {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 14px;
-    margin: 8px 0 14px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
-}
-.shop-timer-live-label {
-    font-size: calc(13px * var(--font-body-scale, 1));
-    letter-spacing: 2px;
-    color: #888;
-}
-.shop-timer-live-time {
-    font-size: calc(36px * var(--font-body-scale, 1));
-    font-weight: bold;
-    font-family: 'Courier New', monospace;
-    line-height: 1;
-}
-.shop-timer-live-projected {
-    font-size: calc(13px * var(--font-body-scale, 1));
-    letter-spacing: 1px;
-    margin-top: 4px;
-}
-.shop-timer-table {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 4px;
-    margin-top: 6px;
-}
-.shop-timer-row {
-    display: grid;
-    grid-template-columns: 1.2fr 1fr 0.8fr;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.02);
-}
-.shop-timer-row--header {
-    background: transparent;
-    font-size: calc(11px * var(--font-header-scale, 1));
-    letter-spacing: 2px;
-    color: #888;
-    padding-bottom: 4px;
-}
-.shop-timer-row--current {
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-}
-.shop-timer-cell {
-    font-size: calc(14px * var(--font-body-scale, 1));
-    letter-spacing: 1px;
-}
-.shop-timer-cell--tier { font-weight: bold; }
-.shop-timer-cell--time { font-family: 'Courier New', monospace; color: #d8d8d8; }
-.shop-timer-cell--mult { text-align: right; font-weight: bold; }
 .shop-help-text { display: flex; flex-direction: column; gap: 6px; }
 .shop-help-title { font-size: calc(16px * var(--font-header-scale, 1)); font-weight: bold; letter-spacing: 1px; }
 .shop-help-title--gold { color: #ffd700; }
@@ -4276,8 +4221,33 @@ body.mobile-portrait .shop-help-icon {
     margin: 0 auto;
     text-align: left;
 }
+/* ── Pre-run BUILD footer (6.225.5) ─────────────────────────────────── */
+/* Two tiers: a centered RUN SETUP card, then a BACK · status · START action
+   bar. _applyPreRunChrome flips display to flex; the column direction + the
+   rest of the layout live here. */
+.shop-prerun-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px 24px 6px;
+    border-top: 1px solid rgba(120, 170, 230, 0.18);
+}
+
+/* Action bar — BACK left, readiness status centered, START right. */
+.shop-prerun-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+}
+
 /* BUILD footer status line + equipped/locked node affordances. */
 .shop-prerun-status {
+    flex: 1;
+    text-align: center;
     color: #bfe9ff;
     font-size: 0.85em;
     letter-spacing: 0.04em;
@@ -4287,40 +4257,87 @@ body.mobile-portrait .shop-help-icon {
 .shop-prerun-status--warn  { color: #ffb454; text-shadow: 0 0 8px rgba(255, 180, 84, 0.4); }
 .shop-prerun-status--ready { color: #8effa8; text-shadow: 0 0 8px rgba(142, 255, 168, 0.4); }
 
-/* ── RUN SETUP control group (RUN-06) ───────────────────────────────── */
-/* Compact run-shape picker that sits in the BUILD footer between BACK and
-   the readiness status. Reuses the menu-font var system + the armory blue. */
+/* ── RUN SETUP control card (RUN-06) ────────────────────────────────── */
+/* The run-shape picker: a labeled card with three vertical control groups
+   (waves-per-stage · stages · difficulty) over a live readout. Reuses the
+   menu-font var system + the armory blue. */
 .shop-runsetup {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
+    gap: 11px;
+    align-self: center;
+    max-width: 100%;
+    padding: 12px 22px 14px;
+    border: 1px solid rgba(80, 140, 220, 0.28);
+    border-radius: 10px;
+    background: rgba(22, 38, 64, 0.32);
     font-family: inherit;
+}
+.shop-runsetup-title {
+    color: #9cc4ec;
+    font-family: var(--font-header);
+    font-size: calc(11px * var(--font-header-scale, 1));
+    letter-spacing: 0.2em;
+    opacity: 0.9;
+}
+.shop-runsetup-groups {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 16px;
 }
 .shop-runsetup-group {
     display: flex;
+    flex-direction: column;
     align-items: center;
+    gap: 8px;
+}
+/* The row of buttons / stepper beneath a group's label. */
+.shop-runsetup-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
     gap: 6px;
 }
+/* Thin vertical rule between control groups. */
+.shop-runsetup-divider {
+    align-self: stretch;
+    width: 1px;
+    margin: 0 2px;
+    background: linear-gradient(180deg, transparent, rgba(120, 170, 230, 0.35), transparent);
+}
 .shop-runsetup-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Reserve two lines for every label so "WAVES PER STAGE" can wrap without
+       knocking the button rows out of alignment with the single-line groups. */
+    min-height: 2.4em;
+    max-width: 9em;
+    text-align: center;
+    line-height: 1.2;
     color: #7fb6e6;
     font-size: calc(10px * var(--font-body-scale, 1));
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     opacity: 0.85;
 }
 .shop-runsetup-btn,
 .shop-runsetup-step {
-    padding: 4px 10px;
+    padding: 5px 11px;
     cursor: pointer;
     font-family: inherit;
     font-size: calc(12px * var(--font-body-scale, 1));
     letter-spacing: 0.04em;
     border: 1px solid rgba(80, 140, 220, 0.5);
+    border-radius: 4px;
     background: transparent;
     color: #8fd0ff;
     line-height: 1;
 }
-.shop-runsetup-step { padding: 4px 8px; min-width: 26px; }
+.shop-runsetup-step { padding: 5px 9px; min-width: 28px; }
 .shop-runsetup-btn:hover:not(:disabled),
 .shop-runsetup-step:hover:not(:disabled) { background: rgba(64, 150, 255, 0.15); }
 .shop-runsetup-btn.active {
@@ -4343,8 +4360,8 @@ body.mobile-portrait .shop-help-icon {
 }
 .shop-runsetup-readout {
     color: #ffd98a;
-    font-size: calc(11px * var(--font-body-scale, 1));
-    letter-spacing: 0.04em;
+    font-size: calc(12px * var(--font-body-scale, 1));
+    letter-spacing: 0.05em;
     text-shadow: 0 0 6px rgba(255, 200, 100, 0.3);
     white-space: nowrap;
 }
@@ -4372,10 +4389,15 @@ body.mobile-portrait .shop-help-icon {
  * relative to the ring's centre. */
 .shop-tree-ring {
     position: relative;
-    /* 6.158.3 — sized to contain the widest orbit (radius 178 + a 56px
-       bubble) so single-column rows never overlap vertically. */
+    /* Width contains the widest orbit (radius 178 + a 56px bubble). */
     width: 400px;
-    height: 400px;
+    /* 6.225.3 — height tracks THIS ring's orbit radius (set inline as
+       `--orbit-radius` by shop-dom) plus a constant 100px of padding for the
+       bubble diameter + its label. Sizing the box to its content keeps the
+       empty space around every cluster identical, so the vertical gap between
+       consecutive weapons/abilities is uniform instead of varying with the
+       bubble count. Falls back to the widest ring when unset. */
+    height: calc(var(--orbit-radius, 178px) * 2 + 100px);
 }
 
 .shop-tree-ring > * {
@@ -4390,14 +4412,16 @@ body.mobile-portrait .shop-help-icon {
     transform: translate(-50%, -50%);
 }
 
-/* Decorative inner ring — purely visual, no dependency semantics. */
+/* Decorative ring — purely visual, no dependency semantics. 6.225.3 — threads
+   the orbiting bubbles (diameter == this ring's orbit) so it scales with the
+   now content-sized box instead of sitting at a fixed 240px. */
 .shop-tree-ring::before {
     content: "";
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 240px;
-    height: 240px;
+    width: calc(var(--orbit-radius, 120px) * 2);
+    height: calc(var(--orbit-radius, 120px) * 2);
     transform: translate(-50%, -50%);
     border-radius: 50%;
     border: 1px dashed rgba(200, 170, 100, 0.18);
@@ -4727,10 +4751,10 @@ body.mobile-portrait .shop-help-icon {
 /* ── Responsive — narrow viewports ───────────────────────────────── */
 @media (max-width: 1100px) {
     /* 6.158.3 — single column is now the base; narrower viewports just get a
-       slightly smaller ring so it fits the panel width. */
+       slightly smaller ring so it fits the panel width. Height stays
+       content-driven (see the base rule's --orbit-radius calc). */
     .shop-tree-ring {
         width: 340px;
-        height: 340px;
     }
 }
 
@@ -4749,11 +4773,6 @@ body.mobile-portrait .shop-help-icon {
     .shop-tree-cluster-body { grid-template-columns: 1fr; gap: 22px 30px; padding: 12px 4px; }
     .shop-tree-ring {
         width: 260px;
-        height: 260px;
-    }
-    .shop-tree-ring::before {
-        width: 180px;
-        height: 180px;
     }
     .shop-node {
         width: 48px;

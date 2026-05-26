@@ -11,6 +11,136 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.228.0] - 2026-05-26
+
+### Added — new-account starter kit + gold (a real "opening fork" from run one)
+
+- Brand-new accounts are now seeded once with a **head-start**: **3000
+  account-gold** plus a handful of starter unlocks beyond the base kit —
+  **Scatter Gun** + **Rail Driver** (primaries), **Mine Layer** (power), and
+  **Deflector Orbs** (ability). The run-one LOADOUT screen is now a genuine
+  choice (3 primaries / 2 powers / 3 abilities — rapid vs. spread vs. pierce,
+  etc.) instead of a single forced kit, and the first ARMORY unlock is ~1-2 runs
+  away instead of ~15.
+- The grant is **one-time and exploit-proof**: seeded only when no save exists
+  (`!loadMeta()`), persisted immediately so it can never be re-granted, and it
+  sits below the cheapest unlock (5000) so it can't be spent directly — it only
+  shortens the grind to the first purchase, never trivializes it. `BASE_LOADOUT`
+  (the always-free floor) is unchanged, so existing players and the deterministic
+  test fixtures are unaffected.
+
+## [6.227.0] - 2026-05-26
+
+### Changed — early-game enemy variety front-loaded (a less repetitive opening)
+
+- Re-authored waves 1–9 so a new player meets a distinct new threat almost every
+  wave: **Drifter** (arc-lightning) now debuts on wave 2, the **Bomber**
+  (Tangerine, mines) on wave 5, and the **Weaver** (spiral-laser) on wave 8. By
+  the end of Stage 3 the player has faced **seven** distinct enemy types and
+  **three different bosses** (Harbinger / Aegis / Lumen) — versus three types by
+  wave 8 before.
+- Only "fair", readable enemies are pulled forward. The punishing /
+  mechanic-heavy roster (Leech buff-strip, Phantom cloak, Devourer absorb, Prism
+  Mirror reflect, Null Drone suppress, Wraithworm blink, …) stays back-loaded so
+  the opening teaches one new behavior at a time. Wave 1 remains the gentlest
+  possible intro (Hunter/Wasp only); enemy counts stay low and the adaptive
+  difficulty director continues to absorb the curve.
+
+## [6.226.0] - 2026-05-26
+
+### Changed — the meta account now stays continuously in sync (never lose progress)
+
+- **Loot banks the instant you grab it.** Mid-run pickups now stream into the
+  persistent stash within ~1s of collection instead of waiting for run-end.
+  Closes a real data-loss bug: collected-but-unequipped loot was held only in
+  `player.runCollected` (in *neither* the resume snapshot nor the profile), so
+  closing the tab mid-run lost it — even on `CONTINUE`.
+- **Run-gold is never lost.** Unspent run-gold already banked into account-gold
+  on win/death; it now also banks when a run is **abandoned** (closing mid-run
+  then choosing `NEW GAME` over `CONTINUE`). Guarded against double-banking via
+  a `goldBanked` stamp on the resume snapshot, including across sessions.
+- **Change-driven, coalesced saving.** Gear equips, permanent powerup stacks,
+  and loot pickups mark the account dirty and flush within ~1s, replacing sole
+  reliance on the 15s timer. Flushes are coalesced (≤1 write/sec) so a burst of
+  pickups is a single `localStorage` write — no per-event `JSON.stringify` on
+  the hot path. The on-tab-hide flush is forced immediately, bypassing the
+  throttle, so an abrupt close persists everything.
+
+## [6.225.7] - 2026-05-26
+
+### Changed — THE HARBINGER actually takes damage now
+
+- Its bolt-head weak-points are now **bigger and slower** — collider/visual
+  radius **22–24 → 34–40px**, orbit speed **0.6–1.6 → 0.4–0.8 rad/s** — so
+  they're realistically hittable (the collider matches the rendered radius, so
+  larger reads bigger *and* catches more stray shots).
+- The core is **no longer fully immune** while bolts shield it: it bleeds a
+  **40% chip** of incoming damage (new opt-in `coreChipFactor`, wired into
+  `collision-system.applyDamageToEnemy`), so fire always registers and the boss
+  reads as taking damage for the whole fight. Clearing the bolts still removes
+  the penalty (full core damage) and shuts off their attacks, so the
+  shoot-the-arms gimmick still pays off — and **other parts-bosses keep the full
+  hard gate** (the chip is Harbinger-only). Follows the 6.225.6 HP cut; together
+  they fix the "big hard meatbag" feel.
+
+## [6.225.6] - 2026-05-26
+
+### Changed — THE HARBINGER is easier to bring down
+
+- Cut the stage-1 boss's core HP (**900 → 520**) and per-phase bolt-head HP
+  (**60 / 80 / 110 → 38 / 50 / 66**). The core is damage-gated while any bolt
+  still shields it, so total kill time ≈ all bolt HP + core HP; the old ~1600
+  effective HP made the Harbinger read as a slow, low-threat meatbag. The core
+  now opens up sooner and the fight lands at the **low end of the 45–120s
+  boss-DoD band** instead of dragging past it.
+
+## [6.225.5] - 2026-05-26
+
+### Changed — pre-run BUILD footer reorganized; "WAVES PER STAGE" rename
+
+- The start-of-run BUILD footer is now **two tiers**: a centered **RUN SETUP**
+  card (labeled vertical control groups — waves-per-stage · stages · difficulty,
+  separated by thin rules, over the live readout) on top, and a
+  **BACK · status · START RUN** action bar below — instead of cramming every
+  control and button onto one wrapping row.
+- Renamed the run-shape label **WAVES/STAGE → WAVES PER STAGE** (the `/` was hard
+  to read); it wraps to two lines above its 3 / 6 / 9 buttons. All element IDs
+  are unchanged, so shop-dom's wiring, gamepad focus, and the BUILD QA flow are
+  unaffected.
+
+## [6.225.4] - 2026-05-26
+
+### Removed — RUN TIMER pause-menu tab
+
+- Dropped the **TIMER** tab from the pause menu (plus its `updateTimerTab`
+  renderer, the now-unused speedrun imports, and the orphaned `.shop-timer-*`
+  CSS). The mid-run pause overlay is for controls / build / audio; the run timer
+  isn't decision-relevant there. The tab was only a **reference card** for the
+  `SPEEDRUN_TIERS` table (CASUAL → GODLIKE), not live scoring. The run is still
+  **timed** and the **final time** still headlines the Game Complete screen; the
+  speedrun framing is now documented in the README instead.
+
+## [6.225.3] - 2026-05-26
+
+### Fixed — uneven vertical spacing in the weapon / ability trees
+
+- Each weapon/ability ring box now sizes its height to that node's **own orbit
+  radius** (via an inline `--orbit-radius`) instead of a fixed 400px. With the
+  old fixed box, clusters with few orbiting bubbles left a large vertical void
+  while dense ones nearly touched, so the gap between consecutive weapons /
+  abilities looked uneven. The padding around every cluster is now constant —
+  giving a **uniform column gap** — and the decorative dashed ring scales with
+  the orbit too.
+
+## [6.225.2] - 2026-05-26
+
+### Fixed — pause-menu headers ignored the selected header font
+
+- The pause-tab page titles (`.pause-tab-content > h2`) were inheriting
+  `--font-body`, so choosing a modern body font (e.g. Helvetica Neue) leaked
+  into the headers. They now use `--font-header`, so pause-menu headers render
+  in the selected header font (**Press Start 2P** by default).
+
 ## [6.225.1] - 2026-05-26
 
 ### Changed — family-aware controller glyphs in the GAMEPAD tab (GP-3)

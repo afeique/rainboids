@@ -498,6 +498,10 @@ export class Player {
         // commit (the lootFeed above is display-only and capped).
         if (!this.runCollected) this.runCollected = [];
         this.runCollected.push(item);
+        // 6.226.0 — loot is yours the moment you grab it: mark the account
+        // dirty so the coalesced flush commits it to the persistent stash
+        // within ~1s, surviving a mid-run close even before run-end.
+        this.gameEngine?.markMetaDirty?.();
         return entry;
     }
 
@@ -528,6 +532,8 @@ export class Player {
             const newMax = this.getEffectiveMaxHealth();
             this.health = Math.min(newMax, this.health + hpGain);
         }
+        // 6.226.0 — persist the equip swap (equippedItems live in the profile).
+        this.gameEngine?.markMetaDirty?.();
         return { equipped: true, replaced: prev };
     }
 

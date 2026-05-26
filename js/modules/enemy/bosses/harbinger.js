@@ -1,10 +1,12 @@
 // THE HARBINGER — stage 1-3 boss (BOSS-05).
 //
 // The first concrete boss. KINETIC element. A blunt, honest fight: a heavy
-// core ringed by rotating BOLT-HEAD weak-points. The core is invulnerable
-// while any bolt-head still shields it, so the player must shoot the spinning
-// bolts off the ring before they can chip the core. Three phases, fewer/faster
-// bolts each phase, and an ENRAGE in the final phase.
+// core ringed by rotating BOLT-HEAD weak-points. While any bolt-head still
+// shields it the core takes only a reduced "chip" of incoming damage
+// (HARBINGER_CORE_CHIP) rather than being fully immune — so fire is never
+// wasted — but clearing the bolts is still what opens the core to full damage
+// (and stops their attacks). Three phases, fewer bolts each phase, and an
+// ENRAGE in the final phase.
 //
 // SELF-CONTAINED + PURE: this module is data + a thin driver over the SHIPPED
 // boss chassis cores — it never touches them and adds no engine deps. It owns:
@@ -37,22 +39,35 @@ import {
     updateBossDeath,
 } from '../boss-intro.js';
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// Core HP is large but most of the fight is spent clearing bolts (core is
-// gated while they live), so the wall-clock kill time lands in the 45–120s
-// band the boss DoD asks for. Numbers are conservative and easy to retune.
-export const HARBINGER_MAX_HEALTH = 900;
+// ── Tuning ──────────────────────────────────────────────────────────────────
+// Most of the fight is spent clearing bolts (the core is damage-gated while any
+// bolt still shields it), so total kill time = bolt HP across all 3 phases +
+// core HP. 6.225.6 — the original 900 core + 60/80/110 bolts made the Harbinger
+// read as a slow, low-threat meatbag (~1600 effective HP). Cut both the core and
+// the per-phase bolt HP so the core opens up sooner and the fight lands at the
+// LOW end of the 45–120s boss-DoD band rather than dragging past it.
+export const HARBINGER_MAX_HEALTH = 520;
 
-// Bolt-head ring per phase: fewer bolts but tougher + faster spin each phase.
-// `speed` is rad/s (boss-parts orbit math); alternating sign reads as two
-// counter-rotating sets early, tightening to a single fast ring at enrage.
+// Fraction of incoming damage the CORE still takes while bolt-heads shield it.
+// 6.225.7 — the old all-or-nothing gate (core fully immune until every bolt was
+// cleared) made fire feel wasted; the bolts were also small + fast and hard to
+// land shots on. Now the core always bleeds a chip, so every hit registers and
+// the boss reads as "taking damage" the whole fight. Clearing the bolts removes
+// the penalty (full damage) and shuts off their attacks, so they still matter.
+export const HARBINGER_CORE_CHIP = 0.4;
+
+// Bolt-head ring per phase. 6.225.7 — bigger colliders + slower spin so they're
+// actually hittable (the collider radius == the rendered radius in boss-render,
+// so larger reads bigger AND catches more shots). `speed` is rad/s (boss-parts
+// orbit math); alternating sign reads as two counter-rotating sets early,
+// tightening to a single ring at enrage.
 const PHASE_BOLTS = [
     // Phase 0 — opening: a wide, slow 4-bolt ring.
-    { count: 4, radius: 130, hp: 60, speed: 0.6, partRadius: 22 },
-    // Phase 1 — mid: 3 bolts, tighter + faster.
-    { count: 3, radius: 110, hp: 80, speed: 1.0, partRadius: 22 },
-    // Phase 2 — enrage: 2 heavy bolts, fast counter-spin.
-    { count: 2, radius: 90, hp: 110, speed: 1.6, partRadius: 24 },
+    { count: 4, radius: 130, hp: 38, speed: 0.4, partRadius: 34 },
+    // Phase 1 — mid: 3 bolts, tighter.
+    { count: 3, radius: 110, hp: 50, speed: 0.55, partRadius: 36 },
+    // Phase 2 — enrage: 2 heavy bolts, counter-spin (still readable).
+    { count: 2, radius: 96, hp: 66, speed: 0.8, partRadius: 40 },
 ];
 
 // HP fractions at which each phase opens (descending — boss-phases convention).
@@ -193,6 +208,10 @@ export function initHarbinger(boss, ctx = null, now = Date.now()) {
     boss.maxHealth = HARBINGER.maxHealth;
     boss.health = HARBINGER.maxHealth;
     boss.size = boss.size || HARBINGER.size;
+    // Core bleeds a chip of damage even while shielded (see HARBINGER_CORE_CHIP).
+    // The collision damage path reads this off the boss; absent/0 on other bosses
+    // means they keep the full hard gate.
+    boss.coreChipFactor = HARBINGER_CORE_CHIP;
     boss._enraged = false;
     boss._now = now;
     if (boss.active === undefined) boss.active = true;

@@ -1,24 +1,12 @@
 // UI management for overlays, messages, and interface elements
 import { MusicPlayer } from '../audio/music-player.js';
 import { POWERUP_TYPES, powerupGoldCost } from '../world/powerup.js';
-import { SPEEDRUN_TIERS, speedrunTierFor } from '../core/constants.js';
 import { loadSettings, saveSettings } from '../core/storage.js';
 import { renderIconHTML, detectControllerFamily, bindingGlyph } from './icons.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { setRumbleEnabled, isRumbleEnabled } from '../platform/rumble.js';
 import { renderSpAllocation } from './sp-allocation.js';
 import { getPassive, getSlotPassives } from '../combat/passive-data.js';
-
-// Format an elapsed-time milliseconds value as M:SS for the pause-menu
-// TIMER tab. Mirrors the same formatter that lives in shop-dom.js for
-// the (now-removed) shop TIMER panel.
-function formatRunTime(ms) {
-    if (!isFinite(ms)) return '∞';
-    const totalSec = Math.max(0, Math.floor(ms / 1000));
-    const m = Math.floor(totalSec / 60);
-    const s = totalSec % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-}
 
 // 5.79.3 — Beam-aware powerup description swap. When the equipped
 //   primary is a continuous-tether beam (Lance Beam, Arc Lightning),
@@ -1315,16 +1303,15 @@ export class UIManager {
         //   powerups, elapsed timer) stays accurate, but the FIRST
         //   paint of any tab is never empty.
         //
-        //   5.100.1 — added Abilities + Timer pre-renders and the
-        //   assists-tab sync so the user-reported flash on first-open
-        //   is gone across ALL dynamic pause tabs.
+        //   5.100.1 — added Abilities pre-render and the assists-tab
+        //   sync so the user-reported flash on first-open is gone
+        //   across ALL dynamic pause tabs.
         this.syncAssistsTab();
         this.updateControlsTab();
         this.updatePrimaryTab();
         this.updatePowerTab();
         // 6.1.0 — Powerups pre-render removed (POWERUPS tab moved to
         // the shop; pause-menu powerups-tab DOM was deleted).
-        if (this.updateTimerTab) this.updateTimerTab();
     }
 
     // Reflect engine-side assists state in the tab checkboxes.
@@ -2010,83 +1997,11 @@ export class UIManager {
         // 6.1.0 — Powerups tab moved to the shop overlay; no
         // pause-menu powerups-tab to re-render.
 
-        // 5.72.1 — TIMER tab moved from shop to pause menu. Render
-        // the speedrun-tier card on tab open. Don't poll-refresh here;
-        // the live elapsed-time row updates via updateTimerTab() called
-        // from the engine's HUD update loop while the tab is visible.
-        if (tabName === 'timer') this.updateTimerTab();
+        // 6.225.4 — RUN TIMER tab removed from the pause menu. The
+        // speedrun-tier scoring still drives the Game Complete screen;
+        // it just isn't surfaced as a mid-run pause panel anymore.
     }
 
-    updateTimerTab() {
-        const mount = document.getElementById('timer-panel-mount');
-        if (!mount) return;
-        const ge = this.gameEngine;
-        const live = (ge && ge.game) ? (ge.game.survivalTime || 0) : 0;
-        const liveTier = speedrunTierFor(live);
-
-        const wrap = document.createElement('div');
-        wrap.className = 'shop-help shop-timer';
-
-        const intro = document.createElement('p');
-        intro.className = 'shop-help-intro';
-        intro.textContent = 'Speedrun bonus — finish the 20-wave campaign faster for a bigger score multiplier on the Game Complete screen. Live elapsed time below; tier table is your target.';
-        wrap.appendChild(intro);
-
-        const liveBox = document.createElement('div');
-        liveBox.className = 'shop-timer-live';
-        const lbl = document.createElement('span');
-        lbl.className = 'shop-timer-live-label';
-        lbl.textContent = 'CURRENT RUN';
-        const time = document.createElement('span');
-        time.className = 'shop-timer-live-time';
-        time.textContent = formatRunTime(live);
-        time.style.color = liveTier.color;
-        const proj = document.createElement('span');
-        proj.className = 'shop-timer-live-projected';
-        proj.textContent = `If you finish now: ${liveTier.label} (${liveTier.multiplier.toFixed(1)}×)`;
-        proj.style.color = liveTier.color;
-        liveBox.appendChild(lbl);
-        liveBox.appendChild(time);
-        liveBox.appendChild(proj);
-        wrap.appendChild(liveBox);
-
-        const table = document.createElement('div');
-        table.className = 'shop-timer-table';
-        const header = document.createElement('div');
-        header.className = 'shop-timer-row shop-timer-row--header';
-        for (const [text, cls] of [['TIER','tier'],['FINISH UNDER','time'],['MULTIPLIER','mult']]) {
-            const c = document.createElement('span');
-            c.className = `shop-timer-cell shop-timer-cell--${cls}`;
-            c.textContent = text;
-            header.appendChild(c);
-        }
-        table.appendChild(header);
-
-        for (const tier of SPEEDRUN_TIERS) {
-            const row = document.createElement('div');
-            row.className = 'shop-timer-row';
-            if (tier === liveTier) row.classList.add('shop-timer-row--current');
-            const tierCell = document.createElement('span');
-            tierCell.className = 'shop-timer-cell shop-timer-cell--tier';
-            tierCell.textContent = tier.label;
-            tierCell.style.color = tier.color;
-            row.appendChild(tierCell);
-            const timeCell = document.createElement('span');
-            timeCell.className = 'shop-timer-cell shop-timer-cell--time';
-            timeCell.textContent = tier.maxMs === Infinity ? '20:00+' : formatRunTime(tier.maxMs);
-            row.appendChild(timeCell);
-            const multCell = document.createElement('span');
-            multCell.className = 'shop-timer-cell shop-timer-cell--mult';
-            multCell.textContent = `${tier.multiplier.toFixed(1)}×`;
-            multCell.style.color = tier.color;
-            row.appendChild(multCell);
-            table.appendChild(row);
-        }
-        wrap.appendChild(table);
-
-        mount.replaceChildren(wrap);
-    }
-    
     startMusic() {
         this.musicPlayer.play();
     }

@@ -266,7 +266,6 @@ function _buildPauseMenu() {
         { key: 'passives', label: 'PASSIVES' },
         { key: 'assists',  label: 'ASSISTS' },
         { key: 'display',  label: 'DISPLAY' },
-        { key: 'timer',    label: 'TIMER' },
         { key: 'music',    label: 'MUSIC' },
         { key: 'sfx',      label: 'SFX' },
     ];
@@ -300,7 +299,6 @@ function _buildPauseMenu() {
     // access on mobile.
     menu.appendChild(_buildAssistsTab());
     menu.appendChild(_buildDisplayTab());
-    menu.appendChild(_buildTimerTab());
     menu.appendChild(_buildMusicTab());
     menu.appendChild(_buildSfxTab());
 }
@@ -558,17 +556,6 @@ function _buildAssistsTab() {
             dodgeSection,
             aggroSection,
             list,
-        ],
-    });
-}
-
-function _buildTimerTab() {
-    return el('div', {
-        id: 'timer-tab',
-        className: 'pause-tab-content',
-        children: [
-            el('h2', { text: 'RUN TIMER' }),
-            el('div', { id: 'timer-panel-mount' }),
         ],
     });
 }
@@ -970,37 +957,53 @@ function _buildShopOverlay() {
     // ── Pre-run BUILD footer (start-of-run mode only) ─────────────
     // 2026-05-23 — When the tree is opened as the start-of-run BUILD
     // screen (game-engine.openArmory → shopDom.showShopDom(true)), this
-    // footer surfaces BACK / loadout status / START RUN. It stays hidden
-    // for the in-run shop. shop-dom toggles its visibility + wires the
-    // buttons in initShopDom / _applyPreRunChrome.
+    // footer surfaces RUN SETUP + BACK / loadout status / START RUN. It
+    // stays hidden for the in-run shop. shop-dom toggles its visibility +
+    // wires the buttons in initShopDom / _applyPreRunChrome.
+    // 6.225.5 — restructured into two tiers: a centered RUN SETUP card on
+    // top, then a BACK · status · START action bar below. The control
+    // groups are vertical (label over control) so labels stay legible and
+    // the row no longer crams every button onto one line. The element IDs
+    // are unchanged so shop-dom's wiring + gamepad focus keep working.
     const preFooter = el('div', { id: 'shop-prerun-footer', className: 'shop-prerun-footer' });
-    Object.assign(preFooter.style, {
-        display: 'none', alignItems: 'center', justifyContent: 'space-between',
-        gap: '16px', padding: '10px 24px', width: '100%', boxSizing: 'border-box',
-    });
+    preFooter.style.display = 'none'; // flipped to flex (column) by _applyPreRunChrome
 
-    // ── RUN SETUP control group (RUN-06) ──────────────────────────
+    // Small helper: one labeled control group (label stacked over its row of
+    // controls). `controls` are appended into the inner row so shop-dom's
+    // `#shop-runsetup-*` querySelectorAll('.shop-runsetup-btn') still resolves.
+    const _runSetupGroup = (id, labelText, controls) => {
+        const group = el('div', { id, className: 'shop-runsetup-group' });
+        group.appendChild(el('span', { className: 'shop-runsetup-label', text: labelText }));
+        const row = el('div', { className: 'shop-runsetup-controls' });
+        for (const c of controls) row.appendChild(c);
+        group.appendChild(row);
+        return group;
+    };
+
+    // ── RUN SETUP control card (RUN-06) ───────────────────────────
     // Lets the player pick the run shape — waves-per-stage (3/6/9) +
-    // stage count (10-100, step 10). A live readout shows total waves +
-    // the reward multiplier. shop-dom wires the controls + the readout
-    // and threads the choice into game.runConfig on START RUN. Lives
-    // inside the BUILD-only footer, so it inherits its visibility gate.
+    // stage count (10-100, step 10) + difficulty MODE. A live readout
+    // shows total waves + the reward multiplier. shop-dom wires the
+    // controls + the readout and threads the choice into game.runConfig
+    // on START RUN. Lives inside the BUILD-only footer, so it inherits
+    // its visibility gate.
     const runSetup = el('div', { id: 'shop-runsetup', className: 'shop-runsetup' });
+    runSetup.appendChild(el('span', { className: 'shop-runsetup-title', text: 'RUN SETUP' }));
+
+    const groupsRow = el('div', { className: 'shop-runsetup-groups' });
 
     // Waves-per-stage segmented selector (3 / 6 / 9).
-    const wpsGroup = el('div', { id: 'shop-runsetup-wps', className: 'shop-runsetup-group' });
-    wpsGroup.append(el('span', { className: 'shop-runsetup-label', text: 'WAVES/STAGE' }));
-    for (const v of [3, 6, 9]) {
+    const wpsButtons = [3, 6, 9].map((v) => {
         const b = el('button', { id: `shop-runsetup-wps-${v}`, className: 'shop-runsetup-btn', text: `${v}` });
         b.type = 'button';
         b.dataset.wps = `${v}`;
-        wpsGroup.appendChild(b);
-    }
-    runSetup.appendChild(wpsGroup);
+        return b;
+    });
+    groupsRow.appendChild(_runSetupGroup('shop-runsetup-wps', 'WAVES PER STAGE', wpsButtons));
+
+    groupsRow.appendChild(el('span', { className: 'shop-runsetup-divider' }));
 
     // Stages stepper (− value + ), step 10, clamped [10,100].
-    const stagesGroup = el('div', { id: 'shop-runsetup-stages', className: 'shop-runsetup-group' });
-    stagesGroup.append(el('span', { className: 'shop-runsetup-label', text: 'STAGES' }));
     const decBtn = el('button', { id: 'shop-runsetup-stages-dec', className: 'shop-runsetup-step', text: '−' });
     decBtn.type = 'button';
     decBtn.setAttribute('aria-label', 'fewer stages');
@@ -1008,17 +1011,16 @@ function _buildShopOverlay() {
     const incBtn = el('button', { id: 'shop-runsetup-stages-inc', className: 'shop-runsetup-step', text: '+' });
     incBtn.type = 'button';
     incBtn.setAttribute('aria-label', 'more stages');
-    stagesGroup.append(decBtn, stagesVal, incBtn);
-    runSetup.appendChild(stagesGroup);
+    groupsRow.appendChild(_runSetupGroup('shop-runsetup-stages', 'STAGES', [decBtn, stagesVal, incBtn]));
+
+    groupsRow.appendChild(el('span', { className: 'shop-runsetup-divider' }));
 
     // ── Difficulty MODE selector (DIR-09) ─────────────────────────
     // Five segmented buttons Easy→Legendary that bias the adaptive
     // Director (§14). shop-dom wires the clicks (sets _preRunRunConfig.mode),
     // greys out gated EPIC/LEGENDARY (§14.7), and refreshes the readout.
     // Default selection is NORMAL; the choice rides into game.runConfig on
-    // START RUN. Matches the WAVES/STAGE segmented styling.
-    const modeGroup = el('div', { id: 'shop-runsetup-mode', className: 'shop-runsetup-group' });
-    modeGroup.append(el('span', { className: 'shop-runsetup-label', text: 'MODE' }));
+    // START RUN.
     const MODE_BTNS = [
         { id: 'easy', mode: 'EASY', label: 'EASY' },
         { id: 'normal', mode: 'NORMAL', label: 'NORMAL' },
@@ -1026,24 +1028,29 @@ function _buildShopOverlay() {
         { id: 'epic', mode: 'EPIC', label: 'EPIC' },
         { id: 'legendary', mode: 'LEGENDARY', label: 'LEGENDARY' },
     ];
-    for (const m of MODE_BTNS) {
+    const modeButtons = MODE_BTNS.map((m) => {
         const b = el('button', { id: `shop-runsetup-mode-${m.id}`, className: 'shop-runsetup-btn', text: m.label });
         b.type = 'button';
         b.dataset.mode = m.mode;
-        modeGroup.appendChild(b);
-    }
-    runSetup.appendChild(modeGroup);
+        return b;
+    });
+    groupsRow.appendChild(_runSetupGroup('shop-runsetup-mode', 'DIFFICULTY', modeButtons));
+
+    runSetup.appendChild(groupsRow);
 
     // Live readout: "N waves · MODE · rewards ×W ×M" (DIR-09 adds the mode +
     // its per-mode reward multiplier; shop-dom keeps it in sync on every edit).
     runSetup.appendChild(el('div', { id: 'shop-runsetup-readout', className: 'shop-runsetup-readout', text: '30 waves · NORMAL · rewards ×1.0 ×1.0' }));
 
-    preFooter.append(
+    // ── Action bar (BACK · status · START) ────────────────────────
+    const actionBar = el('div', { className: 'shop-prerun-actions' });
+    actionBar.append(
         el('button', { id: 'shop-prerun-back', className: 'armory-btn armory-btn--back', text: '← BACK' }),
-        runSetup,
         el('div', { id: 'shop-prerun-status', className: 'shop-prerun-status', text: '' }),
         el('button', { id: 'shop-prerun-start', className: 'armory-btn armory-btn--start', text: 'START RUN →' }),
     );
+
+    preFooter.append(runSetup, actionBar);
     menu.appendChild(preFooter);
 
     // ── Floating tooltip ─────────────────────────────────────────

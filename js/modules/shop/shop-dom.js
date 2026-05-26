@@ -1029,6 +1029,13 @@ function _renderWeaponCluster(container, groups, player, category) {
         // node count so the BUILD ring (attunements + mods) doesn't crowd.
         const N = group.upgrades.length;
         const RADIUS = N <= 4 ? 110 : (N <= 6 ? 130 : (N <= 9 ? 152 : 178));
+        // 6.225.3 — size the ring box to THIS orbit's radius so the empty
+        // padding around every cluster is constant. With a fixed 400px box,
+        // small rings (few bubbles) left a big void above/below while large
+        // rings nearly touched — making the vertical gap between consecutive
+        // weapons/abilities look uneven. CSS reads `--orbit-radius` to derive
+        // the box height, so the column now has a uniform gap throughout.
+        ring.style.setProperty('--orbit-radius', `${RADIUS}px`);
         for (let i = 0; i < N; i++) {
             const upg = group.upgrades[i];
             // Distribute around the circle starting at the top (-90°).

@@ -92,6 +92,41 @@ describe('getWaveConfig() – 20-wave campaign', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Early-game variety front-loading (6.x early-engagement pass)
+// ---------------------------------------------------------------------------
+
+describe('early-game variety front-loading', () => {
+  const typesInWave = (w) => new Set(getWaveConfig(w).subWaves.flat().map((e) => e.type));
+  const typesUpToWave = (n) => {
+    const s = new Set();
+    for (let w = 1; w <= n; w++) for (const t of typesInWave(w)) s.add(t);
+    return s;
+  };
+
+  test('wave 1 still opens with HUNTER (gentlest intro preserved)', () => {
+    expect(getWaveConfig(1).subWaves[0][0].type).toBe('HUNTER');
+  });
+
+  test('DRIFTER debuts by wave 2, TANGERINE by wave 5, WEAVER by wave 8', () => {
+    expect(typesUpToWave(2).has('DRIFTER')).toBe(true);
+    expect(typesUpToWave(5).has('TANGERINE')).toBe(true);
+    expect(typesUpToWave(8).has('WEAVER')).toBe(true);
+  });
+
+  test('the player meets >= 7 distinct (non-boss) enemy types by the end of stage 3 (wave 9)', () => {
+    const types = [...typesUpToWave(9)].filter((t) => t !== 'TITAN');
+    expect(types.length).toBeGreaterThanOrEqual(7);
+  });
+
+  test('punishing / mechanic-heavy enemies stay back-loaded (none in waves 1-9)', () => {
+    const punishing = ['LEECH', 'PHANTOM', 'DEVOURER', 'PRISM_MIRROR', 'NULL_DRONE',
+                       'WRAITHWORM', 'WARDEN', 'CONDUIT_NODE', 'JUGGERNAUT', 'THORNBACK'];
+    const early = typesUpToWave(9);
+    for (const t of punishing) expect(early.has(t)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // getEnemyLevel() / getAsteroidLevel()
 // ---------------------------------------------------------------------------
 

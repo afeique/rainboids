@@ -250,6 +250,9 @@ export function addPowerup(type, config, isShopItem = false) {
     } else {
     }
 
+    // 6.226.0 — permanent powerup stacks live in the persistent profile;
+    // mark the account dirty so the coalesced flush picks up the change.
+    this.gameEngine?.markMetaDirty?.();
     return true;
 }
 
