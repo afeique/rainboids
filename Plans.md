@@ -73,6 +73,8 @@ Audit detail + verified line numbers: `docs/Bug-Pass Audit — Findings & Fixes 
 - **RUN — Adaptive Difficulty system LIVE**: Director (RUN-04, 6.171) + Threat HUD (CD-16, 6.172) → **live in-game** (RUN-05a, 6.177); runConfig plumbing (RUN-01a, 6.173) + card-every-stage-except-last (RUN-01b, 6.174); Reward Dial (RUN-03, 6.175); RUN SETUP UI (RUN-06, 6.176).
 - **ITEM/META**: tier-gated gear resists + readout (ITEM-01, 6.178); Cores resist-targeting (META-03, 6.179); gear-passive reroll (META-04, 6.186) — full ARMORY crafting set (reroll/tier-up/target-resist/reroll-passive).
 - Test suite: **1456 unit + Playwright QA + e2e**, all green @ **6.187.1**.
+- **DIR foundation shipped earlier (unrecorded):** `power-level.js` `computePWR` (DIR-01), `difficulty-constants.js` §14.6 + `baseline`/`pwrPreload` (DIR-02), `game.playerPWR` wired (DIR-05). ⚠ J/K/L rows below are stale — reconcile vs. tree; DIR-04/10 live refactors stay playtest-gated.
+- **P7 mobile/Co-Pilot — substantially COMPLETE (6.216.1→6.220.1):** FB-1/2/3, MB-1/2/3, MB-6(verified), AS-1/2/3/4/5-core. **Remaining = device/eye-gated:** MB-4/5/7 (touch camera/offset/damage-numbers), AS-6 (opt), AS-5 deferred (on-touch auto-cast + stick-side).
 
 ---
 
@@ -185,10 +187,9 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 | ~~MB-3~~ ✅ | `main.js`, `ui/mobile-tutorial.js` | **DONE 6.216.4** — `mountMobileTutorial()` called from `main.js start()` (self-gates isMobile + seen-flag); copy rewritten for one-thumb + Co-Pilot (drag-steer / tap-dash / Co-Pilot aims&fires / auto-cast). 14 unit + QA load 12/12. |
 | MB-4 | `mobile-touch.js`/camera | **Ship-under-finger offset** — anchor ship ~50px above the touch point so the thumb doesn't occlude it. **PATCH.** |
 | MB-5 | camera | **Mobile camera zoom** — tune (~0.75 portrait / ~0.9 landscape) for a moving ship; verify with deadband-follow. **PATCH.** |
-| MB-6 | crit-flash gating | **Verify crit-flash suppression covers mobile** (5.99.2 `3695b94`); fix if mis-gated → no full crit screen-flash on mobile. **PATCH (or none if correct). Verify-first.** |
+| ~~MB-6~~ ✅ verified | `hud/combat.js` (read-only) | **VERIFIED CORRECT (6.220.x) — no fix.** The 5.99.2 crit-flash suppression lives in the damage-number renderer (`combat.js` crit branch: fixed 22px, no zoom, no shadow glow, just orange + "CRIT!" tag) with **no `isMobile` gate** → it's platform-universal, so mobile is covered. No separate crit-driven `triggerScreenFlash` exists (all flash sites are explosions / kills / player-damage / boss-rage, none crit-gated). No code change / no version bump. |
 | MB-7 | `hud/combat.js drawDamageNumbers` | **Canvas-space damage numbers on mobile** — stay readable at mobile zoom. **PATCH.** |
 
-**Sequencing (this track):** AS-1 first (persistence/seeding) → unblocks AS-2/3/4/5. FB-1 + MB-1/2/3 are independent cheap wins (wire dead modules + make the Co-Pilot legible). Suggested first sub-sprint = FB-1 + AS-1+AS-3 + MB-1/2/3 (biggest perceived-quality jump for least code). AS-6/FB-2 optional.
 **Verification gate:** unit (new AS-3/4 thresholds, FB cause-mapping); **survival sims** via `tools/ai-qa-bot/` as a *positioning-only* bot across all difficulty MODEs (assert Co-Pilot keeps player alive + watch director thrash since a deterministic Co-Pilot is periodic); **fun-score A/B** (accept only if no dimension regresses >5 pts); **fairness** (an Autopilot run must not farm an un-escalated game for full rewards). Devices: iOS Safari + Android Chrome, portrait/landscape, notch safe-areas, both stick sides.
 
 ---
