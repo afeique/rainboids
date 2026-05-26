@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.209.0] - 2026-05-26
+
+### Changed — No-downsides passive rework, batch 2: Gunslinger + Purist (CD-02 · §6c)
+
+- **Gunslinger** — removed the **"no power weapons or abilities"** restriction
+  (`player/weapons.js` `firePower` gate + `player/abilities.js` `activateAbility`
+  gate). Per §6c "the 'no powers' was never the point" — it's now a pure
+  **primary-build anchor (+50% primary damage, +30% fire rate)** with no lockout.
+  Dropped its `disableSlots` hook + downside string.
+- **Purist** — removed the **"cannot crit"** restriction
+  (`player/progression.js` `getEffectiveCritChance`). Now a pure offense anchor:
+  **+40% flat damage + shots pierce**, and it can crit. Dropped its `crit` hook +
+  downside string.
+- Both keystones' upsides were already wired — this batch only deletes the
+  penalties. 6 of the original 11 passive downsides now remain (GLASS_CANNON,
+  OVERFLOW_CAPACITOR, EYE_OF_THE_STORM, GRAVITY_WELL, FAILSAFE, HEAT_SINK) for
+  later batches. The reactive director absorbs the net power gain.
+- ⚠ Same caveat as 6.208.0: the eventual **enemy-HP re-tune + extremes playtest**
+  (doc §7) follows the full removal.
+- Tests: updated `passives-player` (Purist now crits; removed the obsolete
+  Gunslinger-disables tests) + `passives-no-downsides` (batch-2 metadata: no
+  downside / no `disableSlots` hook; 6 keystones still carry downsides). Full unit
+  suite **1783** green; QA-14 passives + QA-07 weapons 24/24.
+
+---
+
 ## [6.208.0] - 2026-05-26
 
 ### Changed — No-downsides passive rework, batch 1 (CD-02 · Balance §6c)

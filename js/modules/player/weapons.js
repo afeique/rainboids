@@ -1279,8 +1279,9 @@ export function boostPowerDamage(config, mult) {
 }
 
 export function firePower(bulletPool, audioManager, particlePool) {
-    // P6 — Gunslinger passive: no power weapons (pure-gunner identity).
-    if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) return;
+    // §6c no-downsides rework — Gunslinger no longer blocks power weapons ("the
+    // 'no powers' was never the point"); it's a pure primary-build anchor now
+    // (+50% primary damage / +30% fire rate, applied in getLevelScaledDamage / fire-rate).
     let config = this.getActivePowerConfig();
 
     // OVERFLOW_DISCHARGE — capture whether energy is FULL *before* any cost is

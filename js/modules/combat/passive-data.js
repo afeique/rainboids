@@ -65,14 +65,14 @@ export const PASSIVES = {
     },
     GUNSLINGER: {
         id: 'GUNSLINGER', name: 'Gunslinger', desc: '+50% primary damage, +30% fire rate',
-        hooks: ['damage', 'fireRate', 'disableSlots'], tags: ['keystone', 'offense'],
-        slot: true, item: false, stack: B, downside: 'No power weapons or abilities',
+        hooks: ['damage', 'fireRate'], tags: ['keystone', 'offense'],
+        slot: true, item: false, stack: B,
     },
     PURIST: {
         id: 'PURIST', name: 'Purist', desc: '+40% flat damage; shots pierce',
-        hooks: ['damage', 'bullet', 'crit'], tags: ['keystone', 'offense'],
-        slot: true, item: false, stack: B, downside: 'Cannot crit',
-        damageMult: 1.4, // +40% all damage (the no-crit downside is in getEffectiveCritChance)
+        hooks: ['damage', 'bullet'], tags: ['keystone', 'offense'],
+        slot: true, item: false, stack: B,
+        damageMult: 1.4, // §6c no-downsides — +40% all damage + pierce; the no-crit downside was removed
     },
     TWIN_CAST: {
         id: 'TWIN_CAST', name: 'Twin Cast', desc: 'Power weapons fire twice (2nd at 50%); abilities +1 charge',

@@ -121,17 +121,20 @@ describe('§6c batch 1 — TWIN_CAST fires twice for normal cost', () => {
     });
 });
 
-describe('§6c batch 1 — downside string fields removed from the registry', () => {
-    test('HOARDERS_GREED / FRENZY / TWIN_CAST no longer carry a `downside`', () => {
-        for (const id of ['HOARDERS_GREED', 'FRENZY', 'TWIN_CAST']) {
+describe('§6c batches 1–2 — downside string fields removed from the registry', () => {
+    test('batch 1 (HOARDERS_GREED/FRENZY/TWIN_CAST) + batch 2 (GUNSLINGER/PURIST) no longer carry a `downside`', () => {
+        for (const id of ['HOARDERS_GREED', 'FRENZY', 'TWIN_CAST', 'GUNSLINGER', 'PURIST']) {
             expect(PASSIVES[id]).toBeDefined();
             expect('downside' in PASSIVES[id]).toBe(false);
         }
     });
 
-    test('the other harsh-downside keystones STILL carry their downside (untouched)', () => {
-        // batch 1 leaves these 8 for later re-anchoring batches.
-        for (const id of ['GLASS_CANNON', 'GUNSLINGER', 'PURIST', 'OVERFLOW_CAPACITOR',
+    test('GUNSLINGER no longer carries the slot-disabling hook (no-powers/abilities removed)', () => {
+        expect(PASSIVES.GUNSLINGER.hooks || []).not.toContain('disableSlots');
+    });
+
+    test('the remaining 6 harsh-downside keystones STILL carry their downside (later batches)', () => {
+        for (const id of ['GLASS_CANNON', 'OVERFLOW_CAPACITOR',
             'EYE_OF_THE_STORM', 'GRAVITY_WELL', 'FAILSAFE', 'HEAT_SINK']) {
             expect('downside' in PASSIVES[id]).toBe(true);
             expect(typeof PASSIVES[id].downside).toBe('string');

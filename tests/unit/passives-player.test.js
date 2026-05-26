@@ -279,19 +279,15 @@ describe('P6 batch 7 — Gunslinger (pure-gunner)', () => {
         expect(weapons.getEffectivePrimaryFireRate.call(plain()) / weapons.getEffectivePrimaryFireRate.call(gun()))
             .toBeCloseTo(1.3, 1);
     });
-    test('disables abilities (activateAbility returns false)', () => {
-        const s = { hasPassive: (id) => id === 'GUNSLINGER', equippedAbilities: ['BULWARK', null, null, null], abilityCooldowns: [0, 0, 0, 0] };
-        expect(abilities.activateAbility.call(s, 0)).toBe(false);
-    });
-    test('disables power weapons (firePower no-ops, energy untouched)', () => {
-        const s = { hasPassive: (id) => id === 'GUNSLINGER', energy: 99, getPowerEnergyCost: () => 20, getActivePowerConfig: () => ({}) };
-        weapons.firePower.call(s, null, null, null);
-        expect(s.energy).toBe(99); // returned before spending energy
-    });
+    // §6c no-downsides rework (6.208.x): Gunslinger NO LONGER disables power
+    // weapons or abilities — the "no powers" was never the point. The old
+    // "disables abilities / disables power weapons" tests were removed; the
+    // metadata (no `downside`, no `disableSlots` hook) is asserted in
+    // passives-no-downsides.test.js, and the +50%/+30% upside stays above.
 });
 
-describe('P6 batch 4 — Purist (no crit, +40% damage)', () => {
-    test('getEffectiveCritChance is 0 with Purist, even with crit stacks', () => {
+describe('P6 batch 4 — Purist (+40% damage + pierce, §6c no-downsides)', () => {
+    test('Purist no longer zeroes crit (no-crit downside removed): crit = base + stacks', () => {
         const s = makeStub({
             hasPassive: (id) => id === 'PURIST',
             baseCritChance: 10,
@@ -299,7 +295,8 @@ describe('P6 batch 4 — Purist (no crit, +40% damage)', () => {
             getItemAffixTotal: () => 0,
             spStats: {},
         });
-        expect(progression.getEffectiveCritChance.call(s)).toBe(0);
+        // 10 base + 5×7/stack = 45; Purist used to force 0, now it can crit.
+        expect(progression.getEffectiveCritChance.call(s)).toBe(45);
     });
 
     test('Purist contributes a 1.4 damage multiplier', () => {
