@@ -64,3 +64,46 @@ describe('Assist System', () => {
         expect(dodge).toMatchObject({ type: 'dash' });
     });
 });
+
+describe('AS-3 — auto-dodge intensity thresholds', () => {
+    // A mid-range threat: minTTI 0.5 sits between the conservative (0.34) and
+    // aggressive (0.75) trigger thresholds, so the intensity setting alone
+    // decides whether the Co-Pilot dashes. scoreDodgeDestinations always yields
+    // the 8 compass candidates, so a hand-built situation produces a target.
+    const midThreat = () => ({
+        player: { x: 250, y: 250, radius: 12 },
+        minTTI: 0.5,
+        incomingCount: 1,
+        enemies: [],
+        gameField: { width: 500, height: 500 },
+    });
+
+    test("'off' disables auto-dodge entirely, even under imminent danger", () => {
+        const imminent = { ...midThreat(), minTTI: 0.1 };
+        expect(decideDodge(imminent, { autoDodge: 'off' })).toBeNull();
+    });
+
+    test("'conservative' ignores a mid-range threat (TTI above 0.34)", () => {
+        expect(decideDodge(midThreat(), { autoDodge: 'conservative' })).toBeNull();
+    });
+
+    test("'aggressive' dashes on the same mid-range threat (TTI below 0.75)", () => {
+        expect(decideDodge(midThreat(), { autoDodge: 'aggressive' })).toMatchObject({ type: 'dash' });
+    });
+
+    test('AUTOPILOT level raises the threshold like aggressive', () => {
+        const dodge = decideDodge(midThreat(), { autoDodge: 'conservative', level: 'autopilot' });
+        expect(dodge).toMatchObject({ type: 'dash' });
+    });
+
+    test('both intensities dash on a clearly imminent threat', () => {
+        const imminent = { ...midThreat(), minTTI: 0.2 };
+        expect(decideDodge(imminent, { autoDodge: 'conservative' })).toMatchObject({ type: 'dash' });
+        expect(decideDodge(imminent, { autoDodge: 'aggressive' })).toMatchObject({ type: 'dash' });
+    });
+
+    test('no dodge without an active incoming threat', () => {
+        const none = { ...midThreat(), incomingCount: 0 };
+        expect(decideDodge(none, { autoDodge: 'aggressive' })).toBeNull();
+    });
+});

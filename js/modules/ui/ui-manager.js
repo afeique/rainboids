@@ -103,6 +103,11 @@ export class UIManager {
             // 6.1.1 — assistAutoPower removed; autoFire drives power too.
             // 6.2.3 — Laser Sight toggle. Default ON, desktop-only.
             assistLaserSight: document.getElementById('assist-laser-sight'),
+            // AS-2/3/4 — Co-Pilot tuning. The segmented LEVEL / AUTO-DODGE
+            // buttons are queried by data-attr in syncAssistsTab / wiring;
+            // the aggression slider + readout are kept as direct refs.
+            assistAggressionSlider: document.getElementById('assist-aggression-slider'),
+            assistAggressionValue: document.getElementById('assist-aggression-value'),
             // HUD pause button (top-left)
             hudPauseBtn: document.getElementById('hud-pause-btn'),
             hudShopBtn: document.getElementById('hud-shop-btn')
@@ -1332,6 +1337,19 @@ export class UIManager {
         // 6.1.1 — autoPower retired; autoFire drives both barrels.
         // 6.2.3 — Laser Sight toggle. Default ON; falsy → laser hidden.
         if (this.elements.assistLaserSight) this.elements.assistLaserSight.checked = a.laserSight !== false;
+        // AS-2/3/4 — highlight the active LEVEL / AUTO-DODGE segment + set the
+        // aggression slider from the persisted config.
+        document.querySelectorAll('[data-level]').forEach((b) => {
+            b.classList.toggle('active', b.dataset.level === a.level);
+        });
+        document.querySelectorAll('[data-dodge]').forEach((b) => {
+            b.classList.toggle('active', b.dataset.dodge === (a.autoDodge || 'off'));
+        });
+        if (this.elements.assistAggressionSlider) {
+            const pct = Math.round((typeof a.aggression === 'number' ? a.aggression : 0.55) * 100);
+            this.elements.assistAggressionSlider.value = String(pct);
+            if (this.elements.assistAggressionValue) this.elements.assistAggressionValue.textContent = `${pct}%`;
+        }
     }
 
     setAudioManager(audioManager) {
@@ -1638,6 +1656,43 @@ export class UIManager {
         // 6.2.3 — Laser Sight toggle.
         wireAssist(this.elements.assistLaserSight, 'laserSight');
 
+        // AS-2 — Co-Pilot LEVEL preset. Sets the level, then applies a sensible
+        // toggle bundle so a one-click preset configures the whole Co-Pilot.
+        // Re-syncs the tab so the auto-dodge segment + checkboxes reflect it.
+        const LEVEL_PRESETS = {
+            'manual-touch': { autoDodge: 'off',          autoCastAbilities: false, autoFire: false },
+            'co-pilot':     { autoDodge: 'conservative', autoCastAbilities: true,  autoFire: true },
+            'autopilot':    { autoDodge: 'aggressive',   autoCastAbilities: true,  autoFire: true, autoAim: true },
+        };
+        document.querySelectorAll('[data-level]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                if (!this.gameEngine) return;
+                const level = btn.dataset.level;
+                this.gameEngine.setAssist('level', level);
+                const bundle = LEVEL_PRESETS[level] || {};
+                for (const [k, v] of Object.entries(bundle)) this.gameEngine.setAssist(k, v);
+                this.syncAssistsTab();
+            });
+        });
+        // AS-3 — Auto-Dodge intensity (off / conservative / aggressive).
+        document.querySelectorAll('[data-dodge]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                if (!this.gameEngine) return;
+                this.gameEngine.setAssist('autoDodge', btn.dataset.dodge);
+                this.syncAssistsTab();
+            });
+        });
+        // AS-4 — Aggression slider (10–100% maps to the 0.1–1.0 config value).
+        if (this.elements.assistAggressionSlider) {
+            this.elements.assistAggressionSlider.addEventListener('input', (e) => {
+                const pct = Number(e.target.value);
+                if (this.elements.assistAggressionValue) {
+                    this.elements.assistAggressionValue.textContent = `${Math.round(pct)}%`;
+                }
+                if (this.gameEngine) this.gameEngine.setAssist('aggression', pct / 100);
+            });
+        }
+
         // Control-scheme picker (GAMEPAD tab). Each button carries its
         // scheme in data-scheme; clicking persists it through the engine,
         // which re-highlights the buttons via updateControlSchemeSelector.
@@ -1873,6 +1928,13 @@ export class UIManager {
     }
 
     switchTab(tabName) {
+        // Guard: `pauseTabs` is every `.pause-tab` element, which now also
+        // includes the segmented control-scheme + AS-2/3/4 Co-Pilot buttons
+        // (they reuse the class for styling). Those carry no data-tab, so their
+        // click would call switchTab(undefined) and deactivate ALL tab content
+        // (id === 'undefined-tab' matches nothing). Ignore a falsy tab — only
+        // the real tab buttons (with data-tab) drive tab switching.
+        if (!tabName) return;
         this.elements.pauseTabs.forEach(tab => {
             tab.classList.toggle('active', tab.dataset.tab === tabName);
         });

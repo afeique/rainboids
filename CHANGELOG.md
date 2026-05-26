@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.218.0] - 2026-05-26
+
+### Added — ASSISTS-tab Co-Pilot control surface (mobile P7 · AS-2/3/4)
+
+- The **ASSISTS pause-menu tab is now tunable**, exposing the Co-Pilot config
+  AS-1 made persistent:
+  - **Co-Pilot Level** preset (MANUAL / CO-PILOT / AUTOPILOT) — a segmented
+    selector that sets `level` and applies a bundled toggle preset (AUTOPILOT ⇒
+    aggressive auto-dodge + auto-cast + auto-aim; MANUAL ⇒ everything off).
+  - **Auto-Dodge** intensity (OFF / NORMAL / AGGRESSIVE) → `config.autoDodge`,
+    the off/conservative/aggressive thresholds `decideDodge` already reads.
+  - **Aggression** slider (10–100% → `config.aggression` 0.1–1.0).
+- All three round-trip through the type-aware `setAssist` (AS-1) and persist to
+  `localStorage`; the tab re-syncs its highlighted segments + slider from the
+  saved config on open.
+
+### Fixed
+
+- `switchTab(undefined)` no longer deactivates every pause-menu tab. The new
+  segmented buttons (and the pre-existing control-scheme buttons) reuse the
+  `pause-tab` class for styling but carry no `data-tab`, so their click used to
+  call `switchTab(undefined)` and blank the whole menu. A falsy-tab guard fixes
+  it (latent control-scheme bug too).
+
+Tests: +6 unit (`decideDodge` intensity thresholds) + 6 QA (`52-assists-tuning`:
+level preset bundle, auto-dodge segment, aggression slider, persistence).
+
 ## [6.217.0] - 2026-05-26
 
 ### Added — persisted AI Co-Pilot config (mobile P7 · AS-1)

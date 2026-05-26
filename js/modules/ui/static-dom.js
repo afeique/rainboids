@@ -456,6 +456,67 @@ function _buildAssistsTab() {
         });
         list.appendChild(label);
     }
+    // AS-2/3/4 — Co-Pilot tuning. A segmented LEVEL preset, a segmented
+    // auto-dodge INTENSITY, and an AGGRESSION slider, all driving the
+    // AssistSystem config and persisting via setAssist (AS-1). Reuses the
+    // pause-menu segmented-button idiom (`pause-tab` in a `pause-tabs` row,
+    // `.active` toggled). Placed above the granular helper toggles because
+    // the LEVEL preset bundles them.
+    const segGroup = (titleText, descText, btns) => {
+        const row = el('div', {
+            className: 'pause-tabs',
+            style: { marginBottom: '6px', justifyContent: 'center', flexWrap: 'wrap' },
+        });
+        for (const b of btns) {
+            const btn = el('button', { id: b.id, className: 'pause-tab', text: b.label });
+            btn.dataset[b.dataKey] = b.dataVal;
+            row.appendChild(btn);
+        }
+        return el('div', {
+            style: { marginBottom: '14px' },
+            children: [
+                el('div', { className: 'assist-row-title', style: { textAlign: 'center' }, text: titleText }),
+                el('div', { className: 'assist-row-desc', style: { textAlign: 'center', marginBottom: '6px' }, text: descText }),
+                row,
+            ],
+        });
+    };
+
+    const levelSection = segGroup(
+        'Co-Pilot Level',
+        'How much the AI Co-Pilot does for you.',
+        [
+            { id: 'assist-level-manual-touch', dataKey: 'level', dataVal: 'manual-touch', label: 'MANUAL' },
+            { id: 'assist-level-co-pilot',     dataKey: 'level', dataVal: 'co-pilot',     label: 'CO-PILOT' },
+            { id: 'assist-level-autopilot',    dataKey: 'level', dataVal: 'autopilot',    label: 'AUTOPILOT' },
+        ],
+    );
+
+    const dodgeSection = segGroup(
+        'Auto-Dodge',
+        'Let the Co-Pilot dash you clear of danger. Your manual tap-dash always overrides.',
+        [
+            { id: 'assist-dodge-off',          dataKey: 'dodge', dataVal: 'off',          label: 'OFF' },
+            { id: 'assist-dodge-conservative', dataKey: 'dodge', dataVal: 'conservative', label: 'NORMAL' },
+            { id: 'assist-dodge-aggressive',   dataKey: 'dodge', dataVal: 'aggressive',   label: 'AGGRESSIVE' },
+        ],
+    );
+
+    const aggroSlider = el('input', {
+        id: 'assist-aggression-slider',
+        attrs: { type: 'range', min: '10', max: '100', value: '55' },
+        style: { flex: '1' },
+    });
+    const aggroValue = el('span', { id: 'assist-aggression-value', style: { minWidth: '45px', textAlign: 'right' }, text: '55%' });
+    const aggroSection = el('div', {
+        style: { marginBottom: '18px' },
+        children: [
+            el('div', { className: 'assist-row-title', style: { textAlign: 'center' }, text: 'Aggression' }),
+            el('div', { className: 'assist-row-desc', style: { textAlign: 'center', marginBottom: '6px' }, text: 'How eagerly the Co-Pilot spends abilities and power weapons.' }),
+            el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' }, children: [aggroSlider, aggroValue] }),
+        ],
+    });
+
     const helperText = 'Optional aim and fire helpers. Settings persist between runs.';
     return el('div', {
         id: 'assists-tab',
@@ -466,6 +527,9 @@ function _buildAssistsTab() {
                 style: { marginBottom: '15px', color: '#aaa', fontSize: 'calc(13px * var(--font-body-scale, 1))', textAlign: 'center' },
                 text: helperText,
             }),
+            levelSection,
+            dodgeSection,
+            aggroSection,
             list,
         ],
     });
