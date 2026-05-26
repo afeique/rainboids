@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.216.3] - 2026-05-26
+
+### Added — screen wake lock during play (mobile P7 · MB-1)
+
+- **The screen now stays awake while playing on mobile.** The built-but-unwired
+  `platform/wake-lock.js` (Screen Wake Lock API) is now driven by the engine:
+  a wake lock is acquired on entering `PLAYING` / `WAVE_TRANSITION` and released
+  on every other state (menus, pause, game-over). The reconcile runs each frame
+  but only acts on an actual state change, so there's no per-frame promise
+  churn. The auto-reacquire handler (installed once at boot) re-takes the lock
+  when the tab returns to the foreground (browsers drop wake locks on tab-hide).
+
+Default-safe: `requestWakeLock()` gates on `isMobile()`, so desktop sessions
+acquire nothing and behave exactly as before. Covered by the existing
+`wake-lock` unit suite + the start→pause→resume QA cycle (no integration errors).
+
 ## [6.216.2] - 2026-05-26
 
 ### Added — real haptics + Co-Pilot haptic cues (mobile P7 · MB-2)

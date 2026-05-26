@@ -93,6 +93,7 @@ import { MobileTouchHandler } from './ui/mobile-touch.js';
 import { GamepadHandler } from './ui/gamepad-handler.js';
 import { AssistSystem, ASSIST_LEVELS } from './assist/assist-system.js';
 import { isMobile, isPortrait } from './platform/platform-detect.js';
+import { requestWakeLock, releaseWakeLock, attachAutoReacquireHandler } from './platform/wake-lock.js';
 import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './core/storage.js';
 import { StatsOverlay } from './ui/stats-overlay.js';
 import { InventoryOverlay } from './ui/inventory-overlay.js';
@@ -439,6 +440,14 @@ export class GameEngine {
         // (see onGamepadConnectionChange / _refreshAssistsTabVisibility).
         this.gamepad = new GamepadHandler(this);
         this.gamepad.install();
+        // MB-1 — keep the screen awake during mobile play. The handler
+        // re-acquires the lock when the tab returns to foreground (the
+        // browser drops wake locks on tab-hide). _reconcileWakeLock()
+        // (driven from gameLoop) acquires/releases on state changes; this
+        // is the once-at-boot install of the visibility-return handler.
+        // No-ops on desktop (requestWakeLock gates on isMobile()).
+        attachAutoReacquireHandler();
+        this._wakeLockState = null; // last state reconciled by _reconcileWakeLock
         this.width = window.innerWidth;
         this.height = window.innerHeight;
         this.canvas.width = this.width;
@@ -4064,6 +4073,25 @@ export class GameEngine {
     triggerScreenFlash(alpha, duration) { return cam.triggerScreenFlash.call(this, alpha, duration); }
     triggerGoldScreenFlash(alpha, duration) { return cam.triggerGoldScreenFlash.call(this, alpha, duration); }
 
+    // MB-1 — reconcile the screen wake lock with the current game state.
+    // Acquire while the player is actively in a run (PLAYING /
+    // WAVE_TRANSITION); release on every other state (menus, pause,
+    // game-over). Only acts when the state actually changes so we don't
+    // spin up a promise every frame. requestWakeLock/releaseWakeLock are
+    // both idempotent and no-op on desktop (isMobile() gate), so this is
+    // default-safe everywhere.
+    _reconcileWakeLock() {
+        const state = this.game.state;
+        if (state === this._wakeLockState) return;
+        this._wakeLockState = state;
+        const playing = state === GAME_STATES.PLAYING || state === GAME_STATES.WAVE_TRANSITION;
+        if (playing) {
+            requestWakeLock();
+        } else {
+            releaseWakeLock();
+        }
+    }
+
     gameLoop() {
       try {
         frameClock.advance();
@@ -4073,6 +4101,11 @@ export class GameEngine {
         // lifecycle. Runs every frame because the radial menu freezes the
         // gameplay update loop, so the gameplay poll below can't drive it.
         if (this.gamepad) this.gamepad.pollFrame();
+
+        // MB-1 — keep the screen awake while actually playing. Runs every
+        // frame (before the hitstop early-return) but only does work on a
+        // state change. No-ops on desktop.
+        this._reconcileWakeLock();
 
         // ── Hitstop: selective freeze — entities stop, VFX/player keep going ──
         if (this._hitstopFrames > 0) {

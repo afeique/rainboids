@@ -180,7 +180,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 ### ∥group MB — Mobile wiring & polish *(three built modules are dead/never-imported; several polish items absent)*
 | ID | FILES | DOES |
 |----|----|----|
-| MB-1 | `platform/wake-lock.js`, `game-engine.js` state transitions | **Wire wake-lock** — acquire on PLAYING, release on pause/menu/game-over (screen stays awake during mobile play). **PATCH.** |
+| ~~MB-1~~ ✅ | `game-engine.js` | **DONE 6.216.3** — `_reconcileWakeLock()` (driven each frame from `gameLoop`, acts only on state change) acquires on PLAYING/WAVE_TRANSITION, releases otherwise; `attachAutoReacquireHandler()` installed once at boot (re-takes lock on tab-return). isMobile-gated, default-safe. Covered by wake-lock unit suite + QA pause cycle. |
 | ~~MB-2~~ ✅ | `core/utils.js`, `assist-system.js` | **DONE 6.216.2** — `triggerHapticFeedback` routed through `platform/haptic.js` (real Vibration API, isMobile-gated); Co-Pilot cues (auto-dodge=MEDIUM, auto-cast=LIGHT); `setHapticsEnabled`/`isHapticsEnabled` persist `rainboids:haptics` (default on). 4 unit. *(settings-screen UI toggle deferred to AS-5/settings.)* |
 | MB-3 | `ui/mobile-tutorial.js` (`shouldShowMobileTutorial`/`markShown`), boot path | **Wire first-run tutorial card** — rewrite copy for one-thumb + Co-Pilot ("Steer to dodge, tap to dash — your Co-Pilot handles the rest"); shows once, dismissible. **PATCH.** |
 | MB-4 | `mobile-touch.js`/camera | **Ship-under-finger offset** — anchor ship ~50px above the touch point so the thumb doesn't occlude it. **PATCH.** |
