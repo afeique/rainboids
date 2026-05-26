@@ -1,5 +1,5 @@
 // Combat effects, debris, orb drops, powerup collection, damage numbers, kill streaks
-import { GAME_CONFIG, GAME_STATES, getEnemyDropProfile, BLOODLUST_MAX_STACKS } from '../core/constants.js';
+import { GAME_CONFIG, GAME_STATES, getEnemyDropProfile, BLOODLUST_MAX_STACKS, RESONANT_SURGE_ENERGY } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, ABILITIES } from './weapon-data.js';
@@ -2101,6 +2101,17 @@ export function kindlingTarget(enemies, source, untilKey, now, radius = KINDLING
     return best;
 }
 
+// RESONANT_SURGE — when an elemental status is applied to an enemy that did NOT
+// already have it active, grant the holder +RESONANT_SURGE_ENERGY power energy.
+// `ctx` is the engine/combat `this`. DEFAULT-SAFE + no-spam: only fires when the
+// powerup is held AND the status is newly applied (caller computes `newlyApplied`).
+function _resonantSurgeGrant(ctx, newlyApplied) {
+    if (!newlyApplied) return;
+    const p = ctx && ctx.player;
+    if (!p || typeof p.getPowerupStacks !== 'function' || typeof p.addEnergy !== 'function') return;
+    if (p.getPowerupStacks('RESONANT_SURGE') > 0) p.addEnergy(RESONANT_SURGE_ENERGY);
+}
+
 export function applyBurn(enemy, sourceDmg, durationMs = 3000, _spread = true) {
     if (!enemy || !enemy.active) return;
     if (enemy.warping || enemy._deathFlash > 0) return;
@@ -2126,6 +2137,9 @@ export function applyBurn(enemy, sourceDmg, durationMs = 3000, _spread = true) {
     if (wasInactive) {
         enemy.brnTickAt = now + 500 * _cf;
     }
+
+    // RESONANT_SURGE — burn newly applied (wasInactive) grants the holder energy.
+    _resonantSurgeGrant(this, wasInactive);
 
     // P6 — Kindling: spread the burn to one nearby fresh enemy (no re-spread).
     // `this` is undefined for bare unit-test calls — guard before touching it.
@@ -2180,8 +2194,14 @@ function _statusGuard(enemy) {
 // CORRODE — +15% incoming damage per stack from ALL sources. Cap 3, refresh.
 export function applyCorrode(enemy, durationMs = 4000, maxStacks = 3, _spread = true) {
     if (!_statusGuard(enemy)) return;
+    // Capture pre-state BEFORE the refresh: corrode is active iff it has stacks
+    // AND its window hasn't expired. wasInactive = a NEW application.
+    const wasInactive = !(enemy.corrodeStacks > 0) || (enemy.corrodeUntil || 0) <= frameClock.now;
     enemy.corrodeStacks = Math.min(maxStacks, (enemy.corrodeStacks || 0) + 1);
     enemy.corrodeUntil = frameClock.now + durationMs * conduitFactor(this);
+
+    // RESONANT_SURGE — corrode newly applied grants the holder energy.
+    _resonantSurgeGrant(this, wasInactive);
 
     // P6 — Kindling: spread the corrode to one nearby fresh enemy (no re-spread).
     // `this` is undefined for bare unit-test calls — guard before touching it.
@@ -2197,7 +2217,12 @@ export function applyCorrode(enemy, durationMs = 4000, maxStacks = 3, _spread = 
 // CHILL — lighter movement slow (×0.6, applied in Enemy.update). Refresh.
 export function applyChill(enemy, durationMs = 2000) {
     if (!_statusGuard(enemy)) return;
+    // Capture pre-state BEFORE the refresh: chill is active iff its window
+    // hasn't expired. wasInactive = a NEW application.
+    const wasInactive = (enemy.chillUntil || 0) <= frameClock.now;
     enemy.chillUntil = Math.max(enemy.chillUntil || 0, frameClock.now + durationMs * conduitFactor(this));
+    // RESONANT_SURGE — chill newly applied grants the holder energy.
+    _resonantSurgeGrant(this, wasInactive);
     // ENMY-07 — blink-burrow's isFrozen reads `_frozenUntil`; mirror the live
     // CHILL window into it so a chilled Wraithworm can't blink/burrow away
     // (design: the slow holds it in place). Tiny, side-effect-free.
@@ -2215,7 +2240,12 @@ export function applyFreeze(enemy, durationMs = 1500) {
 // CONDUCT — +50% VOLT damage taken (applied in applyDamageToEnemy). Refresh.
 export function applyConduct(enemy, durationMs = 3000) {
     if (!_statusGuard(enemy)) return;
+    // Capture pre-state BEFORE the refresh: conduct is active iff its window
+    // hasn't expired. wasInactive = a NEW application.
+    const wasInactive = (enemy.conductUntil || 0) <= frameClock.now;
     enemy.conductUntil = Math.max(enemy.conductUntil || 0, frameClock.now + durationMs * conduitFactor(this));
+    // RESONANT_SURGE — conduct newly applied grants the holder energy.
+    _resonantSurgeGrant(this, wasInactive);
 }
 
 // OIL — primes the enemy; the next Pyro hit flares (E4). Refresh.
@@ -2227,7 +2257,12 @@ export function applyOil(enemy, durationMs = 5000) {
 // MARK — homing-priority + crit + bonus loot (consumed in E4). Refresh.
 export function applyMark(enemy, durationMs = 6000) {
     if (!_statusGuard(enemy)) return;
+    // Capture pre-state BEFORE the refresh: mark is active iff its window
+    // hasn't expired. wasInactive = a NEW application.
+    const wasInactive = (enemy.markUntil || 0) <= frameClock.now;
     enemy.markUntil = Math.max(enemy.markUntil || 0, frameClock.now + durationMs);
+    // RESONANT_SURGE — mark newly applied grants the holder energy.
+    _resonantSurgeGrant(this, wasInactive);
     // ENMY-03 — cloak's isTargetable reads `_markUntil`; mirror the live mark
     // window into it so MARKing a cloaked PHANTOM reveals it (keeps it on the
     // homing/auto-aim target list). Tiny, side-effect-free normalization.

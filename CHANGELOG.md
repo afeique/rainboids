@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.207.0] - 2026-05-26
+
+### Added — Resonant Surge powerup (CD-04)
+
+- **Resonant Surge** (new powerup, `world/powerup.js`) — **applying a fresh
+  elemental status grants +6 energy** (`RESONANT_SURGE_ENERGY`), turning
+  element/CC builds into a fuel source for power builds. Granted once per *new*
+  affliction (re-applying to an already-afflicted enemy gives nothing), gated in
+  all 5 status applicators (burn/corrode/chill/conduct/mark, `combat-manager.js`)
+  on the powerup being held.
+
+### Fixed — status-applicator wrappers now forward `this` (activates Kindling + Conduit)
+
+- **The engine's elemental status-applicator wrappers** (`game-engine.js`
+  `applyBurn`/`applyCorrode`/`applyChill`/`applyConduct`/`applyMark`) forwarded to
+  the combat module **without `.call(this, …)`**, so through the live hit-path the
+  applicators ran with `this` = the combat module (no `.player`) — silently
+  no-op'ing every player-context feature inside them. **This had been disabling
+  the shipped Kindling (burn/corrode spread to nearby enemies) and Conduit
+  (faster status ticks) passives in actual gameplay** (and would have left
+  Resonant Surge inert). Fixed by forwarding `this`.
+- ⚠ **Balance note:** this *activates* Kindling + Conduit for players who run
+  them — they now work as designed (they were inert before). The reactive
+  difficulty director absorbs the change. Flagging since it shifts those builds'
+  feel. (The non-player-context applicators — stun/slow/freeze/oil/bleed — were
+  left as-is; no behavior change there.)
+- Tests: `tests/unit/cd-resonant-surge.test.js` (+11 — const, entry, all 5
+  applicators via `.call`: fresh→+6 once, re-apply→+0, no-powerup→+0,
+  post-expiry→grants, missing-player→no-throw) + `tests/qa/45-resonant-surge.spec.js`
+  (+5 — live fresh-status grant, no-spam-on-reapply, default-safe). Full unit
+  suite **1776** green; QA-07 weapons + QA-28 roster regression 25/25.
+
+---
+
 ## [6.206.0] - 2026-05-25
 
 ### Added — Overflow Discharge energy-synergy powerup (CD-04)

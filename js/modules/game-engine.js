@@ -3048,16 +3048,20 @@ export class GameEngine {
     // Phase 3 — BRN / STUN status procs. Called from collision-system.js
     // at the Arc Lightning + Lance Beam hit paths. Refresh-style; no
     // immunity gap on repeated stun (user requirement).
-    applyBurn(enemy, sourceDmg, durationMs) { return combat.applyBurn(enemy, sourceDmg, durationMs); }
+    // 6.207.0 — forward `this` so the applicators' player-context features
+    // (Resonant Surge energy grant, KINDLING status-spread, CONDUIT faster ticks)
+    // actually fire through the live hit-path. Without `.call(this, …)` these ran
+    // with `this` = the combat module (no `.player`) and silently no-op'd.
+    applyBurn(enemy, sourceDmg, durationMs) { return combat.applyBurn.call(this, enemy, sourceDmg, durationMs); }
     applyStun(enemy, durationMs) { return combat.applyStun(enemy, durationMs); }
     applySlow(enemy, durationMs, factor) { return combat.applySlow(enemy, durationMs, factor); }
     // E3 — extended elemental status applicators.
-    applyCorrode(enemy, durationMs, maxStacks) { return combat.applyCorrode(enemy, durationMs, maxStacks); }
-    applyChill(enemy, durationMs) { return combat.applyChill(enemy, durationMs); }
+    applyCorrode(enemy, durationMs, maxStacks) { return combat.applyCorrode.call(this, enemy, durationMs, maxStacks); }
+    applyChill(enemy, durationMs) { return combat.applyChill.call(this, enemy, durationMs); }
     applyFreeze(enemy, durationMs) { return combat.applyFreeze(enemy, durationMs); }
-    applyConduct(enemy, durationMs) { return combat.applyConduct(enemy, durationMs); }
+    applyConduct(enemy, durationMs) { return combat.applyConduct.call(this, enemy, durationMs); }
     applyOil(enemy, durationMs) { return combat.applyOil(enemy, durationMs); }
-    applyMark(enemy, durationMs) { return combat.applyMark(enemy, durationMs); }
+    applyMark(enemy, durationMs) { return combat.applyMark.call(this, enemy, durationMs); }
     applyBleed(enemy, sourceDmg, durationMs, maxStacks) { return combat.applyBleed(enemy, sourceDmg, durationMs, maxStacks); }
     // W6 — apply an ability attunement's element status to an enemy, reusing
     // the same per-element verb the weapon hit-path uses (Pyro burn, Cryo

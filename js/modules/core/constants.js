@@ -406,6 +406,15 @@ export const FLUX_PER_STACK = 0.15;
 export const FLUX_MAX_STACKS = 5;
 export const FLUX_WINDOW_MS = 4000;
 
+// RESONANT_SURGE (energy-synergy powerup) — while held, applying an elemental
+// status (burn / corrode / chill / conduct / mark) to an enemy that did NOT
+// already have that status active grants +RESONANT_SURGE_ENERGY power energy
+// (element builds fuel power builds). The grant fires only on a NEW application
+// — re-procs on an already-afflicted enemy do NOT grant, so spamming an element
+// onto one target can't farm energy. The gated grants live in the combat-manager
+// status applicators. DEFAULT-SAFE: 0 stacks → no grant, byte-for-byte unchanged.
+export const RESONANT_SURGE_ENERGY = 6;
+
 // RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
 // The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
 // accessor below returns today's values when no runConfig is set.

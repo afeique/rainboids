@@ -411,6 +411,30 @@ export const POWERUP_TYPES = {
         description: 'At full energy, your next power weapon is free and deals +40%',
     },
 
+    // RESONANT_SURGE (energy-synergy) — while held, applying an elemental status
+    // (burn / corrode / chill / conduct / mark) to an enemy that did NOT already
+    // have it active grants +6 power energy (element builds fuel power builds).
+    // The gated grants live in the combat-manager status applicators, fired only
+    // on a NEW application — re-procs on an already-afflicted enemy grant nothing.
+    // Gated on getPowerupStacks('RESONANT_SURGE') > 0 — DEFAULT-SAFE (no powerup →
+    // no grant, byte-for-byte unchanged).
+    RESONANT_SURGE: {
+        name: 'Resonant Surge',
+        displayName: 'Resonant Surge',
+        abbr: 'RSNS',
+        color: '#33ffcc',
+        gradientColors: ['#aaffee', '#11997a'],
+        icon: 'bolt',
+        duration: 30000,
+        effect: 'resonantSurge',
+        rarity: 0.10,
+        category: 'OFFENSE',
+        maxStacks: 1,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'Applying an elemental status grants +6 energy',
+    },
+
     // 6.16.0 — Dash post-burst i-frame extender. Every SHIFT dash
     // already grants a 1s post-burst invuln window (see Player._triggerDash
     // + progression.getPostDashIframeMs). Each stack here adds +2s,
