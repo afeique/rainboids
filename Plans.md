@@ -174,7 +174,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 | ID | FILES | DOES |
 |----|----|----|
 | ~~FB-1~~ ✅ | `hud/status.js` | **DONE 6.216.1** — auto-casts surfaced: new-cast edge-detect on `player._lastAssistCast` → pip flash (per-slot timer) + "↑ ABILITY" `_assistToast`. Additive, default-safe. 8 unit + 5 QA. |
-| FB-2 | ship render | *(optional)* **Auto-dodge cue** — subtle ship glow when `_assistDashAngle` drove the dash. **PATCH.** |
+| ~~FB-2~~ ✅ | `player/player.js`, `player/renderer.js` | **DONE 6.220.1** — `_coPilotDashActive` flagged on the assist-driven dash branch of `_triggerDash`; `renderer.drawCoPilotDashGlow` paints a pulsing cyan aura while `isDashing && _coPilotDashActive`. Serves desktop/gamepad Co-Pilot (mobile has the MB-2 haptic). Default-safe; +4 unit. |
 | ~~FB-3~~ ✅ | NEW `hud/death-cause.js`, `player/lifecycle.js`, `hud/overlays.js` | **DONE 6.219.0** — one-line death cause under the GAME OVER wave/time summary; `classifyDamageSource(opts.source)` stamps `player.lastDamageSource` on every lethal hit + snapshots at death; pure `deathCauseString` map (default-safe, never blames Co-Pilot). Collision sites already passed the source. 18 unit. |
 
 ### ∥group MB — Mobile wiring & polish *(three built modules are dead/never-imported; several polish items absent)*

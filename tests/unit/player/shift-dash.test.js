@@ -161,6 +161,50 @@ describe('Player._triggerDash — trigger contract', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests — FB-2 Co-Pilot auto-dodge cue flag
+// ---------------------------------------------------------------------------
+
+describe('Player._triggerDash — FB-2 _coPilotDashActive flag', () => {
+    let player;
+    let audio;
+
+    beforeEach(() => {
+        player = freshPlayer();
+        audio = makeAudio();
+    });
+
+    test('a Co-Pilot auto-dodge dash (_assistDashAngle) flags the cue', () => {
+        player._assistDashAngle = Math.PI / 4; // Co-Pilot decided this dodge
+        player._triggerDash(audio);
+        expect(player._coPilotDashActive).toBe(true);
+        // The assist angle is consumed by the trigger.
+        expect(player._assistDashAngle).toBeNull();
+    });
+
+    test('a manual key/aim dash does NOT flag the cue', () => {
+        player._triggerDash(audio); // no _assistDashAngle set
+        expect(player._coPilotDashActive).toBe(false);
+    });
+
+    test('a tap-directed dash does NOT flag the cue', () => {
+        player._triggerDash(audio, player.x + 120, player.y); // tap target
+        expect(player._coPilotDashActive).toBe(false);
+    });
+
+    test('a manual dash after a Co-Pilot dash clears the cue flag', () => {
+        player._assistDashAngle = 0;
+        player._triggerDash(audio);
+        expect(player._coPilotDashActive).toBe(true);
+        // Clear the burst + cooldown so a second dash can fire.
+        player.isDashing = false;
+        player.dashTimer = 0;
+        player.dashCooldown = 0;
+        player._triggerDash(audio); // manual this time
+        expect(player._coPilotDashActive).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Tests — kinematics and lifecycle
 // ---------------------------------------------------------------------------
 

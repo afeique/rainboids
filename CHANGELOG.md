@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.220.1] - 2026-05-26
+
+### Added — auto-dodge visual cue (mobile P7 · FB-2)
+
+- When the **AI Co-Pilot auto-dodges**, the ship now shows a subtle pulsing cyan
+  aura for the duration of the dash burst — making the automation legible for
+  desktop / gamepad Co-Pilot players, who (unlike mobile, which gets the MB-2
+  haptic) had no auto-dodge feedback. The cyan matches the FB-1 auto-cast toast
+  for a consistent "the Co-Pilot did this" colour.
+- `player._coPilotDashActive` is set only on the assist-driven dash branch in
+  `_triggerDash` (manual tap / key / gamepad dashes leave it false), and the
+  glow renders only while `isDashing && _coPilotDashActive`.
+
+Default-safe: manual dashes are unmarked and non-Co-Pilot play renders
+byte-for-byte as before. Tests: +4 unit (the cue-flag is set on a Co-Pilot dash,
+cleared on manual / tap dashes).
+
 ## [6.220.0] - 2026-05-26
 
 ### Added — touch-reachable Co-Pilot tuning (mobile P7 · AS-5)

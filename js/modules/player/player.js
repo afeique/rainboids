@@ -1529,6 +1529,13 @@ export class Player {
         if (this.dashCooldown > 0) return false;
 
         let angle;
+        // FB-2 — flag whether THIS dash was driven by the AI Co-Pilot's
+        // auto-dodge (the _assistDashAngle branch) rather than a manual tap /
+        // key / gamepad dash, so the ship can render a subtle cue for the
+        // duration of the burst. Reset each dash; set only on the assist path.
+        // (Mobile already gets a haptic pulse via MB-2; this serves desktop /
+        // gamepad Co-Pilot users who have no haptic feedback.)
+        this._coPilotDashActive = false;
         if (typeof targetWorldX === 'number' && typeof targetWorldY === 'number') {
             // Tap-directed dash: aim straight at the tap position.
             // Guard against a tap landing exactly on the ship (dist=0
@@ -1543,6 +1550,7 @@ export class Player {
         } else if (typeof this._assistDashAngle === 'number') {
             angle = this._assistDashAngle;
             this._assistDashAngle = null;
+            this._coPilotDashActive = true;
         } else if (typeof this._dashInputAngle === 'number') {
             angle = this._dashInputAngle;
             this._dashInputAngle = null;

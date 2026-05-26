@@ -76,6 +76,7 @@ export function draw(ctx) {
     drawMuzzleFlash.call(this, ctx, r, noseY);
     drawHitFlash.call(this, ctx, r);
     drawEnergyChargeGlow.call(this, ctx);
+    drawCoPilotDashGlow.call(this, ctx, r);
 
     if (this.levelUpAnimation && this.levelUpAnimation.active) {
         this.drawLevelUpEffects(ctx);
@@ -84,6 +85,32 @@ export function draw(ctx) {
     // Draw cooldown timer at ship tip
     this.drawCooldownTimer(ctx);
 
+    ctx.restore();
+}
+
+// ── FB-2: AI Co-Pilot auto-dodge cue ─────────────────────────────────
+// A subtle cyan aura around the hull while the ship is mid-dash on a
+// Co-Pilot-driven auto-dodge (player._coPilotDashActive, set in
+// _triggerDash's assist branch). Makes the automation legible for desktop
+// / gamepad Co-Pilot players, who — unlike mobile (MB-2 haptic) — get no
+// other auto-dodge feedback. Default-safe: renders only when BOTH the dash
+// burst is active AND it was Co-Pilot-driven, so manual dashes are unmarked
+// and non-Co-Pilot play is byte-for-byte unchanged. The cyan matches the
+// FB-1 auto-cast toast for a consistent "the Co-Pilot did this" colour.
+function drawCoPilotDashGlow(ctx, r) {
+    if (!this.isDashing || !this._coPilotDashActive) return;
+    const t = frameClock.now * 0.001;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 22);
+    const alpha = 0.22 + 0.16 * pulse;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(95, 208, 255, ${alpha})`;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(95, 208, 255, 0.9)';
+    ctx.shadowBlur = 10 + 6 * pulse;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.55, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
 }
 
