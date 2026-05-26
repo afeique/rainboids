@@ -1,7 +1,8 @@
-// Phase P6 — Twin Cast passive: power weapons fire twice (2nd at 50% damage)
-// for +30% energy cost. Pure helpers tested here; the firePower call site wires
-// the energy cost (both deduct paths) + re-dispatches the BURST powers once
-// more with a half-damage clone.
+// Phase P6 + §6c no-downsides rework — Twin Cast passive: power weapons fire
+// twice (2nd at 50% damage) for the NORMAL cost. The old +30% energy penalty was
+// removed in §6c; twinCastEnergyCost is now a no-op (TWIN_CAST_ENERGY_MULT = 1.0)
+// and the keystone is a pure double-fire upside. Pure helpers tested here; the
+// firePower call site re-dispatches the BURST powers once more with a half-clone.
 import { describe, expect, test } from '@jest/globals';
 import {
     twinCastDoubles,
@@ -12,10 +13,15 @@ import {
     TWIN_CAST_SECOND_MULT,
 } from '../../js/modules/player/weapons.js';
 
-describe('Twin Cast — energy cost', () => {
-    test('+30% with the passive', () => {
-        expect(twinCastEnergyCost(20, true)).toBeCloseTo(20 * TWIN_CAST_ENERGY_MULT, 5);
-        expect(TWIN_CAST_ENERGY_MULT).toBeCloseTo(1.3, 5);
+describe('Twin Cast — energy cost (§6c no-downsides: fires twice for normal cost)', () => {
+    test('the multiplier is 1.0 — the +30% penalty was removed in §6c', () => {
+        expect(TWIN_CAST_ENERGY_MULT).toBeCloseTo(1.0, 5);
+    });
+    test('twinCastEnergyCost is a no-op WITH the passive (normal cost)', () => {
+        // §6c: Twin Cast fires twice for the base cost, so the "has passive"
+        // path must return the base amount unchanged — no energy penalty.
+        expect(twinCastEnergyCost(20, true)).toBe(20);
+        expect(twinCastEnergyCost(13.5, true)).toBeCloseTo(13.5, 5);
     });
     test('unchanged without the passive', () => {
         expect(twinCastEnergyCost(20, false)).toBe(20);

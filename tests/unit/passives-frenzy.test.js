@@ -1,7 +1,9 @@
-// Phase P6 — Frenzy passive: +8% outgoing damage per enemy near the player,
-// capped at +80% (10 enemies). frenzyNearbyCount is the capped proximity count
-// (computed on-demand at applyDamageToEnemy); frenzyMult is the count→multiplier
-// curve. The +30% damage-taken downside is wired separately in lifecycle.
+// Phase P6 + §6c no-downsides rework — Frenzy passive: +8% outgoing damage per
+// enemy near the player, capped at +80% (10 enemies). frenzyNearbyCount is the
+// capped proximity count (computed on-demand at applyDamageToEnemy); frenzyMult
+// is the count→multiplier curve. §6c removed the old +30% damage-taken penalty,
+// so Frenzy is now a pure crowd-damage upside (no incoming-damage downside in
+// lifecycle anymore — see passives-no-downsides.test.js for that assertion).
 import { describe, expect, test } from '@jest/globals';
 import {
     frenzyNearbyCount,

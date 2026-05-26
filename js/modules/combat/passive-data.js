@@ -77,7 +77,7 @@ export const PASSIVES = {
     TWIN_CAST: {
         id: 'TWIN_CAST', name: 'Twin Cast', desc: 'Power weapons fire twice (2nd at 50%); abilities +1 charge',
         hooks: ['powerFire', 'abilityCast', 'energyCost'], tags: ['keystone', 'power'],
-        slot: true, item: true, itemTierMin: TRANS, stack: B, downside: 'Energy cost +30%',
+        slot: true, item: true, itemTierMin: TRANS, stack: B,
     },
     PRISMATIC_SOUL: {
         id: 'PRISMATIC_SOUL', name: 'Prismatic Soul', desc: 'Your shots auto-cycle all 6 elements',
@@ -194,7 +194,6 @@ export const PASSIVES = {
     HOARDERS_GREED: {
         id: 'HOARDERS_GREED', name: "Hoarder's Greed", desc: '+100% gold-find; gold orbs heal 1 HP',
         hooks: ['gold', 'drop', 'damageTaken'], tags: ['econ'], slot: true, item: false, stack: B,
-        downside: '+15% damage taken',
     },
 
     // ── Round-3 §10.1 — additional keystones (slot-only, build-defining, binary) ──
@@ -210,7 +209,6 @@ export const PASSIVES = {
     FRENZY: {
         id: 'FRENZY', name: 'Frenzy', desc: '+8% damage per nearby enemy (cap +80%)',
         hooks: ['damage', 'proximity'], tags: ['keystone', 'offense'], slot: true, item: false, stack: B,
-        downside: '+30% damage taken',
     },
     GRAVITY_WELL: {
         id: 'GRAVITY_WELL', name: 'Gravity Well', desc: 'A constant weak pull draws enemies toward your reticle, grouping them',

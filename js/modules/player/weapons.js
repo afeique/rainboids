@@ -336,9 +336,9 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
         const powerConfig = this.getActivePowerConfig();
         if (powerConfig.isChargeBased) {
             // CHARGE_SHOT — spend energy, then fire at a fixed full charge.
-            // P6 — Twin Cast: +30% energy cost (applied before Resonance so a
-            // free shot still wins). CHARGE_SHOT does not double-fire (charge
-            // mechanics) — noted as a Twin Cast follow-up.
+            // §6c — Twin Cast no longer adds an energy cost (twinCastEnergyCost
+            // is a no-op now); the branch stays for structural parity with the
+            // burst path. CHARGE_SHOT does not double-fire (charge mechanics).
             let _chargeCost = this.getPowerEnergyCost();
             if (typeof this.hasPassive === 'function' && this.hasPassive('TWIN_CAST')) {
                 _chargeCost = twinCastEnergyCost(_chargeCost, true);
@@ -1241,7 +1241,11 @@ export function resonanceStep(prevCount) {
 // scales every known damage field on a SHALLOW COPY (never mutate the shared
 // POWER_WEAPONS config returned by getActivePowerConfig). Pure helpers so the
 // cost curve + double-selection + half-clone unit-test cleanly.
-export const TWIN_CAST_ENERGY_MULT = 1.3;
+// §6c no-downsides rework — Twin Cast's +30% energy-cost penalty is gone. The
+// keystone now fires power weapons twice (2nd at 50%) for the NORMAL cost, so
+// the multiplier is 1.0 and twinCastEnergyCost is a no-op (the call sites stay
+// for structural clarity / future re-tuning, but never raise the cost now).
+export const TWIN_CAST_ENERGY_MULT = 1.0;
 export const TWIN_CAST_SECOND_MULT = 0.5;
 export const TWIN_CAST_DOUBLES = new Set([
     'NOVA_BLAST', 'MISSILE_SALVO', 'SINGULARITY', 'CRYO_BURST', 'ORBITAL_STRIKE', 'MINE_LAYER',
@@ -1288,8 +1292,9 @@ export function firePower(bulletPool, audioManager, particlePool) {
     // 6.29.0 — Spend energy. Callers gate on isPowerReady() (energy >=
     // cost) before reaching here, but deduct defensively in case a
     // future caller skips the gate.
-    // P6 — Twin Cast: +30% energy cost (it fires twice — see below). Applied
-    // before Resonance so a Resonance free shot still wins (cost → 0).
+    // §6c — Twin Cast no longer adds an energy cost (twinCastEnergyCost is a
+    // no-op now); it fires twice (see below) for the NORMAL cost. Resonance can
+    // still zero the cost on its 3rd-use free shot.
     let _powerCost = this.getPowerEnergyCost();
     if (typeof this.hasPassive === 'function' && this.hasPassive('TWIN_CAST')) {
         _powerCost = twinCastEnergyCost(_powerCost, true);
@@ -1387,8 +1392,8 @@ export function firePower(bulletPool, audioManager, particlePool) {
     }
 
     // P6 — Twin Cast: burst powers fire a 2nd time at 50% damage. No extra
-    // energy (the +30% was already applied above) and no extra cooldown (the
-    // 1st fire set it). Re-dispatches only the BURST powers (beam/buff/duration
+    // energy (§6c — Twin Cast fires twice for the normal cost) and no extra
+    // cooldown (the 1st fire set it). Re-dispatches only the BURST powers (beam/buff/duration
     // powers returned early or are buffs — a 2nd cast is meaningless). The
     // half-clone scales the active power's damage field without mutating the
     // shared config.

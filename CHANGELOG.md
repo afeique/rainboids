@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.208.0] - 2026-05-26
+
+### Changed — No-downsides passive rework, batch 1 (CD-02 · Balance §6c)
+
+- Begins the **no-downsides** direction (a keystone is defined by the build it
+  unlocks, not by an imposed penalty). Removed the penalties from 3 passives,
+  keeping each one's existing upside as its §6c anchor:
+  - **Hoarder's Greed** — dropped the **+15% damage taken** (`player/lifecycle.js`).
+    Now pure **+100% gold find**.
+  - **Frenzy** — dropped the **+30% damage taken** (`player/lifecycle.js`). Now
+    pure **+8% outgoing damage per nearby enemy** (the crowd-damage anchor).
+  - **Twin Cast** — dropped the **+30% energy cost** (`TWIN_CAST_ENERGY_MULT`
+    1.3 → 1.0, `player/weapons.js`). Power weapons still fire twice (2nd at 50%),
+    now for **normal cost**.
+- Removed those three `downside:` strings from `combat/passive-data.js` (8 of the
+  original 11 remain for later batches). The reactive difficulty director absorbs
+  the net power gain.
+- ⚠ **This is the start of a balance-defining rework.** Per the design doc's §7
+  sequencing, the full pass (the remaining 8 downsides + keystone re-anchors incl.
+  the Glass-Cannon/Berserker merge → "+40%→+90% as HP falls") and the subsequent
+  **enemy-HP re-tune + extremes playtest** are still to come.
+- Tests: `tests/unit/passives-no-downsides.test.js` (+8 — Frenzy/Hoarder's take
+  baseline incoming damage (no penalty) while their upsides hold; `twinCastEnergyCost`
+  is a no-op; the other 8 keystones still carry downsides) + updated
+  `passives-twin-cast` / `passives-frenzy` to the new design. Full unit suite
+  **1784** green; QA-07 weapons + QA-03 player regression 30/30.
+
+---
+
 ## [6.207.1] - 2026-05-26
 
 ### Fixed — Conduit no longer shortens non-DoT statuses (chill / freeze / conduct)

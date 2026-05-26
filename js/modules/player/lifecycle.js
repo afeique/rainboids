@@ -295,16 +295,11 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     const wave = (this.game && this.game.currentWave) ? (this.game.currentWave | 0) : 1;
     reducedDamage *= getMobileIncomingDamageMultiplier(wave);
 
-    // P6 — Hoarder's Greed downside: +15% damage taken (the +100% gold-find
-    // upside is in getGoldFindMultiplier).
-    if (this.player.hasPassive && this.player.hasPassive('HOARDERS_GREED')) {
-        reducedDamage *= 1.15;
-    }
-    // P6 — Frenzy downside: +30% damage taken (the +8%/nearby-enemy outgoing
-    // upside is in applyDamageToEnemy).
-    if (this.player.hasPassive && this.player.hasPassive('FRENZY')) {
-        reducedDamage *= 1.30;
-    }
+    // §6c no-downsides rework — Hoarder's Greed and Frenzy no longer increase
+    // incoming damage. Their upsides remain the keystone anchor: Hoarder's Greed
+    // = pure +100% gold-find (getGoldFindMultiplier); Frenzy = pure crowd damage
+    // (+8%/nearby-enemy outgoing, applied via frenzyMult in applyDamageToEnemy).
+    // No incoming-damage penalty is applied here for either passive.
 
     // BULWARK active-ability damage reduction (was applied inline at the
     // collision sites). IRON_WILL deepens it 50% → 65%.
