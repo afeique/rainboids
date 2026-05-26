@@ -1184,6 +1184,12 @@ export function sanguineHealAmount(maxHp, frac = SANGUINE_HEAL_FRAC) {
     if (!(maxHp > 0)) return 0;
     return maxHp * frac;
 }
+
+// CD-04 (T2) — Life-on-Kill powerup: small FLAT heal per enemy kill while held.
+// A powerup sibling of the Sanguine passive's % heal — kept flat (and small) so
+// the two stack sanely. onEnemyKill owns the per-kill trigger, gated on the
+// powerup being held (default-safe: no powerup → no heal).
+export const LIFE_ON_KILL_HEAL = 3;
 export function flowStateReduce(cooldowns, maxes, frac = FLOW_STATE_FRACTION) {
     if (!Array.isArray(cooldowns) || !Array.isArray(maxes)) return;
     for (let i = 0; i < cooldowns.length; i++) {
@@ -1228,6 +1234,15 @@ export function onEnemyKill(enemy) {
         const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
             ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
         this.player.gainHealth(sanguineHealAmount(maxHp));
+    }
+
+    // CD-04 (T2) — Life-on-Kill powerup: each enemy kill restores a small flat
+    // amount of HP. Routed through gainHealth so over-heal banks toward a spare
+    // tank (Bloodshield), just like Sanguine. Gated on the powerup being held so
+    // a non-holder does zero extra work here — default-safe.
+    if (this.player?.getPowerupStacks?.('LIFE_ON_KILL') > 0
+        && typeof this.player.gainHealth === 'function') {
+        this.player.gainHealth(LIFE_ON_KILL_HEAL);
     }
 
     // E8b — death flare (ASHEN_DETONATOR and any `deathFlare` enemy): bursts

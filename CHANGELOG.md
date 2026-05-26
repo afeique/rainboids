@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.202.0] - 2026-05-25
+
+### Added — Regenerator + Life-on-Kill sustain powerups (CD-04/08 · doc T2)
+
+- **Regenerator** (new powerup, `world/powerup.js`) — while held, raises the
+  effective-regen ceiling from **3.0 → 5.0 HP/s** (`getEffectiveRegen` cap is now
+  conditional on holding it, `player/progression.js`), letting heavy-regen builds
+  (REGEN powerup + the Regeneration SP stat + item affixes) climb past the normal
+  cap. (The doc's "in-combat +0.5/s" nuance is deferred — cap raise only.)
+- **Life on Kill** (new powerup) — each enemy **kill restores 3 HP**
+  (`LIFE_ON_KILL_HEAL`, gated in `combat-manager.js` `onEnemyKill` beside the
+  Sanguine/Bloodlust hooks), routed through `gainHealth` so over-heal banks toward
+  a tank / Bloodshield.
+- **Default-safe:** without the powerup, the regen cap stays 3.0 and kills heal
+  nothing — non-holders are byte-for-byte unchanged (both gated on
+  `getPowerupStacks(id) > 0`). The regen combat-gate logic is untouched.
+- Tests: `tests/unit/cd-sustain-powerups.test.js` (+7 — powerup entries,
+  `getEffectiveRegen` default-safe 3.0 cap vs boosted 5.0 cap) +
+  `tests/qa/40-sustain-powerups.spec.js` (+5 — Regenerator lets regen exceed 3 up
+  to 5, Life-on-Kill heals on kill, default-safe baselines). Full unit suite
+  **1735** green; QA-03 player regression 11/11.
+
+---
+
 ## [6.201.0] - 2026-05-25
 
 ### Added — Sanguine + Hemoglutton blood-sustain passives (CD-02/09 · doc T9)

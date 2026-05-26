@@ -412,6 +412,8 @@ export function getRangeMultiplier() {
 // trivial to wait out. Cap at 3.0 HP/s keeps regen a meaningful
 // recovery tool without turning the player into a tank.
 const REGEN_RATE_CAP = 3.0;
+// CD-04 (T2) — Regenerator powerup raises the ceiling to 5.0 HP/s while held.
+const REGEN_RATE_CAP_BOOSTED = 5.0;
 export function getEffectiveRegen() {
     let regen = 0;
     const stacks = this.getPowerupStacks ? this.getPowerupStacks('REGEN') : 0;
@@ -419,7 +421,11 @@ export function getEffectiveRegen() {
     regen += this.getItemAffixTotal('regen'); // 6.32.0 — item regen affixes
     regen += _passiveMod(this, 'regen');       // P2 — passive numeric mods
     regen += _spVal(this, 'REGENERATION');     // CD-08 — permanent SP regen stat (default-safe: 0 pts → 0)
-    return Math.min(REGEN_RATE_CAP, regen);
+    // CD-04 (T2) — Regenerator: while held, the cap rises 3.0 → 5.0 HP/s.
+    // Default-safe: without the powerup the cap is the existing 3.0.
+    const cap = (this.getPowerupStacks?.('REGENERATOR') > 0)
+        ? REGEN_RATE_CAP_BOOSTED : REGEN_RATE_CAP;
+    return Math.min(cap, regen);
 }
 
 export function getEffectiveShield() {

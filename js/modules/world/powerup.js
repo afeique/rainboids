@@ -271,6 +271,52 @@ export const POWERUP_TYPES = {
         description: '+0.5 HP/s out of combat (4s after hit)'
     },
 
+    // CD-04 (T2) — Regenerator. Raises the effective-regen ceiling from the
+    // base 3.0 HP/s cap to 5.0 HP/s while held, letting heavy-regen builds
+    // (REGEN stacks + the Regeneration SP stat + item regen affixes) climb
+    // past the normal cap. Read in progression.getEffectiveRegen as a gated
+    // ceiling — without the powerup the cap stays 3.0 (byte-for-byte default).
+    // The doc's "in-combat +0.5/s" nuance is DEFERRED; this ships the cap
+    // raise only and does not touch the regen combat-gate.
+    REGENERATOR: {
+        name: 'Regenerator',
+        displayName: 'Regenerator',
+        abbr: 'RGEN',
+        color: '#88ffbb',
+        gradientColors: ['#ccffdd', '#33aa77'],
+        icon: 'sparkle',
+        duration: 30000,
+        effect: 'regenerator',
+        rarity: 0.10,
+        category: 'DEFENSE',
+        maxStacks: 1,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'Raises your regen cap to 5 HP/s',
+    },
+
+    // CD-04 (T2) — Life-on-Kill. Heals a small flat amount per enemy kill
+    // while held — a powerup sibling of the Sanguine passive's % heal, kept
+    // flat (and small) so the two stack sanely. Routed through gainHealth in
+    // combat-manager.onEnemyKill so over-heal banks toward a spare tank.
+    // Gated on the powerup being held — default-safe (no powerup → no heal).
+    LIFE_ON_KILL: {
+        name: 'Life on Kill',
+        displayName: 'Life on Kill',
+        abbr: 'LOK',
+        color: '#ff5577',
+        gradientColors: ['#ff99aa', '#aa1133'],
+        icon: 'heart',
+        duration: 30000,
+        effect: 'lifeOnKill',
+        rarity: 0.10,
+        category: 'DEFENSE',
+        maxStacks: 1,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'Killing an enemy restores 3 HP',
+    },
+
     // 6.16.0 — Dash post-burst i-frame extender. Every SHIFT dash
     // already grants a 1s post-burst invuln window (see Player._triggerDash
     // + progression.getPostDashIframeMs). Each stack here adds +2s,
