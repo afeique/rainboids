@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.221.0] - 2026-05-26
+
+### Added — Smart-Cast best-pick logic (mobile P7 · AS-6)
+
+- New `pickSmartCast(situation, player, config, lastCast)` — the on-demand
+  Co-Pilot helper that returns the single best thing to cast **right now** (the
+  higher-scored of the best ready ability vs. the power weapon). Unlike the
+  autonomous `act()` loop it evaluates **with auto-cast forced on**, so a manual
+  Smart-Cast works even when the Co-Pilot's automatic casting is off (e.g. at
+  MANUAL level).
+- `AssistSystem.smartCast(input)` applies that pick to the shared input exactly
+  as `act()` does (ability → slot activation; power → aim + secondary-fire),
+  reading the most-recent sensed situation + the live player.
+
+Pure + side-effect-free best-pick (5 new unit tests covering heal-vs-power
+selection, the toggle-override, the empty case, and higher-score tie-break). The
+**Smart-Cast HUD button that calls `smartCast()` is the device-gated UI piece**
+(default-hidden, placement/feel wants real-device validation) — deferred. No
+behavior change until a button is wired.
+
 ## [6.220.1] - 2026-05-26
 
 ### Added — auto-dodge visual cue (mobile P7 · FB-2)

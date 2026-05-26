@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals';
-import { DEFAULT_ASSIST_CONFIG, decideCast, decideDodge, decidePower, senseSituation, senseThreats } from '../../js/modules/assist/assist-system.js';
+import { DEFAULT_ASSIST_CONFIG, decideCast, decideDodge, decidePower, pickSmartCast, senseSituation, senseThreats } from '../../js/modules/assist/assist-system.js';
 
 function player(overrides = {}) {
     return {
@@ -62,6 +62,69 @@ describe('Assist System', () => {
         });
         const dodge = decideDodge(situation, DEFAULT_ASSIST_CONFIG);
         expect(dodge).toMatchObject({ type: 'dash' });
+    });
+});
+
+describe('AS-6 — pickSmartCast (on-demand best pick)', () => {
+    const smartPlayer = (overrides = {}) => player({
+        equippedAbilities: ['FIELD_MEDIC'],
+        abilityCooldowns: [0],
+        activePower: 'SINGULARITY',
+        isPowerReady: () => true,
+        ...overrides,
+    });
+
+    test('picks a ready heal ability when HP is low and no power is available', () => {
+        const situation = senseSituation({ player: player({ health: 25 }), enemies: [], bullets: [], threatLevel: 2, now: 1000 });
+        const p = smartPlayer({ health: 25, activePower: null });
+        expect(pickSmartCast(situation, p, DEFAULT_ASSIST_CONFIG, {})).toMatchObject({ type: 'ability', id: 'FIELD_MEDIC' });
+    });
+
+    test('picks the power when it is the only candidate against a crowd', () => {
+        const situation = senseSituation({
+            player: player({ health: 90 }),
+            enemies: [
+                { active: true, x: 120, y: 100 }, { active: true, x: 130, y: 105 },
+                { active: true, x: 140, y: 110 }, { active: true, x: 150, y: 115 },
+            ],
+            bullets: [], threatLevel: 3, now: 1000,
+        });
+        const p = smartPlayer({ health: 90, equippedAbilities: [], abilityCooldowns: [] });
+        expect(pickSmartCast(situation, p, DEFAULT_ASSIST_CONFIG, {})).toMatchObject({ type: 'power', id: 'SINGULARITY' });
+    });
+
+    test('evaluates even when the auto-cast toggles are OFF (manual override)', () => {
+        const situation = senseSituation({ player: player({ health: 25 }), enemies: [], bullets: [], threatLevel: 2, now: 1000 });
+        const p = smartPlayer({ health: 25, activePower: null });
+        const offConfig = { ...DEFAULT_ASSIST_CONFIG, autoCastAbilities: false, autoCastPower: false };
+        // Plain decideCast short-circuits on autoCastAbilities:false; pickSmartCast forces it on.
+        expect(decideCast(situation, p.equippedAbilities, p.abilityCooldowns, offConfig, {})).toBeNull();
+        expect(pickSmartCast(situation, p, offConfig, {})).toMatchObject({ type: 'ability', id: 'FIELD_MEDIC' });
+    });
+
+    test('returns null when nothing is worth casting', () => {
+        const situation = senseSituation({ player: player({ health: 100 }), enemies: [], bullets: [], threatLevel: 0, now: 1000 });
+        const p = smartPlayer({ health: 100, equippedAbilities: [], abilityCooldowns: [], activePower: null, isPowerReady: () => false });
+        expect(pickSmartCast(situation, p, DEFAULT_ASSIST_CONFIG, {})).toBeNull();
+    });
+
+    test('returns the higher-scored option when both an ability and a power qualify', () => {
+        const situation = senseSituation({
+            player: player({ health: 25 }),
+            enemies: [
+                { active: true, x: 120, y: 100 }, { active: true, x: 130, y: 105 },
+                { active: true, x: 140, y: 110 }, { active: true, x: 150, y: 115 },
+            ],
+            bullets: [], threatLevel: 3, now: 1000,
+        });
+        const p = smartPlayer({ health: 25 });
+        const forced = { ...DEFAULT_ASSIST_CONFIG, autoCastAbilities: true, autoCastPower: true };
+        const ability = decideCast(situation, p.equippedAbilities, p.abilityCooldowns, forced, {});
+        const power = decidePower(situation, p.activePower, true, forced, {});
+        const pick = pickSmartCast(situation, p, DEFAULT_ASSIST_CONFIG, {});
+        expect(pick).not.toBeNull();
+        const bestScore = Math.max(ability ? ability.score : -Infinity, power ? power.score : -Infinity);
+        expect(pick.score).toBeCloseTo(bestScore, 5);
     });
 });
 

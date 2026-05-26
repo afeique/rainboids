@@ -161,6 +161,23 @@ export function decidePower(situation, powerId, ready, config = DEFAULT_ASSIST_C
     };
 }
 
+// AS-6 — Smart-Cast: pick the single best thing to cast RIGHT NOW (the higher-
+// scored of the best ready ability vs. the power weapon) for an on-demand
+// manual trigger. Unlike the autonomous act() loop, this evaluates both
+// pipelines with auto-cast FORCED ON (the player explicitly asked), so it works
+// even when the Co-Pilot's automatic casting is off (e.g. MANUAL level). Pure:
+// returns the decideCast/decidePower pick object ({type:'ability'|'power',...})
+// or null when nothing is worth casting. No side effects.
+export function pickSmartCast(situation, player, config = DEFAULT_ASSIST_CONFIG, lastCast = {}) {
+    if (!situation || !player) return null;
+    const evalCfg = { ...config, autoCastAbilities: true, autoCastPower: true };
+    const ability = decideCast(situation, player.equippedAbilities, player.abilityCooldowns, evalCfg, lastCast);
+    const ready = typeof player.isPowerReady === 'function' && player.isPowerReady();
+    const power = decidePower(situation, player.activePower, ready, evalCfg, lastCast);
+    if (ability && power) return ability.score >= power.score ? ability : power;
+    return ability || power || null;
+}
+
 export function scoreDodgeDestinations(situation) {
     const player = situation.player || {};
     const px = player.x || 0, py = player.y || 0;
@@ -267,5 +284,34 @@ export class AssistSystem {
             return cast;
         }
         return power || dodge;
+    }
+
+    // AS-6 — apply an on-demand Smart-Cast to the shared input. Evaluates
+    // pickSmartCast against the most-recent sensed situation (act() refreshes
+    // this.lastSituation every frame) and the live player, then writes the
+    // chosen ability/power into `input` exactly as act() does. Returns the pick
+    // (or null). A future Smart-Cast HUD button (default hidden) calls this on
+    // press; it works regardless of the Co-Pilot's auto-cast toggles.
+    smartCast(input) {
+        const situation = this.lastSituation;
+        const player = this.engine && this.engine.player;
+        if (!situation || !input || !player) return null;
+        const pick = pickSmartCast(situation, player, this.config, this.lastCast);
+        if (!pick) return null;
+        const now = situation.now || Date.now();
+        if (pick.type === 'power') {
+            if (pick.target && typeof pick.target.x === 'number') {
+                input.aimX = pick.target.x;
+                input.aimY = pick.target.y;
+            }
+            input.fireSecondary = true;
+            this.lastCast.powerAt = now;
+        } else if (pick.type === 'ability') {
+            input.activateAbilitySlot = input.activateAbilitySlot || [false, false, false, false];
+            input.activateAbilitySlot[pick.slot] = true;
+            player._lastAssistCast = { id: pick.id, slot: pick.slot, t: now };
+            this.lastCast.bigCastAt = now;
+        }
+        return pick;
     }
 }
