@@ -1,11 +1,14 @@
 // Mobile first-run tutorial overlay.
 //
 // A self-contained, opt-in overlay that briefly teaches a mobile player the
-// three things the mobile mode does differently from a desktop session:
-//   * Tap-to-shoot (target selection by touch)
-//   * Auto-pilot dodging (the ship handles immediate-threat evasion)
-//   * Long-press radial menu (weapon switching)
-//   * Power weapons auto-fire when charged
+// one-thumb + AI Co-Pilot control model. Copy updated (MB-3) for the
+// re-baselined controls — the old "tap to shoot / long-press for weapons"
+// model is gone (aim + fire are forced-automatic on mobile; the player's
+// job is purely dodging):
+//   * Drag-to-steer (virtual analog stick — ship follows the thumb)
+//   * Tap-to-dash (directed dash toward the tapped point)
+//   * AI Co-Pilot handles aiming + firing
+//   * Abilities + power weapons auto-cast when ready
 //
 // The overlay is built entirely in JS — no CSS file edits, no index.html
 // edits — so it can be added as a self-contained module without touching
@@ -31,10 +34,10 @@ const DISMISS_BUTTON_ID = 'mobile-tutorial-dismiss';
 // The four instructional items shown on the overlay. Order matches the
 // priority of what a fresh mobile player needs to learn first.
 const TUTORIAL_ITEMS = [
-    { icon: '🎯', text: 'Tap enemies and asteroids to shoot at them' },
-    { icon: '🤖', text: 'Your ship auto-dodges nearby threats' },
-    { icon: '⚡', text: 'Long-press anywhere to change weapons' },
-    { icon: '🔋', text: 'Power weapons auto-fire when charged' },
+    { icon: '🕹️', text: 'Drag to steer — your ship follows your thumb' },
+    { icon: '👆', text: 'Tap anywhere to dash toward that spot' },
+    { icon: '🤖', text: 'Your Co-Pilot aims and fires — just focus on dodging' },
+    { icon: '⚡', text: 'Abilities & power weapons auto-cast when ready' },
 ];
 
 // CSS injected into <head>. Kept as a single template literal so the

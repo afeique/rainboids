@@ -8,6 +8,7 @@ import { VERSION } from './modules/core/version.js';
 import { isMobile as _isMobilePlatform } from './modules/platform/platform-detect.js';
 import { buildStaticDom } from './modules/ui/static-dom.js';
 import { applyFonts } from './modules/ui/font-settings.js';
+import { mountMobileTutorial } from './modules/ui/mobile-tutorial.js';
 
 // 5.91.0 — Rainboids now supports a full mobile-mode overhaul (auto-
 // pilot + tap-to-shoot + long-press weapon radial). The desktop-only
@@ -326,6 +327,12 @@ class RainboidsGame {
     start() {
         this.gameEngine.start();
         window.gameEngine = this.gameEngine;
+        // MB-3 — first-run mobile tutorial. Mounted once the title screen is
+        // up; mountMobileTutorial() self-gates on isMobile() + the "seen"
+        // localStorage flag, so desktop and repeat-visit mobile players never
+        // see it. The overlay sits over the title and is dismissed with one
+        // tap (which also primes the audio-unlock gesture).
+        mountMobileTutorial();
     }
 }
 

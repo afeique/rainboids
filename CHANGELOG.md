@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.216.4] - 2026-05-26
+
+### Added — first-run mobile tutorial card (mobile P7 · MB-3)
+
+- The **mobile first-run tutorial** is now wired into the boot path. The
+  built-but-unimported `ui/mobile-tutorial.js` overlay mounts once the title
+  screen is up (`mountMobileTutorial()` in `main.js`'s `start()`); it self-gates
+  on `isMobile()` + a `localStorage` "seen" flag, so desktop and repeat-visit
+  mobile players never see it. One tap on **"Got it!"** dismisses it (and primes
+  the audio-unlock gesture).
+
+### Changed
+
+- **Tutorial copy rewritten** for the re-baselined one-thumb + AI Co-Pilot
+  controls. The old card taught the retired model ("tap to shoot", "long-press
+  for weapons"); it now teaches the real model: **drag to steer**, **tap to
+  dash** toward a spot, the **Co-Pilot aims & fires** (player just dodges), and
+  **abilities/power weapons auto-cast**.
+
+Default-safe: desktop boot is byte-for-byte unchanged (mount no-ops off-mobile).
+Covered by the existing `mobile-tutorial` unit suite (14/14) + QA load (12/12,
+no fatal JS errors).
+
 ## [6.216.3] - 2026-05-26
 
 ### Added — screen wake lock during play (mobile P7 · MB-1)
