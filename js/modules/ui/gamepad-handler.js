@@ -27,6 +27,7 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { ACTIONS, GAMEPAD_BUTTON, GAMEPAD_LAYOUTS, createGamepadBindingState } from './bindings.js';
+import { GamepadFocusController } from './gamepad-focus.js';
 
 const MOVE_DEADZONE = 0.22;     // radial deadzone for the left (move) stick
 const AIM_DEADZONE = 0.28;      // radial deadzone for the right (aim) stick
@@ -71,6 +72,15 @@ export class GamepadHandler {
         // GP-2 — L3 (TOGGLE_AUTO_AIM) is a rising-edge toggle; R3 (LOCK_ON) is
         // a held modifier read each frame (no edge state needed).
         this._prevToggleAutoAim = false;
+        // GP-1 — pad-driven menu navigation. A lazily-created focus controller
+        // points at whichever overlay is open (v1: the pause overlay); the
+        // up/down/confirm/cancel intents are rising-edge.
+        this._menuFocus = null;
+        this._menuRoot = null;
+        this._prevNavUp = false;
+        this._prevNavDown = false;
+        this._prevConfirm = false;
+        this._prevCancel = false;
         // U3 — D-pad tab cycling while the BUILD/shop tree is open.
         this._prevTabPrev = false;
         this._prevTabNext = false;
@@ -201,6 +211,43 @@ export class GamepadHandler {
             this._prevTabNext = tNext;
         }
 
+        // GP-1 — pad-navigate an open menu (v1: the pause overlay). When a
+        // navigable overlay is up, the left stick / D-pad up-down move a focus
+        // marker through its controls (auto-discovered by the focus
+        // controller), A activates the focused control, B backs out (resume).
+        // This owns the frame while a menu is open, so radials don't co-fire.
+        const menuRoot = this._activeMenuRoot();
+        if (menuRoot) {
+            if (!this._menuFocus) this._menuFocus = new GamepadFocusController(null, { wrap: true });
+            if (this._menuRoot !== menuRoot) {
+                this._menuFocus.setRoot(menuRoot);
+                this._menuRoot = menuRoot;
+                this._menuFocus.focusFirst();
+            }
+            const axes = gp.axes || [];
+            const ly = axes.length > 1 ? axes[1] : 0;
+            const navUp = ly < -0.5 || this._pressed(gp, BTN_DPAD_UP);
+            const navDown = ly > 0.5 || this._pressed(gp, BTN_DPAD_DOWN);
+            if (navUp && !this._prevNavUp) this._menuFocus.handleAction('up');
+            if (navDown && !this._prevNavDown) this._menuFocus.handleAction('down');
+            this._prevNavUp = navUp;
+            this._prevNavDown = navDown;
+            const confirm = this._pressed(gp, BTN_CROSS);
+            if (confirm && !this._prevConfirm) this._menuFocus.handleAction('confirm');
+            this._prevConfirm = confirm;
+            const cancel = this._pressed(gp, BTN_CIRCLE);
+            if (cancel && !this._prevCancel && typeof this.engine.togglePause === 'function') {
+                this.engine.togglePause(); // B = back = resume
+            }
+            this._prevCancel = cancel;
+            return; // menu nav owns the frame
+        } else if (this._menuRoot) {
+            // Overlay closed — drop the focus marker + edge state.
+            if (this._menuFocus) this._menuFocus.clear();
+            this._menuRoot = null;
+            this._prevNavUp = this._prevNavDown = this._prevConfirm = this._prevCancel = false;
+        }
+
         // Weapon radials — hold a bumper / Triangle to open, sticks pick the
         // slice, release commits (or cancels in the dead zone).
         const radial = this.engine.radialMenu;
@@ -258,10 +305,27 @@ export class GamepadHandler {
         }
     }
 
+    // GP-1 — the DOM root of the currently-open, pad-navigable overlay, or
+    // null. v1 covers the pause overlay; later increments extend this to the
+    // shop / armory / settings / wave-pick / inventory overlays.
+    _activeMenuRoot() {
+        const eng = this.engine;
+        if (!eng || !eng.game || eng.game.state !== GAME_STATES.PAUSED) return null;
+        const el = eng.uiManager && eng.uiManager.elements && eng.uiManager.elements.pauseOverlay;
+        return (el && el.style && el.style.display === 'flex') ? el : null;
+    }
+
     _resetFrameState() {
         this._prevPause = false;
         this._prevTabPrev = false;
         this._prevTabNext = false;
+        // GP-1 — drop any menu focus marker + nav edge state on scheme/pad loss.
+        if (this._menuFocus) this._menuFocus.clear();
+        this._menuRoot = null;
+        this._prevNavUp = false;
+        this._prevNavDown = false;
+        this._prevConfirm = false;
+        this._prevCancel = false;
         // If a gamepad-opened radial is still up when we lose the scheme/pad,
         // close it cleanly so it doesn't strand the frozen gameplay loop.
         if (this._heldRadial && this.engine && this.engine.radialMenu && this.engine.radialMenu.isOpen()) {

@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.223.0] - 2026-05-26
+
+### Added — pad-navigable pause menu (GP-1, v1)
+
+- **The pause overlay is now fully operable with a gamepad** — no mouse needed.
+  The built-but-undriven `GamepadFocusController` is now driven from
+  `gamepad-handler.js`'s `pollFrame`: while the pause menu is open, the left
+  stick / D-pad up–down move a focus marker through its controls (auto-
+  discovered — tabs and buttons are all reachable), **A** activates the focused
+  control, and **B** backs out (resume). All intents are rising-edge.
+
+This is the first increment of GP-1; later increments extend the same routing to
+the shop / armory / settings / run-setup / wave-pick / inventory overlays (it's
+gated behind a single `_activeMenuRoot()` lookup). Default-safe: only runs on the
+gamepad scheme with a pad connected, and only while a navigable overlay is open —
+mouse/keyboard/touch play is byte-for-byte unchanged. Tests: +8 unit
+(`GamepadFocusController`, previously untested) + 6 unit (the `pollFrame`
+menu-nav routing — move / activate / resume / pause-gated / analog-stick nav),
+all in jsdom. Full unit suite 1906 green.
+
 ## [6.222.0] - 2026-05-26
 
 ### Added — gamepad L3 / R3 bindings now functional (GP-2)
