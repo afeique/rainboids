@@ -415,6 +415,22 @@ export const FLUX_WINDOW_MS = 4000;
 // status applicators. DEFAULT-SAFE: 0 stacks → no grant, byte-for-byte unchanged.
 export const RESONANT_SURGE_ENERGY = 6;
 
+// CAPACITOR_BANK (energy keystone passive) — while held, the energy meter can
+// OVERCHARGE past the normal effective cap (getEffectiveMaxEnergy), up to
+// CAPACITOR_BANK_OVERCHARGE_MULT× that cap (the portion above 100% is the
+// "overcharge"). The overcharge bleeds off at CAPACITOR_BANK_DECAY_PER_SEC
+// energy/s back DOWN toward the normal cap (it never decays below the normal
+// cap — normal regen owns the 0..100% zone). Power weapons fired while above
+// the normal cap deal +CAPACITOR_BANK_DMG_BONUS damage. DEFAULT-SAFE: without
+// the passive the energy cap is exactly getEffectiveMaxEnergy(), no decay, no
+// boost — the meter behaves byte-for-byte as before.
+//   - CAPACITOR_BANK_OVERCHARGE_MULT: max-energy multiplier while held (1.5 = 150%).
+//   - CAPACITOR_BANK_DECAY_PER_SEC: flat overcharge bleed-off rate (energy/s).
+//   - CAPACITOR_BANK_DMG_BONUS: power-damage multiplier while overcharged (1.25 = +25%).
+export const CAPACITOR_BANK_OVERCHARGE_MULT = 1.5;
+export const CAPACITOR_BANK_DECAY_PER_SEC = 8;
+export const CAPACITOR_BANK_DMG_BONUS = 1.25;
+
 // RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
 // The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
 // accessor below returns today's values when no runConfig is set.

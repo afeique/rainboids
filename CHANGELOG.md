@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.214.0] - 2026-05-26
+
+### Added — Capacitor Bank passive: energy overcharge (CD-02 · energy axis)
+
+- **Capacitor Bank** (new energy keystone, `combat/passive-data.js`) — while
+  equipped, the energy meter can **overcharge to 150%** of its effective max; the
+  overcharge **decays** (~8/s back toward the normal cap) but **power weapons
+  fired while overcharged deal +25%**. A burst-timing energy keystone — bank
+  above full, then dump it for amplified power shots.
+- Wired through the energy system: `getEnergyOverchargeCap()` (`progression.js`,
+  ×1.5 with the passive) raises the regen + `addEnergy` clamps; a pure
+  `capacitorBankDecayStep` bleeds the excess in `player.update`; the +25% applies
+  in `firePower` / the CHARGE_SHOT path when energy is above the normal max at
+  cast (captured before the spend, mirroring Overflow Discharge). Charge-bar
+  display stays clamped to 100%. Constants in `core/constants.js`.
+- **Default-safe:** without the passive, `getEnergyOverchargeCap()` equals
+  `getEffectiveMaxEnergy()` (clamps byte-for-byte unchanged), no decay, no boost,
+  charge bar unchanged.
+- Tests: `tests/unit/cd-capacitor-bank.test.js` (+9 — cap ×1.5/×1, decay
+  bleed/floor/no-op, entry) + `tests/qa/48-capacitor-bank.spec.js` (+4 —
+  overcharge allowed ≤1.5× + ×1.25 power, decay toward normal, default-safe).
+  Full unit suite **1811** green; QA-36 energy + QA-07 weapons regression 24/24.
+
+---
+
 ## [6.213.0] - 2026-05-26
 
 ### Added — Apex Predator keystone + the no-downsides passive rework is complete (CD-02 · §6c)

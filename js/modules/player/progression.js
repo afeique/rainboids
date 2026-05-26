@@ -21,7 +21,7 @@ export function levelUp() { return false; }
 // and `spStats` live on the player but are saved to localStorage so they
 // carry between runs.
 import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-stats.js';
-import { EFFICIENCY_CAP, FLUX_PER_STACK } from '../core/constants.js';
+import { EFFICIENCY_CAP, FLUX_PER_STACK, CAPACITOR_BANK_OVERCHARGE_MULT, CAPACITOR_BANK_DECAY_PER_SEC } from '../core/constants.js';
 import { loadMeta, saveMeta } from '../core/storage.js';
 import { frameClock } from '../core/frame-clock.js';
 import { playerChillSpeedMult } from './player-status.js';
@@ -547,6 +547,30 @@ export function getEffectiveMaxEnergy() {
     const base = (this.maxEnergy || 100) + _spVal(this, 'CAPACITOR');
     const overflow = (typeof this.hasPassive === 'function' && this.hasPassive('OVERFLOW_CAPACITOR')) ? 1.5 : 1;
     return base * overflow;
+}
+
+// CAPACITOR_BANK — the energy CLAMP ceiling. While the passive is held the meter
+// may OVERCHARGE up to CAPACITOR_BANK_OVERCHARGE_MULT× the normal effective cap
+// (the portion above getEffectiveMaxEnergy() is the "overcharge"). Used at every
+// energy clamp site (regen clamp + addEnergy clamp in player.js). DEFAULT-SAFE:
+// without the passive this returns exactly getEffectiveMaxEnergy() — the clamp is
+// byte-for-byte the normal cap and the meter can never bank past 100%.
+export function getEnergyOverchargeCap() {
+    const cap = this.getEffectiveMaxEnergy();
+    const held = (typeof this.hasPassive === 'function' && this.hasPassive('CAPACITOR_BANK'));
+    return held ? cap * CAPACITOR_BANK_OVERCHARGE_MULT : cap;
+}
+
+// CAPACITOR_BANK — pure overcharge decay step. The portion of `energy` ABOVE
+// `normalMax` (the normal effective cap) bleeds off at CAPACITOR_BANK_DECAY_PER_SEC
+// per second, FLOORED at normalMax (it never decays below the normal cap — the
+// 0..100% zone is owned by regen). Returns the new energy value. Pure (no `this`)
+// so it's unit-testable in isolation. Below the cap (or at/under it) → returned
+// unchanged (no work).
+export function capacitorBankDecayStep(energy, normalMax, dtMs) {
+    if (!(energy > normalMax) || !(dtMs > 0)) return energy;
+    const decayed = energy - CAPACITOR_BANK_DECAY_PER_SEC * dtMs / 1000;
+    return Math.max(normalMax, decayed);
 }
 
 // REACTOR — multiplier on the per-frame regen increment. 0 pts → 1.

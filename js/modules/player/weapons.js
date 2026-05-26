@@ -1,7 +1,7 @@
 // Player weapon system — extracted from Player class
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
-import { GAME_CONFIG, FLUX_MAX_STACKS } from '../core/constants.js';
+import { GAME_CONFIG, FLUX_MAX_STACKS, CAPACITOR_BANK_DMG_BONUS } from '../core/constants.js';
 import { frameClock } from '../core/frame-clock.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity, attunementElements } from '../combat/weapon-data.js';
 import { resolveBulletElements } from '../combat/elements.js';
@@ -324,6 +324,11 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
     // CD: charge% reads the CAPACITOR-boosted cap so it agrees with the regen
     // clamp + the addEnergy clamp. Default-safe: 0 SP → maxEnergy (100). The
     // typeof guard keeps non-Player stubs (unit tests) working off raw maxEnergy.
+    // CAPACITOR_BANK: maxE is the NORMAL effective cap (not the overcharge cap),
+    // so when energy OVERCHARGES past it the raw ratio exceeds 1 — Math.min(1, …)
+    // clamps chargeLevel to 1.0 so the charge bar/glow never overflows, and
+    // isFullyCharged stays true (full-and-beyond is still fully charged). The
+    // underlying `energy` is left honest for the overcharge logic.
     const maxE = (typeof this.getEffectiveMaxEnergy === 'function')
         ? this.getEffectiveMaxEnergy()
         : (this.maxEnergy || 100);
@@ -340,6 +345,13 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
             // is a no-op now); the branch stays for structural parity with the
             // burst path. CHARGE_SHOT does not double-fire (charge mechanics).
             let _chargeCost = this.getPowerEnergyCost();
+            // CAPACITOR_BANK — capture whether energy is OVERCHARGED (above the
+            // normal effective cap) *before* the spend, mirroring firePower's
+            // _cbOver. A charge shot fired while overcharged deals +25% (applied
+            // inside fireChargedShot). Default-safe: no passive or not overcharged
+            // → false → no boost.
+            const _cbOver = (typeof this.hasPassive === 'function' && this.hasPassive('CAPACITOR_BANK'))
+                && (this.energy || 0) > this.getEffectiveMaxEnergy();
             if (typeof this.hasPassive === 'function' && this.hasPassive('TWIN_CAST')) {
                 _chargeCost = twinCastEnergyCost(_chargeCost, true);
             }
@@ -367,7 +379,7 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
             }
             this.chargeStartTime = now - this.maxChargeTime; // force a full-charge shot
             this.pausedChargeTime = 0;
-            this.fireChargedShot(bulletPool, audioManager);
+            this.fireChargedShot(bulletPool, audioManager, _cbOver);
             // Short anti-spam floor so a held button can't dump the whole
             // meter in consecutive frames; the energy cost is the real gate.
             this.powerCooldown = 400;
@@ -1290,6 +1302,14 @@ export function firePower(bulletPool, audioManager, particlePool) {
     // consulted below when the powerup is held.
     const _odFull = (this.energy || 0) >= this.getEffectiveMaxEnergy() * 0.999;
 
+    // CAPACITOR_BANK — capture whether energy is OVERCHARGED (above the normal
+    // effective cap) *before* any cost is deducted, mirroring _odFull. A power
+    // fired while overcharged gets +25% damage (applied to `config` below).
+    // Default-safe: only consulted below when the passive is held; without it
+    // _cbOver is unused and no boost applies.
+    const _cbOver = (typeof this.hasPassive === 'function' && this.hasPassive('CAPACITOR_BANK'))
+        && (this.energy || 0) > this.getEffectiveMaxEnergy();
+
     // 6.29.0 — Spend energy. Callers gate on isPowerReady() (energy >=
     // cost) before reaching here, but deduct defensively in case a
     // future caller skips the gate.
@@ -1340,6 +1360,14 @@ export function firePower(bulletPool, audioManager, particlePool) {
     // half-clone (below) derives from `config` too, so the echo inherits the boost
     // — sane composition, no double-free (the cost was already zeroed once).
     if (_odBoost) config = boostPowerDamage(config, 1.40);
+
+    // CAPACITOR_BANK — apply the +25% overcharge power-damage boost by
+    // reassigning `config` to a boosted clone BEFORE the dispatch. Composes
+    // with the Overflow-Discharge boost (both reclone via boostPowerDamage,
+    // shallow copy, never mutating the shared config). Twin Cast's half-clone
+    // derives from `config` too, so the echo inherits the boost. Default-safe:
+    // not held or not overcharged → _cbOver false → config unchanged.
+    if (_cbOver) config = boostPowerDamage(config, CAPACITOR_BANK_DMG_BONUS);
 
     switch (this.activePower) {
         case 'MINE_LAYER':
@@ -1964,7 +1992,7 @@ export function getHitStreakMultiplier() {
 
 // ── Charged shot firing ────────────────────────────────────────────────────
 
-export function fireChargedShot(bulletPool, audioManager) {
+export function fireChargedShot(bulletPool, audioManager, capacitorOvercharged = false) {
     const rawChargeTime = (Date.now() - this.chargeStartTime) + this.pausedChargeTime;
 
     // Apply charge speed upgrades
@@ -1989,7 +2017,10 @@ export function fireChargedShot(bulletPool, audioManager) {
     const sizeMultiplier = 1 + (chargeTime / 1000) * 0.4;     // unchanged — visual feel
     const speedMultiplier = 1 + (chargeTime / 1000) * 0.2;    // unchanged
     const damageBonus = (chargeTime / 1000) * 0.6;            // +0.6/sec (was +1.2) → ~3 at 5s
-    const totalDamage = baseDamage + damageBonus;
+    // CAPACITOR_BANK — a charge shot fired while OVERCHARGED deals +25%. The
+    // overcharged state was captured before the energy spend (updatePowerCharge).
+    // Default-safe: flag false (no passive / not overcharged) → ×1, unchanged.
+    const totalDamage = (baseDamage + damageBonus) * (capacitorOvercharged ? CAPACITOR_BANK_DMG_BONUS : 1);
     const critChanceBonus = (chargeTime / 1000) * 0.04;       // +4%/sec (was +8%), max 20% at 5s
 
     // Calculate charge-based homing strength (base homing from charge time)

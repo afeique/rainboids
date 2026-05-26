@@ -97,6 +97,19 @@ export const PASSIVES = {
         hooks: ['energyRegen', 'maxEnergy'], tags: ['keystone', 'energy'],
         slot: true, item: true, itemTierMin: TRANS, stack: B,
     },
+    CAPACITOR_BANK: {
+        // Energy keystone — the meter can OVERCHARGE past the normal cap (up to
+        // 150%); the overcharge decays back toward the cap, but powers fired
+        // while overcharged deal +25%. No downside. Wired in:
+        //   • getEnergyOverchargeCap (progression.js) — the ×1.5 clamp cap
+        //   • player.js — regen clamp + addEnergy clamp use the overcharge cap;
+        //     a per-frame block bleeds the overcharge back toward the normal cap
+        //   • weapons.js firePower / fireChargedShot — +25% power damage while
+        //     above the normal cap (captured BEFORE the spend)
+        id: 'CAPACITOR_BANK', name: 'Capacitor Bank', desc: 'Energy overcharges to 150%; the overcharge decays, but powers fired while overcharged deal +25%',
+        hooks: ['maxEnergy', 'energyRegen', 'damage'], tags: ['keystone', 'energy'],
+        slot: true, item: true, itemTierMin: TRANS, stack: B,
+    },
     KILLING_SPREE: {
         id: 'KILLING_SPREE', name: 'Killing Spree', desc: 'Kill-streak no longer resets on hit (slow decay); ×2 streak damage',
         hooks: ['streak'], tags: ['keystone', 'tempo'],
@@ -294,6 +307,7 @@ export const PASSIVES = {
 const _PASSIVE_ICONS = {
     GLASS_CANNON: 'gem', GUNSLINGER: 'pistol', PURIST: 'dagger', APEX_PREDATOR: 'skull',
     TWIN_CAST: 'multi-shot', PRISMATIC_SOUL: 'sparkle', OVERFLOW_CAPACITOR: 'battery',
+    CAPACITOR_BANK: 'battery',
     KILLING_SPREE: 'skull', ONE_WITH_THE_VOID: 'ghost', SECOND_HEART: 'heart',
     EYE_OF_THE_STORM: 'eye', DETONATOR: 'explosion', FRENZY: 'fist', GRAVITY_WELL: 'vortex',
     FLOW_STATE: 'hourglass', FAILSAFE: 'shield', HEAT_SINK: 'fire',

@@ -1,5 +1,5 @@
 // Player ship entity
-import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS, BLOODLUST_DECAY_MS, FLUX_WINDOW_MS } from '../core/constants.js';
+import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS, BLOODLUST_DECAY_MS, FLUX_WINDOW_MS, CAPACITOR_BANK_DECAY_PER_SEC } from '../core/constants.js';
 import { random, wrap } from '../core/utils.js';
 import * as weapons from './weapons.js';
 import * as abilities from './abilities.js';
@@ -1086,7 +1086,13 @@ export class Player {
                 // Default-safe: 0 SP → maxE = this.maxEnergy, regenMult = 1.
                 const maxE = this.getEffectiveMaxEnergy();
                 const regenMult = this.getEffectiveEnergyRegenMult();
-                this.energy = Math.min(maxE, (this.energy || 0) + maxE * regenMult * dtMs / ENERGY_FILL_MS);
+                // CAPACITOR_BANK — clamp to the OVERCHARGE cap (×1.5 with the
+                // passive, == maxE without it) so the meter can climb past the
+                // normal cap ONLY while held. The regen rate itself is computed
+                // off maxE (unchanged); only the ceiling moves. Default-safe:
+                // no passive → cap == maxE → byte-for-byte the old clamp.
+                const energyCap = this.getEnergyOverchargeCap();
+                this.energy = Math.min(energyCap, (this.energy || 0) + maxE * regenMult * dtMs / ENERGY_FILL_MS);
             }
 
             // P6 — Siege passive: ramp damage while ~stationary, decay it while
@@ -1132,6 +1138,20 @@ export class Player {
             // default-safe.
             if (this._fluxStacks > 0 && eNow - (this._fluxRefreshMs || 0) > FLUX_WINDOW_MS) {
                 this._fluxStacks = 0;
+            }
+
+            // CAPACITOR_BANK — overcharge decay. While held, the portion of the
+            // meter ABOVE the normal effective cap bleeds off at
+            // CAPACITOR_BANK_DECAY_PER_SEC energy/s, floored at the normal cap
+            // (never below — normal regen owns the 0..100% zone). Gated on the
+            // passive AND an actual overcharge (energy > normal cap) so a player
+            // without the passive (or not overcharged) does zero work —
+            // default-safe. Reuses the energy block's clamped real-time dtMs.
+            if (dtMs > 0 && typeof this.hasPassive === 'function' && this.hasPassive('CAPACITOR_BANK')) {
+                const normalMax = this.getEffectiveMaxEnergy();
+                if ((this.energy || 0) > normalMax) {
+                    this.energy = progression.capacitorBankDecayStep(this.energy || 0, normalMax, dtMs);
+                }
             }
         }
 
@@ -1378,6 +1398,12 @@ export class Player {
         return progression.getEffectiveMaxEnergy.call(this);
     }
 
+    // CAPACITOR_BANK — the energy clamp ceiling (overcharge cap). Default-safe:
+    // without the passive this equals getEffectiveMaxEnergy().
+    getEnergyOverchargeCap() {
+        return progression.getEnergyOverchargeCap.call(this);
+    }
+
     getEffectiveEnergyRegenMult() {
         return progression.getEffectiveEnergyRegenMult.call(this);
     }
@@ -1615,8 +1641,11 @@ export class Player {
     }
     addEnergy(amount) {
         // CD: clamp to the CAPACITOR-boosted cap so the meter can bank past
-        // the base 100. Default-safe: 0 SP → getEffectiveMaxEnergy() == maxEnergy.
-        this.energy = Math.max(0, Math.min(this.getEffectiveMaxEnergy(), (this.energy || 0) + amount));
+        // the base 100. CAPACITOR_BANK raises this ceiling to the overcharge cap
+        // (×1.5) so energy granted from any source can climb into the overcharge
+        // zone while held. Default-safe: no passive → getEnergyOverchargeCap()
+        // == getEffectiveMaxEnergy() == maxEnergy → byte-for-byte the old clamp.
+        this.energy = Math.max(0, Math.min(this.getEnergyOverchargeCap(), (this.energy || 0) + amount));
     }
 
     // P6 — Siege passive: outgoing damage multiplier from the current standing-
