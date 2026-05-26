@@ -175,7 +175,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 |----|----|----|
 | ~~FB-1~~ ✅ | `hud/status.js` | **DONE 6.216.1** — auto-casts surfaced: new-cast edge-detect on `player._lastAssistCast` → pip flash (per-slot timer) + "↑ ABILITY" `_assistToast`. Additive, default-safe. 8 unit + 5 QA. |
 | FB-2 | ship render | *(optional)* **Auto-dodge cue** — subtle ship glow when `_assistDashAngle` drove the dash. **PATCH.** |
-| FB-3 | record `player.lastDamageSource`; `overlays.js` `drawGameOverScreen` `:1150` | **Death-cause readout** — one-line cause ("Cornered by Hunters"/"Caught in Titan barrage") under the wave/time line, read from the kill event (teach positioning, not blame the Co-Pilot). Unit: cause-string mapping. **MINOR.** |
+| ~~FB-3~~ ✅ | NEW `hud/death-cause.js`, `player/lifecycle.js`, `hud/overlays.js` | **DONE 6.219.0** — one-line death cause under the GAME OVER wave/time summary; `classifyDamageSource(opts.source)` stamps `player.lastDamageSource` on every lethal hit + snapshots at death; pure `deathCauseString` map (default-safe, never blames Co-Pilot). Collision sites already passed the source. 18 unit. |
 
 ### ∥group MB — Mobile wiring & polish *(three built modules are dead/never-imported; several polish items absent)*
 | ID | FILES | DOES |

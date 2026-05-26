@@ -34,6 +34,39 @@ import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { applyPlayerStatus, playerCorrodeMult } from './player-status.js';
 import { getDifficulty } from '../wave/difficulty-director.js';
+import { deathCauseString } from '../hud/death-cause.js';
+
+// FB-3 — derive a compact, serializable death-cause descriptor from the live
+// damage source passed into takeDamage (opts.source) plus call-context flags.
+// Pure + default-safe: anything unrecognized collapses to { kind: 'unknown' }.
+// The entity duck-typing mirrors the three player-hit collision sites:
+//   enemy        → has a string `.type` (HUNTER/TITAN/…), no `.shape`/`.shooter`
+//   enemy-bullet → has `.shooter`/`.shape` (carries its firing enemy's type via
+//                  the shooter when available)
+//   asteroid     → neither of the above
+export function classifyDamageSource(opts = {}) {
+    if (opts.isPlayerBurn) return { kind: 'burn' };
+    if (opts.isHazard) return { kind: 'hazard' };
+
+    const src = opts.source;
+    if (!src || typeof src !== 'object') return { kind: 'unknown' };
+
+    // Enemy bullet / mine: identified by the `shooter` slot (a property the
+    // bullet class always declares; enemies and asteroids never do).
+    if (Object.prototype.hasOwnProperty.call(src, 'shooter')) {
+        const shooterType = src.shooter && typeof src.shooter.type === 'string'
+            ? src.shooter.type : undefined;
+        return { kind: 'enemy-bullet', enemyType: shooterType };
+    }
+
+    // Enemy: carries an enemy-type string on `.type`.
+    if (typeof src.type === 'string' && src.type.length > 0) {
+        return { kind: 'enemy', enemyType: src.type };
+    }
+
+    // Everything else colliding through the player pipeline is an asteroid.
+    return { kind: 'asteroid' };
+}
 
 // RUN-05a — Adaptive Difficulty Director threat axis (D_thr) read helper.
 // Returns the active D_thr multiplier for incoming player damage, defaulting to
@@ -198,6 +231,8 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         if (burnDmg <= 0) return 0;
         this.player.health = Math.max(0, this.player.health - burnDmg);
         this.player._lastDamageAt = Date.now();
+        // FB-3 — record the last damage source for the GAME OVER cause readout.
+        this.player.lastDamageSource = classifyDamageSource(opts);
         if (this.game && this.game.stats) this.game.stats.totalDamageTaken += burnDmg;
         if (this.player.health <= 0) return _resolvePlayerLethal.call(this, burnDmg);
         return burnDmg;
@@ -333,8 +368,11 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         }
     }
     this.player._lastDamageAt = Date.now();
-
-    // A.E9-S1 — an elemental enemy hit that landed applies its player-side
+    // FB-3 — record the last damage source for the GAME OVER cause readout.
+    // Stamped on every hit that reaches HP resolution (the dodge / i-frame /
+    // invuln / negation early-returns above never get here), so the readout
+    // reflects whatever ultimately lands the killing blow.
+    this.player.lastDamageSource = classifyDamageSource(opts);
     // status (CRYO→chill, TOXIC→corrode; Pyro burn lands in S1b). The hit
     // wasn't dodged/i-framed (those returned early above), so the status sticks.
     if (opts.element) applyPlayerStatus(this.player, opts.element, frameClock.now);
@@ -630,6 +668,13 @@ export function handlePlayerDeath() {
     const playerAngle = this.player.angle || 0;
 
     this.deathLocation = { x: dx, y: dy };
+
+    // FB-3 — snapshot the death-cause string now, from the last recorded
+    // damage source. Snapshotting here (rather than reading the live field at
+    // draw time) guards against the field being overwritten before the overlay
+    // shows. Default-safe: a never-recorded source → the generic "Ship
+    // destroyed". Never throws, never references the Co-Pilot.
+    this._deathCause = deathCauseString(this.player && this.player.lastDamageSource);
 
     // Vaporize the LAST triangle (the bottom-left, which is what's
     // rendered when tanks=1). healthTanks is already 0 by the time

@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.219.0] - 2026-05-26
+
+### Added — death-cause readout on the GAME OVER screen (mobile P7 · FB-3)
+
+- The GAME OVER screen now shows **what killed you** on a line under the
+  wave/time summary — e.g. "Cornered by Hunters", "Caught in a Titan barrage",
+  "Crushed by an asteroid", "Burned to death". It's instructive (teaches
+  positioning), never blames the Co-Pilot.
+- The player's last damage source is captured on every lethal-capable hit
+  (`classifyDamageSource` duck-types the existing `opts.source` the collision
+  sites already pass — enemy `.type` / enemy-bullet `.shooter` / asteroid) and
+  snapshotted at the death sequence so the live field can't be overwritten
+  before the overlay reads it. New pure `hud/death-cause.js` maps the source to
+  a phrase, default-safe (missing/unknown → generic "Ship destroyed", never
+  throws).
+
+Default-safe: when no source was recorded the line is omitted and the summary
+layout is unchanged. Collision-system call sites were already passing the
+source, so no damage-path plumbing changed. Tests: +18 unit (`death-cause`).
+
 ## [6.218.0] - 2026-05-26
 
 ### Added — ASSISTS-tab Co-Pilot control surface (mobile P7 · AS-2/3/4)

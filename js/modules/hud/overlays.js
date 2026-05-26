@@ -6,6 +6,7 @@ import { rgba } from '../core/color-cache.js';
 import { STREAK_TIERS as WEAPON_DATA_STREAK_TIERS, getStreakGoldMult } from '../combat/weapon-data.js';
 import { VERSION } from '../core/version.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
+import { deathCauseString } from './death-cause.js';
 // 5.92.0 — Title screen responsive layout: in mobile-portrait mode
 // the NEW GAME / CONTINUE / MULTIPLAYER buttons stack vertically so
 // they fit a phone-sized viewport without truncation; landscape mobile
@@ -1105,6 +1106,14 @@ export function drawGameOverScreen() {
     const summaryFS = _isMobile
         ? Math.max(11, Math.floor(titleFS / 3.0))
         : 22;
+    // FB-3 — death-cause readout, one line under the summary. Slightly smaller
+    // than the summary line so the hierarchy reads title → stats → cause.
+    const causeFS = Math.max(9, Math.floor(summaryFS * 0.72));
+    const causeText = (() => {
+        const c = this._deathCause
+            || deathCauseString(this.player && this.player.lastDamageSource);
+        return typeof c === 'string' && c.length > 0 ? c : '';
+    })();
     // Button sizing matches the title-screen mobile pattern.
     let buttonW, buttonH, buttonGap;
     if (_isPortrait) {
@@ -1126,16 +1135,21 @@ export function drawGameOverScreen() {
     const titleH = titleFS + 12;
     const titleSummaryGap = _isMobile ? 18 : 32;
     const summaryH = summaryFS + 6;
+    // FB-3 — reserve a line for the death-cause readout (only when present).
+    const summaryCauseGap = causeText ? (_isMobile ? 8 : 12) : 0;
+    const causeH = causeText ? causeFS + 4 : 0;
     const summaryButtonsGap = _isMobile ? 22 : 36;
     const buttonsBlockH = _isPortrait
         ? buttonH * 2 + buttonGap
         : buttonH;
-    const contentH = titleH + titleSummaryGap + summaryH + summaryButtonsGap + buttonsBlockH;
+    const contentH = titleH + titleSummaryGap + summaryH
+        + summaryCauseGap + causeH + summaryButtonsGap + buttonsBlockH;
     let contentTop = (this.canvas.height - contentH) / 2;
     if (contentTop < 16) contentTop = 16;
     const titleY = contentTop + titleH / 2;
     const summaryY = titleY + titleH / 2 + titleSummaryGap + summaryH / 2;
-    const buttonsTop = summaryY + summaryH / 2 + summaryButtonsGap;
+    const causeY = summaryY + summaryH / 2 + summaryCauseGap + causeH / 2;
+    const buttonsTop = causeY + causeH / 2 + summaryButtonsGap;
 
     this.drawWavyText('GAME OVER', centerX, titleY, {
         fontSize: titleFS,
@@ -1161,6 +1175,20 @@ export function drawGameOverScreen() {
         outline: true,
         outlineWidth: Math.max(2, Math.floor(summaryFS / 5)),
     });
+
+    // FB-3 — death-cause readout, one line under the summary. Same wavy idiom,
+    // smaller + a touch dimmer so it reads as an instructive subtitle. Guarded:
+    // skipped entirely when there is no cause string.
+    if (causeText) {
+        this.drawWavyText(causeText, centerX, causeY, {
+            fontSize: causeFS,
+            colors: WAVY_PALETTES.whiteShimmer,
+            amplitude: 0,
+            colorSpeed: 0.12,
+            outline: true,
+            outlineWidth: Math.max(2, Math.floor(causeFS / 5)),
+        });
+    }
 
     // Buttons — vertical stack on portrait, side-by-side everywhere
     // else (matches the title screen mobile pattern).
