@@ -21,7 +21,7 @@ export function levelUp() { return false; }
 // and `spStats` live on the player but are saved to localStorage so they
 // carry between runs.
 import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-stats.js';
-import { EFFICIENCY_CAP } from '../core/constants.js';
+import { EFFICIENCY_CAP, FLUX_PER_STACK } from '../core/constants.js';
 import { loadMeta, saveMeta } from '../core/storage.js';
 import { frameClock } from '../core/frame-clock.js';
 import { playerChillSpeedMult } from './player-status.js';
@@ -547,8 +547,11 @@ export function getEffectiveMaxEnergy() {
 
 // REACTOR — multiplier on the per-frame regen increment. 0 pts → 1.
 // _spVal('REACTOR') is the percentage (0..100), so /100 → 0..1 added to 1.
+// FLUX (energy-synergy powerup) adds a stacking bonus on top: +FLUX_PER_STACK per
+// active stack while the ramp is alive (player.update zeroes _fluxStacks once the
+// fade window elapses). Default-safe: 0 Flux stacks → +0 → the exact `1 + REACTOR%`.
 export function getEffectiveEnergyRegenMult() {
-    return 1 + _spVal(this, 'REACTOR') / 100;
+    return 1 + _spVal(this, 'REACTOR') / 100 + (this._fluxStacks || 0) * FLUX_PER_STACK;
 }
 
 // EFFICIENCY — discounts power-weapon energy cost. 0 pts → baseCost.

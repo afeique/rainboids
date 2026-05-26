@@ -1,7 +1,8 @@
 // Player weapon system — extracted from Player class
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
-import { GAME_CONFIG } from '../core/constants.js';
+import { GAME_CONFIG, FLUX_MAX_STACKS } from '../core/constants.js';
+import { frameClock } from '../core/frame-clock.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity, attunementElements } from '../combat/weapon-data.js';
 import { resolveBulletElements } from '../combat/elements.js';
 import { prismaticElement } from '../combat/passive-data.js';
@@ -348,7 +349,22 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
                 this._resonanceUses = _r.count;
                 if (_r.free) _chargeCost = 0;
             }
+            // SURGE_BATTERY: while held, the FIRST power weapon each wave is free.
+            // Zero the cost + spend the per-wave charge (recharged at wave start).
+            // Default-safe: no powerup OR already-spent → cost path unchanged.
+            if (this._surgeBatteryReady && typeof this.getPowerupStacks === 'function'
+                && this.getPowerupStacks('SURGE_BATTERY') > 0) {
+                _chargeCost = 0;
+                this._surgeBatteryReady = false;
+            }
             this.energy = Math.max(0, (this.energy || 0) - _chargeCost);
+            // FLUX: while held, each power cast adds a stacking +energy-regen buff
+            // (capped at FLUX_MAX_STACKS) and refreshes the fade window. Default-safe:
+            // no powerup → no stack gain → getEffectiveEnergyRegenMult unchanged.
+            if (typeof this.getPowerupStacks === 'function' && this.getPowerupStacks('FLUX') > 0) {
+                this._fluxStacks = Math.min(FLUX_MAX_STACKS, (this._fluxStacks || 0) + 1);
+                this._fluxRefreshMs = frameClock.now;
+            }
             this.chargeStartTime = now - this.maxChargeTime; // force a full-charge shot
             this.pausedChargeTime = 0;
             this.fireChargedShot(bulletPool, audioManager);
@@ -1265,7 +1281,22 @@ export function firePower(bulletPool, audioManager, particlePool) {
         this._resonanceUses = _r.count;
         if (_r.free) _powerCost = 0;
     }
+    // SURGE_BATTERY: while held, the FIRST power weapon each wave is free. Zero the
+    // cost + spend the per-wave charge (recharged at wave start). Default-safe: no
+    // powerup OR already-spent → cost path unchanged.
+    if (this._surgeBatteryReady && typeof this.getPowerupStacks === 'function'
+        && this.getPowerupStacks('SURGE_BATTERY') > 0) {
+        _powerCost = 0;
+        this._surgeBatteryReady = false;
+    }
     this.energy = Math.max(0, (this.energy || 0) - _powerCost);
+    // FLUX: while held, each power cast adds a stacking +energy-regen buff (capped
+    // at FLUX_MAX_STACKS) and refreshes the fade window. Default-safe: no powerup →
+    // no stack gain → getEffectiveEnergyRegenMult unchanged.
+    if (typeof this.getPowerupStacks === 'function' && this.getPowerupStacks('FLUX') > 0) {
+        this._fluxStacks = Math.min(FLUX_MAX_STACKS, (this._fluxStacks || 0) + 1);
+        this._fluxRefreshMs = frameClock.now;
+    }
 
     switch (this.activePower) {
         case 'MINE_LAYER':

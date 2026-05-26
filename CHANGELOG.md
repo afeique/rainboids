@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.205.0] - 2026-05-25
+
+### Added — Surge Battery + Flux energy-synergy powerups (CD-04)
+
+- **Surge Battery** (new powerup, `world/powerup.js`) — while held, your **first
+  power weapon each wave costs 0 energy**, recharging at wave start (the
+  power-economy sibling of Ablative Plating's first-hit block). Zeroed at both
+  power-cost spend points in `weapons.js` (`firePower` + the CHARGE_SHOT path),
+  recharged in `wave-manager.js` `spawnWaveEntities`.
+- **Flux** (new powerup) — each **power cast ramps your energy regen**: +15% per
+  stack (`FLUX_PER_STACK`), up to 5 stacks (+75%, `FLUX_MAX_STACKS`), fading if
+  you don't cast within 4s (`FLUX_WINDOW_MS`). Stack-gain on cast in `firePower` /
+  CHARGE_SHOT; the bonus is folded into `getEffectiveEnergyRegenMult`
+  (`progression.js`); the ramp zeroes in `player.update` once the window lapses
+  (state reset per run). A power-spam regen engine — casting begets casting.
+- **Default-safe:** without the powerup, power cost and energy regen are
+  byte-for-byte unchanged (both gated on `getPowerupStacks(id) > 0`; Flux adds +0
+  at 0 stacks). Now that AoE power weapons crit (6.204.0 / R1), these meaningfully
+  fuel a functional power-build axis.
+- Tests: `tests/unit/cd-energy-powerups.test.js` (+11 — entries, FLUX consts,
+  `getEffectiveEnergyRegenMult` default-safe + Flux-bonus + window-expiry decay) +
+  `tests/qa/43-energy-powerups.spec.js` (+6 — Surge first-cast-free/second-normal +
+  recharge, Flux regen ramp, default-safe baselines). Full unit suite **1759**
+  green; QA-07 weapons regression 19/19.
+
+---
+
 ## [6.204.0] - 2026-05-25
 
 ### Added — AoE power weapons now crit (CD-07 / R1 mechanical routing)

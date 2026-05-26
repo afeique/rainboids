@@ -392,6 +392,20 @@ export const BLOODLUST_MAX_STACKS = 10;
 export const BLOODLUST_PER_STACK = 0.04;
 export const BLOODLUST_DECAY_MS = 2000;
 
+// FLUX (energy-synergy powerup) — each power cast grants a stacking +energy-regen
+// buff that fades when you stop casting (casting begets casting, a power-spam
+// regen ramp). Each cast adds one stack (capped at FLUX_MAX_STACKS) and refreshes
+// a FLUX_WINDOW_MS window; if the whole window elapses with no fresh cast the ramp
+// fades to 0. The regen bonus is +FLUX_PER_STACK per stack, applied in
+// getEffectiveEnergyRegenMult. DEFAULT-SAFE: 0 stacks → +0 → the existing
+// `1 + REACTOR%` is byte-for-byte unchanged.
+//   - FLUX_PER_STACK: regen-mult bonus per stack (+15% each).
+//   - FLUX_MAX_STACKS: stack ceiling (+75% regen at full); further casts refresh.
+//   - FLUX_WINDOW_MS: time without a cast before the whole ramp fades to 0.
+export const FLUX_PER_STACK = 0.15;
+export const FLUX_MAX_STACKS = 5;
+export const FLUX_WINDOW_MS = 4000;
+
 // RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
 // The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
 // accessor below returns today's values when no runConfig is set.

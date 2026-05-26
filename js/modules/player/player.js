@@ -1,5 +1,5 @@
 // Player ship entity
-import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS, BLOODLUST_DECAY_MS } from '../core/constants.js';
+import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS, BLOODLUST_DECAY_MS, FLUX_WINDOW_MS } from '../core/constants.js';
 import { random, wrap } from '../core/utils.js';
 import * as weapons from './weapons.js';
 import * as abilities from './abilities.js';
@@ -423,6 +423,22 @@ export class Player {
         // Default-safe: the gate in lifecycle.takeDamage also requires the powerup
         // to be held, so this flag is inert without it.
         this._ablativeReady = true;
+
+        // SURGE_BATTERY — while the powerup is held, the first power weapon each
+        // wave costs 0 energy. Ready on spawn / run-start so the very first wave's
+        // first cast is free; spent (flipped false) by weapons.firePower and
+        // recharged at wave start (wave-manager.spawnWaveEntities). Default-safe:
+        // the gate in firePower also requires the powerup, so this flag is inert
+        // without it.
+        this._surgeBatteryReady = true;
+
+        // FLUX — while the powerup is held, each power cast adds a stacking
+        // +energy-regen buff that fades when casting stops. _fluxStacks is the
+        // current stack count (0..FLUX_MAX_STACKS); _fluxRefreshMs is the clock of
+        // the last cast. Reset to 0 on spawn / run-start so a fresh run has no ramp.
+        // Default-safe: 0 stacks → getEffectiveEnergyRegenMult adds +0.
+        this._fluxStacks = 0;
+        this._fluxRefreshMs = 0;
 
         let scale = 1;
         this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
@@ -1106,6 +1122,16 @@ export class Player {
                     last += BLOODLUST_DECAY_MS;
                 }
                 this._bloodlustRefreshMs = last;
+            }
+
+            // FLUX — energy-regen ramp decay. Each power cast (weapons.firePower)
+            // adds a stack + stamps _fluxRefreshMs; if the whole FLUX_WINDOW_MS
+            // elapses with no fresh cast, the ramp fades to 0 (all-or-nothing per
+            // window, matching the "fades in 4s" spec). Gated on a non-zero stack
+            // count so a player with 0 stacks (or no powerup) does zero work —
+            // default-safe.
+            if (this._fluxStacks > 0 && eNow - (this._fluxRefreshMs || 0) > FLUX_WINDOW_MS) {
+                this._fluxStacks = 0;
             }
         }
 

@@ -341,6 +341,53 @@ export const POWERUP_TYPES = {
         description: 'The first hit each wave is fully blocked.',
     },
 
+    // SURGE_BATTERY (energy-synergy) — while held, the FIRST power weapon each wave
+    // costs 0 energy. The free shot is consumed (the per-wave _surgeBatteryReady
+    // flag flips false) until the next wave recharges it (wave-manager.spawnWaveEntities,
+    // beside the Ablative Plating recharge). The cost zero-out sits in weapons.firePower
+    // and the CHARGE_SHOT path. Gated on the powerup being held + the ready flag —
+    // DEFAULT-SAFE (no powerup OR already-spent → normal cost path unchanged).
+    SURGE_BATTERY: {
+        name: 'Surge Battery',
+        displayName: 'Surge Battery',
+        abbr: 'SRGB',
+        color: '#ffdd55',
+        gradientColors: ['#fff0aa', '#cc9911'],
+        icon: 'bolt',
+        duration: 30000,
+        effect: 'surgeBattery',
+        rarity: 0.10,
+        category: 'OFFENSE',
+        maxStacks: 1,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'Your first power weapon each wave is free',
+    },
+
+    // FLUX (energy-synergy) — while held, each power cast grants a stacking
+    // +energy-regen buff that fades when you stop casting. The on-cast stack gain
+    // sits in weapons.firePower / the CHARGE_SHOT path (after a successful spend);
+    // the per-stack regen bonus is applied in progression.getEffectiveEnergyRegenMult
+    // (only while stacks are non-zero); the window decay lives in player.update.
+    // Gated on the powerup being held — DEFAULT-SAFE (no powerup → no stacks → no
+    // regen bonus, byte-for-byte unchanged).
+    FLUX: {
+        name: 'Flux',
+        displayName: 'Flux',
+        abbr: 'FLUX',
+        color: '#66ccff',
+        gradientColors: ['#aaddff', '#2266aa'],
+        icon: 'bolt',
+        duration: 30000,
+        effect: 'flux',
+        rarity: 0.10,
+        category: 'OFFENSE',
+        maxStacks: 1,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'Each power cast ramps your energy regen (stacking, fades in 4s)',
+    },
+
     // 6.16.0 — Dash post-burst i-frame extender. Every SHIFT dash
     // already grants a 1s post-burst invuln window (see Player._triggerDash
     // + progression.getPostDashIframeMs). Each stack here adds +2s,

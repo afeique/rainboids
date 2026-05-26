@@ -725,6 +725,12 @@ export function spawnWaveEntities() {
     // lifecycle.takeDamage also requires the powerup to be held, so this flag is
     // inert without it.
     if (this.player) this.player._ablativeReady = true;
+    // SURGE_BATTERY — recharge the per-wave free power weapon at wave start: the
+    // next wave's first power cast (if the powerup is held) is free again. Same
+    // guard + binding (`this.player`) as the Ablative recharge above. Default-safe:
+    // the gate in weapons.firePower also requires the powerup, so this is inert
+    // without it.
+    if (this.player) this.player._surgeBatteryReady = true;
     // BOSS-04 — clear the once-per-wave modular-boss guard so this wave's boss
     // (if any) can spawn when its boss group fires.
     this._modularBossSpawnedWave = null;
