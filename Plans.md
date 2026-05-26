@@ -173,7 +173,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 ### ∥group FB — Co-Pilot & death feedback *(`_lastAssistCast` written but never read; no auto-cast cue; game-over shows no cause)*
 | ID | FILES | DOES |
 |----|----|----|
-| FB-1 | `assist-system.js:261` (writer), `status.js:1753` slot-bar, toast system | **Surface auto-casts** — on a new `player._lastAssistCast`, flash the matching cooldown slot + brief toast ("BULWARK"/"EMP", reuse pickup-toast). High player-value, cheap, independent. **PATCH.** |
+| ~~FB-1~~ ✅ | `hud/status.js` | **DONE 6.216.1** — auto-casts surfaced: new-cast edge-detect on `player._lastAssistCast` → pip flash (per-slot timer) + "↑ ABILITY" `_assistToast`. Additive, default-safe. 8 unit + 5 QA. |
 | FB-2 | ship render | *(optional)* **Auto-dodge cue** — subtle ship glow when `_assistDashAngle` drove the dash. **PATCH.** |
 | FB-3 | record `player.lastDamageSource`; `overlays.js` `drawGameOverScreen` `:1150` | **Death-cause readout** — one-line cause ("Cornered by Hunters"/"Caught in Titan barrage") under the wave/time line, read from the kill event (teach positioning, not blame the Co-Pilot). Unit: cause-string mapping. **MINOR.** |
 

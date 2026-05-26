@@ -24,6 +24,39 @@ import { isSuppressed } from '../enemy/abilities/suppress-aura.js';
 // is unchanged.
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 
+// ── FB-1 (P7) — AI Co-Pilot auto-cast feedback ────────────────────────────
+// The Assist System writes `player._lastAssistCast = { id, slot, t }` on each
+// ability auto-cast (assist-system.js). Nothing read it, so the Co-Pilot's
+// automation was invisible. These pure helpers + the per-frame detection below
+// surface that: a brief pip flash on the cast slot and a small "↑ NAME" toast.
+//
+// DEFAULT-SAFE: a player not running the Co-Pilot never has `_lastAssistCast`,
+// so isNewAssistCast returns false and no feedback state is ever touched — the
+// HUD render is byte-for-byte unchanged.
+
+// How long a cast-slot pip stays lit, in ms. Bounded + cheap (one timer).
+export const ASSIST_FLASH_MS = 500;
+// How long the assist toast lingers, in ms (short by design).
+export const ASSIST_TOAST_MS = 1000;
+
+// Is `cast` a NEW auto-cast relative to the last timestamp we already handled?
+// Guards a missing/empty cast and a missing timestamp. `lastSeenT` is whatever
+// the renderer recorded last frame (undefined on the very first frame).
+export function isNewAssistCast(cast, lastSeenT) {
+    if (!cast || typeof cast.t !== 'number') return false;
+    return cast.t !== lastSeenT;
+}
+
+// Resolve an ability id (e.g. 'BULWARK') to its display name (e.g. 'Bulwark').
+// Falls back to the raw id when the ability has no `name`, and returns '' for a
+// missing/unknown id so the toast can be skipped gracefully (no NPE).
+export function assistAbilityName(id) {
+    if (!id) return '';
+    const cfg = ABILITIES[id];
+    if (cfg && cfg.name) return cfg.name;
+    return String(id);
+}
+
 export function drawHUD() {
         if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
             // Draw health bar and UI elements
@@ -150,6 +183,10 @@ export function drawHUD() {
 
         // Draw ability cooldown HUD + streak buff indicator
         if (this.player && this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
+            // FB-1 (P7) — detect any new AI Co-Pilot auto-cast and arm the pip
+            // flash + assist toast. No-op for a player without a live Co-Pilot
+            // (no _lastAssistCast) ⇒ HUD unchanged.
+            detectAssistCast.call(this);
             this.drawAbilityCooldownHUD();
             this.drawStreakIndicator();
         }
@@ -161,6 +198,13 @@ export function drawHUD() {
         // game-message-overlay is commented out in index.html.
         if (this._pickupToast && this.game.state !== GAME_STATES.TITLE_SCREEN) {
             this.drawPickupToast();
+        }
+
+        // FB-1 (P7) — AI Co-Pilot auto-cast toast. Parallel to the pickup
+        // toast (own field) so the two never clobber each other. Only set
+        // when the Co-Pilot actually casts; otherwise this is a no-op.
+        if (this._assistToast && this.game.state !== GAME_STATES.TITLE_SCREEN) {
+            drawAssistToast.call(this);
         }
 
         // Draw title screen with wavy text
@@ -258,6 +302,104 @@ export function drawPickupToast() {
         ctx.strokeText(t.subtitle, cx, subY);
         ctx.fillText(t.subtitle, cx, subY);
     }
+
+    ctx.restore();
+}
+
+// ── FB-1 (P7) — AI Co-Pilot auto-cast detection + toast ───────────────────
+// Run once per HUD frame (from drawHUD). Reads player._lastAssistCast — the
+// { id, slot, t } stamp the Assist System writes on each ability auto-cast —
+// and, when it sees a NEW one (a timestamp it hasn't handled), arms two cues:
+//   1. a per-slot pip flash ({ slot, until }) rendered atop the cooldown bar,
+//   2. a short "↑ NAME" assist toast (its own field so it never clobbers a
+//      pickup toast).
+// DEFAULT-SAFE: no _lastAssistCast (Co-Pilot off) ⇒ early return, no state set.
+export function detectAssistCast() {
+    const cast = this.player && this.player._lastAssistCast;
+    if (!isNewAssistCast(cast, this._lastAssistCastSeenT)) return;
+    // Record the timestamp first so a render exception can't re-fire it.
+    this._lastAssistCastSeenT = cast.t;
+
+    const now = Date.now();
+    // Pip flash — only for a valid slot index (0–3). Bounded single timer.
+    if (typeof cast.slot === 'number' && cast.slot >= 0 && cast.slot < 4) {
+        this._assistCastFlash = { slot: cast.slot, until: now + ASSIST_FLASH_MS };
+    }
+    // Toast — only when we can name the ability (skip gracefully otherwise).
+    const name = assistAbilityName(cast.id);
+    if (name) {
+        this._assistToast = {
+            title: name,
+            accentColor: '#7af0ff',
+            startAt: now,
+            duration: ASSIST_TOAST_MS,
+        };
+    }
+}
+
+// FB-1 (P7) — assist toast render. A small top-left "↑ NAME" cue marking an
+// AI Co-Pilot auto-cast. Mirrors the pickup-toast fade (fade-in 120 ms, fade
+// out over the last 30%) but anchors top-left + prefixes an up-arrow glyph so
+// it reads as "the Co-Pilot just used this," distinct from a pickup. Cleared
+// from its own _assistToast field when the duration elapses.
+export function drawAssistToast() {
+    const t = this._assistToast;
+    if (!t) return;
+    const now = Date.now();
+    const elapsed = now - (t.startAt || now);
+    const duration = t.duration || ASSIST_TOAST_MS;
+    if (elapsed >= duration) {
+        this._assistToast = null;
+        return;
+    }
+    const fadeOutFrom = duration * 0.7;
+    const fadeIn = Math.min(1, elapsed / 120);
+    const fadeOut = elapsed < fadeOutFrom
+        ? 1
+        : Math.max(0, 1 - (elapsed - fadeOutFrom) / (duration - fadeOutFrom));
+    const alpha = fadeIn * fadeOut;
+
+    const ctx = this.ctx;
+    const _mob = isMobile();
+    const _port = _mob && isPortrait();
+    const titleFS = _port ? 11 : (_mob ? 13 : 14);
+    const padX = _port ? 10 : 14;
+    const padY = _port ? 6 : 8;
+
+    const label = `↑ ${(t.title || '').toUpperCase()}`; // "↑ BULWARK"
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${titleFS}px 'Press Start 2P', monospace`;
+    const labelW = ctx.measureText(label).width;
+    const blockW = labelW + padX * 2;
+    const blockH = titleFS + padY * 2;
+    // Top-left, just below the status panel area. Distinct anchor from the
+    // left-CENTER pickup toast so both can coexist.
+    const x0 = 24;
+    const y0 = 96;
+    const cx = x0 + blockW / 2;
+    const cy = y0 + blockH / 2;
+
+    const accent = t.accentColor || '#7af0ff';
+    ctx.fillStyle = 'rgba(8, 14, 24, 0.92)';
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x0, y0, blockW, blockH, 9);
+    else ctx.rect(x0, y0, blockW, blockH);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = `bold ${titleFS}px 'Press Start 2P', monospace`;
+    ctx.fillStyle = accent;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
+    ctx.strokeText(label, cx, cy);
+    ctx.fillText(label, cx, cy);
 
     ctx.restore();
 }
@@ -1834,6 +1976,23 @@ export function drawAbilitySlotBar(ctx, leftX, bottomY) {
     // skipped for a player not in an aura.
     const suppressed = isSuppressed(this.player, Date.now());
 
+    // FB-1 (P7) — Co-Pilot auto-cast pip flash. detectAssistCast arms
+    // this._assistCastFlash = { slot, until }; we read it here, compute a 0→1
+    // fade for the lit slot, and clear it once expired. No flash armed (no
+    // Co-Pilot) ⇒ flashSlot stays -1 and the loop's flash block is skipped.
+    let flashSlot = -1;
+    let flashPulse = 0;
+    if (this._assistCastFlash) {
+        const nowF = Date.now();
+        if (nowF < this._assistCastFlash.until) {
+            flashSlot = this._assistCastFlash.slot;
+            const remain = this._assistCastFlash.until - nowF;
+            flashPulse = Math.max(0, Math.min(1, remain / ASSIST_FLASH_MS));
+        } else {
+            this._assistCastFlash = null;
+        }
+    }
+
     for (let slot = 0; slot < 4; slot++) {
         const sx = leftX + slot * (slotSize + slotGap);
         const cx = sx + slotSize / 2;
@@ -1913,6 +2072,23 @@ export function drawAbilitySlotBar(ctx, leftX, bottomY) {
             ctx.lineWidth = 1.5;
             _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
             ctx.stroke();
+        }
+
+        // FB-1 (P7) — auto-cast pip flash: a bright cyan fill pulse + glowing
+        // outline on the slot the Co-Pilot just cast, fading over ASSIST_FLASH_MS.
+        // Only the lit slot draws this; flashSlot is -1 when no cast is armed.
+        if (slot === flashSlot && flashPulse > 0) {
+            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
+            ctx.fillStyle = `rgba(122, 240, 255, ${0.45 * flashPulse})`;
+            ctx.fill();
+            ctx.save();
+            ctx.shadowColor = '#7af0ff';
+            ctx.shadowBlur = 12 * flashPulse;
+            ctx.strokeStyle = `rgba(190, 250, 255, ${0.95 * flashPulse})`;
+            ctx.lineWidth = 2.5;
+            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
+            ctx.stroke();
+            ctx.restore();
         }
 
         ctx.restore();

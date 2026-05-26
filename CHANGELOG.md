@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.216.1] - 2026-05-26
+
+### Added — AI Co-Pilot auto-cast feedback (mobile P7 · FB-1)
+
+- The AI Co-Pilot's **ability auto-casts are now surfaced on the HUD** so its
+  automation is legible: each new auto-cast **flashes the matching ability
+  cooldown pip** + shows a brief **"↑ ABILITY" toast** (e.g. "↑ BULWARK"). Reads
+  `player._lastAssistCast` (previously written but never consumed) via an
+  edge-detected new-cast check in the HUD draw (`hud/status.js`); a parallel
+  `_assistToast` (distinct from the pickup toast) + a per-slot flash timer drive
+  the visuals.
+- **Default-safe / additive:** a player not using the Co-Pilot (no auto-casts)
+  sees the HUD byte-for-byte unchanged; bounded flash timers, no perf cost.
+- Tests: `tests/unit/assist-feedback.test.js` (+8 — new-cast edge detection,
+  ability-name lookup) + `tests/qa/51-assist-feedback.spec.js` (+5 — cast arms
+  flash+toast, default-safe arms nothing, no re-fire on same cast, no fatal
+  errors). Full unit suite **1841** green; QA-04 HUD regression 13/13.
+
+---
+
 ## [6.216.0] - 2026-05-26
 
 ### Added — HEAT_SINK keystone mechanic: uncapped fire-rate ramp + vent AoE (CD-02 · §6c)
