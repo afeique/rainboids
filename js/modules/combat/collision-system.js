@@ -2424,6 +2424,24 @@ export function bloodlustMult(stacks) {
     return 1 + Math.min(BLOODLUST_MAX_STACKS, Math.max(0, stacks | 0)) * BLOODLUST_PER_STACK;
 }
 
+// CD-02 §6c — Apex Predator: a hit that would leave the enemy at/below 15% of
+// its max HP instead EXECUTES it (the hit becomes lethal). Pure resolver so it
+// unit-tests without the engine `this`. Given the final post-multiplier `damage`
+// and the enemy's current `health` / `maxHealth`, returns true when the strike
+// should execute. Bosses are exempt. DEFAULT-SAFE by construction: the caller
+// gates on hasPassive('APEX_PREDATOR'), so without the passive this is never
+// consulted and `damage` is untouched.
+export const APEX_EXECUTE_THRESHOLD = 0.15; // fraction of max HP
+export function shouldExecute(health, damage, maxHealth, isBoss) {
+    if (isBoss || !(maxHealth > 0)) return false;
+    return (health - damage) <= APEX_EXECUTE_THRESHOLD * maxHealth;
+}
+// Enemy-object convenience wrapper used at the damage hook.
+export function apexExecutes(enemy, damage) {
+    if (!enemy) return false;
+    return shouldExecute(enemy.health, damage, enemy.maxHealth, !!enemy.isBoss);
+}
+
 // R1 / CD-07 — AoE power-weapon crit roll. Pure resolver so it unit-tests
 // without the engine `this`. AoE/power weapons (nova, lightning, mines,
 // missiles, beams) deal damage through damageEnemy(...) and historically
@@ -2702,6 +2720,17 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     // (expired or absent), so this is a no-op for every non-devourer enemy and
     // for a devourer whose shield has lapsed.
     damage = consumeAbsorbShield(enemy, damage, frameClock.now);
+
+    // CD-02 §6c — Apex Predator: finish enemies the hit would leave at/below 15%
+    // max HP (instant execute). Bosses exempt. Default-safe: no passive → no
+    // change. Sits AFTER every damage multiplier (crit / Bloodlust / Siege /
+    // resist / armor / shields) and BEFORE `enemy.health -= damage`, so the
+    // existing destroyed/kill path (result.destroyed → onEnemyKill) fires
+    // naturally when health hits 0.
+    if (this.player && typeof this.player.hasPassive === 'function'
+        && this.player.hasPassive('APEX_PREDATOR') && apexExecutes(enemy, damage)) {
+        damage = enemy.health; // lethal — execute
+    }
 
     enemy.health -= damage;
     enemy.health = Math.max(0, Math.min(enemy.health, enemy.maxHealth));

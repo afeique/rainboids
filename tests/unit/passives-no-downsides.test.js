@@ -162,14 +162,39 @@ describe('§6c batches 1–4 — downside string fields removed from the registr
         expect(PASSIVES.BERSERKERS_PACT).toBeUndefined();
     });
 
-    test('HEAT_SINK is the ONLY remaining keystone carrying a downside', () => {
-        expect('downside' in PASSIVES.HEAT_SINK).toBe(true);
-        expect(typeof PASSIVES.HEAT_SINK.downside).toBe('string');
-        expect(PASSIVES.HEAT_SINK.downside.length).toBeGreaterThan(0);
-        // No other keystone still carries a downside string.
-        const keystonesWithDownside = Object.values(PASSIVES)
-            .filter((p) => Array.isArray(p.tags) && p.tags.includes('keystone') && 'downside' in p)
+    test('CD-02 — HEAT_SINK no longer carries a downside (lockout string removed)', () => {
+        // HEAT_SINK was the last keystone with a downside string. Its lockout
+        // never existed in code (the HEAT mechanic was never wired), so the
+        // string was removed — completing the no-downsides rework.
+        expect(PASSIVES.HEAT_SINK).toBeDefined();
+        expect('downside' in PASSIVES.HEAT_SINK).toBe(false);
+    });
+
+    test('CD-02 — the no-downsides rework is COMPLETE: ZERO passives in the registry carry a downside', () => {
+        // All 11 original keystone downsides are now removed/reworked. Assert
+        // across the WHOLE registry, not just keystones, so any future downside
+        // (on any channel) trips this guard.
+        const withDownside = Object.values(PASSIVES)
+            .filter((p) => 'downside' in p)
             .map((p) => p.id);
-        expect(keystonesWithDownside).toEqual(['HEAT_SINK']);
+        expect(withDownside).toEqual([]);
+    });
+});
+
+describe('CD-02 §6c — Apex Predator keystone exists (no downside)', () => {
+    test('APEX_PREDATOR is registered as a no-downside offense keystone', () => {
+        const ap = PASSIVES.APEX_PREDATOR;
+        expect(ap).toBeDefined();
+        expect(ap.id).toBe('APEX_PREDATOR');
+        expect('downside' in ap).toBe(false);
+        // The execute IS the effect — no static damageMult.
+        expect('damageMult' in ap).toBe(false);
+        expect(ap.tags).toContain('keystone');
+        expect(ap.tags).toContain('offense');
+        expect(ap.slot).toBe(true);
+        expect(ap.item).toBe(false);
+        // Icon-map entry wired (reused slug).
+        expect(typeof ap.icon).toBe('string');
+        expect(ap.icon.length).toBeGreaterThan(0);
     });
 });

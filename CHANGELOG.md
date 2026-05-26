@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.213.0] - 2026-05-26
+
+### Added — Apex Predator keystone + the no-downsides passive rework is complete (CD-02 · §6c)
+
+- **Apex Predator** (new keystone, `combat/passive-data.js`) — **your damage
+  executes enemies the hit would leave at or below 15% max HP** (instant kill),
+  filling the keystone slot the Glass-Cannon/Berserker merge freed. The
+  crit/assassin anchor. Implemented via a pure `shouldExecute(health, damage,
+  maxHealth, isBoss)` helper + the gated block in `collision-system.js`
+  `applyDamageToEnemy`, placed after all damage multipliers and before HP is
+  reduced. **Bosses are exempt; default-safe** (no passive → damage byte-for-byte
+  unchanged).
+- **HEAT_SINK** — removed its "vent lockout" downside string (it was inert — the
+  HEAT/fire-rate-ramp/vent mechanic was never wired). **This clears the last of
+  the original 11 passive downsides: the no-downsides rework is now complete**
+  (batches 1–6, 6.208.0→6.213.0). Every keystone is defined by the build it
+  unlocks, not an imposed penalty. *(HEAT_SINK's full uncapped-ramp + vent-AoE
+  mechanic remains a separate net-new feature, not built here.)*
+- Tests: `tests/unit/cd-apex-predator.test.js` (+11 — threshold/boundary, boss
+  never executes, default-safe, live `applyDamageToEnemy` integration) +
+  `tests/qa/47-cd-apex-predator.spec.js` (+5 — chipped enemy executed when
+  equipped, default-safe without, boss never) + `passives-no-downsides` updated
+  (0 downsides remain registry-wide). Full unit suite **1802** green; QA-07
+  weapons + QA-28 roster regression 25/25.
+
+---
+
 ## [6.212.0] - 2026-05-26
 
 ### Changed — No-downsides batch 5: Glass Cannon ↔ Berserker's Pact merge (CD-02 · §6c)

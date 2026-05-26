@@ -71,6 +71,15 @@ export const PASSIVES = {
         slot: true, item: false, stack: B,
         damageMult: 1.4, // §6c no-downsides — +40% all damage + pierce; the no-crit downside was removed
     },
+    APEX_PREDATOR: {
+        // CD-02 §6c — no-downside offense keystone filling the slot freed by the
+        // Berserker→Glass Cannon merge. Anchors crit/assassin builds; "fun to
+        // feel." NO static damageMult — the execute IS the effect (wired in
+        // collision-system.applyDamageToEnemy, gated on hasPassive). Bosses exempt.
+        id: 'APEX_PREDATOR', name: 'Apex Predator', desc: 'Your damage executes enemies below 15% max HP',
+        hooks: ['damage', 'execute'], tags: ['keystone', 'offense'],
+        slot: true, item: false, stack: B,
+    },
     TWIN_CAST: {
         id: 'TWIN_CAST', name: 'Twin Cast', desc: 'Power weapons fire twice (2nd at 50%); abilities +1 charge',
         hooks: ['powerFire', 'abilityCast', 'energyCost'], tags: ['keystone', 'power'],
@@ -229,9 +238,14 @@ export const PASSIVES = {
         // PURE upside; the −15% max-HP (maxHpMult 0.85) downside was removed.
     },
     HEAT_SINK: {
+        // §6c no-downsides — completes the no-downside rework of all 11 original
+        // keystone downsides. The `downside: 'Over-holding triggers a vent lockout'`
+        // string was removed: HEAT_SINK is currently INERT (its fire-rate-ramp /
+        // HEAT / vent mechanic was never wired), so the lockout doesn't exist in
+        // code. The full HEAT mechanic (uncapped ramp + vent AoE burst, with NO
+        // lockout) is a separate net-new feature — NOT built here.
         id: 'HEAT_SINK', name: 'Heat Sink', desc: 'Primaries ignore their fire-rate cap and ramp while held, building HEAT; max heat VENTs (brief lockout + AoE burst)',
         hooks: ['fireRate', 'fire'], tags: ['keystone', 'offense'], slot: true, item: false, stack: B,
-        downside: 'Over-holding triggers a vent lockout',
     },
 
     // ── Round-3 §10.1 — additional modular passives (item + slot, loot-safe) ──
@@ -278,7 +292,7 @@ export const PASSIVES = {
 // per relic instead of a generic fallback. A few are intentional thematic dups
 // (fire, bolt, ghost, anger) where two relics share a motif.
 const _PASSIVE_ICONS = {
-    GLASS_CANNON: 'gem', GUNSLINGER: 'pistol', PURIST: 'dagger',
+    GLASS_CANNON: 'gem', GUNSLINGER: 'pistol', PURIST: 'dagger', APEX_PREDATOR: 'skull',
     TWIN_CAST: 'multi-shot', PRISMATIC_SOUL: 'sparkle', OVERFLOW_CAPACITOR: 'battery',
     KILLING_SPREE: 'skull', ONE_WITH_THE_VOID: 'ghost', SECOND_HEART: 'heart',
     EYE_OF_THE_STORM: 'eye', DETONATOR: 'explosion', FRENZY: 'fist', GRAVITY_WELL: 'vortex',
