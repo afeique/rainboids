@@ -418,6 +418,7 @@ export function getEffectiveRegen() {
     if (stacks > 0) regen += stacks * 0.5;
     regen += this.getItemAffixTotal('regen'); // 6.32.0 — item regen affixes
     regen += _passiveMod(this, 'regen');       // P2 — passive numeric mods
+    regen += _spVal(this, 'REGENERATION');     // CD-08 — permanent SP regen stat (default-safe: 0 pts → 0)
     return Math.min(REGEN_RATE_CAP, regen);
 }
 

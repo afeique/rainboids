@@ -98,7 +98,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 |----|----|----|----|
 | CD-06 | `player/player.js` | getEffectiveMaxEnergy/EnergyRegen/PowerCost (−50% cap); Bloodshield buffer (accumulate/decay/soak); Bloodlust stacks; Regeneration into regen | CD-01/02/05 |
 | CD-07 | `player/weapons.js` | R-POWERPIPE: route power-weapon dmg through the player damage/crit pipeline; Efficiency+cap; Overclock cooldown-mode | CD-06 |
-| CD-08 | `player/progression.js` | getEffectiveRegen += Regeneration; cap→5 w/ Regenerator; energy tick uses getEffectiveEnergyRegen | CD-06 |
+| CD-08 ◐ | `player/progression.js` | ~~getEffectiveRegen += Regeneration~~ ✅ **6.198.0** (REGENERATION SP stat, +2 HP/s, shares the 3 HP/s cap, default-safe). **STILL TODO:** cap→5 w/ Regenerator powerup (not built yet). Energy regen tick already uses getEffectiveEnergyRegenMult (6.197.0). | CD-06 |
 | CD-09 | `player/lifecycle.js` | takeDamage: Bloodshield soak-first; per-hit cap 45% (generalize FAILSAFE); remove HOARDERS/FRENZY taxes; Thorns reflect+status | CD-06 |
 | CD-10 ⚠ | `combat/collision-system.js` | applyDamageToEnemy: Bloodlust mult, Hemoglutton, Sanguine on-kill, lifesteal→Bloodshield feed, Designator mark crit/detonate, Sentry targeting, Retribution nova. ⚠ hot hub — serialize | CD-06 |
 

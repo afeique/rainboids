@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.198.0] - 2026-05-25
+
+### Added — Regeneration SP stat (CD-08)
+
+- **Regeneration** (`core/sp-stats.js`) — a new permanent SP stat granting up to
+  **+2 HP/s** out-of-combat passive regen at full investment. It feeds the
+  existing `getEffectiveRegen()` (`player/progression.js`) alongside the REGEN
+  powerup and item regen affixes, sharing the same combat-gated **3 HP/s ceiling**
+  (`REGEN_RATE_CAP`) and the 4-second no-damage window — a permanent sustain path
+  that doesn't require finding the run-only REGEN powerup. Auto-surfaces in the
+  STATS grid (`sparkle` icon). **Default-safe:** 0 points → no regen contribution,
+  so out-of-combat healing is byte-for-byte unchanged; the reactive director
+  absorbs the sustain for invested builds.
+- Tests: `tests/unit/cd-regen-stat.test.js` (+8 — `spStatValue`, the stat def,
+  and `getEffectiveRegen` folding it in: default-safe, scaling, capped at 3 HP/s,
+  no change when un-allocated). Full unit suite **1686** green.
+
+---
+
 ## [6.197.0] - 2026-05-25
 
 ### Added — Energy-economy SP stats: Capacitor / Reactor / Efficiency (CD-01/05/06/14)

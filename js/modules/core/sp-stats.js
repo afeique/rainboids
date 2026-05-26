@@ -32,6 +32,10 @@ export const SP_STATS = [
     { id: 'CAPACITOR',  name: 'Capacitor',  icon: 'battery', max: 100, label: (t) => `+${t} max energy` },
     { id: 'REACTOR',    name: 'Reactor',    icon: 'bolt',    max: 100, label: (t) => `+${t}% energy regen` },
     { id: 'EFFICIENCY', name: 'Efficiency', icon: 'chart',   max: 50,  label: (t) => `−${t}% power cost` },
+    // CD sustain axis (CD-08). A permanent passive HP-regen source that feeds
+    // getEffectiveRegen alongside the REGEN powerup + item affixes, sharing the
+    // same combat-gated 3 HP/s ceiling (REGEN_RATE_CAP). Default-safe: 0 pts → 0.
+    { id: 'REGENERATION', name: 'Regeneration', icon: 'sparkle', max: 2, label: (t) => `+${t} HP/s out of combat` },
 ];
 
 const _BY_ID = Object.fromEntries(SP_STATS.map((s) => [s.id, s]));
