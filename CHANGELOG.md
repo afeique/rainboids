@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.228.1] - 2026-05-26
+
+### Added — gamepad rumble on taking a hit (GP-4 cue)
+
+- Extends the GP-4 rumble feature with a **defensive cue**: a HEAVY rumble when
+  the player takes a real HP-loss hit (`player/lifecycle.js` `takeDamage`, inside
+  the post-Bloodshield-soak `finalDamage > 0` block). Mitigated/absorbed hits and
+  the per-tick burn DoT don't buzz. Self-gates on an enabled + connected actuator
+  pad (off by default), so non-gamepad play is byte-for-byte unchanged. Full unit
+  suite green (the rumble module's gating is unit-covered).
+
 ## [6.228.0] - 2026-05-26
 
 ### Added — new-account starter kit + gold (a real "opening fork" from run one)

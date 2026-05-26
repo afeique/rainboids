@@ -31,6 +31,7 @@
 import { GAME_STATES, WAVES_PER_STAGE } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { isMobile } from '../platform/platform-detect.js';
+import { rumble, RUMBLE } from '../platform/rumble.js';
 import { frameClock } from '../core/frame-clock.js';
 import { applyPlayerStatus, playerCorrodeMult } from './player-status.js';
 import { getDifficulty } from '../wave/difficulty-director.js';
@@ -405,6 +406,11 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
 
     if (finalDamage > 0) {
         this._breakKillStreak();
+        // GP-4 — gamepad rumble on a real HP-loss hit (defensive cue). Fires
+        // only here (post-soak finalDamage > 0), so mitigated/absorbed hits
+        // and the per-tick burn DoT don't buzz. Self-gates on an enabled +
+        // connected actuator pad, so non-gamepad play is a no-op.
+        rumble(RUMBLE.HEAVY);
         if (this.game && this.game.stats) this.game.stats.totalDamageTaken += finalDamage;
         // RUN-05a — count this hit for the director's per-wave `hitsSurvived`
         // signal (reset to 0 at each wave start in wave-manager). Only real
