@@ -121,9 +121,11 @@ describe('§6c batch 1 — TWIN_CAST fires twice for normal cost', () => {
     });
 });
 
-describe('§6c batches 1–2 — downside string fields removed from the registry', () => {
-    test('batch 1 (HOARDERS_GREED/FRENZY/TWIN_CAST) + batch 2 (GUNSLINGER/PURIST) no longer carry a `downside`', () => {
-        for (const id of ['HOARDERS_GREED', 'FRENZY', 'TWIN_CAST', 'GUNSLINGER', 'PURIST']) {
+describe('§6c batches 1–3 — downside string fields removed from the registry', () => {
+    test('batches 1–3 keystones no longer carry a `downside`', () => {
+        // b1: HOARDERS_GREED/FRENZY/TWIN_CAST · b2: GUNSLINGER/PURIST · b3: FAILSAFE/EYE_OF_THE_STORM
+        for (const id of ['HOARDERS_GREED', 'FRENZY', 'TWIN_CAST', 'GUNSLINGER', 'PURIST',
+            'FAILSAFE', 'EYE_OF_THE_STORM']) {
             expect(PASSIVES[id]).toBeDefined();
             expect('downside' in PASSIVES[id]).toBe(false);
         }
@@ -133,9 +135,12 @@ describe('§6c batches 1–2 — downside string fields removed from the registr
         expect(PASSIVES.GUNSLINGER.hooks || []).not.toContain('disableSlots');
     });
 
-    test('the remaining 6 harsh-downside keystones STILL carry their downside (later batches)', () => {
-        for (const id of ['GLASS_CANNON', 'OVERFLOW_CAPACITOR',
-            'EYE_OF_THE_STORM', 'GRAVITY_WELL', 'FAILSAFE', 'HEAT_SINK']) {
+    test('FAILSAFE no longer carries the −15% max-HP penalty (maxHpMult removed; per-hit cap stays)', () => {
+        expect('maxHpMult' in PASSIVES.FAILSAFE).toBe(false);
+    });
+
+    test('the remaining 4 harsh-downside keystones STILL carry their downside (later batches)', () => {
+        for (const id of ['GLASS_CANNON', 'OVERFLOW_CAPACITOR', 'GRAVITY_WELL', 'HEAT_SINK']) {
             expect('downside' in PASSIVES[id]).toBe(true);
             expect(typeof PASSIVES[id].downside).toBe('string');
             expect(PASSIVES[id].downside.length).toBeGreaterThan(0);

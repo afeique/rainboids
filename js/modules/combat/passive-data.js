@@ -200,7 +200,9 @@ export const PASSIVES = {
     EYE_OF_THE_STORM: {
         id: 'EYE_OF_THE_STORM', name: 'Eye of the Storm', desc: 'While stationary, nearby enemies + their projectiles slow 40%',
         hooks: ['stationary', 'enemySlow'], tags: ['keystone', 'tempo', 'defense'],
-        slot: true, item: false, stack: B, downside: "You're a sitting target while it's up",
+        // §6c no-downsides — the "sitting target" risk is EMERGENT (you choose to
+        // stand still), not an imposed mechanical penalty, so no downside field.
+        slot: true, item: false, stack: B,
     },
     DETONATOR: {
         id: 'DETONATOR', name: 'Detonator', desc: 'Killing a status-afflicted enemy detonates its statuses as an AoE (fire/frost/acid)',
@@ -222,7 +224,8 @@ export const PASSIVES = {
     FAILSAFE: {
         id: 'FAILSAFE', name: 'Failsafe', desc: 'No single hit can remove more than 50% of your max HP',
         hooks: ['damageTaken'], tags: ['keystone', 'defense'], slot: true, item: false, stack: B,
-        downside: '−15% max HP', maxHpMult: 0.85,
+        // §6c no-downsides — kept as a defensive keystone with the per-hit cap as
+        // PURE upside; the −15% max-HP (maxHpMult 0.85) downside was removed.
     },
     HEAT_SINK: {
         id: 'HEAT_SINK', name: 'Heat Sink', desc: 'Primaries ignore their fire-rate cap and ramp while held, building HEAT; max heat VENTs (brief lockout + AoE burst)',

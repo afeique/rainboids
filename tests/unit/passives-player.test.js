@@ -229,14 +229,16 @@ describe('P6 — passive effect batch 1 (Glass Cannon multipliers)', () => {
 });
 
 describe('P6 batch 3 — Failsafe maxHP + Overflow Spark', () => {
-    test('Failsafe applies a 0.85 max-HP multiplier', () => {
+    test('Failsafe no longer reduces max HP (§6c no-downsides: −15% maxHP removed)', () => {
         const s = makeStub({ maxHealth: 200, getPowerupStacks: () => 0, getItemAffixTotal: () => 0, spStats: {} });
         s.getPassiveMod = (k) => passives.getPassiveMod.call(s, k);
         s.getPassiveMaxHpMult = () => passives.getPassiveMaxHpMult.call(s);
         own(s, ['FAILSAFE']);
         equip(s, 0, 'FAILSAFE');
-        expect(passives.getPassiveMaxHpMult.call(s)).toBeCloseTo(0.85);
-        expect(progression.getEffectiveMaxHealth.call(s)).toBe(170); // 200 × 0.85
+        // The maxHpMult downside was removed; Failsafe keeps only the per-hit
+        // cap (asserted in lifecycle damage tests) — max HP is unmultiplied.
+        expect(passives.getPassiveMaxHpMult.call(s)).toBeCloseTo(1.0);
+        expect(progression.getEffectiveMaxHealth.call(s)).toBe(200); // full, no penalty
     });
 
     test('Overflow Spark: +25% primary damage only at full energy', () => {

@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.210.0] - 2026-05-26
+
+### Changed — No-downsides passive rework, batch 3: Failsafe + Eye of the Storm (CD-02 · §6c)
+
+- **Failsafe** — removed the **−15% max-HP** penalty (`maxHpMult: 0.85`,
+  `combat/passive-data.js`). Per §6c it stays a defensive keystone with the
+  **"no single hit > 50% max HP" per-hit cap as pure upside** (the cap logic in
+  `lifecycle.js` is unchanged).
+- **Eye of the Storm** — removed the "you're a sitting target" downside string.
+  Per §6c the fragility is **emergent** (you choose to stand still for the 40%
+  enemy/projectile slow), not an imposed mechanical penalty — there was no code
+  behind the string, so this is purely accurate metadata.
+- 4 of the original 11 passive downsides now remain — **GLASS_CANNON**,
+  **OVERFLOW_CAPACITOR**, **GRAVITY_WELL**, **HEAT_SINK** — each needing a
+  mechanic-level rework (Glass Cannon/Berserker merge → Apex Predator; Overflow
+  cost; the pull/lockout mechanics) in later batches.
+- Tests: updated `passives-player` (Failsafe no longer multiplies max HP — full
+  200, per-hit cap unchanged) + `passives-no-downsides` (batch-3 list: 7 removed,
+  Failsafe `maxHpMult` gone, 4 keystones still carry downsides). Full unit suite
+  **1784** green; QA-14 passives + QA-03 player 16/16.
+
+---
+
 ## [6.209.0] - 2026-05-26
 
 ### Changed — No-downsides passive rework, batch 2: Gunslinger + Purist (CD-02 · §6c)
