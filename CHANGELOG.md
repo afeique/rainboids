@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.204.0] - 2026-05-25
+
+### Added — AoE power weapons now crit (CD-07 / R1 mechanical routing)
+
+- **AoE power-weapon damage now rolls crit** using the player's crit kit
+  (`getEffectiveCritChance` / `getEffectiveCritDamage`), so Nova, Orbital Strike,
+  Mines, Lightning, and Missiles scale with crit-chance/-damage builds — the same
+  as primaries and bullet-based powers already did. This is the load-bearing R1
+  routing that makes the energy axis (Capacitor/Reactor/Efficiency + power builds)
+  actually pay off: power weapons already inherited `getPassiveDamageMult`
+  (Glass Cannon / Bloodlust / Frenzy) via `applyDamageToEnemy`; crit was the
+  missing piece.
+- Implemented via an opt-in **`canCrit`** param on `damageEnemy`
+  (`combat/collision-system.js`, threaded through the `game-engine.js` wrapper),
+  default `false`, passed `true` only from the **6 power-weapon AoE call sites**
+  (nova / mines / lightning ×2 / missiles / beam). Non-power `damageEnemy` callers
+  (BACKLASH dodge-retaliation, BULWARK RETALIATION pulse, EXPLOSIVE-bullet splash)
+  stay non-crit, byte-for-byte unchanged. A pure `rollAoeCrit(player, damage)`
+  helper mirrors the bullet path's crit math (pre-multiply by critDmg%, set
+  `isCrit` for the damage-number FX); `applyDamageToEnemy` only forwards the flag,
+  so there's **no double-multiply** and **no double-crit** (bullet powers reach
+  enemies via the separate bullet→`takeDamage` path).
+- **Default-safe:** 0 crit chance ⇒ AoE power damage byte-for-byte unchanged
+  (`canCrit=false` or a 0-crit player both short-circuit `rollAoeCrit`).
+- **NOTE:** this is the *mechanical* half of R1 — base power-weapon damage
+  *tuning* ("so energy builds measurably out-perform") remains a deliberate
+  balance/playtest pass, not done here.
+- Tests: `tests/unit/cd-power-crit.test.js` (+8 — crit math, bullet-path parity,
+  default-safe / null-player / failed-roll, boundary) + `tests/qa/42-power-crit.spec.js`
+  (+4 — live AoE crit + FX, default-safe base damage, CHARGE_SHOT no-double-crit).
+  Full unit suite **1748** green; QA-07 weapons + QA-28 roster regression 25/25.
+
+---
+
 ## [6.203.0] - 2026-05-25
 
 ### Added — Ablative Plating powerup: first hit each wave fully blocked (CD-04)

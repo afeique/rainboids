@@ -1322,7 +1322,7 @@ export function checkLanceBeamCollisions() {
         // player (no point-blank dead zone).
         if (Math.abs(angDelta(Math.atan2(ey, ex), aim)) > arcHalf
             && d2 > (r + beamW) * (r + beamW)) continue;
-        this.damageEnemy(enemy, dmg);
+        this.damageEnemy(enemy, dmg, undefined, true); // R1/CD-07 — AoE power can crit
         if (Math.random() < 0.15) this.applyBurn(enemy, dmg);
         if (enemy.vel) {
             const len = Math.sqrt(d2) || 1;
@@ -1434,7 +1434,7 @@ export function checkMineCollisions() {
             const dist = Math.hypot(enemy.x - mine.x, enemy.y - mine.y);
             if (dist >= blastR) continue;
             const dmg = mineDmg * (1 - dist / blastR * 0.5);
-            this.damageEnemy(enemy, dmg);
+            this.damageEnemy(enemy, dmg, undefined, true); // R1/CD-07 — AoE power can crit
             if (dist > 0.001 && enemy.vel) {
                 const kx = (enemy.x - mine.x) / dist;
                 const ky = (enemy.y - mine.y) / dist;
@@ -1683,7 +1683,7 @@ export function checkNovaCollisions() {
                 // (damageEnemy may reset the pool slot on lethal hits).
                 const killX = enemy.x;
                 const killY = enemy.y;
-                this.damageEnemy(enemy, novaDmg);
+                this.damageEnemy(enemy, novaDmg, undefined, true); // R1/CD-07 — AoE power can crit
                 const wasKilled = !enemy.active || enemy.health <= 0.001;
 
                 // Phase 4 — INFERNO: always-on BRN apply to every enemy
@@ -1865,7 +1865,7 @@ export function checkLightningCollisions() {
             const kx = dx / len;
             const ky = dy / len;
             if (bestKind === 'enemy') {
-                this.damageEnemy(best, dmg);
+                this.damageEnemy(best, dmg, undefined, true); // R1/CD-07 — AoE power can crit
                 // Phase 3 — Arc Lightning STUN proc: 25% per per-tick
                 // hit. Refresh-style; chained procs keep the tether
                 // target frozen indefinitely.
@@ -1930,7 +1930,7 @@ export function checkLightningCollisions() {
                 kx = dx / d; ky = dy / d;
             }
             if (t.enemy && t.enemy.active) {
-                this.damageEnemy(t.enemy, dmg);
+                this.damageEnemy(t.enemy, dmg, undefined, true); // R1/CD-07 — AoE power can crit
                 if (t.enemy.vel) {
                     t.enemy.vel.x += kx * LIGHTNING_KNOCK;
                     t.enemy.vel.y += ky * LIGHTNING_KNOCK;
@@ -2072,7 +2072,7 @@ export function checkMissileCollisions() {
             if (!enemy.active) continue;
             const dist = Math.hypot(enemy.x - missile.x, enemy.y - missile.y);
             if (dist < (enemy.radius || 15) + 6) {
-                this.damageEnemy(enemy, missileDamage);
+                this.damageEnemy(enemy, missileDamage, undefined, true); // R1/CD-07 — AoE power can crit
                 if (enemy.vel) {
                     enemy.vel.x += kx * MISSILE_KNOCK;
                     enemy.vel.y += ky * MISSILE_KNOCK;
@@ -2422,6 +2422,35 @@ export function frenzyMult(count) {
 // the damage hook (no per-frame system here). DEFAULT-SAFE: 0 stacks → ×1.
 export function bloodlustMult(stacks) {
     return 1 + Math.min(BLOODLUST_MAX_STACKS, Math.max(0, stacks | 0)) * BLOODLUST_PER_STACK;
+}
+
+// R1 / CD-07 — AoE power-weapon crit roll. Pure resolver so it unit-tests
+// without the engine `this`. AoE/power weapons (nova, lightning, mines,
+// missiles, beams) deal damage through damageEnemy(...) and historically
+// could NOT crit — only primaries + bullet-based powers rolled crit at bullet
+// creation (weapons.js createBullet). This mirrors that bullet-path math
+// EXACTLY: roll `Math.random()*100 < getEffectiveCritChance()`, and on a crit
+// PRE-MULTIPLY the damage by `getEffectiveCritDamage()/100`. applyDamageToEnemy
+// does NOT apply a crit multiplier — it only renders the crit damage-number FX
+// from `opts.isCrit` — so pre-multiplying here matches bullets byte-for-byte
+// (no double-multiply).
+//
+// DEFAULT-SAFE: returns the input damage unchanged + isCrit:false when there is
+// no player, the player has no crit getters, or the crit roll fails (a player
+// with 0 crit chance NEVER enters the crit branch). `rng` is injectable for
+// deterministic tests; it defaults to Math.random so live callers behave
+// exactly like the bullet path.
+export function rollAoeCrit(player, damage, rng = Math.random) {
+    if (!player || typeof player.getEffectiveCritChance !== 'function'
+        || typeof player.getEffectiveCritDamage !== 'function') {
+        return { damage, isCrit: false };
+    }
+    const critChance = player.getEffectiveCritChance();
+    if (rng() * 100 < critChance) {
+        const critMult = player.getEffectiveCritDamage() / 100;
+        return { damage: damage * critMult, isCrit: true };
+    }
+    return { damage, isCrit: false };
 }
 
 // P6 — Gravity Well passive: a constant weak pull drags enemies toward the
@@ -3303,14 +3332,31 @@ export function applyWeaponElementStatus(enemy, element, dealt) {
     }
 }
 
-export function damageEnemy(enemy, damage, element) {
+export function damageEnemy(enemy, damage, element, canCrit = false) {
     // E2 — optional `element` lets AoE/power-weapon sources (beams, nova,
     // mines, missiles) carry their element into the resistance multiplier.
     // Defaults to KINETIC in applyDamageToEnemy when omitted; power-weapon
     // callers begin passing their element in E6.
+    //
+    // R1 / CD-07 — opt-in `canCrit` (default false) lets POWER-WEAPON AoE call
+    // sites roll crit so they scale with the player's crit kit like primaries.
+    // It is opt-in (not unconditional inside damageEnemy) because some callers
+    // are NON-power fixed-damage effects that must stay byte-for-byte:
+    // BACKLASH (dodge retaliation, lifecycle), the BULWARK RETALIATION pulse
+    // (lifecycle), and the EXPLOSIVE-bullet splash (bullet.js — its triggering
+    // bullet already pre-rolled its own crit on the direct hit). Per-target roll
+    // mirrors per-bullet crit. DEFAULT-SAFE: canCrit=false ⇒ no roll; or a 0-crit
+    // player ⇒ rollAoeCrit returns the damage unchanged + isCrit:false.
+    let isCrit = false;
+    if (canCrit && this.player) {
+        const c = rollAoeCrit(this.player, damage);
+        damage = c.damage;
+        isCrit = c.isCrit;
+    }
     const result = applyDamageToEnemy.call(this, enemy, damage, {
         numberY: enemy ? enemy.y - 15 : undefined,
         element,
+        isCrit,
     });
     if (result.blocked) return;
     // Surface this enemy in the top-center info panel — covers AOE hits

@@ -3257,7 +3257,7 @@ export class GameEngine {
     checkTractorShieldCollisions() { return col.checkTractorShieldCollisions.call(this); }
     checkCryoCollisions() { return col.checkCryoCollisions.call(this); }
     checkPrismBeamCollisions() { return col.checkPrismBeamCollisions.call(this); }
-    damageEnemy(enemy, damage) { return col.damageEnemy.call(this, enemy, damage); }
+    damageEnemy(enemy, damage, element, canCrit) { return col.damageEnemy.call(this, enemy, damage, element, canCrit); }
     applyDamageToEnemy(enemy, damage, opts) { return col.applyDamageToEnemy.call(this, enemy, damage, opts); }
     destroyAsteroid(ast) { return col.destroyAsteroid.call(this, ast); }
     // Mine defensive plasma shield zone — 6.23.0 (2026-05-19), refactored
