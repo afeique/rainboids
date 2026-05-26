@@ -48,6 +48,19 @@ const BTN_DPAD_UP = GAMEPAD_BUTTON.DPAD_UP, BTN_DPAD_DOWN = GAMEPAD_BUTTON.DPAD_
     BTN_DPAD_LEFT = GAMEPAD_BUTTON.DPAD_LEFT, BTN_DPAD_RIGHT = GAMEPAD_BUTTON.DPAD_RIGHT;
 const GAMEPAD_LAYOUT_STORAGE_KEY = 'rainboids:gamepad-layout';
 
+// GP-1 — pad-navigable overlays, keyed by the game state that owns them. Each
+// is a full-screen, exclusive DOM overlay; the focus controller auto-discovers
+// its buttons. The shop (D-pad tab cycling + ambiguous state) and the `I`
+// inventory overlay (drives its own GamepadFocusController) are intentionally
+// NOT here yet — they need their own coordination pass.
+const MENU_OVERLAY_BY_STATE = {
+    [GAME_STATES.PAUSED]: 'pause-overlay',
+    [GAME_STATES.ARMORY]: 'armory-overlay',
+    [GAME_STATES.LOADOUT]: 'loadout-overlay',
+    [GAME_STATES.HANGAR]: 'hangar-overlay',
+    [GAME_STATES.SETTINGS]: 'settings-overlay',
+};
+
 // Radial deadzone with re-scaling: inside the deadzone returns a zero
 // vector; outside, magnitude ramps 0→1 from the deadzone edge to full
 // deflection so there's no velocity discontinuity at the threshold.
@@ -236,8 +249,14 @@ export class GamepadHandler {
             if (confirm && !this._prevConfirm) this._menuFocus.handleAction('confirm');
             this._prevConfirm = confirm;
             const cancel = this._pressed(gp, BTN_CIRCLE);
-            if (cancel && !this._prevCancel && typeof this.engine.togglePause === 'function') {
-                this.engine.togglePause(); // B = back = resume
+            // B = back. For the pause overlay that means resume (togglePause).
+            // For the meta screens (ARMORY/LOADOUT/HANGAR/SETTINGS) there's no
+            // generic "back" yet, so B is a no-op there — the on-screen BACK
+            // button is reachable via nav + A. (Per-overlay B-back: follow-up.)
+            if (cancel && !this._prevCancel
+                && this.engine.game && this.engine.game.state === GAME_STATES.PAUSED
+                && typeof this.engine.togglePause === 'function') {
+                this.engine.togglePause();
             }
             this._prevCancel = cancel;
             return; // menu nav owns the frame
@@ -310,9 +329,15 @@ export class GamepadHandler {
     // shop / armory / settings / wave-pick / inventory overlays.
     _activeMenuRoot() {
         const eng = this.engine;
-        if (!eng || !eng.game || eng.game.state !== GAME_STATES.PAUSED) return null;
-        const el = eng.uiManager && eng.uiManager.elements && eng.uiManager.elements.pauseOverlay;
-        return (el && el.style && el.style.display === 'flex') ? el : null;
+        if (!eng || !eng.game) return null;
+        const id = MENU_OVERLAY_BY_STATE[eng.game.state];
+        if (!id || typeof document === 'undefined') return null;
+        const el = document.getElementById(id);
+        if (!el) return null;
+        // The owning state is the primary signal; the display guard just skips
+        // an overlay explicitly hidden mid-transition (jsdom leaves display '').
+        const hidden = el.style && el.style.display === 'none';
+        return hidden ? null : el;
     }
 
     _resetFrameState() {

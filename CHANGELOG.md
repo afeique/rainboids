@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.224.0] - 2026-05-26
+
+### Added — pad navigation extends to the pre-run meta screens (GP-1, v2)
+
+- Gamepad menu navigation now covers the **ARMORY, LOADOUT, HANGAR, and SETTINGS**
+  overlays in addition to the pause menu — left-stick/D-pad move + A activate work
+  on each. Driven by a `MENU_OVERLAY_BY_STATE` map (game state → overlay element)
+  so the routing is one lookup; the focus controller auto-discovers each overlay's
+  buttons. (The shop overlay — which has its own D-pad tab cycling — and the `I`
+  inventory overlay — which drives its own focus controller — are intentionally
+  excluded pending a dedicated coordination pass.)
+
+### Fixed
+
+- **B no longer fires `togglePause` outside the pause menu.** The v1 cancel
+  binding called `togglePause` for any pad-navigable overlay; now it's gated to
+  the PAUSED state (a stray pause-toggle in a meta screen is a no-op). On the meta
+  screens B is currently inert — the on-screen BACK button is reachable via nav + A
+  (per-overlay B-back is a follow-up).
+
+Default-safe: gamepad-scheme + connected-pad + a mapped overlay open only; all
+other play is unchanged. Tests: +3 unit (ARMORY navigable/activatable, B-no-pause
+on a meta screen, unmapped-state → no nav); full unit suite 1909 green.
+
 ## [6.223.0] - 2026-05-26
 
 ### Added — pad-navigable pause menu (GP-1, v1)
