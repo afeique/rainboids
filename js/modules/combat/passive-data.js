@@ -86,8 +86,10 @@ export const PASSIVES = {
     },
     OVERFLOW_CAPACITOR: {
         id: 'OVERFLOW_CAPACITOR', name: 'Overflow Capacitor', desc: '2× energy regen, +50% max energy',
-        hooks: ['energyRegen', 'maxEnergy', 'energyCost'], tags: ['keystone', 'energy'],
-        slot: true, item: true, itemTierMin: TRANS, stack: B, downside: 'Power costs ×1.5',
+        // §6c no-downsides — reworked to pure 2×regen/+50%max (wired into the
+        // getEffectiveMaxEnergy/RegenMult getters); the ×1.5 power-cost downside removed.
+        hooks: ['energyRegen', 'maxEnergy'], tags: ['keystone', 'energy'],
+        slot: true, item: true, itemTierMin: TRANS, stack: B,
     },
     KILLING_SPREE: {
         id: 'KILLING_SPREE', name: 'Killing Spree', desc: 'Kill-streak no longer resets on hit (slow decay); ×2 streak damage',
@@ -214,8 +216,10 @@ export const PASSIVES = {
     },
     GRAVITY_WELL: {
         id: 'GRAVITY_WELL', name: 'Gravity Well', desc: 'A constant weak pull draws enemies toward your reticle, grouping them',
+        // §6c no-downsides — the "pulls danger toward you" risk is EMERGENT (the
+        // pull targets your reticle; group near yourself at your own risk), not an
+        // imposed mechanical penalty. No downside field.
         hooks: ['update', 'enemyPull'], tags: ['keystone', 'element'], slot: true, item: false, stack: B,
-        downside: 'Pulls danger toward you too',
     },
     FLOW_STATE: {
         id: 'FLOW_STATE', name: 'Flow State', desc: 'Each kill cuts all ability cooldowns by 3%',

@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.211.0] - 2026-05-26
+
+### Changed — No-downsides passive rework, batch 4: Overflow Capacitor + Gravity Well (CD-02 · §6c)
+
+- **Overflow Capacitor** — reworked to **pure 2× energy regen + 50% max energy**
+  and **wired live** (it was previously inert — defined but never consumed). The
+  upside now flows through the energy getters: `getEffectiveMaxEnergy` ×1.5,
+  `getEffectiveEnergyRegenMult` ×2 (`player/progression.js`), both gated on the
+  passive (default-safe ×1 without it). The never-implemented "Power costs ×1.5"
+  downside string + `energyCost` hook were removed. A real power-build energy
+  keystone now, composing with the Capacitor/Reactor stats + Flux.
+- **Gravity Well** — removed the "pulls danger toward you too" downside string.
+  The pull targets your **reticle** (grouping enemies where you aim); clustering
+  them near yourself is an emergent choice, not an imposed penalty — no code
+  backed the string.
+- **2 of the original 11 passive downsides remain** — **GLASS_CANNON** (the
+  Glass-Cannon/Berserker merge → Apex Predator) and **HEAT_SINK** (the vent
+  lockout → AoE-reward rework) — both net-new-mechanic batches.
+- Tests: `passives-no-downsides` updated (batch-4 list; Overflow Capacitor getter
+  behavior ×1.5 max / ×2 regen + default-safe; 2 keystones still carry downsides).
+  Full unit suite **1785** green; QA-36 energy + QA-14 passives 10/10.
+
+---
+
 ## [6.210.0] - 2026-05-26
 
 ### Changed — No-downsides passive rework, batch 3: Failsafe + Eye of the Storm (CD-02 · §6c)

@@ -541,8 +541,12 @@ export function getEffectiveBurstStarHealing() {
 // collapses to the exact pre-CD value (maxEnergy / regenMult 1 / baseCost).
 
 // CAPACITOR — raises the energy reservoir. 0 pts → base maxEnergy (100).
+// OVERFLOW_CAPACITOR passive (§6c, no-downsides rework) multiplies the reservoir
+// by 1.5 (+50% max). Default-safe: without the passive, ×1.
 export function getEffectiveMaxEnergy() {
-    return (this.maxEnergy || 100) + _spVal(this, 'CAPACITOR');
+    const base = (this.maxEnergy || 100) + _spVal(this, 'CAPACITOR');
+    const overflow = (typeof this.hasPassive === 'function' && this.hasPassive('OVERFLOW_CAPACITOR')) ? 1.5 : 1;
+    return base * overflow;
 }
 
 // REACTOR — multiplier on the per-frame regen increment. 0 pts → 1.
@@ -551,7 +555,9 @@ export function getEffectiveMaxEnergy() {
 // active stack while the ramp is alive (player.update zeroes _fluxStacks once the
 // fade window elapses). Default-safe: 0 Flux stacks → +0 → the exact `1 + REACTOR%`.
 export function getEffectiveEnergyRegenMult() {
-    return 1 + _spVal(this, 'REACTOR') / 100 + (this._fluxStacks || 0) * FLUX_PER_STACK;
+    // OVERFLOW_CAPACITOR passive (§6c) doubles regen (×2). Default-safe: ×1 without it.
+    const overflow = (typeof this.hasPassive === 'function' && this.hasPassive('OVERFLOW_CAPACITOR')) ? 2 : 1;
+    return (1 + _spVal(this, 'REACTOR') / 100 + (this._fluxStacks || 0) * FLUX_PER_STACK) * overflow;
 }
 
 // EFFICIENCY — discounts power-weapon energy cost. 0 pts → baseCost.

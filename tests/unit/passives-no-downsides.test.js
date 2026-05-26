@@ -121,11 +121,12 @@ describe('§6c batch 1 — TWIN_CAST fires twice for normal cost', () => {
     });
 });
 
-describe('§6c batches 1–3 — downside string fields removed from the registry', () => {
-    test('batches 1–3 keystones no longer carry a `downside`', () => {
-        // b1: HOARDERS_GREED/FRENZY/TWIN_CAST · b2: GUNSLINGER/PURIST · b3: FAILSAFE/EYE_OF_THE_STORM
+describe('§6c batches 1–4 — downside string fields removed from the registry', () => {
+    test('batches 1–4 keystones no longer carry a `downside`', () => {
+        // b1: HOARDERS_GREED/FRENZY/TWIN_CAST · b2: GUNSLINGER/PURIST ·
+        // b3: FAILSAFE/EYE_OF_THE_STORM · b4: OVERFLOW_CAPACITOR/GRAVITY_WELL
         for (const id of ['HOARDERS_GREED', 'FRENZY', 'TWIN_CAST', 'GUNSLINGER', 'PURIST',
-            'FAILSAFE', 'EYE_OF_THE_STORM']) {
+            'FAILSAFE', 'EYE_OF_THE_STORM', 'OVERFLOW_CAPACITOR', 'GRAVITY_WELL']) {
             expect(PASSIVES[id]).toBeDefined();
             expect('downside' in PASSIVES[id]).toBe(false);
         }
@@ -139,8 +140,17 @@ describe('§6c batches 1–3 — downside string fields removed from the registr
         expect('maxHpMult' in PASSIVES.FAILSAFE).toBe(false);
     });
 
-    test('the remaining 4 harsh-downside keystones STILL carry their downside (later batches)', () => {
-        for (const id of ['GLASS_CANNON', 'OVERFLOW_CAPACITOR', 'GRAVITY_WELL', 'HEAT_SINK']) {
+    test('OVERFLOW_CAPACITOR is now wired (×1.5 max energy, ×2 regen) + default-safe without it', () => {
+        const withOC = { maxEnergy: 100, spStats: {}, _fluxStacks: 0, hasPassive: (id) => id === 'OVERFLOW_CAPACITOR' };
+        const without = { maxEnergy: 100, spStats: {}, _fluxStacks: 0, hasPassive: () => false };
+        expect(progression.getEffectiveMaxEnergy.call(without)).toBe(100);       // default-safe
+        expect(progression.getEffectiveMaxEnergy.call(withOC)).toBeCloseTo(150); // +50% max
+        expect(progression.getEffectiveEnergyRegenMult.call(without)).toBeCloseTo(1); // default-safe
+        expect(progression.getEffectiveEnergyRegenMult.call(withOC)).toBeCloseTo(2); // ×2 regen
+    });
+
+    test('the remaining 2 harsh-downside keystones STILL carry their downside (later batches)', () => {
+        for (const id of ['GLASS_CANNON', 'HEAT_SINK']) {
             expect('downside' in PASSIVES[id]).toBe(true);
             expect(typeof PASSIVES[id].downside).toBe('string');
             expect(PASSIVES[id].downside.length).toBeGreaterThan(0);
