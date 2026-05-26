@@ -2220,7 +2220,10 @@ export function applyChill(enemy, durationMs = 2000) {
     // Capture pre-state BEFORE the refresh: chill is active iff its window
     // hasn't expired. wasInactive = a NEW application.
     const wasInactive = (enemy.chillUntil || 0) <= frameClock.now;
-    enemy.chillUntil = Math.max(enemy.chillUntil || 0, frameClock.now + durationMs * conduitFactor(this));
+    // 6.207.1 — CONDUIT (faster DoT ticks / shorter DoT window) must NOT scale
+    // CHILL: it's a slow/CC with no ticks, so conduitFactor (<1) would only
+    // SHORTEN it — a pure downside. Conduit scales DoTs only (burn/corrode/bleed).
+    enemy.chillUntil = Math.max(enemy.chillUntil || 0, frameClock.now + durationMs);
     // RESONANT_SURGE — chill newly applied grants the holder energy.
     _resonantSurgeGrant(this, wasInactive);
     // ENMY-07 — blink-burrow's isFrozen reads `_frozenUntil`; mirror the live
@@ -2232,7 +2235,9 @@ export function applyChill(enemy, durationMs = 2000) {
 // FREEZE — full halt + no firing (OR'd into the stun gate) + brittle. Refresh.
 export function applyFreeze(enemy, durationMs = 1500) {
     if (!_statusGuard(enemy)) return;
-    enemy.freezeUntil = Math.max(enemy.freezeUntil || 0, frameClock.now + durationMs * conduitFactor(this));
+    // 6.207.1 — CONDUIT must NOT scale FREEZE (hard CC, no ticks) — same reason
+    // as chill: conduitFactor would only shorten it (a downside). DoTs only.
+    enemy.freezeUntil = Math.max(enemy.freezeUntil || 0, frameClock.now + durationMs);
     // ENMY-07 — same mirror as applyChill: a hard FREEZE also blocks blink.
     enemy._frozenUntil = Math.max(enemy._frozenUntil || 0, enemy.freezeUntil);
 }
@@ -2243,7 +2248,9 @@ export function applyConduct(enemy, durationMs = 3000) {
     // Capture pre-state BEFORE the refresh: conduct is active iff its window
     // hasn't expired. wasInactive = a NEW application.
     const wasInactive = (enemy.conductUntil || 0) <= frameClock.now;
-    enemy.conductUntil = Math.max(enemy.conductUntil || 0, frameClock.now + durationMs * conduitFactor(this));
+    // 6.207.1 — CONDUIT must NOT scale CONDUCT (a +50%-VOLT-vuln debuff, no
+    // ticks) — conduitFactor would only shorten this player-beneficial window.
+    enemy.conductUntil = Math.max(enemy.conductUntil || 0, frameClock.now + durationMs);
     // RESONANT_SURGE — conduct newly applied grants the holder energy.
     _resonantSurgeGrant(this, wasInactive);
 }

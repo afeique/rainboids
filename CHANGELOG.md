@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.207.1] - 2026-05-26
+
+### Fixed — Conduit no longer shortens non-DoT statuses (chill / freeze / conduct)
+
+- The **Conduit** passive (`conduitFactor`, "shorter window + faster *ticks*") was
+  multiplied into the duration of **chill, freeze, and conduct** — but those are
+  CC/debuffs with no ticks, so the `<1` factor only **shortened** them, a pure
+  *downside* for Conduit holders. The 6.207.0 wrapper fix had just made this fire
+  live for chill + conduct. Removed `conduitFactor` from all three; Conduit now
+  scales **DoTs only** (burn / corrode / bleed), as intended. Conduit holders keep
+  full-duration chill/freeze/conduct + their faster DoT ticks.
+- Full unit suite **1776** green; QA-28 roster + QA-45 resonant-surge 11/11.
+
+---
+
 ## [6.207.0] - 2026-05-26
 
 ### Added — Resonant Surge powerup (CD-04)
