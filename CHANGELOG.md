@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.217.0] - 2026-05-26
+
+### Added — persisted AI Co-Pilot config (mobile P7 · AS-1)
+
+- **The Co-Pilot's richer config now persists.** The saved `rainboidsAssists`
+  blob is extended to carry `level` (manual-touch / co-pilot / autopilot),
+  `aggression` (0.1–1), and `autoDodge` (off / conservative / aggressive)
+  alongside the existing boolean toggles. The `AssistSystem` is **seeded from
+  the saved prefs** at construction, so a player's chosen Co-Pilot tuning now
+  survives a reload. This is the prerequisite that unblocks the AS-2/3/4 control
+  surface (level preset / auto-dodge intensity / aggression slider).
+- New pure helper module `assist/assist-config.js`
+  (`defaultAssistConfig` / `mergeStoredAssists`) builds the platform defaults
+  and merges + **sanitizes** a stored blob (clamps `aggression`, validates
+  `level`/`autoDodge`, strips the retired `autoPower`), so a corrupt or stale
+  save can't push a bad value into the live config. 13 new unit tests.
+
+### Changed
+
+- The per-frame assist reconcile **no longer hard-codes `level`/`autoDodge`
+  from `controlScheme`** — it mirrors the player's saved `this.assists` instead.
+  A touch-only device still force-bakes the Co-Pilot baseline (aim/fire/
+  abilities must be automatic for one-thumb play); desktop/gamepad now honor the
+  saved config. `setAssist()` is type-aware (string `level`/`autoDodge`, clamped
+  numeric `aggression`, boolean toggles).
+
+Default-safe: a default desktop config is manual (`level` MANUAL_TOUCH,
+`autoDodge` off) → the assist system stays dormant and desktop play is
+unchanged. Verified: 21 assist unit tests + QA load 12/12 + HUD/gameplay 13/13.
+
 ## [6.216.4] - 2026-05-26
 
 ### Added — first-run mobile tutorial card (mobile P7 · MB-3)

@@ -92,6 +92,7 @@ import { RadialMenu } from './ui/radial-menu.js';
 import { MobileTouchHandler } from './ui/mobile-touch.js';
 import { GamepadHandler } from './ui/gamepad-handler.js';
 import { AssistSystem, ASSIST_LEVELS } from './assist/assist-system.js';
+import { mergeStoredAssists } from './assist/assist-config.js';
 import { isMobile, isPortrait } from './platform/platform-detect.js';
 import { requestWakeLock, releaseWakeLock, attachAutoReacquireHandler } from './platform/wake-lock.js';
 import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './core/storage.js';
@@ -564,12 +565,17 @@ export class GameEngine {
         // this.uiManager.hideTitleScreen();
         
         this.initializePools();
+        // AS-1 — seed the Co-Pilot config from the persisted prefs (this.assists)
+        // rather than raw mobile defaults, so a player's saved level/auto-dodge/
+        // aggression survive a reload. The per-frame reconcile below still
+        // force-bakes the Co-Pilot baseline on a touch-only device.
         this.assistSystem = new AssistSystem(this, {
-            level: this.mobile ? ASSIST_LEVELS.CO_PILOT : ASSIST_LEVELS.MANUAL_TOUCH,
-            autoDodge: this.mobile ? 'conservative' : 'off',
-            autoCastAbilities: this.mobile,
-            autoCastPower: this.mobile,
-            autoAim: this.mobile,
+            level: this.assists.level,
+            autoDodge: this.assists.autoDodge,
+            aggression: this.assists.aggression,
+            autoCastAbilities: this.assists.autoCastAbilities,
+            autoCastPower: this.assists.autoFire,
+            autoAim: this.assists.autoAim,
         });
         this.setupEventListeners();
         // Set the initial ASSISTS / GAMEPAD tab visibility now that the UI
@@ -3374,12 +3380,28 @@ export class GameEngine {
             // player reads it — left stick → movement, right stick → aim,
             // triggers → fire/power, A → dash, B/X → ability.
             if (this.gamepad) this.gamepad.poll(input);
-            if (this.assistSystem && (this.controlScheme === 'touch' || this.assists?.autoCastAbilities || this.assists?.autoFire)) {
+            // AS-1 — reconcile the Co-Pilot config from the player's saved
+            // prefs each frame (mirror this.assists), no longer hard-coding it
+            // from controlScheme. On a touch-only device the Co-Pilot baseline
+            // is still force-baked (aim/fire/abilities MUST be automatic or a
+            // one-thumb player can't act); auto-dodge intensity honors the saved
+            // pref. On desktop/gamepad the saved level/auto-dodge/aggression are
+            // honored, so a manual desktop player (default level MANUAL_TOUCH,
+            // auto-dodge off) sees no behavior change.
+            if (this.assistSystem && this._assistSystemActive()) {
                 const cfg = this.assistSystem.config;
-                cfg.level = this.controlScheme === 'touch' ? ASSIST_LEVELS.CO_PILOT : ASSIST_LEVELS.MANUAL_TOUCH;
-                cfg.autoDodge = this.controlScheme === 'touch' ? 'conservative' : 'off';
-                cfg.autoCastAbilities = this.controlScheme === 'touch' || !!this.assists?.autoCastAbilities;
-                cfg.autoCastPower = this.controlScheme === 'touch' || !!this.assists?.autoFire;
+                if (this.controlScheme === 'touch') {
+                    cfg.level = ASSIST_LEVELS.CO_PILOT;
+                    cfg.autoDodge = this.assists.autoDodge || 'conservative';
+                    cfg.autoCastAbilities = true;
+                    cfg.autoCastPower = true;
+                } else {
+                    cfg.level = this.assists.level;
+                    cfg.autoDodge = this.assists.autoDodge;
+                    cfg.autoCastAbilities = !!this.assists.autoCastAbilities;
+                    cfg.autoCastPower = !!this.assists.autoFire;
+                }
+                cfg.aggression = this.assists.aggression;
                 this.assistSystem.tick(input);
             }
             // Add the update method to the input object so player can call it
@@ -5011,23 +5033,17 @@ export class GameEngine {
         // 6.2.3 — `laserSight` added. Default ON on desktop; mobile gets
         // it false (the touch model never drew the laser — a mobile player
         // with a gamepad can opt back into it).
+        // AS-1 (6.217.0) — the persisted blob now also carries the richer
+        // Co-Pilot config (level / aggression / autoDodge). Defaulting +
+        // merging + sanitizing moved to the pure assist-config helper so the
+        // load/merge/save path is unit-testable without the engine.
         const mobile = isMobile();
-        const defaults = {
-            aimAssist: false,
-            autoAim: false,
-            autoFire: false,
-            autoCastAbilities: false,
-            laserSight: !mobile,
-        };
         try {
             const raw = localStorage.getItem('rainboidsAssists');
             const stored = raw ? JSON.parse(raw) : null;
-            const merged = stored ? Object.assign({}, defaults, stored) : defaults;
-            // Strip the retired `autoPower` field if present in stored.
-            delete merged.autoPower;
-            return merged;
+            return mergeStoredAssists(stored, mobile);
         } catch (e) {
-            return defaults;
+            return mergeStoredAssists(null, mobile);
         }
     }
 
@@ -5104,9 +5120,33 @@ export class GameEngine {
         }
     }
 
+    // AS-1 — true iff the Co-Pilot/AssistSystem should run this frame. Touch
+    // always runs it (forced one-thumb baseline); otherwise it runs only if
+    // the player opted into a non-manual level, an auto-cast, or auto-dodge.
+    // A default manual desktop config returns false → no per-frame work and
+    // no behavior change vs. pre-AS-1.
+    _assistSystemActive() {
+        if (this.controlScheme === 'touch') return true;
+        const a = this.assists;
+        if (!a) return false;
+        return a.level !== ASSIST_LEVELS.MANUAL_TOUCH
+            || !!a.autoCastAbilities
+            || !!a.autoFire
+            || (!!a.autoDodge && a.autoDodge !== 'off');
+    }
+
     setAssist(name, value) {
         if (!this.assists || !(name in this.assists)) return;
-        this.assists[name] = !!value;
+        // AS-1 — `level` / `autoDodge` are strings and `aggression` is a number
+        // (clamped 0.1–1); the rest stay booleans. Persist the whole blob.
+        if (name === 'level' || name === 'autoDodge') {
+            this.assists[name] = value;
+        } else if (name === 'aggression') {
+            const n = Number(value);
+            if (Number.isFinite(n)) this.assists[name] = Math.max(0.1, Math.min(1, n));
+        } else {
+            this.assists[name] = !!value;
+        }
         try {
             localStorage.setItem('rainboidsAssists', JSON.stringify(this.assists));
         } catch (e) { /* localStorage may be unavailable */ }
