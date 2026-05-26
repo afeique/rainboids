@@ -1,5 +1,5 @@
 // Player ship entity
-import { GAME_CONFIG } from '../core/constants.js';
+import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS } from '../core/constants.js';
 import { random, wrap } from '../core/utils.js';
 import * as weapons from './weapons.js';
 import * as abilities from './abilities.js';
@@ -401,6 +401,13 @@ export class Player {
         this.regenTimer = 0;
         this.empActive = false;
         this.tractorShieldActive = false;
+
+        // CD-10 — Bloodshield buffer (temporary damage-soak fed by heal-overflow
+        // when the BLOODSHIELD passive is equipped). Reset to empty on spawn /
+        // run-start so a fresh run starts with no cushion. Default-safe: 0 buffer
+        // means the soak in lifecycle.takeDamage is a no-op.
+        this.bloodshield = 0;
+        this._bloodshieldRefreshMs = 0;
 
         let scale = 1;
         this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
@@ -1060,6 +1067,17 @@ export class Player {
             } else if (this._siegeRamp) {
                 this._siegeRamp = 0;
             }
+
+            // CD-10 — Bloodshield buffer decay. The banked shield fades when it
+            // hasn't been topped up recently (BLOODSHIELD_DECAY_DELAY_MS grace),
+            // floored at 0. Gated on a non-empty buffer so a player with 0
+            // bloodshield (or no passive) does zero extra work — default-safe.
+            if (this.bloodshield > 0) {
+                const sinceRefresh = eNow - (this._bloodshieldRefreshMs || 0);
+                if (sinceRefresh >= BLOODSHIELD_DECAY_DELAY_MS && dtMs > 0) {
+                    this.bloodshield = Math.max(0, this.bloodshield - BLOODSHIELD_DECAY_PER_SEC * dtMs / 1000);
+                }
+            }
         }
 
         // Charging shot system - charge when holding left-click, fire on release
@@ -1246,6 +1264,30 @@ export class Player {
 
     getEffectiveMaxHealth() {
         return progression.getEffectiveMaxHealth.call(this);
+    }
+
+    // CD-10 — current Bloodshield buffer cap (35% of effective max HP).
+    getBloodshieldCap() {
+        const maxHp = (typeof this.getEffectiveMaxHealth === 'function')
+            ? this.getEffectiveMaxHealth() : this.maxHealth;
+        return Math.max(0, maxHp * BLOODSHIELD_CAP_FRAC);
+    }
+
+    // CD-10 — bank `amount` shield points into the Bloodshield buffer, clamped to
+    // the 35%-of-max-HP cap, and stamp the refresh time (so decay's grace window
+    // restarts). Returns the amount actually banked (≥ 0). Caller gates on the
+    // BLOODSHIELD passive; this is pure clamp math so 0/negative input is inert.
+    addBloodshield(amount) {
+        if (!(amount > 0)) return 0;
+        const cap = this.getBloodshieldCap();
+        const before = this.bloodshield || 0;
+        const next = Math.min(cap, before + amount);
+        const added = Math.max(0, next - before);
+        if (added > 0) {
+            this.bloodshield = next;
+            this._bloodshieldRefreshMs = Date.now();
+        }
+        return added;
     }
 
     getEffectiveCritChance() {

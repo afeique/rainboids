@@ -167,6 +167,10 @@ export const PASSIVES = {
         id: 'GUARDIAN_ECHO', name: 'Guardian Echo', desc: 'A lethal-threshold hit emits a knockback nova (no death-save)',
         hooks: ['damageTaken'], tags: ['defense'], slot: true, item: true, itemTierMin: EXC, stack: B,
     },
+    BLOODSHIELD: {
+        id: 'BLOODSHIELD', name: 'Bloodshield', desc: 'Over-healing banks a temporary shield that soaks damage before your HP (max 35% HP).',
+        hooks: ['heal', 'damageTaken'], tags: ['defense', 'sustain'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
     SALVAGE_PROTOCOL: {
         id: 'SALVAGE_PROTOCOL', name: 'Salvage Protocol', desc: '+1 Core per salvage; better tier-up chance on drops',
         hooks: ['salvage', 'drop'], tags: ['econ'], slot: false, item: true, itemTierMin: EXC, stack: A,
@@ -269,7 +273,7 @@ const _PASSIVE_ICONS = {
     STATIC_CHARGE: 'bolt', OPPORTUNIST: 'target', PREDATOR: 'bow-arrow',
     VAMPIRIC_ROUNDS: 'droplet', RICOCHET: 'shuffle', MOMENTUM_ROUNDS: 'rocket',
     CHAIN_REACTION: 'bomb', KINETIC_BATTERY: 'wind', OVERFLOW_SPARK: 'bolt',
-    LAST_BASTION: 'medal', GUARDIAN_ECHO: 'thorns', SALVAGE_PROTOCOL: 'wrench',
+    LAST_BASTION: 'medal', GUARDIAN_ECHO: 'thorns', BLOODSHIELD: 'shield', SALVAGE_PROTOCOL: 'wrench',
     SCAVENGER: 'magnet', HOARDERS_GREED: 'money-bag', OVERKILL: 'dizzy', VENDETTA: 'anger',
     CONDUIT: 'chain', AFTERIMAGE: 'ghost', RESONANCE: 'loop', BACKLASH: 'undo',
     HARVEST: 'cart', TRACER_LOCK: 'crosshair', SIEGE: 'chart',

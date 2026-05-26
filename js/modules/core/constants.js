@@ -363,6 +363,20 @@ export const BOSS_WAVE_INTERVAL = WAVES_PER_STAGE;
 //     something. Future CD caps (regen ceiling, etc.) go in this block.
 export const EFFICIENCY_CAP = 0.5;
 
+// CD-10 — BLOODSHIELD (no-downside, passive-gated). Over-healing past max HP is
+// banked into a temporary shield buffer that soaks incoming damage before HP.
+//   - BLOODSHIELD_CAP_FRAC (CD-05 R-CAP): the buffer can hold at most 35% of
+//     the player's *effective* max HP, so excess sustain becomes a meaningful
+//     but bounded cushion (never a second health bar).
+//   - BLOODSHIELD_DECAY_PER_SEC: the buffer fades when not refreshed (a flat
+//     5 shield points/second) so it reads as a fading bonus, not permanent.
+//   - BLOODSHIELD_DECAY_DELAY_MS: a short grace window after the buffer is
+//     last topped up before decay begins (so a fresh top-off isn't instantly
+//     eaten by decay between feeds).
+export const BLOODSHIELD_CAP_FRAC = 0.35;
+export const BLOODSHIELD_DECAY_PER_SEC = 5;
+export const BLOODSHIELD_DECAY_DELAY_MS = 1500;
+
 // RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
 // The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
 // accessor below returns today's values when no runConfig is set.

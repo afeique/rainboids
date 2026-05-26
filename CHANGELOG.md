@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.199.0] - 2026-05-25
+
+### Added — Bloodshield: over-heal banks a damage-soaking buffer (CD-02/05/09)
+
+- **Bloodshield** (new no-downside passive, `combat/passive-data.js`) — while
+  equipped, healing that would **overflow** your max HP is banked as a temporary
+  **Bloodshield buffer** that **soaks incoming damage before your HP**, capped at
+  **35% of max HP** (`BLOODSHIELD_CAP_FRAC`, `core/constants.js`, CD-05) and
+  **decaying** ~5 HP/s after a short grace window. Turns excess sustain
+  (lifesteal / regen / orbs at full HP) into a survivability cushion — the
+  defensive anchor of the "blood" build archetype.
+- **Soak** (`player/lifecycle.js` `takeDamage`) — inserted after `finalDamage`
+  is finalized (post shield/resist/FAILSAFE) and **before** it reduces HP /
+  resolves lethal, so the buffer absorbs first and only the remainder hits HP
+  (and downstream stats/thorns/lethal see the real HP-loss amount). A pure
+  `applyBloodshieldSoak(player, dmg)` resolver backs it for unit testing.
+- **Feed** — banked at the single over-heal funnel (`accumulateOverflowToTank`),
+  so orb overflow *and* regen-at-max both feed it; the buffer cushions first (to
+  its cap), the remainder falls through to the existing health-tank accumulator.
+  Buffer state + decay live on the player (`player/player.js`,
+  `addBloodshield`/`getBloodshieldCap`, reset per run).
+- **Default-safe:** without the Bloodshield passive (and an empty buffer),
+  `takeDamage` and healing are byte-for-byte unchanged — the soak is gated on
+  `bloodshield > 0` and the feed on `hasPassive('BLOODSHIELD')`. The reactive
+  director absorbs the survivability gain for invested builds.
+- Tests: `tests/unit/cd-bloodshield.test.js` (+18 — soak resolver incl.
+  default-safe, cap clamp, decay + floor + grace, `takeDamage` integration) +
+  `tests/qa/37-bloodshield.spec.js` (+5 — full/partial soak, over-heal feed,
+  default-safe full damage without the passive). Full unit suite **1704** green;
+  QA-03 player + QA-04 HUD damage regression 24/24.
+
+---
+
 ## [6.198.0] - 2026-05-25
 
 ### Added — Regeneration SP stat (CD-08)

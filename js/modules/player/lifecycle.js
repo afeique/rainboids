@@ -166,6 +166,21 @@ export function backlashTarget(source) {
     return (atk && atk.active) ? atk : null;
 }
 
+// CD-10 — Bloodshield soak. Pure resolver so the buffer math unit-tests cleanly
+// without the engine `this`. Given a player-like (with a numeric `bloodshield`)
+// and the finalized incoming `dmg`, drain the buffer first: it absorbs
+// min(buffer, dmg), and only the remainder is the amount that should hit HP.
+// MUTATES player.bloodshield (the live buffer). Returns
+// `{ dmg, absorbed }` where `dmg` is the post-soak to-HP amount.
+// Default-safe: a 0/absent buffer absorbs nothing → dmg is returned unchanged.
+export function applyBloodshieldSoak(player, dmg) {
+    const buf = (player && player.bloodshield) || 0;
+    if (!(buf > 0) || !(dmg > 0)) return { dmg, absorbed: 0 };
+    const absorbed = Math.min(buf, dmg);
+    player.bloodshield = buf - absorbed;
+    return { dmg: dmg - absorbed, absorbed };
+}
+
 export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     if (this.player.invincible) return 0;
 
@@ -322,7 +337,19 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
 
     // Round to an integer so HP, damage numbers, and stats stay clean
     // (the collision sites used to round; the generic path didn't).
-    const finalDamage = Math.round(reducedDamage);
+    // CD-10 — BLOODSHIELD soak. After `finalDamage` is fully finalized (post
+    // shield/resist/corrode/mobile/FAILSAFE) and BEFORE it reduces HP / resolves
+    // lethal, the temporary buffer absorbs min(buffer, finalDamage); only the
+    // remainder hits HP. `let` so the soak shrinks the value the entire
+    // downstream path (stats, thorns, Guardian Echo threshold, lethal) sees the
+    // real HP-loss amount. Default-safe: bloodshield 0 → soak 0 → unchanged.
+    let finalDamage = Math.round(reducedDamage);
+    if (this.player.bloodshield > 0 && finalDamage > 0) {
+        const soak = Math.min(this.player.bloodshield, finalDamage);
+        this.player.bloodshield -= soak;
+        finalDamage -= soak;
+        if (soak > 0 && typeof this.events?.emit === 'function') this.events.emit('audio:shield');
+    }
     const hpBeforeHit = this.player.health;
     this.player.health = Math.max(0, this.player.health - finalDamage);
 
@@ -492,6 +519,22 @@ export function applyHealthOrbToTanks(orbAmount, amountHealed) {
 // the sparkling spawnTankRecharge animation, and emits an audio cue.
 export function accumulateOverflowToTank(credit) {
     if (!(credit > 0) || !this.player) return;
+
+    // CD-10 — BLOODSHIELD feed (passive-gated). This is the SINGLE over-heal
+    // funnel — orb overflow AND regen-ticks-at-max both arrive here — so banking
+    // the buffer here covers every heal-overflow source from one place. The
+    // buffer cushions FIRST (up to its 35%-max-HP cap); only the REMAINDER falls
+    // through to the triforce-tank accumulator below, keeping tank behavior
+    // coherent once the buffer is topped off. Default-safe: without the
+    // BLOODSHIELD passive the buffer is untouched and the full credit feeds tanks
+    // exactly as before.
+    if (this.player.hasPassive && this.player.hasPassive('BLOODSHIELD')
+        && typeof this.player.addBloodshield === 'function') {
+        const banked = this.player.addBloodshield(credit);
+        credit -= banked;
+        if (!(credit > 0)) return; // buffer absorbed all of it; nothing for tanks
+    }
+
     if (this.player._tankProgress === undefined) this.player._tankProgress = 0;
     // 6.0.0 — BLOOD_BANK doubles overflow→tank credit.
     const bloodBankStacks = this.player.getPowerupStacks
