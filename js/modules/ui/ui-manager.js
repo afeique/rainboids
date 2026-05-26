@@ -5,6 +5,7 @@ import { SPEEDRUN_TIERS, speedrunTierFor } from '../core/constants.js';
 import { loadSettings, saveSettings } from '../core/storage.js';
 import { renderIconHTML } from './icons.js';
 import { isMobile } from '../platform/platform-detect.js';
+import { setRumbleEnabled, isRumbleEnabled } from '../platform/rumble.js';
 import { renderSpAllocation } from './sp-allocation.js';
 import { getPassive, getSlotPassives } from '../combat/passive-data.js';
 
@@ -1737,6 +1738,14 @@ export class UIManager {
         };
         wireLayout(document.getElementById('gamepad-layout-pro'));
         wireLayout(document.getElementById('gamepad-layout-classic'));
+
+        // GP-4 — rumble toggle (GAMEPAD tab). Reflects the persisted flag and
+        // writes it back through setRumbleEnabled. Off by default.
+        const rumbleToggle = document.getElementById('gamepad-rumble-toggle');
+        if (rumbleToggle) {
+            rumbleToggle.checked = isRumbleEnabled();
+            rumbleToggle.addEventListener('change', () => setRumbleEnabled(rumbleToggle.checked));
+        }
 
         // Music controls
         this.elements.musicPlayPause.addEventListener('click', () => {

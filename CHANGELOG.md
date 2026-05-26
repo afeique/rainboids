@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.225.0] - 2026-05-26
+
+### Added — gamepad rumble (GP-4)
+
+- New `platform/rumble.js` — a thin wrapper around the Gamepad API's
+  `vibrationActuator.playEffect('dual-rumble', …)`, mirroring `platform/haptic.js`.
+  `RUMBLE` intensity presets (LIGHT/MEDIUM/HEAVY), `rumble(preset)` (finds the
+  first connected pad with an actuator; graceful no-op where unsupported), and a
+  persisted `setRumbleEnabled` / `isRumbleEnabled` flag (`rainboids:rumble`).
+- Wired the first cue: **dashing rumbles** (MEDIUM), from `player._triggerDash`
+  so it fires for every dash source and self-gates on an enabled + connected
+  actuator pad. A **Rumble** toggle was added to the GAMEPAD pause tab.
+
+**Off by default** — per the controls plan, rumble feel needs a real-device
+pass (Xbox / DualSense / Switch × browsers) before it's enabled, so the toggle
+ships off and keyboard/touch/no-pad play is unaffected. Tests: +8 unit
+(`rumble`: enable-flag gating, actuator detection, magnitude clamp, graceful
+throw, support check); full unit suite 1917 green. Further cues (hit / low-HP /
+ability-ready / power-fire) are follow-ups.
+
 ## [6.224.0] - 2026-05-26
 
 ### Added — pad navigation extends to the pre-run meta screens (GP-1, v2)

@@ -410,6 +410,21 @@ function _buildGamepadTab() {
                 text: 'Layout:',
             }),
             layoutRow,
+            // GP-4 — rumble toggle (off by default; reuses the assists-row look).
+            el('label', {
+                className: 'assist-row',
+                style: { marginBottom: '10px' },
+                children: [
+                    el('input', { id: 'gamepad-rumble-toggle', attrs: { type: 'checkbox' } }),
+                    el('div', {
+                        className: 'assist-row-text',
+                        children: [
+                            el('div', { className: 'assist-row-title', text: 'Rumble' }),
+                            el('div', { className: 'assist-row-desc', text: 'Controller vibration on dashes. Off by default.' }),
+                        ],
+                    }),
+                ],
+            }),
             list,
         ],
     });

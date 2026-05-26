@@ -16,6 +16,7 @@ import { scoreItem } from '../world/item-system.js';
 // unchanged; isMobile() returns false off touch devices unless the
 // `?mobile=1` URL param is set.
 import { isMobile } from '../platform/platform-detect.js';
+import { rumble, RUMBLE } from '../platform/rumble.js';
 import { initPlayerStatus } from './player-status.js';
 
 // P6 — Kinetic Battery passive: a successful dash refunds this much power
@@ -1579,6 +1580,9 @@ export class Player {
         this.dashTimer    = Player.DASH_DURATION_MS;
         this.dashVelX     = Math.cos(angle) * dashSpeed;
         this.dashVelY     = Math.sin(angle) * dashSpeed;
+        // GP-4 — gamepad rumble on dash (every dash source; self-gates on an
+        // enabled + connected actuator pad, so keyboard/touch/no-pad = no-op).
+        rumble(RUMBLE.MEDIUM);
         this.dashCooldown = Player.DASH_COOLDOWN_MS;
 
         // Post-dash i-frame window. Spans the burst itself (already
