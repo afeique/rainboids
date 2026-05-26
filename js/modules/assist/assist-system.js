@@ -1,4 +1,6 @@
 import { ABILITIES, POWER_WEAPONS } from '../combat/weapon-data.js';
+import { triggerHapticFeedback } from '../core/utils.js';
+import { HAPTIC } from '../platform/haptic.js';
 
 export const ASSIST_LEVELS = Object.freeze({
     MANUAL_TOUCH: 'manual-touch',
@@ -232,6 +234,7 @@ export class AssistSystem {
             input.dashTargetScreenX = null;
             input.dashTargetScreenY = null;
             player._assistDashAngle = dodge.target.angle;
+            triggerHapticFeedback(HAPTIC.MEDIUM);
         }
 
         const now = situation.now;
@@ -259,6 +262,7 @@ export class AssistSystem {
             input.activateAbilitySlot = input.activateAbilitySlot || [false, false, false, false];
             input.activateAbilitySlot[cast.slot] = true;
             player._lastAssistCast = { id: cast.id, slot: cast.slot, t: now };
+            triggerHapticFeedback(HAPTIC.LIGHT);
             this.lastCast.bigCastAt = now;
             return cast;
         }

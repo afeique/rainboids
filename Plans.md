@@ -181,7 +181,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 | ID | FILES | DOES |
 |----|----|----|
 | MB-1 | `platform/wake-lock.js`, `game-engine.js` state transitions | **Wire wake-lock** — acquire on PLAYING, release on pause/menu/game-over (screen stays awake during mobile play). **PATCH.** |
-| MB-2 | `core/utils.js:115` no-op `triggerHapticFeedback` (called `collision-system.js:213,815`) → `platform/haptic.js` | **Wire real haptics** + Co-Pilot cues (auto-cast=light, auto-dodge=medium, hit=scaled); settings toggle. **PATCH.** |
+| ~~MB-2~~ ✅ | `core/utils.js`, `assist-system.js` | **DONE 6.216.2** — `triggerHapticFeedback` routed through `platform/haptic.js` (real Vibration API, isMobile-gated); Co-Pilot cues (auto-dodge=MEDIUM, auto-cast=LIGHT); `setHapticsEnabled`/`isHapticsEnabled` persist `rainboids:haptics` (default on). 4 unit. *(settings-screen UI toggle deferred to AS-5/settings.)* |
 | MB-3 | `ui/mobile-tutorial.js` (`shouldShowMobileTutorial`/`markShown`), boot path | **Wire first-run tutorial card** — rewrite copy for one-thumb + Co-Pilot ("Steer to dodge, tap to dash — your Co-Pilot handles the rest"); shows once, dismissible. **PATCH.** |
 | MB-4 | `mobile-touch.js`/camera | **Ship-under-finger offset** — anchor ship ~50px above the touch point so the thumb doesn't occlude it. **PATCH.** |
 | MB-5 | camera | **Mobile camera zoom** — tune (~0.75 portrait / ~0.9 landscape) for a moving ship; verify with deadband-follow. **PATCH.** |

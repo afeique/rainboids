@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.216.2] - 2026-05-26
+
+### Added — real haptics + Co-Pilot haptic cues (mobile P7 · MB-2)
+
+- **`triggerHapticFeedback()` now actually buzzes on mobile.** It was a no-op
+  stub; it now routes through the built-but-unwired `platform/haptic.js`
+  (Web Vibration API), which gates on `isMobile()` so desktop stays silent.
+  The two existing hit call sites in `collision-system.js` now produce real
+  feedback on mobile devices.
+- **AI Co-Pilot haptic cues** — the Co-Pilot's automation is now felt as well
+  as seen: a **medium** buzz on each auto-dodge and a **light** buzz on each
+  ability auto-cast (fired from the already edge-gated Act-phase branches, so
+  one pulse per event — no per-frame buzzing).
+- **Haptics toggle** — `setHapticsEnabled()` / `isHapticsEnabled()` persist a
+  user preference under `localStorage['rainboids:haptics']` (default ON);
+  disabling short-circuits all haptics regardless of platform.
+
+Default-safe: desktop and any non-Vibration-API browser remain byte-for-byte
+unchanged. New unit suite (`haptic-wiring`) covers the enable-flag gating.
+
 ## [6.216.1] - 2026-05-26
 
 ### Added — AI Co-Pilot auto-cast feedback (mobile P7 · FB-1)

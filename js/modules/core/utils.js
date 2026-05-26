@@ -1,4 +1,5 @@
 import { GAME_CONFIG, NOISE_CONFIG } from './constants.js';
+import { vibrate } from '../platform/haptic.js';
 
 // Game field dimensions — authoritative source for all entity boundary checks.
 // Uses fixed logical resolution from GAME_CONFIG rather than window viewport size.
@@ -112,9 +113,30 @@ if (typeof window !== 'undefined') {
     document.addEventListener('keydown', markUserInteraction, { once: true });
 }
 
-export function triggerHapticFeedback(_duration = 10) {
-    // Desktop-only build: no haptic feedback. Kept as a no-op so existing
-    // call sites in collision-system.js / input-handler.js don't need edits.
+// Haptics user preference. Default ON; persisted under 'rainboids:haptics'
+// ('0' = disabled). Read lazily so a disabled-localStorage environment
+// (private mode, tests) silently falls back to the default.
+let _hapticsEnabled = true;
+try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('rainboids:haptics') === '0') {
+        _hapticsEnabled = false;
+    }
+} catch (_) { /* localStorage unavailable — keep default */ }
+
+export function isHapticsEnabled() { return _hapticsEnabled; }
+export function setHapticsEnabled(on) {
+    _hapticsEnabled = !!on;
+    try {
+        if (typeof localStorage !== 'undefined') localStorage.setItem('rainboids:haptics', on ? '1' : '0');
+    } catch (_) { /* ignore */ }
+}
+
+export function triggerHapticFeedback(duration = 10) {
+    // Routes to the Web Vibration API via platform/haptic.js, which itself
+    // gates on isMobile() + navigator.vibrate (so desktop is a no-op). The
+    // user preference flag lets a mobile player turn buzzing off entirely.
+    if (!_hapticsEnabled) return false;
+    return vibrate(duration);
 }
 
 // --- NOISE GENERATION AND STAR DISTRIBUTION ---
