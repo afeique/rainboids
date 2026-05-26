@@ -377,6 +377,21 @@ export const BLOODSHIELD_CAP_FRAC = 0.35;
 export const BLOODSHIELD_DECAY_PER_SEC = 5;
 export const BLOODSHIELD_DECAY_DELAY_MS = 1500;
 
+// CD-11 — BLOODLUST (no-downside, passive-gated). The offensive complement to
+// BLOODSHIELD: each enemy kill grants a stack; stacks give a flat +outgoing-
+// damage bonus each, cap at a ceiling, and decay (one stack lost per interval
+// without a fresh kill). A fast-kills aggression engine — kept in a band the
+// difficulty director can absorb.
+//   - BLOODLUST_MAX_STACKS (CD-11 R-CAP): the stack ceiling (the +damage caps at
+//     MAX × PER, i.e. +40% at full). Further kills past the cap just refresh.
+//   - BLOODLUST_PER_STACK: outgoing-damage bonus per stack (+4% each).
+//   - BLOODLUST_DECAY_MS: time without a kill before one stack is shed; the
+//     drain repeats every interval down to 0 (reads as a fading streak, never
+//     permanent). Each kill re-stamps the timer, so sustained pressure holds it.
+export const BLOODLUST_MAX_STACKS = 10;
+export const BLOODLUST_PER_STACK = 0.04;
+export const BLOODLUST_DECAY_MS = 2000;
+
 // RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
 // The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
 // accessor below returns today's values when no runConfig is set.

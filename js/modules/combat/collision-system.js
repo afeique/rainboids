@@ -1,6 +1,6 @@
 // Collision detection and response system
 // All functions are called with .call(gameEngine) — `this` is the GameEngine instance.
-import { GAME_CONFIG } from '../core/constants.js';
+import { GAME_CONFIG, BLOODLUST_MAX_STACKS, BLOODLUST_PER_STACK } from '../core/constants.js';
 import { random, collision, starCollision, triggerHapticFeedback } from '../core/utils.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
 import { notifyBossDeath } from '../enemy/boss-rage.js';
@@ -2406,6 +2406,15 @@ export function frenzyMult(count) {
     return 1 + Math.min(FRENZY_MAX_ENEMIES, Math.max(0, count | 0)) * FRENZY_PER_ENEMY;
 }
 
+// CD-11 — Bloodlust passive: +4% outgoing damage per Bloodlust stack, capped at
+// +40% (10 stacks). The stack count is owned by the player (gained on kill in
+// combat-manager.onEnemyKill, decayed per-frame in player.update); this is the
+// pure stacks→multiplier curve so it unit-tests cleanly and applies on-demand at
+// the damage hook (no per-frame system here). DEFAULT-SAFE: 0 stacks → ×1.
+export function bloodlustMult(stacks) {
+    return 1 + Math.min(BLOODLUST_MAX_STACKS, Math.max(0, stacks | 0)) * BLOODLUST_PER_STACK;
+}
+
 // P6 — Gravity Well passive: a constant weak pull drags enemies toward the
 // player's reticle, grouping them (downside: it pulls danger toward you too).
 // `gravityWellPull` is the pure per-enemy position nudge (toward the target,
@@ -2568,6 +2577,13 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
                 this.player.x, this.player.y);
             const _fm = frenzyMult(_fc);
             if (_fm !== 1) damage *= _fm;
+        }
+        // CD-11 — Bloodlust: +4% outgoing damage per stack (cap +40%). Stacks are
+        // gained on kill + decay on the player; this just reads them. DEFAULT-SAFE:
+        // no passive → skip; 0 stacks → bloodlustMult returns ×1 (no-op).
+        if (typeof this.player.hasPassive === 'function' && this.player.hasPassive('BLOODLUST')) {
+            const _bm = bloodlustMult(this.player.bloodlustStacks || 0);
+            if (_bm !== 1) damage *= _bm;
         }
         // P6 — Siege: outgoing damage ramps while standing still (player owns the
         // ramp + per-equip gate; getSiegeDamageMult returns 1 when inactive).

@@ -1,5 +1,5 @@
 // Combat effects, debris, orb drops, powerup collection, damage numbers, kill streaks
-import { GAME_CONFIG, GAME_STATES, getEnemyDropProfile } from '../core/constants.js';
+import { GAME_CONFIG, GAME_STATES, getEnemyDropProfile, BLOODLUST_MAX_STACKS } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, ABILITIES } from './weapon-data.js';
@@ -1196,6 +1196,16 @@ export function onEnemyKill(enemy) {
     // P6 — Flow State: each kill cuts every ability's remaining cooldown.
     if (this.player && this.player.hasPassive && this.player.hasPassive('FLOW_STATE')) {
         flowStateReduce(this.player.abilityCooldowns, this.player.abilityCooldownsMax);
+    }
+
+    // CD-11 — Bloodlust: each kill grants a stack (clamped to the cap) and
+    // re-stamps the decay timer; the +damage is read at the damage hook, the
+    // decay ticks in player.update. Gated on the passive so a non-Bloodlust
+    // player does zero extra work here — default-safe.
+    if (this.player && this.player.hasPassive && this.player.hasPassive('BLOODLUST')) {
+        this.player.bloodlustStacks = Math.min(
+            BLOODLUST_MAX_STACKS, (this.player.bloodlustStacks || 0) + 1);
+        this.player._bloodlustRefreshMs = frameClock.now;
     }
 
     // E8b — death flare (ASHEN_DETONATOR and any `deathFlare` enemy): bursts

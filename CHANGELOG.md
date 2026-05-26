@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.200.0] - 2026-05-25
+
+### Added — Bloodlust: stacking on-kill damage buff (CD-02/11)
+
+- **Bloodlust** (new no-downside passive, `combat/passive-data.js`) — the
+  offensive half of the "blood" archetype (pairs with Bloodshield). Each enemy
+  **kill** grants a Bloodlust stack: **+4% outgoing damage per stack, cap +40%**
+  (`BLOODLUST_MAX_STACKS = 10`, `BLOODLUST_PER_STACK = 0.04`), the stacks
+  **decaying** one every 2s without a kill (`BLOODLUST_DECAY_MS`). A fast-kills
+  aggression engine.
+- **Mult** (`combat/collision-system.js` `applyDamageToEnemy`) — applied in the
+  `if (this.player)` outgoing-damage block right after FRENZY, via a pure
+  `bloodlustMult(stacks)` helper (mirrors `frenzyMult`). **Stack gain** in the
+  canonical `onEnemyKill` (`combat/combat-manager.js`); **decay** in
+  `player.update` (`player/player.js`; stacks state init/reset per run).
+- **Default-safe:** without the Bloodlust passive the whole block is skipped, and
+  at 0 stacks `bloodlustMult` returns ×1 (damage untouched) — outgoing damage is
+  byte-for-byte unchanged. The reactive director absorbs the gain for invested
+  builds.
+- Tests: `tests/unit/cd-bloodlust.test.js` (+14 — the mult curve incl. cap/clamp/
+  default-safe, kill-gain clamp, per-interval decay + floor) +
+  `tests/qa/38-bloodlust.spec.js` (+5 — damage scales with stacks, kill grants a
+  stack, decay over time, default-safe baseline). Full unit suite **1718** green;
+  QA-07 weapons + QA-28 roster regression 25/25.
+
+---
+
 ## [6.199.0] - 2026-05-25
 
 ### Added — Bloodshield: over-heal banks a damage-soaking buffer (CD-02/05/09)

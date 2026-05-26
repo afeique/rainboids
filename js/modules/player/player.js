@@ -1,5 +1,5 @@
 // Player ship entity
-import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS } from '../core/constants.js';
+import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS, BLOODLUST_DECAY_MS } from '../core/constants.js';
 import { random, wrap } from '../core/utils.js';
 import * as weapons from './weapons.js';
 import * as abilities from './abilities.js';
@@ -408,6 +408,13 @@ export class Player {
         // means the soak in lifecycle.takeDamage is a no-op.
         this.bloodshield = 0;
         this._bloodshieldRefreshMs = 0;
+
+        // CD-11 — Bloodlust stacks (on-kill outgoing-damage buff when the
+        // BLOODLUST passive is equipped). Reset to 0 on spawn / run-start so a
+        // fresh run starts with no buff. Default-safe: 0 stacks means the
+        // bloodlustMult at the damage hook is a no-op (×1).
+        this.bloodlustStacks = 0;
+        this._bloodlustRefreshMs = 0;
 
         let scale = 1;
         this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
@@ -1077,6 +1084,20 @@ export class Player {
                 if (sinceRefresh >= BLOODSHIELD_DECAY_DELAY_MS && dtMs > 0) {
                     this.bloodshield = Math.max(0, this.bloodshield - BLOODSHIELD_DECAY_PER_SEC * dtMs / 1000);
                 }
+            }
+
+            // CD-11 — Bloodlust stack decay. Lose one stack per BLOODLUST_DECAY_MS
+            // elapsed since the last kill, draining toward 0; each shed advances
+            // the timestamp by one interval so a long frame gap can shed more than
+            // one but never over-drains. Gated on a non-zero stack count so a
+            // player with 0 stacks (or no passive) does zero work — default-safe.
+            if (this.bloodlustStacks > 0 && dtMs > 0) {
+                let last = this._bloodlustRefreshMs || 0;
+                while (this.bloodlustStacks > 0 && eNow - last >= BLOODLUST_DECAY_MS) {
+                    this.bloodlustStacks--;
+                    last += BLOODLUST_DECAY_MS;
+                }
+                this._bloodlustRefreshMs = last;
             }
         }
 

@@ -96,7 +96,7 @@ Full spec: `docs/Combat Depth — Implementation Plan (consolidated) – 2026-05
 ### CD Phase 1 — player mechanics *(CD-06 first, then ∥group G)*
 | ID | FILE | DOES | DEP |
 |----|----|----|----|
-| CD-06 ◐ | `player/player.js` | ~~getEffectiveMaxEnergy/EnergyRegen/PowerCost (−50% cap)~~ ✅ 6.197.0 · ~~Bloodshield buffer (accumulate/decay/soak)~~ ✅ **6.199.0** (`addBloodshield`/`getBloodshieldCap` + per-frame decay; BLOODSHIELD passive in passive-data.js; cap 35% maxHP). **STILL TODO:** Bloodlust stacks · ~~Regeneration into regen~~ ✅ 6.198.0 | CD-01/02/05 |
+| CD-06 ✅ | `player/player.js` | ~~getEffectiveMaxEnergy/EnergyRegen/PowerCost~~ ✅ 6.197.0 · ~~Bloodshield buffer~~ ✅ 6.199.0 · ~~Bloodlust stacks~~ ✅ **6.200.0** (on-kill stack in combat-manager `onEnemyKill`, +4%/stack cap +40% mult in collision `applyDamageToEnemy`, decay in player.update; BLOODLUST passive) · ~~Regeneration into regen~~ ✅ 6.198.0. **DONE.** | CD-01/02/05 |
 | CD-07 | `player/weapons.js` | R-POWERPIPE: route power-weapon dmg through the player damage/crit pipeline; Efficiency+cap; Overclock cooldown-mode | CD-06 |
 | CD-08 ◐ | `player/progression.js` | ~~getEffectiveRegen += Regeneration~~ ✅ **6.198.0** (REGENERATION SP stat, +2 HP/s, shares the 3 HP/s cap, default-safe). **STILL TODO:** cap→5 w/ Regenerator powerup (not built yet). Energy regen tick already uses getEffectiveEnergyRegenMult (6.197.0). | CD-06 |
 | CD-09 ◐ | `player/lifecycle.js` | ~~takeDamage: Bloodshield soak-first~~ ✅ **6.199.0** (soak after FAILSAFE, before HP; over-heal feed in accumulateOverflowToTank; default-safe). **STILL TODO:** per-hit cap 45% (generalize FAILSAFE); remove HOARDERS/FRENZY taxes; Thorns reflect+status | CD-06 |

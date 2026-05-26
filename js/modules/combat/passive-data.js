@@ -171,6 +171,10 @@ export const PASSIVES = {
         id: 'BLOODSHIELD', name: 'Bloodshield', desc: 'Over-healing banks a temporary shield that soaks damage before your HP (max 35% HP).',
         hooks: ['heal', 'damageTaken'], tags: ['defense', 'sustain'], slot: true, item: true, itemTierMin: EXC, stack: B,
     },
+    BLOODLUST: {
+        id: 'BLOODLUST', name: 'Bloodlust', desc: 'Each kill grants a stack of Bloodlust: +4% damage per stack (cap +40%), decaying without kills.',
+        hooks: ['onKill', 'damage'], tags: ['offense', 'tempo'], slot: true, item: true, itemTierMin: EXC, stack: B,
+    },
     SALVAGE_PROTOCOL: {
         id: 'SALVAGE_PROTOCOL', name: 'Salvage Protocol', desc: '+1 Core per salvage; better tier-up chance on drops',
         hooks: ['salvage', 'drop'], tags: ['econ'], slot: false, item: true, itemTierMin: EXC, stack: A,
@@ -273,7 +277,7 @@ const _PASSIVE_ICONS = {
     STATIC_CHARGE: 'bolt', OPPORTUNIST: 'target', PREDATOR: 'bow-arrow',
     VAMPIRIC_ROUNDS: 'droplet', RICOCHET: 'shuffle', MOMENTUM_ROUNDS: 'rocket',
     CHAIN_REACTION: 'bomb', KINETIC_BATTERY: 'wind', OVERFLOW_SPARK: 'bolt',
-    LAST_BASTION: 'medal', GUARDIAN_ECHO: 'thorns', BLOODSHIELD: 'shield', SALVAGE_PROTOCOL: 'wrench',
+    LAST_BASTION: 'medal', GUARDIAN_ECHO: 'thorns', BLOODSHIELD: 'shield', BLOODLUST: 'skull', SALVAGE_PROTOCOL: 'wrench',
     SCAVENGER: 'magnet', HOARDERS_GREED: 'money-bag', OVERKILL: 'dizzy', VENDETTA: 'anger',
     CONDUIT: 'chain', AFTERIMAGE: 'ghost', RESONANCE: 'loop', BACKLASH: 'undo',
     HARVEST: 'cart', TRACER_LOCK: 'crosshair', SIEGE: 'chart',
