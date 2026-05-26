@@ -431,6 +431,19 @@ export const CAPACITOR_BANK_OVERCHARGE_MULT = 1.5;
 export const CAPACITOR_BANK_DECAY_PER_SEC = 8;
 export const CAPACITOR_BANK_DMG_BONUS = 1.25;
 
+// OVERCLOCK (energy keystone passive) — a total economy INVERSION, framed as an
+// alternate economy (a choice, neither pro nor con). While held, power weapons
+// IGNORE the energy meter entirely (0 cost, no energy gate) and instead fire on
+// a flat internal cooldown at reduced effect — a machine-gun-power build.
+//   - OVERCLOCK_COOLDOWN_MS: the flat internal cooldown between power casts
+//     (replaces the energy meter as the sole gate; same cadence for every power).
+//   - OVERCLOCK_EFFECT_MULT: damage multiplier applied to the fired power (×0.6,
+//     the tradeoff for free + spammable). Applied via boostPowerDamage like the
+//     other power-damage hooks. DEFAULT-SAFE: without the passive none of this
+//     runs — energy cost, gate, damage, and per-weapon cooldown are unchanged.
+export const OVERCLOCK_COOLDOWN_MS = 2500;
+export const OVERCLOCK_EFFECT_MULT = 0.6;
+
 // RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
 // The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
 // accessor below returns today's values when no runConfig is set.

@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.215.0] - 2026-05-26
+
+### Added — Overclock keystone: power-economy inversion (CD-02 · R-OVERCLOCK)
+
+- **Overclock** (new energy keystone, `combat/passive-data.js`) — while equipped,
+  power weapons **ignore the energy meter entirely**: they cost **0 energy** and
+  fire on a **flat 2.5 s internal cooldown** (`OVERCLOCK_COOLDOWN_MS`) at **60%
+  effect** (`OVERCLOCK_EFFECT_MULT`, `core/constants.js`). A machine-gun-power
+  build — a total economy inversion framed as an *alternate* economy (no downside
+  field), not a drawback.
+- Implemented via a dedicated `_overclockCdUntil` timer (`player.js`, reset per
+  run): `isPowerReady` gates on it (ignoring energy + the per-weapon cooldown)
+  when held; `firePower` + the CHARGE_SHOT path force `cost = 0`, stamp the timer,
+  and apply ×0.6 via `boostPowerDamage`. Composes with the other energy passives.
+- **Default-safe:** without Overclock, `isPowerReady`, the energy spend, power
+  damage, and per-weapon cooldowns are byte-for-byte unchanged.
+- This completes the **energy-build keystone set** (Overflow Capacitor · Capacitor
+  Bank · Overclock) on top of the energy SP stats + synergy powerups.
+- Tests: `tests/unit/cd-overclock.test.js` (+10 — `isPowerReady` Overclock vs
+  energy-gated default-safe, `firePower` no-spend + ×0.6 + timer) +
+  `tests/qa/49-overclock.spec.js` (+4 — fires at 0 energy on cooldown at ×0.6;
+  default-safe doesn't). Full unit suite **1821** green; QA-07 weapons + QA-36
+  energy regression 24/24.
+
+---
+
 ## [6.214.0] - 2026-05-26
 
 ### Added — Capacitor Bank passive: energy overcharge (CD-02 · energy axis)

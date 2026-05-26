@@ -110,6 +110,21 @@ export const PASSIVES = {
         hooks: ['maxEnergy', 'energyRegen', 'damage'], tags: ['keystone', 'energy'],
         slot: true, item: true, itemTierMin: TRANS, stack: B,
     },
+    OVERCLOCK: {
+        // Energy keystone — a total ECONOMY INVERSION, framed as an ALTERNATE
+        // economy (a choice, neither pro nor con — no downside field). While held,
+        // power weapons ignore the energy meter (0 cost, no energy gate) and fire
+        // on a flat ~2.5s internal cooldown at ~60% effect: a machine-gun-power
+        // build. Wired in weapons.js:
+        //   • isPowerReady — gates ONLY on the dedicated _overclockCdUntil timer
+        //     (ignores energy AND the per-weapon powerCooldown)
+        //   • firePower / the CHARGE_SHOT path — _powerCost forced to 0 (no spend),
+        //     config boosted-down ×0.6 via boostPowerDamage, and _overclockCdUntil
+        //     stamped on every successful fire (covers the early-return cases too)
+        id: 'OVERCLOCK', name: 'Overclock', desc: 'Power weapons ignore the energy meter — they fire on a flat 2.5s cooldown at 60% effect',
+        hooks: ['power', 'energy'], tags: ['keystone', 'energy'],
+        slot: true, item: false, stack: B,
+    },
     KILLING_SPREE: {
         id: 'KILLING_SPREE', name: 'Killing Spree', desc: 'Kill-streak no longer resets on hit (slow decay); ×2 streak damage',
         hooks: ['streak'], tags: ['keystone', 'tempo'],
@@ -307,7 +322,7 @@ export const PASSIVES = {
 const _PASSIVE_ICONS = {
     GLASS_CANNON: 'gem', GUNSLINGER: 'pistol', PURIST: 'dagger', APEX_PREDATOR: 'skull',
     TWIN_CAST: 'multi-shot', PRISMATIC_SOUL: 'sparkle', OVERFLOW_CAPACITOR: 'battery',
-    CAPACITOR_BANK: 'battery',
+    CAPACITOR_BANK: 'battery', OVERCLOCK: 'bolt',
     KILLING_SPREE: 'skull', ONE_WITH_THE_VOID: 'ghost', SECOND_HEART: 'heart',
     EYE_OF_THE_STORM: 'eye', DETONATOR: 'explosion', FRENZY: 'fist', GRAVITY_WELL: 'vortex',
     FLOW_STATE: 'hourglass', FAILSAFE: 'shield', HEAT_SINK: 'fire',

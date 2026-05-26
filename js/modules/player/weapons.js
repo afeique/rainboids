@@ -1,7 +1,7 @@
 // Player weapon system — extracted from Player class
 // All functions are called with .call(this) so `this` refers to the Player instance.
 
-import { GAME_CONFIG, FLUX_MAX_STACKS, CAPACITOR_BANK_DMG_BONUS } from '../core/constants.js';
+import { GAME_CONFIG, FLUX_MAX_STACKS, CAPACITOR_BANK_DMG_BONUS, OVERCLOCK_COOLDOWN_MS, OVERCLOCK_EFFECT_MULT } from '../core/constants.js';
 import { frameClock } from '../core/frame-clock.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity, attunementElements } from '../combat/weapon-data.js';
 import { resolveBulletElements } from '../combat/elements.js';
@@ -369,6 +369,16 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
                 _chargeCost = 0;
                 this._surgeBatteryReady = false;
             }
+            // OVERCLOCK — economy inversion for the charge-shot build too: ignore
+            // the energy meter (0 cost, no spend), fire on the flat internal
+            // cooldown (stamped below — isPowerReady gates on it), and deal ×0.6
+            // effect (passed into fireChargedShot). Default-safe: no keystone →
+            // none of this runs, the charge cost/spend path is unchanged.
+            const _overclockCharge = (typeof this.hasPassive === 'function' && this.hasPassive('OVERCLOCK'));
+            if (_overclockCharge) {
+                _chargeCost = 0;
+                this._overclockCdUntil = frameClock.now + OVERCLOCK_COOLDOWN_MS;
+            }
             this.energy = Math.max(0, (this.energy || 0) - _chargeCost);
             // FLUX: while held, each power cast adds a stacking +energy-regen buff
             // (capped at FLUX_MAX_STACKS) and refreshes the fade window. Default-safe:
@@ -379,7 +389,9 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
             }
             this.chargeStartTime = now - this.maxChargeTime; // force a full-charge shot
             this.pausedChargeTime = 0;
-            this.fireChargedShot(bulletPool, audioManager, _cbOver);
+            // OVERCLOCK applies the ×0.6 effect to the charged shot's damage.
+            // Default-safe: no keystone → mult 1 → unchanged.
+            this.fireChargedShot(bulletPool, audioManager, _cbOver, _overclockCharge ? OVERCLOCK_EFFECT_MULT : 1);
             // Short anti-spam floor so a held button can't dump the whole
             // meter in consecutive frames; the energy cost is the real gate.
             this.powerCooldown = 400;
@@ -1344,6 +1356,17 @@ export function firePower(bulletPool, audioManager, particlePool) {
         _powerCost = 0;
         _odBoost = true;
     }
+    // OVERCLOCK: power weapons ignore the energy meter entirely — force the cost
+    // to 0 (no spend; the Math.max below then no-ops) and stamp the dedicated
+    // internal cooldown (the SOLE gate, set BEFORE the switch so the early-return
+    // beam/buff cases — LANCE_BEAM / LIGHTNING_ARC / PRISM_BEAM — are covered too).
+    // The ×0.6 effect boost is applied to `config` alongside the other boosts
+    // below. Default-safe: no keystone → none of this runs, cost path unchanged.
+    const _overclock = (typeof this.hasPassive === 'function' && this.hasPassive('OVERCLOCK'));
+    if (_overclock) {
+        _powerCost = 0;
+        this._overclockCdUntil = frameClock.now + OVERCLOCK_COOLDOWN_MS;
+    }
     this.energy = Math.max(0, (this.energy || 0) - _powerCost);
     // FLUX: while held, each power cast adds a stacking +energy-regen buff (capped
     // at FLUX_MAX_STACKS) and refreshes the fade window. Default-safe: no powerup →
@@ -1368,6 +1391,13 @@ export function firePower(bulletPool, audioManager, particlePool) {
     // derives from `config` too, so the echo inherits the boost. Default-safe:
     // not held or not overcharged → _cbOver false → config unchanged.
     if (_cbOver) config = boostPowerDamage(config, CAPACITOR_BANK_DMG_BONUS);
+
+    // OVERCLOCK — apply the ×0.6 effect reduction (the tradeoff for free + spammable)
+    // by reassigning `config` to a boosted-down clone BEFORE the dispatch, so every
+    // switch case (incl. the early-return beam/buff cases) reads the reduced values.
+    // Composes with the other boost hooks if they somehow co-apply (multiply both —
+    // fine/rare). Default-safe: no keystone → _overclock false → config unchanged.
+    if (_overclock) config = boostPowerDamage(config, OVERCLOCK_EFFECT_MULT);
 
     switch (this.activePower) {
         case 'MINE_LAYER':
@@ -1992,7 +2022,7 @@ export function getHitStreakMultiplier() {
 
 // ── Charged shot firing ────────────────────────────────────────────────────
 
-export function fireChargedShot(bulletPool, audioManager, capacitorOvercharged = false) {
+export function fireChargedShot(bulletPool, audioManager, capacitorOvercharged = false, effectMult = 1) {
     const rawChargeTime = (Date.now() - this.chargeStartTime) + this.pausedChargeTime;
 
     // Apply charge speed upgrades
@@ -2020,7 +2050,10 @@ export function fireChargedShot(bulletPool, audioManager, capacitorOvercharged =
     // CAPACITOR_BANK — a charge shot fired while OVERCHARGED deals +25%. The
     // overcharged state was captured before the energy spend (updatePowerCharge).
     // Default-safe: flag false (no passive / not overcharged) → ×1, unchanged.
-    const totalDamage = (baseDamage + damageBonus) * (capacitorOvercharged ? CAPACITOR_BANK_DMG_BONUS : 1);
+    // OVERCLOCK passes effectMult ×0.6 (the economy-inversion tradeoff); composes
+    // multiplicatively with the CAPACITOR_BANK overcharge bonus (rare overlap is fine).
+    // Default-safe: no keystone → effectMult 1 → unchanged.
+    const totalDamage = (baseDamage + damageBonus) * (capacitorOvercharged ? CAPACITOR_BANK_DMG_BONUS : 1) * effectMult;
     const critChanceBonus = (chargeTime / 1000) * 0.04;       // +4%/sec (was +8%), max 20% at 5s
 
     // Calculate charge-based homing strength (base homing from charge time)
@@ -2367,6 +2400,13 @@ export function getPowerEnergyCost() {
 }
 
 export function isPowerReady() {
+    // OVERCLOCK — economy inversion. The dedicated _overclockCdUntil timer is the
+    // SOLE gate: ignore the energy meter AND the per-weapon powerCooldown (the
+    // per-weapon fire fns still set powerCooldown, but Overclock doesn't read it).
+    // Default-safe: only this branch runs when the keystone is held.
+    if (typeof this.hasPassive === 'function' && this.hasPassive('OVERCLOCK')) {
+        return frameClock.now >= (this._overclockCdUntil || 0);
+    }
     // Energy-gated (6.29.0). The per-weapon fire fns still set
     // `powerCooldown` for a short anti-spam floor, but the primary
     // gate is now having enough energy banked.

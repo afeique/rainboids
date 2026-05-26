@@ -440,6 +440,13 @@ export class Player {
         this._fluxStacks = 0;
         this._fluxRefreshMs = 0;
 
+        // OVERCLOCK — while the keystone is held, power weapons ignore the energy
+        // meter and fire on a flat internal cooldown instead. _overclockCdUntil is
+        // the frameClock timestamp the next power cast is allowed at (the SOLE
+        // gate under Overclock). Reset to 0 on spawn / run-start so the first cast
+        // is immediately ready. Default-safe: 0 with no passive → never consulted.
+        this._overclockCdUntil = 0;
+
         let scale = 1;
         this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
         // Player mass (smaller than most asteroids)
