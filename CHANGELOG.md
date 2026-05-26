@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.206.0] - 2026-05-25
+
+### Added — Overflow Discharge energy-synergy powerup (CD-04)
+
+- **Overflow Discharge** (new powerup, `world/powerup.js`) — while held, firing a
+  power weapon **at full energy** makes that cast **free (0 energy) and +40%
+  damage** — rewarding holding the meter to the cap instead of casting early.
+- Implemented as a single gated hook in `weapons.js` `firePower`: `_odFull`
+  captures full-energy (vs the CAPACITOR-aware `getEffectiveMaxEnergy`) **before**
+  the spend; when held + full, `_powerCost = 0` and the config is reassigned to a
+  +40% clone via a new `boostPowerDamage(config, mult)` helper (mirrors
+  `twinCastHalfConfig`, scaling every `TWIN_CAST_DMG_FIELDS` damage field). The
+  boosted config flows to every power case incl. the early-return ones
+  (beam/arc/overdrive) and composes sanely with Twin Cast.
+- **Default-safe:** without the powerup, or below full energy, cost + damage are
+  byte-for-byte unchanged. Composes with the other energy powerups + R1
+  power-weapon crit (6.204.0) for a full power-build economy.
+- Tests: `tests/unit/cd-overflow-discharge.test.js` (+6 — entry, `boostPowerDamage`
+  scales only-present damage fields / clones / default-safe at mult 1) +
+  `tests/qa/44-overflow-discharge.spec.js` (+4 — full-energy free + 1.4× damage,
+  non-full normal cost, default-safe baseline). Full unit suite **1765** green;
+  QA-07 weapons regression 19/19.
+
+---
+
 ## [6.205.0] - 2026-05-25
 
 ### Added — Surge Battery + Flux energy-synergy powerups (CD-04)

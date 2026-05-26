@@ -388,6 +388,29 @@ export const POWERUP_TYPES = {
         description: 'Each power cast ramps your energy regen (stacking, fades in 4s)',
     },
 
+    // OVERFLOW_DISCHARGE (energy-synergy) — while held, casting a power weapon at
+    // FULL energy makes that cast FREE (0 energy) AND deals +40% damage. Rewards
+    // holding/timing the meter to its cap instead of wasting overcap. The full-
+    // energy capture + cost zero-out + damage boost all live in weapons.firePower
+    // (gated on getPowerupStacks('OVERFLOW_DISCHARGE') > 0 + full energy). DEFAULT-
+    // SAFE: no powerup OR not-full → normal cost + base damage, byte-for-byte.
+    OVERFLOW_DISCHARGE: {
+        name: 'Overflow Discharge',
+        displayName: 'Overflow Discharge',
+        abbr: 'OVFD',
+        color: '#ffaa33',
+        gradientColors: ['#ffdd99', '#cc6611'],
+        icon: 'bolt',
+        duration: 30000,
+        effect: 'overflowDischarge',
+        rarity: 0.10,
+        category: 'OFFENSE',
+        maxStacks: 1,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'At full energy, your next power weapon is free and deals +40%',
+    },
+
     // 6.16.0 — Dash post-burst i-frame extender. Every SHIFT dash
     // already grants a 1s post-burst invuln window (see Player._triggerDash
     // + progression.getPostDashIframeMs). Each stack here adds +2s,

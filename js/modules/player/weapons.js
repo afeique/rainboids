@@ -1261,10 +1261,29 @@ export function twinCastHalfConfig(config, mult = TWIN_CAST_SECOND_MULT) {
     return half;
 }
 
+// OVERFLOW_DISCHARGE — clone the power config and scale every known damage field
+// by `mult` (the +40% full-energy boost). Mirrors twinCastHalfConfig: SHALLOW
+// COPY (never mutate the shared POWER_WEAPONS config) over the same
+// TWIN_CAST_DMG_FIELDS so every power damage field scales. DEFAULT-SAFE: mult 1
+// → identical values; non-damage fields + the original object are untouched.
+export function boostPowerDamage(config, mult) {
+    const boosted = { ...config };
+    for (const k of TWIN_CAST_DMG_FIELDS) {
+        if (typeof boosted[k] === 'number') boosted[k] *= mult;
+    }
+    return boosted;
+}
+
 export function firePower(bulletPool, audioManager, particlePool) {
     // P6 — Gunslinger passive: no power weapons (pure-gunner identity).
     if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) return;
-    const config = this.getActivePowerConfig();
+    let config = this.getActivePowerConfig();
+
+    // OVERFLOW_DISCHARGE — capture whether energy is FULL *before* any cost is
+    // deducted (use getEffectiveMaxEnergy() — the CAPACITOR-aware cap — so "full"
+    // matches the real ceiling). 0.999× absorbs float drift. Default-safe: only
+    // consulted below when the powerup is held.
+    const _odFull = (this.energy || 0) >= this.getEffectiveMaxEnergy() * 0.999;
 
     // 6.29.0 — Spend energy. Callers gate on isPowerReady() (energy >=
     // cost) before reaching here, but deduct defensively in case a
@@ -1289,6 +1308,16 @@ export function firePower(bulletPool, audioManager, particlePool) {
         _powerCost = 0;
         this._surgeBatteryReady = false;
     }
+    // OVERFLOW_DISCHARGE: while held, casting at FULL energy makes this power free
+    // (0 cost) AND boosts its damage +40% (applied to `config` before the switch).
+    // Independent of Surge Battery — both just zero the cost. Default-safe: no
+    // powerup OR not-full → no trigger, cost + config unchanged.
+    let _odBoost = false;
+    if (_odFull && typeof this.getPowerupStacks === 'function'
+        && this.getPowerupStacks('OVERFLOW_DISCHARGE') > 0) {
+        _powerCost = 0;
+        _odBoost = true;
+    }
     this.energy = Math.max(0, (this.energy || 0) - _powerCost);
     // FLUX: while held, each power cast adds a stacking +energy-regen buff (capped
     // at FLUX_MAX_STACKS) and refreshes the fade window. Default-safe: no powerup →
@@ -1297,6 +1326,14 @@ export function firePower(bulletPool, audioManager, particlePool) {
         this._fluxStacks = Math.min(FLUX_MAX_STACKS, (this._fluxStacks || 0) + 1);
         this._fluxRefreshMs = frameClock.now;
     }
+
+    // OVERFLOW_DISCHARGE: apply the +40% damage boost by reassigning `config` to a
+    // boosted clone BEFORE the dispatch. Every switch case (incl. the early-return
+    // beam/buff cases — LANCE_BEAM / LIGHTNING_ARC / PRISM_BEAM / OVERDRIVE) reads
+    // this same `config`, so they all consume the boosted values. Twin Cast's
+    // half-clone (below) derives from `config` too, so the echo inherits the boost
+    // — sane composition, no double-free (the cost was already zeroed once).
+    if (_odBoost) config = boostPowerDamage(config, 1.40);
 
     switch (this.activePower) {
         case 'MINE_LAYER':
