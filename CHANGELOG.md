@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.197.0] - 2026-05-25
+
+### Added — Energy-economy SP stats: Capacitor / Reactor / Efficiency (CD-01/05/06/14)
+
+- Three new permanent **SP stats** that govern the power-weapon **energy economy**,
+  the first slice of the CD ("combat-depth") build-axis expansion:
+  - **Capacitor** (`core/sp-stats.js`) — `+N` max energy (up to +100 at full → a
+    200-energy reservoir), so bigger charges / more power shots banked.
+  - **Reactor** — `+N%` energy regen (up to 2× fill rate at full).
+  - **Efficiency** — `−N%` power-weapon energy cost, **capped at −50%**
+    (`EFFICIENCY_CAP`, `core/constants.js`, CD-05 R-CAP).
+- They auto-surface in the STATS allocation grid (CD-14 — `ui/sp-allocation.js`
+  iterates `SP_STATS`). Wired through new default-safe player getters
+  (`getEffectiveMaxEnergy`/`getEffectiveEnergyRegenMult`/`getEffectivePowerCost`,
+  `player/progression.js`) consumed at the energy-cap / regen / power-cost read
+  sites in `player.js` + `weapons.js` — all routed consistently so charge%, the
+  regen clamp, and the spend agree on one value.
+- **Default-safe:** with 0 points allocated, every read site collapses to its
+  exact pre-CD value (maxEnergy 100, regen ×1, power cost = base) — current play
+  is byte-for-byte unchanged; the reactive difficulty director absorbs the gain
+  for invested builds (per the flow-channel design).
+- Tests: `tests/unit/cd-energy-stats.test.js` (+14 — `spStatValue` + the three
+  getters: default-safe, scaled, efficiency capped) + `tests/qa/36-cd-energy.spec.js`
+  (+5 — default-safe run, CAPACITOR raises the live cap past 100, EFFICIENCY
+  discounts live cost to 0.5×, power weapon still fires). Full unit suite **1678**
+  green; QA-07 weapons regression 19/19.
+
+---
+
 ## [6.196.0] - 2026-05-25
 
 ### Added — Director telemetry for balance tuning (CD-17)

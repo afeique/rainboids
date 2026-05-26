@@ -353,6 +353,16 @@ export const BOSS_WAVES = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30];
 // produce sensible defaults under the new cadence.
 export const BOSS_WAVE_INTERVAL = WAVES_PER_STAGE;
 
+// ── Combat-depth (CD) build-axis caps ───────────────────────────────────────
+// R-CAP — hard ceilings that keep the CD permanent stats from trivializing
+// their respective economies. Each cap is the maximum *effect*, independent of
+// how many points / affixes pile in.
+//   - EFFICIENCY_CAP (CD-05): power-weapon energy cost can be reduced at most
+//     50%. A fully-invested EFFICIENCY stat hits exactly this floor; further
+//     sources (later slices) still clamp here so power weapons always cost
+//     something. Future CD caps (regen ceiling, etc.) go in this block.
+export const EFFICIENCY_CAP = 0.5;
+
 // RUN-01a — runConfig model. A run is `stages × wavesPerStage` waves.
 // The DEFAULT is the canonical 10 × 3 = 30-wave campaign, so every
 // accessor below returns today's values when no runConfig is set.

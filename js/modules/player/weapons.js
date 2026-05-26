@@ -320,7 +320,12 @@ export function updateChargingSystem(input, bulletPool, audioManager, particlePo
     // Charge state now mirrors the energy meter; the renderer reads `energy`
     // directly for the body glow + nose ring, so the legacy hold-charge
     // flags are simply kept consistent (no wind-up animation anymore).
-    const maxE = this.maxEnergy || 100;
+    // CD: charge% reads the CAPACITOR-boosted cap so it agrees with the regen
+    // clamp + the addEnergy clamp. Default-safe: 0 SP → maxEnergy (100). The
+    // typeof guard keeps non-Player stubs (unit tests) working off raw maxEnergy.
+    const maxE = (typeof this.getEffectiveMaxEnergy === 'function')
+        ? this.getEffectiveMaxEnergy()
+        : (this.maxEnergy || 100);
     this.isCharging = false;
     this.tractorBeamActive = false;
     this.chargeLevel = Math.min(1, (this.energy || 0) / maxE);
@@ -2206,9 +2211,13 @@ export function getEffectivePrimaryDamage() {
     }
 
     // P6 — Overflow Spark passive: at full energy, primaries deal +25%.
-    if (typeof this.hasPassive === 'function' && this.hasPassive('OVERFLOW_SPARK')
-        && (this.energy || 0) >= (this.maxEnergy || 100) * 0.999) {
-        damage *= 1.25;
+    if (typeof this.hasPassive === 'function' && this.hasPassive('OVERFLOW_SPARK')) {
+        // CD: full-energy check reads the CAPACITOR-boosted cap so it agrees
+        // with the charge%/regen clamps. Default-safe + stub-safe fallback.
+        const maxE = (typeof this.getEffectiveMaxEnergy === 'function')
+            ? this.getEffectiveMaxEnergy()
+            : (this.maxEnergy || 100);
+        if ((this.energy || 0) >= maxE * 0.999) damage *= 1.25;
     }
 
     // P6 — Gunslinger passive: +50% primary damage (the trade for giving up
@@ -2242,7 +2251,14 @@ export const POWER_ENERGY_COST = {
 };
 
 export function getPowerEnergyCost() {
-    return POWER_ENERGY_COST[this.activePower] || 30;
+    const base = POWER_ENERGY_COST[this.activePower] || 30;
+    // CD: EFFICIENCY discounts power-weapon cost (capped −50%, CD-05). Applied
+    // at the single source so the fire gate (isPowerReady), charge-shot cost,
+    // and the spend deduction all read the same discounted value. Default-safe:
+    // 0 SP → getEffectivePowerCost(base) === base.
+    return (typeof this.getEffectivePowerCost === 'function')
+        ? this.getEffectivePowerCost(base)
+        : base;
 }
 
 export function isPowerReady() {

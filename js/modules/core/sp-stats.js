@@ -25,6 +25,13 @@ export const SP_STATS = [
     { id: 'CRIT_DAMAGE', name: 'Crit Damage', icon: 'dagger', max: 200, label: (t) => `+${t}% crit damage` },
     { id: 'DODGE',       name: 'Evasion',     icon: 'wind',   max: 50,  label: (t) => `+${t}% dodge chance` },
     { id: 'SPEED',       name: 'Speed',       icon: 'bullet-train', max: 100, label: (t) => `+${t}% thrust & top speed` },
+    // CD energy-economy axis (CD-01). These govern the power-weapon energy
+    // meter: CAPACITOR raises max energy (base 100 → up to 200 at full),
+    // REACTOR speeds the regen fill (up to +100% → 2× at full), and EFFICIENCY
+    // shaves power-weapon energy cost (up to −50% at full — the CD-05 cap).
+    { id: 'CAPACITOR',  name: 'Capacitor',  icon: 'battery', max: 100, label: (t) => `+${t} max energy` },
+    { id: 'REACTOR',    name: 'Reactor',    icon: 'bolt',    max: 100, label: (t) => `+${t}% energy regen` },
+    { id: 'EFFICIENCY', name: 'Efficiency', icon: 'chart',   max: 50,  label: (t) => `−${t}% power cost` },
 ];
 
 const _BY_ID = Object.fromEntries(SP_STATS.map((s) => [s.id, s]));

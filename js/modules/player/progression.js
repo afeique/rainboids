@@ -21,6 +21,7 @@ export function levelUp() { return false; }
 // and `spStats` live on the player but are saved to localStorage so they
 // carry between runs.
 import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-stats.js';
+import { EFFICIENCY_CAP } from '../core/constants.js';
 import { loadMeta, saveMeta } from '../core/storage.js';
 import { frameClock } from '../core/frame-clock.js';
 import { playerChillSpeedMult } from './player-status.js';
@@ -524,4 +525,29 @@ export function getEffectiveHealthStarHealing() {
 
 export function getEffectiveBurstStarHealing() {
     return this.getEffectiveHealthOrbHealing();
+}
+
+// ── CD energy-economy effective getters (CD-06) ─────────────────────────────
+// Power weapons run on the energy meter (player.energy / player.maxEnergy,
+// base 100). Three permanent SP stats reshape that economy. All three are
+// DEFAULT-SAFE: with 0 points allocated _spVal returns 0, so each getter
+// collapses to the exact pre-CD value (maxEnergy / regenMult 1 / baseCost).
+
+// CAPACITOR — raises the energy reservoir. 0 pts → base maxEnergy (100).
+export function getEffectiveMaxEnergy() {
+    return (this.maxEnergy || 100) + _spVal(this, 'CAPACITOR');
+}
+
+// REACTOR — multiplier on the per-frame regen increment. 0 pts → 1.
+// _spVal('REACTOR') is the percentage (0..100), so /100 → 0..1 added to 1.
+export function getEffectiveEnergyRegenMult() {
+    return 1 + _spVal(this, 'REACTOR') / 100;
+}
+
+// EFFICIENCY — discounts power-weapon energy cost. 0 pts → baseCost.
+// The discount fraction is capped at EFFICIENCY_CAP (CD-05, 0.5) so a power
+// weapon never costs less than 50% of base, no matter how much piles in.
+export function getEffectivePowerCost(baseCost) {
+    const discount = Math.min(EFFICIENCY_CAP, _spVal(this, 'EFFICIENCY') / 100);
+    return baseCost * (1 - discount);
 }

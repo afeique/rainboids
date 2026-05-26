@@ -1044,8 +1044,11 @@ export class Player {
             this._lastEnergyTime = eNow;
             if (!this.chargePaused && dtMs > 0) {
                 const ENERGY_FILL_MS = 12000;  // empty → full in 12 seconds
-                const maxE = this.maxEnergy || 100;
-                this.energy = Math.min(maxE, (this.energy || 0) + maxE * dtMs / ENERGY_FILL_MS);
+                // CD: CAPACITOR raises the cap, REACTOR scales the fill rate.
+                // Default-safe: 0 SP → maxE = this.maxEnergy, regenMult = 1.
+                const maxE = this.getEffectiveMaxEnergy();
+                const regenMult = this.getEffectiveEnergyRegenMult();
+                this.energy = Math.min(maxE, (this.energy || 0) + maxE * regenMult * dtMs / ENERGY_FILL_MS);
             }
 
             // P6 — Siege passive: ramp damage while ~stationary, decay it while
@@ -1272,7 +1275,20 @@ export class Player {
     getEffectiveBurstStarHealing() {
         return progression.getEffectiveBurstStarHealing.call(this);
     }
-    
+
+    // CD energy-economy getters (CD-06). Default-safe: 0 SP → base values.
+    getEffectiveMaxEnergy() {
+        return progression.getEffectiveMaxEnergy.call(this);
+    }
+
+    getEffectiveEnergyRegenMult() {
+        return progression.getEffectiveEnergyRegenMult.call(this);
+    }
+
+    getEffectivePowerCost(baseCost) {
+        return progression.getEffectivePowerCost.call(this, baseCost);
+    }
+
     // ── Weapon System Methods ──────────────────────────────────────────────
 
     // Phase B.S1 — back-compat accessors for the legacy single-ability API.
@@ -1501,7 +1517,9 @@ export class Player {
         return weapons.getPowerEnergyCost.call(this);
     }
     addEnergy(amount) {
-        this.energy = Math.max(0, Math.min(this.maxEnergy, (this.energy || 0) + amount));
+        // CD: clamp to the CAPACITOR-boosted cap so the meter can bank past
+        // the base 100. Default-safe: 0 SP → getEffectiveMaxEnergy() == maxEnergy.
+        this.energy = Math.max(0, Math.min(this.getEffectiveMaxEnergy(), (this.energy || 0) + amount));
     }
 
     // P6 — Siege passive: outgoing damage multiplier from the current standing-
