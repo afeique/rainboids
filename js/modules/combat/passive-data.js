@@ -52,16 +52,13 @@ export const PASSIVES = {
     // ones are slot-ONLY (never roll "can't crit" on a helmet); the milder
     // ones can roll as a Transcendental chase affix.
     GLASS_CANNON: {
-        id: 'GLASS_CANNON', name: 'Glass Cannon', desc: '+60% damage; −50% max HP',
-        hooks: ['damage', 'maxHp'], tags: ['keystone', 'offense'],
-        slot: true, item: false, stack: B, downside: '−50% max HP',
-        // P6 — static multiplier contributions (aggregated by the player).
-        damageMult: 1.6, maxHpMult: 0.5,
-    },
-    BERSERKERS_PACT: {
-        id: 'BERSERKERS_PACT', name: "Berserker's Pact", desc: 'Damage ramps as HP falls (up to +80% near death)',
+        // §6c no-downsides — merged with the (inert) Berserker's Pact into one
+        // keystone: pure-upside HP-scaling damage. The −50% max-HP downside and
+        // the static damageMult are gone; the live HP ramp is wired in
+        // player/passives.js getPassiveDamageMult (a static field can't be HP-aware).
+        id: 'GLASS_CANNON', name: 'Glass Cannon', desc: '+40% damage, scaling to +90% as current HP falls',
         hooks: ['damage'], tags: ['keystone', 'offense'],
-        slot: true, item: true, itemTierMin: TRANS, stack: B,
+        slot: true, item: false, stack: B,
     },
     GUNSLINGER: {
         id: 'GUNSLINGER', name: 'Gunslinger', desc: '+50% primary damage, +30% fire rate',
@@ -281,7 +278,7 @@ export const PASSIVES = {
 // per relic instead of a generic fallback. A few are intentional thematic dups
 // (fire, bolt, ghost, anger) where two relics share a motif.
 const _PASSIVE_ICONS = {
-    GLASS_CANNON: 'gem', BERSERKERS_PACT: 'anger', GUNSLINGER: 'pistol', PURIST: 'dagger',
+    GLASS_CANNON: 'gem', GUNSLINGER: 'pistol', PURIST: 'dagger',
     TWIN_CAST: 'multi-shot', PRISMATIC_SOUL: 'sparkle', OVERFLOW_CAPACITOR: 'battery',
     KILLING_SPREE: 'skull', ONE_WITH_THE_VOID: 'ghost', SECOND_HEART: 'heart',
     EYE_OF_THE_STORM: 'eye', DETONATOR: 'explosion', FRENZY: 'fist', GRAVITY_WELL: 'vortex',

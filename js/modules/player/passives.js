@@ -91,10 +91,28 @@ export function getPassiveMult(field) {
     return mult;
 }
 
-/** Global outgoing-damage multiplier from active passives (Glass Cannon, …). */
-export function getPassiveDamageMult() { return getPassiveMult.call(this, 'damageMult'); }
+/**
+ * Global outgoing-damage multiplier from active passives.
+ *
+ * Starts from the static `damageMult` product (Glass Cannon no longer
+ * contributes a static field). §6c — Glass Cannon (merged with Berserker's
+ * Pact) is a pure-upside HP-scaling keystone: +40% damage at full HP ramping
+ * to +90% at 0 HP. That can't be a static field (it's HP-aware), so it's
+ * applied on top here. Default-safe: without GLASS_CANNON this is byte-for-byte
+ * the existing static product.
+ */
+export function getPassiveDamageMult() {
+    let mult = getPassiveMult.call(this, 'damageMult');
+    if (this.activePassives && this.activePassives.has('GLASS_CANNON')) {
+        const maxHp = (typeof this.getEffectiveMaxHealth === 'function')
+            ? this.getEffectiveMaxHealth() : (this.maxHealth || 1);
+        const hpFrac = Math.max(0, Math.min(1, (this.health || 0) / (maxHp || 1)));
+        mult *= 1.4 + 0.5 * (1 - hpFrac); // +40% at full HP → +90% at 0 HP
+    }
+    return mult;
+}
 
-/** Max-HP multiplier from active passives (Glass Cannon −50%, Failsafe −15%, …). */
+/** Max-HP multiplier from active passives (a passive's static `maxHpMult` field). */
 export function getPassiveMaxHpMult() { return getPassiveMult.call(this, 'maxHpMult'); }
 
 /**

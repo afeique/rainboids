@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.212.0] - 2026-05-26
+
+### Changed — No-downsides batch 5: Glass Cannon ↔ Berserker's Pact merge (CD-02 · §6c)
+
+- **Glass Cannon** is now the merged pure-upside keystone: **+40% damage at full
+  HP, scaling up to +90% as current HP falls** (`1.4 + 0.5·(1−hpFrac)`, applied
+  dynamically in `getPassiveDamageMult`, `player/passives.js`). Its **−50% max-HP
+  downside is gone** (static `maxHpMult: 0.5` removed → max HP unpenalized) along
+  with the static `damageMult: 1.6`. Default-safe: without the keystone,
+  `getPassiveDamageMult` and `getEffectiveMaxHealth` are byte-for-byte unchanged.
+- **Berserker's Pact removed** — it was inert (its "+80% as HP falls" was never
+  wired) and is now folded into Glass Cannon's HP-ramp, freeing a keystone slot
+  (per §6c; the freed slot is for the upcoming **Apex Predator** keystone).
+  Removing it from the registry degrades saves gracefully (the passive lookups
+  all guard unknown ids).
+- **Only HEAT_SINK's downside now remains** (1 of the original 11) — its
+  vent-lockout is part of an unbuilt HEAT mechanic, a separate net-new feature.
+- Tests: rewrote the Glass Cannon block in `passives-player` (HP-scaling curve
+  1.4/1.65/1.9 + clamp + no max-HP penalty + compounding), updated
+  `passives-no-downsides` (HEAT_SINK the sole remaining downside), `passives-registry`
+  + `passives-gear` (Berserker gone). Full unit suite **1790** green; QA-14
+  passives + QA-07 weapons 24/24.
+
+---
+
 ## [6.211.0] - 2026-05-26
 
 ### Changed — No-downsides passive rework, batch 4: Overflow Capacitor + Gravity Well (CD-02 · §6c)

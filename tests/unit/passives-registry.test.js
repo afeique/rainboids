@@ -48,7 +48,8 @@ describe('PASSIVES registry — shape & delivery metadata', () => {
     });
 
     test('keystones (binary, build-defining) include the design set', () => {
-        for (const id of ['GLASS_CANNON', 'BERSERKERS_PACT', 'GUNSLINGER', 'PURIST',
+        // §6c batch 5 — BERSERKERS_PACT was merged into GLASS_CANNON and removed.
+        for (const id of ['GLASS_CANNON', 'GUNSLINGER', 'PURIST',
             'TWIN_CAST', 'PRISMATIC_SOUL', 'OVERFLOW_CAPACITOR', 'KILLING_SPREE',
             'ONE_WITH_THE_VOID', 'SECOND_HEART']) {
             expect(PASSIVES[id]).toBeDefined();
@@ -56,6 +57,8 @@ describe('PASSIVES registry — shape & delivery metadata', () => {
             expect(PASSIVES[id].stack).toBe(PASSIVE_STACK.BINARY);
             expect(PASSIVES[id].slot).toBe(true);
         }
+        // The merged-away keystone no longer exists in the registry.
+        expect(PASSIVES.BERSERKERS_PACT).toBeUndefined();
     });
 
     test('harsh-downside keystones are slot-only (never roll on gear)', () => {

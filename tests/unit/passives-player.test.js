@@ -186,19 +186,47 @@ describe('P2 — getPassiveMod folds into getEffective* getters', () => {
     });
 });
 
-describe('P6 — passive effect batch 1 (Glass Cannon multipliers)', () => {
-    test('getPassiveDamageMult / getPassiveMaxHpMult default to 1, then reflect Glass Cannon', () => {
-        const s = makeStub();
+describe('§6c no-downsides — Glass Cannon (merged keystone: HP-scaling, pure upside)', () => {
+    // §6c merged the inert Berserker's Pact into Glass Cannon. The static
+    // damageMult/maxHpMult fields and the −50% max-HP downside are GONE; the
+    // damage now scales with missing HP (+40% full → +90% empty), wired live in
+    // getPassiveDamageMult since a static registry field can't be HP-aware.
+    test('getPassiveDamageMult / getPassiveMaxHpMult default to 1 without Glass Cannon', () => {
+        const s = makeStub({ health: 100, getEffectiveMaxHealth: () => 100 });
         own(s, ['GLASS_CANNON']);
         // owned but not equipped → no effect
         expect(passives.getPassiveDamageMult.call(s)).toBe(1);
         expect(passives.getPassiveMaxHpMult.call(s)).toBe(1);
-        equip(s, 0, 'GLASS_CANNON');
-        expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.6);
-        expect(passives.getPassiveMaxHpMult.call(s)).toBe(0.5);
     });
 
-    test('getEffectiveMaxHealth halves with Glass Cannon equipped', () => {
+    test('HP-scaling damage curve: +40% at full HP → +65% at half → +90% at ~0', () => {
+        const s = makeStub({ getEffectiveMaxHealth: () => 100 });
+        own(s, ['GLASS_CANNON']);
+        equip(s, 0, 'GLASS_CANNON');
+        s.health = 100; // full HP
+        expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.4);
+        s.health = 50;  // half HP
+        expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.65);
+        s.health = 0;   // ~0 HP
+        expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.9);
+    });
+
+    test('HP fraction is clamped (over-full / negative HP do not exceed the curve)', () => {
+        const s = makeStub({ getEffectiveMaxHealth: () => 100 });
+        own(s, ['GLASS_CANNON']);
+        equip(s, 0, 'GLASS_CANNON');
+        s.health = 150; // over-full → clamps to full-HP bonus (+40%)
+        expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.4);
+        s.health = -20; // negative → clamps to empty-HP bonus (+90%)
+        expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.9);
+    });
+
+    test('Glass Cannon no longer carries the static damageMult / maxHpMult fields', () => {
+        expect('damageMult' in PASSIVES.GLASS_CANNON).toBe(false);
+        expect('maxHpMult' in PASSIVES.GLASS_CANNON).toBe(false);
+    });
+
+    test('Glass Cannon no longer reduces max HP (−50% downside removed)', () => {
         const s = makeStub({
             maxHealth: 200,
             getPowerupStacks: () => 0,
@@ -210,18 +238,20 @@ describe('P6 — passive effect batch 1 (Glass Cannon multipliers)', () => {
         own(s, ['GLASS_CANNON']);
         expect(progression.getEffectiveMaxHealth.call(s)).toBe(200); // not equipped
         equip(s, 0, 'GLASS_CANNON');
-        expect(progression.getEffectiveMaxHealth.call(s)).toBe(100); // ×0.5
+        expect(passives.getPassiveMaxHpMult.call(s)).toBeCloseTo(1.0);
+        expect(progression.getEffectiveMaxHealth.call(s)).toBe(200); // unpenalized
     });
 
-    test('multipliers compound across active passives', () => {
+    test('the HP-scaling multiplier compounds on top of static damageMult passives', () => {
         // Inject a second damageMult passive temporarily to prove the product.
         PASSIVES.OPPORTUNIST.damageMult = 1.5;
         try {
-            const s = makeStub({ passiveSlotsUnlocked: 2 });
+            const s = makeStub({ passiveSlotsUnlocked: 2, health: 100, getEffectiveMaxHealth: () => 100 });
             own(s, ['GLASS_CANNON', 'OPPORTUNIST']);
             equip(s, 0, 'GLASS_CANNON');
             equip(s, 1, 'OPPORTUNIST');
-            expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.6 * 1.5);
+            // static product (1.5) × Glass Cannon's full-HP ramp (1.4)
+            expect(passives.getPassiveDamageMult.call(s)).toBeCloseTo(1.4 * 1.5);
         } finally {
             delete PASSIVES.OPPORTUNIST.damageMult;
         }

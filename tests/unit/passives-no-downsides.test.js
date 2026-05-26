@@ -149,11 +149,27 @@ describe('§6c batches 1–4 — downside string fields removed from the registr
         expect(progression.getEffectiveEnergyRegenMult.call(withOC)).toBeCloseTo(2); // ×2 regen
     });
 
-    test('the remaining 2 harsh-downside keystones STILL carry their downside (later batches)', () => {
-        for (const id of ['GLASS_CANNON', 'HEAT_SINK']) {
-            expect('downside' in PASSIVES[id]).toBe(true);
-            expect(typeof PASSIVES[id].downside).toBe('string');
-            expect(PASSIVES[id].downside.length).toBeGreaterThan(0);
-        }
+    test('batch 5 — Glass Cannon (merged keystone) is now pure-upside (no downside, no static fields)', () => {
+        // §6c merged the inert Berserker's Pact into Glass Cannon: pure-upside
+        // HP-scaling damage. The −50% max-HP downside and the static
+        // damageMult/maxHpMult fields are gone.
+        expect('downside' in PASSIVES.GLASS_CANNON).toBe(false);
+        expect('damageMult' in PASSIVES.GLASS_CANNON).toBe(false);
+        expect('maxHpMult' in PASSIVES.GLASS_CANNON).toBe(false);
+    });
+
+    test('batch 5 — Berserker\'s Pact is removed from the registry (merged into Glass Cannon)', () => {
+        expect(PASSIVES.BERSERKERS_PACT).toBeUndefined();
+    });
+
+    test('HEAT_SINK is the ONLY remaining keystone carrying a downside', () => {
+        expect('downside' in PASSIVES.HEAT_SINK).toBe(true);
+        expect(typeof PASSIVES.HEAT_SINK.downside).toBe('string');
+        expect(PASSIVES.HEAT_SINK.downside.length).toBeGreaterThan(0);
+        // No other keystone still carries a downside string.
+        const keystonesWithDownside = Object.values(PASSIVES)
+            .filter((p) => Array.isArray(p.tags) && p.tags.includes('keystone') && 'downside' in p)
+            .map((p) => p.id);
+        expect(keystonesWithDownside).toEqual(['HEAT_SINK']);
     });
 });

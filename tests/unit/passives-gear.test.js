@@ -17,14 +17,17 @@ describe('eligibleItemPassives — rarity gating', () => {
         const ids = eligibleItemPassives('exceptional').map((p) => p.id);
         expect(ids).toContain('CATALYST');       // modular, itemTierMin exceptional
         expect(ids).toContain('OPPORTUNIST');
-        expect(ids).not.toContain('BERSERKERS_PACT'); // keystone, itemTierMin transcendental
+        expect(ids).not.toContain('TWIN_CAST');  // keystone, itemTierMin transcendental
         expect(ids).not.toContain('GLASS_CANNON');     // keystone, slot-only (item:false)
     });
 
     test('Transcendental gear can also roll the chase keystones', () => {
+        // §6c batch 5 — BERSERKERS_PACT (the former transcendental item keystone)
+        // was merged into GLASS_CANNON and removed; TWIN_CAST is now the
+        // representative transcendental chase keystone.
         const ids = eligibleItemPassives('transcendental').map((p) => p.id);
-        expect(ids).toContain('CATALYST');         // modular still eligible
-        expect(ids).toContain('BERSERKERS_PACT');  // transcendental keystone now allowed
+        expect(ids).toContain('CATALYST');     // modular still eligible
+        expect(ids).toContain('TWIN_CAST');    // transcendental keystone now allowed
     });
 
     test('every eligible passive is item-deliverable (item: true)', () => {
