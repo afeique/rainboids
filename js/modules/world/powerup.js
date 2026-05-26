@@ -317,6 +317,30 @@ export const POWERUP_TYPES = {
         description: 'Killing an enemy restores 3 HP',
     },
 
+    // CD-04 — Ablative Plating. While held, the FIRST damaging hit each wave is
+    // fully blocked (0 damage), then the plate is spent until the next wave
+    // recharges it. The recharge fires at wave start (wave-manager.spawnWaveEntities)
+    // and the block sits in lifecycle.takeDamage AFTER the dodge / invuln / i-frame
+    // guards — so a dodged or i-framed hit never wastes the plate; it only spends
+    // on a hit that would actually land. Gated on the powerup being held + the
+    // ready flag — DEFAULT-SAFE (no powerup OR spent plate → damage path unchanged).
+    ABLATIVE_PLATING: {
+        name: 'Ablative',
+        displayName: 'Ablative Plating',
+        abbr: 'ABL',
+        color: '#aaccee',
+        gradientColors: ['#ddeeff', '#5577aa'],
+        icon: 'shield',
+        duration: 30000,
+        effect: 'ablativePlating',
+        rarity: 0.10,
+        category: 'DEFENSE',
+        maxStacks: 1,
+        spCost: 4,
+        spCostIncrement: 2,
+        description: 'The first hit each wave is fully blocked.',
+    },
+
     // 6.16.0 — Dash post-burst i-frame extender. Every SHIFT dash
     // already grants a 1s post-burst invuln window (see Player._triggerDash
     // + progression.getPostDashIframeMs). Each stack here adds +2s,

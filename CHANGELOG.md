@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.203.0] - 2026-05-25
+
+### Added — Ablative Plating powerup: first hit each wave fully blocked (CD-04)
+
+- **Ablative Plating** (new defensive powerup, `world/powerup.js`) — while held,
+  the **first damaging hit each wave is fully negated** (0 damage), then the plate
+  is spent until the next wave recharges it. A recurring "free hit" rewarding
+  aggressive early-wave positioning.
+- **Block** (`player/lifecycle.js` `takeDamage`) — placed **after** the dodge /
+  invincible / i-frame / REFLEXES early-returns, so a dodged or i-framed hit
+  never wastes the plate; on a hit that would actually land it consumes the
+  charge and `return 0` (the same no-damage contract callers already handle).
+  **Recharge** at wave start (`wave/wave-manager.js` `spawnWaveEntities`); the
+  `_ablativeReady` flag inits ready per run (`player/player.js`).
+- **Default-safe:** the block is gated on `_ablativeReady && getPowerupStacks
+  ('ABLATIVE_PLATING') > 0` — without the powerup (or once spent that wave) it
+  falls through to the normal damage path unchanged.
+- Tests: `tests/unit/cd-ablative-plating.test.js` (+5 — entry shape, the
+  takeDamage gate: held+ready → 0 and flag flips, spent/no-powerup → normal
+  damage) + `tests/qa/41-ablative-plating.spec.js` (+5 — first hit blocked +
+  spent, second hit normal, recharge on wave start, default-safe). Full unit
+  suite **1740** green; QA-03 player + QA-04 HUD regression 24/24.
+
+---
+
 ## [6.202.0] - 2026-05-25
 
 ### Added — Regenerator + Life-on-Kill sustain powerups (CD-04/08 · doc T2)

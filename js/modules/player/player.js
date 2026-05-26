@@ -416,6 +416,14 @@ export class Player {
         this.bloodlustStacks = 0;
         this._bloodlustRefreshMs = 0;
 
+        // CD-04 — Ablative Plating charge. While the ABLATIVE_PLATING powerup is
+        // held, the first damaging hit each wave is fully blocked, then the plate
+        // is spent until the next wave recharges it (wave-manager.spawnWaveEntities).
+        // Default ready on spawn / run-start so the very first wave is covered.
+        // Default-safe: the gate in lifecycle.takeDamage also requires the powerup
+        // to be held, so this flag is inert without it.
+        this._ablativeReady = true;
+
         let scale = 1;
         this.radius = (GAME_CONFIG.SHIP_SIZE * scale) / 2;
         // Player mass (smaller than most asteroids)

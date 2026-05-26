@@ -251,6 +251,23 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         }
     }
 
+    // CD-04 — ABLATIVE PLATING. While the powerup is held, the FIRST damaging hit
+    // each wave is fully negated. Sits AFTER the dodge / invuln / i-frame / REFLEXES
+    // early-returns above, so a dodged or i-framed hit never wastes the plate — it
+    // only spends on a hit that would actually land. A clean full negation: consume
+    // the charge and return 0 (the same no-damage contract callers already handle for
+    // a dodge / invuln), before any HP / lethal resolution. Recharged at wave start
+    // (wave-manager.spawnWaveEntities). DEFAULT-SAFE: no powerup held OR the plate is
+    // already spent (`_ablativeReady` false) → falls through to the normal path
+    // byte-for-byte unchanged.
+    if (this.player._ablativeReady
+        && this.player.getPowerupStacks
+        && this.player.getPowerupStacks('ABLATIVE_PLATING') > 0) {
+        this.player._ablativeReady = false;
+        if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
+        return 0; // hit fully negated
+    }
+
     // RUN-05a — Adaptive Difficulty Director threat axis. Scale the INCOMING
     // damage by the active D_thr (default 1.0 with no director — see
     // directorThreatMult). Applied here, on the top-level incoming-damage path

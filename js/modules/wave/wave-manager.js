@@ -718,6 +718,13 @@ export function spawnWaveEntities() {
     // (→ hitsSurvived, incremented in lifecycle.takeDamage).
     this._waveStartMs = Date.now();
     this.game._waveHits = 0;
+    // CD-04 — recharge the Ablative Plating plate at wave start: the next wave's
+    // first damaging hit (if the powerup is held) is fully blocked again. Guard for
+    // player existence (the wave-manager binds the player as `this.player`, matching
+    // every other player access in this module). Default-safe: the gate in
+    // lifecycle.takeDamage also requires the powerup to be held, so this flag is
+    // inert without it.
+    if (this.player) this.player._ablativeReady = true;
     // BOSS-04 — clear the once-per-wave modular-boss guard so this wave's boss
     // (if any) can spawn when its boss group fires.
     this._modularBossSpawnedWave = null;
