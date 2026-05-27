@@ -358,6 +358,35 @@ function utilityAffixTotal(player) {
     return Math.max(0, affix(player, 'utility'));
 }
 
+// Effective SP-stat value — the live getter returns the stat's contribution
+// (e.g. THORNS / SPEED = points × 5). Defensive: 0 for a stub without the getter.
+function spStat(player, id) {
+    if (player && typeof player.getSpStatValue === 'function') {
+        const v = player.getSpStatValue(id);
+        return Number.isFinite(v) && v > 0 ? v : 0;
+    }
+    return 0;
+}
+
+// THORNS (T25) — fraction of damage reflected back at attackers. Mirrors
+// combat-manager: 0.25 per THORNS powerup stack + (item thorns + SP THORNS)/100.
+// A stub may set `thornsFrac` directly. Starter → 0 (calibration anchor holds).
+function thornsFrac(player) {
+    if (player && Number.isFinite(player.thornsFrac)) return Math.max(0, player.thornsFrac);
+    const frac = stacks(player, 'THORNS') * 0.25 + (affix(player, 'thorns') + spStat(player, 'THORNS')) / 100;
+    return Math.max(0, Number.isFinite(frac) ? frac : 0);
+}
+
+// SPEED (T25) — movement multiplier from SP SPEED + item speed + SPEED_BOOST
+// stacks. Mirrors getMovementSpeedMultiplier MINUS the transient CHILL debuff
+// (a build prior shouldn't price in a temporary enemy slow). A stub may set
+// `speedMult` directly. Starter → 1.0 (calibration anchor holds).
+function speedMult(player) {
+    if (player && Number.isFinite(player.speedMult)) return Math.max(1, player.speedMult);
+    const m = 1 + (spStat(player, 'SPEED') + affix(player, 'speed')) / 100 + stacks(player, 'SPEED_BOOST') * 0.65;
+    return Math.max(1, Number.isFinite(m) ? m : 1);
+}
+
 // ── §14.1 sub-scores ─────────────────────────────────────────────────────────
 
 /**
@@ -373,7 +402,11 @@ export function offense(player) {
     const reach = 1 + 0.25 * pierceCount(player) + 0.40 * (hasExplosive(player) ? 1 : 0);
     const primaryDPS = dmg * sps * shots * crit * reach;
     const o = primaryDPS + 0.6 * powerDPS(player);
-    return Math.max(1e-6, o);
+    // T25 — THORNS contributes a reflected-damage offense credit: a thorns
+    // build outputs extra damage by tanking hits. Credit half the reflect
+    // fraction against primary DPS; starter (0 thorns) → no change.
+    const thorns = thornsFrac(player) * primaryDPS * 0.5;
+    return Math.max(1e-6, o + thorns);
 }
 
 /**
@@ -384,7 +417,10 @@ export function offense(player) {
  */
 export function survivability(player) {
     const hp = maxHealth(player);
-    const ehp = (hp / (1 - shieldFrac(player)) / (1 - dodgeFrac(player))) * lives(player);
+    let ehp = (hp / (1 - shieldFrac(player)) / (1 - dodgeFrac(player))) * lives(player);
+    // T25 — SPEED improves effective survivability through mobility/kiting:
+    // credit half the movement-speed bonus as bonus EHP. Starter (×1.0) → no change.
+    ehp *= 1 + (speedMult(player) - 1) * 0.5;
     const sustain = regenPerSec(player) + 0.5 * lifestealFrac(player) * offense(player);
     return Math.max(1e-6, ehp + sustain * SUSTAIN_WINDOW);
 }

@@ -73,6 +73,10 @@ export function addXp(amount) {
     if (leveled) {
         this._leveledUpPending = true;
         this.saveMetaState();
+        // T25 — PWR is LIVE current power: a level-up raises the level-ramp that
+        // gear amplifies (T26) and unlocks SP to invest, so refresh the build-
+        // strength prior the difficulty director reads. Guarded off-engine.
+        this.gameEngine?.recomputePlayerPWR?.();
         // 6.148.0 — re-arm the on-screen LEVEL UP announcement. The 6.0.0
         // refactor no-op'd triggerLevelUpEffects and the 6.35.0 meta-leveling
         // never re-wired it, so level-ups had gone silent. The canvas
@@ -112,6 +116,8 @@ export function allocateSp(statId) {
     this.spStats[statId] += 1;
     this.sp -= 1;
     this.saveMetaState();
+    // T25 — SP investment changes effective stats; refresh the live PWR prior.
+    this.gameEngine?.recomputePlayerPWR?.();
     return true;
 }
 
@@ -123,6 +129,8 @@ export function deallocateSp(statId) {
     this.spStats[statId] -= 1;
     this.sp = (this.sp || 0) + 1;
     this.saveMetaState();
+    // T25 — SP investment changes effective stats; refresh the live PWR prior.
+    this.gameEngine?.recomputePlayerPWR?.();
     return true;
 }
 
