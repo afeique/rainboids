@@ -45,8 +45,7 @@ export const FIRE_COOLDOWN_TICKS = 8; // ~7.5 shots/sec
 export const BULLET_OOB_MARGIN = 50; // despawn this far outside the arena
 
 // Enemies — v1 ships a single "chaser" type that homes on the nearest player.
-export const ENEMY_MAX_COUNT = 6; // concurrent cap
-export const ENEMY_SPAWN_INTERVAL = 90; // ticks between spawns (~1.5 s)
+export const ENEMY_MAX_COUNT = 6; // concurrent cap (alive at once)
 export const ENEMY_CHASER_HP = 3;
 export const ENEMY_CHASER_RADIUS = 16;
 export const ENEMY_CHASER_SPEED = 1.6; // px/tick
@@ -70,3 +69,11 @@ export const GOLD_VALUE = 5;
 export const HEALTH_VALUE = 15;
 export const ENEMY_HEALTH_DROP_CHANCE = 0.3; // chance an enemy also drops health
 export const ASTEROID_GOLD_CHANCE = 0.5; // chance a destroyed asteroid drops gold
+
+// Waves — paced enemy budgets between intermissions; scale with player count.
+export const WAVE_INTERMISSION = 180; // ticks between waves (~3 s)
+export const WAVE_SPAWN_PACING = 45; // ticks between spawns within a wave
+export const GAMEOVER_DELAY = 240; // ticks after team-wipe before the run restarts
+export const WAVE_BASE_COUNT = 2; // budget = (BASE + wave*PER_WAVE) * playerScale
+export const WAVE_PER_WAVE = 2;
+export const WAVE_HP_PER_3_WAVES = 1; // enemy bonus HP per 3 waves

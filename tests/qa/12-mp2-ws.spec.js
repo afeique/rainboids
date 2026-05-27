@@ -81,8 +81,10 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     await expect.poll(() => a.evaluate(() => window.__mp.asteroidCount())).toBeGreaterThan(0);
     await expect.poll(() => b.evaluate(() => window.__mp.asteroidCount())).toBeGreaterThan(0);
 
-    // Enemies spawn once players are present (first spawn ~1.5s).
-    await expect.poll(() => a.evaluate(() => window.__mp.enemyCount()), { timeout: 8000 }).toBeGreaterThan(0);
+    // The wave system advances once players are present (wave 1 ~3s in),
+    // and enemies spawn during the active wave.
+    await expect.poll(() => a.evaluate(() => window.__mp.wave()), { timeout: 9000 }).toBeGreaterThanOrEqual(1);
+    await expect.poll(() => a.evaluate(() => window.__mp.enemyCount()), { timeout: 9000 }).toBeGreaterThan(0);
 
     const aId = await a.evaluate(() => window.__mp.playerId());
 

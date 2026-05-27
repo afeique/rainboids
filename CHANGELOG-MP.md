@@ -7,6 +7,29 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.8.0] - 2026-05-27
+
+### Added
+- **Wave system** (`wave.js` `updateWaves()`) replacing the flat enemy spawner:
+  intermission → active → (budget spawned + all enemies dead) → intermission.
+  Per-wave enemy budget and enemy HP scale with wave number and player count;
+  emits `WAVE_START` / `WAVE_CLEAR`. Enemies spawn paced from arena edges.
+- **Run-over / restart**: a full team-wipe (all ships downed) → `GAME_OVER`,
+  then after a delay the room resets (ships revived at spawn, entities cleared,
+  wave reset) → `RUN_RESTART`.
+- **Client**: snapshot carries `wave` + `waveState`; HUD shows them; wave/
+  game-over/restart events raise a fading center banner.
+- `enemy.js`/`world.js` — `spawnEnemy` accepts an HP override for wave scaling.
+
+### Changed
+- Removed the interim flat `tickEnemySpawner`; enemy spawning is now wave-driven.
+
+### Tests
+- `tests/unit/sim-wave.test.js` — wave start/clear, budget scaling by player
+  count, and team-wipe → game-over → restart.
+- `tests/unit/sim-enemy.test.js` — dropped the old flat-spawner cases.
+- `tests/qa/12-mp2-ws.spec.js` — asserts the wave system advances to wave ≥ 1.
+
 ## [0.7.0] - 2026-05-27
 
 ### Added

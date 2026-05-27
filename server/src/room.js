@@ -73,7 +73,11 @@ function buildSnapshot(world) {
   for (const [, d] of world.drops) {
     drops.push({ id: d.id, x: round(d.x), y: round(d.y), k: d.kind });
   }
-  return { t: S2C.SNAPSHOT, tick: world.tick, ships, asteroids, bullets, enemies, drops };
+  return {
+    t: S2C.SNAPSHOT, tick: world.tick,
+    wave: world.wave, ws: world.waveState,
+    ships, asteroids, bullets, enemies, drops,
+  };
 }
 
 export class Room {

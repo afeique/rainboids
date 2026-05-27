@@ -5,12 +5,12 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { createEnemy, stepEnemy, nearestShip } from '../../js/sim/enemy.js';
-import { createWorld, addShip, spawnBullet, spawnEnemy, tickEnemySpawner } from '../../js/sim/world.js';
+import { createWorld, addShip, spawnBullet, spawnEnemy } from '../../js/sim/world.js';
 import { tick } from '../../js/sim/tick.js';
 import { resolveCollisions } from '../../js/sim/collision.js';
 import { EMPTY_INPUT } from '../../js/sim/ship.js';
 import { EV } from '../../js/sim/events.js';
-import { ENEMY_MAX_COUNT, ENEMY_CONTACT_DAMAGE } from '../../js/sim/constants.js';
+import { ENEMY_CONTACT_DAMAGE } from '../../js/sim/constants.js';
 
 describe('chaser AI', () => {
   it('finds the nearest living ship', () => {
@@ -75,29 +75,6 @@ describe('enemy vs ship contact', () => {
     expect(ship.downed).toBe(true);
     expect(ship.hp).toBe(0);
     expect(w.events.some((ev) => ev.type === EV.SHIP_DOWNED && ev.id === 1)).toBe(true);
-  });
-});
-
-describe('enemy spawner', () => {
-  it('does not spawn when no players are present', () => {
-    const w = createWorld({ seed: 1 });
-    w.enemySpawnTimer = 1;
-    tickEnemySpawner(w);
-    expect(w.enemies.size).toBe(0);
-  });
-
-  it('spawns on interval when a player is present, respecting the cap', () => {
-    const w = createWorld({ seed: 1 });
-    addShip(w, 1, 500, 500);
-    w.enemySpawnTimer = 1;
-    tickEnemySpawner(w);
-    expect(w.enemies.size).toBe(1);
-
-    // Fill to cap → no more spawns.
-    while (w.enemies.size < ENEMY_MAX_COUNT) spawnEnemy(w, 0, 0);
-    w.enemySpawnTimer = 1;
-    tickEnemySpawner(w);
-    expect(w.enemies.size).toBe(ENEMY_MAX_COUNT);
   });
 });
 

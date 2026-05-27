@@ -120,7 +120,7 @@ function drawDrop(ctx, d) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, now, localId, localDowned, localReviveProgress }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, now, localId, localDowned, localReviveProgress, banner }) {
   // Background.
   ctx.fillStyle = '#070710';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -178,5 +178,18 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
   // Local ship (predicted).
   if (localShip) {
     drawShip(ctx, localShip.x, localShip.y, localShip.angle, '#ffd23f', `P${localId} (you)`, true, localDowned, localReviveProgress);
+  }
+
+  // Center banner (wave/game-over announcements).
+  if (banner && now != null) {
+    const age = (now - banner.born) / 2500;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - age * age);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 64px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(banner.text, canvas.width / 2, canvas.height * 0.28);
+    ctx.restore();
   }
 }

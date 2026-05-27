@@ -18,7 +18,10 @@ export const EV = Object.freeze({
   ENEMY_DEATH: 'enemy_death',
   DROP_SPAWN: 'drop_spawn',
   DROP_COLLECTED: 'drop_collected',
-  // Grows additively as systems are ported: WAVE_START, ...
+  WAVE_START: 'wave_start',
+  WAVE_CLEAR: 'wave_clear',
+  GAME_OVER: 'game_over',
+  RUN_RESTART: 'run_restart',
 });
 
 /** Push an event onto the world's per-tick event list. */

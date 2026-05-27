@@ -10,9 +10,10 @@ import { stepAsteroid } from './asteroid.js';
 import { stepBullet } from './bullet.js';
 import { stepEnemy } from './enemy.js';
 import { stepDrop } from './drop.js';
-import { spawnBullet, tickEnemySpawner } from './world.js';
+import { spawnBullet } from './world.js';
 import { resolveCollisions } from './collision.js';
 import { updateRevives } from './coop.js';
+import { updateWaves } from './wave.js';
 import { EV, emit } from './events.js';
 import { BULLET_SPEED, FIRE_COOLDOWN_TICKS } from './constants.js';
 
@@ -65,9 +66,7 @@ export function tick(world, inputsByPlayer) {
   for (const [id, d] of world.drops) if (!d.alive) world.drops.delete(id);
 
   updateRevives(world);
-  tickEnemySpawner(world);
-
-  // Future systems (waves, drops) tick here in dependency order.
+  updateWaves(world);
 
   return world.events;
 }

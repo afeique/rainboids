@@ -54,6 +54,9 @@ async function main() {
   let localReviveProgress = 0;
   let localGold = 0;
   let lastDrops = new Map();
+  let wave = 0;
+  let waveState = 'intermission';
+  let banner = null; // { text, born }
   const effects = []; // ephemeral client-side juice: { x, y, r, born }
 
   // Debug/test hook: lets QA specs (and the console) inspect live client state
@@ -71,6 +74,8 @@ async function main() {
     dropCount: () => lastDrops.size,
     localHp: () => localHp,
     localGold: () => localGold,
+    wave: () => wave,
+    waveState: () => waveState,
   };
 
   transport.onMessage((msg) => {
@@ -84,6 +89,8 @@ async function main() {
       case S2C.SNAPSHOT: {
         lastSnapshotTick = msg.tick;
         latestBullets = msg.bullets || [];
+        if (typeof msg.wave === 'number') wave = msg.wave;
+        if (msg.ws) waveState = msg.ws;
         interp.add(msg);
         if (predictor) {
           const me = msg.ships.find((s) => s.id === playerId);
@@ -104,6 +111,14 @@ async function main() {
         for (const p of msg.payloads || []) {
           if (p.type === EV.ASTEROID_DESTROYED || p.type === EV.ENEMY_DEATH) {
             effects.push({ x: p.x, y: p.y, r: p.r || 24, born: performance.now() });
+          } else if (p.type === EV.WAVE_START) {
+            banner = { text: `WAVE ${p.wave}`, born: performance.now() };
+          } else if (p.type === EV.WAVE_CLEAR) {
+            banner = { text: `WAVE ${p.wave} CLEAR`, born: performance.now() };
+          } else if (p.type === EV.GAME_OVER) {
+            banner = { text: 'GAME OVER', born: performance.now() };
+          } else if (p.type === EV.RUN_RESTART) {
+            banner = { text: 'NEW RUN', born: performance.now() };
           }
         }
         break;
@@ -163,6 +178,9 @@ async function main() {
     for (let i = effects.length - 1; i >= 0; i--) {
       if (now - effects[i].born > 500) effects.splice(i, 1);
     }
+    // Banner fades after ~2.5 s.
+    if (banner && now - banner.born > 2500) banner = null;
+
     render(ctx, canvas, {
       localShip: predictor ? predictor.ship : null,
       remoteShips: remote,
@@ -175,13 +193,14 @@ async function main() {
       localId: playerId,
       localDowned,
       localReviveProgress,
+      banner,
     });
 
     // Lightweight HUD line.
     const hud = document.getElementById('hud');
     if (hud) {
       const hp = localHp != null ? `· hp ${Math.ceil(localHp)}${localDowned ? ' DOWNED' : ''} ` : '';
-      hud.textContent = `tick ${lastSnapshotTick} · players ${roster.length} ${hp}· gold ${localGold} · enemies ${enemies.size}`;
+      hud.textContent = `wave ${wave} (${waveState}) · players ${roster.length} ${hp}· gold ${localGold} · enemies ${enemies.size}`;
     }
 
     requestAnimationFrame(frame);

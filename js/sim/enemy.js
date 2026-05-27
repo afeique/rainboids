@@ -6,7 +6,8 @@
 
 import { ENEMY_CHASER_HP, ENEMY_CHASER_RADIUS, ENEMY_CHASER_SPEED } from './constants.js';
 
-export function createEnemy(id, x, y, type = 'chaser') {
+export function createEnemy(id, x, y, type = 'chaser', hpOverride = null) {
+  const hp = hpOverride != null ? hpOverride : ENEMY_CHASER_HP;
   return {
     id,
     type,
@@ -15,8 +16,8 @@ export function createEnemy(id, x, y, type = 'chaser') {
     angle: 0,
     radius: ENEMY_CHASER_RADIUS,
     speed: ENEMY_CHASER_SPEED,
-    hp: ENEMY_CHASER_HP,
-    maxHp: ENEMY_CHASER_HP,
+    hp,
+    maxHp: hp,
     alive: true,
     contactCooldown: 0, // ticks until this enemy can deal contact damage again
   };
