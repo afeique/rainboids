@@ -1846,18 +1846,26 @@ export class GameEngine {
     _migrateBankedProgression(meta) {
         if (!meta || meta.levelMigrated) return meta;
         const PER_LEVEL_RS = 1500; // tunable — revisited in the T71 balance pass
+        // T24 — banked account level → R$ (one SP per level earned beyond 1).
         const bankedLevel = Math.max(0, (meta.level | 0) - 1);
-        const grant = bankedLevel * PER_LEVEL_RS;
+        const levelGrant = bankedLevel * PER_LEVEL_RS;
+        // T61 — banked Cores (the retired T23 GEAR-crafting wallet) fold 1:1 → R$.
+        const coresGrant = Math.max(0, meta.cores | 0);
+        const grant = levelGrant + coresGrant;
         const accountGold = resolveAccountGold(meta) + grant;
-        // Setting keys to undefined drops them from the serialized blob
-        // (saveMeta merges, and JSON.stringify omits undefined-valued keys).
+        // Setting keys to undefined drops them from the serialized blob (saveMeta
+        // merges, and JSON.stringify omits undefined-valued keys). `levelMigrated`
+        // gates this whole one-time account migration. Old {type,value} gear left
+        // in the stash is dormant under the new amp model (the getters read
+        // {stat,pct}), not broken — it's still manually salvageable for R$.
         saveMeta({
             accountGold,
             level: undefined, xp: undefined, sp: undefined, spStats: undefined,
+            cores: undefined,
             levelMigrated: true,
         });
         if (grant > 0) {
-            try { console.log(`[T24 migrate] banked level ${meta.level | 0} → +${grant} R$`); } catch {}
+            try { console.log(`[migrate] banked L${meta.level | 0} (+${levelGrant}) + ${coresGrant} cores → +${grant} R$`); } catch {}
         }
         return loadMeta();
     }
