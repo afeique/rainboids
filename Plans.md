@@ -51,7 +51,7 @@
 - [x] **T21** 🔴 Rename Gold→Rainshards (R$) — **DONE (display-layer)**: HUD readout, pickup feedback, stats/banner labels, shop/armory labels, streak "+N% R$" now show **R$ / Rainshards**. Internal `money`/`accountGold`/`createMoneyOrb` identifiers RETAINED (166 refs + save schema — display-only rename is the right scope; mapped to "Rainshards" at the display layer).
 - [x] **T20** 🔴 Unlock everything + remove milestone gift — **DONE**: `armory.setAllUnlocked(true)` at boot → `getUnlockedSet` returns all (pure fn + unit tests unchanged; runtime layer). Milestone gift + `ability-gift.js` + `clearedStage1` removed. Compact-list store auto-hides (nothing locked); sell button suppressed while all-unlocked. Unit 2233 green + boot smoke 12/12.
 >   ⚠ **Deferred QA:** specs `08-armory`/`12-abilities`/`19-run-setup`/`31-build-flow` assert the OLD locked/owned behavior → now stale; reconcile at **T70** (after weapons-as-loot T30 + UI T42/43 settle, to avoid churning them 2-3×).
-- [ ] **T22** 🔴 Remove card draft + powerup picks (powerups→weapon traits) [T21]
+- [x] **T22** 🔴 Remove card draft + powerup picks — **DONE**: stage-clear card menu disabled (`fireSurvivorOverlay=false` → stage clear proceeds via the existing next-wave path); recap subtitle no longer promises a powerup. The choose-moment moves to the run DRAFT (T32); powerups become weapon traits (T30). Dead card machinery (`openWaveClearPowerupsMenu`/`#wave-pick-overlay`/`card-draft.js`/shop powerup tab) left inert → cleaned in T30/T70. Unit 2233 green.
 - [ ] **T23** 🔴 Eliminate Cores → salvage to R$; crafting costs in R$ [T21]
 ### Phase 1 — progression + PWR
 - [ ] **T24** 🔴 Per-run level/SP + migration (banked→R$)

@@ -286,13 +286,13 @@ export function updateWaveSystem() {
 
         this.showWaveComplete();
 
-        // 5.74.2 — wave clear no longer auto-opens the shop. Instead the
-        // survivor-card overlay (on card stages — see isCardStage) opens for
-        // the pick. 2.7s gap lets the WAVE COMPLETE banner read first.
-        // 5.101.0 — Off-cadence waves auto-advance into the next wave
-        // without interrupting the player. The pause-menu POWERUPS tab
-        // is still reachable any time via ESC for SP spending.
-        const fireSurvivorOverlay = survivorWave;
+        // 8.x looter pivot (T22) — the in-game CARD DRAFT + powerup picks are
+        // REMOVED. Stage clear now just proceeds (R$ + drops already granted);
+        // the per-stage CHOICE moment moves to the run DRAFT (T32), and the old
+        // card "powerups" become rolled WEAPON TRAITS (T30). So no card menu fires.
+        // (The openWaveClearPowerupsMenu / #wave-pick-overlay / card-draft.js
+        //  machinery is now dead — left inert here, removed/reworked in T30/T70.)
+        const fireSurvivorOverlay = false;
         setTimeout(() => {
             if (this.game.state !== GAME_STATES.WAVE_TRANSITION) return;
             if (fireSurvivorOverlay) {
@@ -600,10 +600,9 @@ export function showWaveComplete() {
     const title = isStage
         ? `STAGE ${getStage(cleared, runWavesPerStage(this.game))} CLEAR!`
         : `WAVE CLEAR`;
-    // 6.x — no gold lump sum on clear; advertise the powerup pick / mission only.
-    const subtitle = isStage
-        ? `POWERUP INCOMING${missionTag}`
-        : (missionTag ? missionTag.replace(/^ · /, '') : 'WAVE CLEAR');
+    // 8.x — no card draft / powerup pick on clear; just the mission tag (the
+    // run DRAFT at T32 is the choose moment). Subtitle is mission status or blank.
+    const subtitle = missionTag ? missionTag.replace(/^ · /, '') : (isStage ? 'STAGE CLEAR' : 'WAVE CLEAR');
     // 6.22.1 — Mid-stage WAVE CLEAR banner suppressed (set active:false)
     // per user request — banner felt redundant on every sub-wave clear.
     // Stage clear banners (1-3, 2-3, 3-3) still fire below. To restore
