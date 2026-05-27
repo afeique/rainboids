@@ -122,8 +122,10 @@ npm run dev          # → http://localhost:8090
 <summary><b>Project structure</b></summary>
 
 ```
-index.html              # Game entry point
+index.html              # Solo game entry point
+mp.html                 # Multiplayer (co-op) entry point — experimental
 VERSION · CHANGELOG.md  # Solo semantic version + history
+VERSION-MP · CHANGELOG-MP.md  # Multiplayer semantic version + history
 CLAUDE.md               # Contributor / agent instructions
 js/
   main.js               # Bootstrap
@@ -136,14 +138,22 @@ js/
     enemy/              # entity, data, movement, firing, AI, shapes, boss phases/parts/intro/rage/fx/render, bosses/ (10 unique)
     combat/             # elements, collision, weapon-data, combat-manager
     hud/ · world/ · shop/ · ui/ · wave/ · audio/ · performance/ · render/
+  sim/                  # shared headless co-op sim (pure JS; runs in Node + browser)
+  mp/                   # multiplayer client — net/ (transport+codec) · netcode/ (predict/interp) · renderer
 css/                    # styles.css
 sfx/                    # 47 pre-rendered SFXR WAVs (regen: npm run generate-sfx)
 music/                  # background tracks
 tests/                  # unit/ (Jest) · qa/ e2e/ performance/ (Playwright) · helpers/
 tools/                  # benchmark/ · ai-qa-bot/ · scripts/
+server/                 # Node.js authoritative multiplayer server (imports js/sim) — see server/README.md
 screenshots/ · electron/ · docs/
-multiplayer/            # experimental WASM co-op — SHELVED (see multiplayer/RESTORE.md)
+multiplayer/            # earlier Rust/WASM co-op attempt — SHELVED (see multiplayer/RESTORE.md)
 ```
+
+> **Multiplayer (experimental):** authoritative Node.js server running the same
+> `js/sim/` the browser uses (no parity problem). Run `npm run mp:install` once,
+> then `npm run mp:server`, serve the client with `npm run dev`, and open
+> `/mp.html` (`?room=CODE` for a private game). Details in `server/README.md`.
 </details>
 
 ---
