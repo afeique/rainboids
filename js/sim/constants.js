@@ -52,3 +52,9 @@ export const ENEMY_CHASER_RADIUS = 16;
 export const ENEMY_CHASER_SPEED = 1.6; // px/tick
 export const ENEMY_CONTACT_DAMAGE = 10;
 export const ENEMY_CONTACT_COOLDOWN = 30; // ticks between contact hits (~0.5 s)
+
+// Co-op revive: a living teammate lingering near a downed ship revives it.
+export const REVIVE_RADIUS = 90; // px a reviver must be within
+export const REVIVE_TICKS = 120; // ticks of nearby presence to revive (~2 s)
+export const REVIVE_HP = 50; // HP a revived ship comes back with
+export const REVIVE_DECAY = 2; // progress lost per tick when no reviver is near

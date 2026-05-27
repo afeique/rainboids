@@ -51,6 +51,7 @@ async function main() {
   let latestBullets = [];
   let localHp = null;
   let localDowned = false;
+  let localReviveProgress = 0;
   const effects = []; // ephemeral client-side juice: { x, y, r, born }
 
   // Debug/test hook: lets QA specs (and the console) inspect live client state
@@ -85,6 +86,7 @@ async function main() {
           if (me) {
             localHp = me.hp;
             localDowned = !!me.dn;
+            localReviveProgress = me.rp || 0;
             predictor.reconcile(
               { x: me.x, y: me.y, vx: me.vx, vy: me.vy, angle: me.a },
               me.li,
@@ -134,7 +136,11 @@ async function main() {
     if (acc > 250) acc = 250;
 
     while (acc >= TICK_MS && predictor) {
-      const inp = input.snapshot();
+      // While downed, the server holds the ship still; feed neutral input so
+      // local prediction matches (no jittery snap-back on reconcile).
+      const inp = localDowned
+        ? { up: false, down: false, left: false, right: false, fire: false, aimX: null, aimY: null }
+        : input.snapshot();
       const clientTick = predictor.step(inp);
       transport.sendInput({ t: C2S.INPUT, ...inp, clientTick });
       acc -= TICK_MS;
@@ -151,7 +157,7 @@ async function main() {
       if (now - effects[i].born > 500) effects.splice(i, 1);
     }
     render(ctx, canvas, {
-      localShip: predictor && !localDowned ? predictor.ship : null,
+      localShip: predictor ? predictor.ship : null,
       remoteShips: remote,
       asteroids,
       enemies,
@@ -159,6 +165,8 @@ async function main() {
       effects,
       now,
       localId: playerId,
+      localDowned,
+      localReviveProgress,
     });
 
     // Lightweight HUD line.

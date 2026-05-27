@@ -76,6 +76,8 @@ export class Interpolator {
         angle: lerpAngle(sa.a, sb.a, f),
         hp: sb.hp,
         mhp: sb.mhp,
+        downed: !!sb.dn,
+        reviveProgress: sb.rp || 0,
       });
     }
     return out;

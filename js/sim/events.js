@@ -9,6 +9,7 @@ export const EV = Object.freeze({
   SHIP_SPAWN: 'ship_spawn',
   SHIP_HIT: 'ship_hit',
   SHIP_DOWNED: 'ship_downed',
+  SHIP_REVIVED: 'ship_revived',
   BULLET_SPAWN: 'bullet_spawn',
   ASTEROID_HIT: 'asteroid_hit',
   ASTEROID_DESTROYED: 'asteroid_destroyed',

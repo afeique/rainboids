@@ -40,6 +40,7 @@ function buildSnapshot(world) {
       hp: s.hp, mhp: s.maxHp,
       al: s.alive,
       dn: s.downed,
+      rp: s.reviveProgress,
       li: s.lastInputTick, // per-ship acked input tick (owning client reconciles)
     });
   }

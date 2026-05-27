@@ -7,6 +7,26 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.6.0] - 2026-05-27
+
+### Added
+- **Co-op revive** — the signature teamwork mechanic, pairing with the downed
+  state from 0.5.0:
+  - `coop.js` — `updateRevives()`: a downed ship accrues revive progress while a
+    living teammate is within `REVIVE_RADIUS`; reaching `REVIVE_TICKS` (~2 s)
+    brings it back at `REVIVE_HP` and emits `SHIP_REVIVED`. Progress decays when
+    no reviver is near. Runs each `tick()`.
+  - `ship.js` — `reviveProgress` field; `server/src/room.js` snapshots it (`rp`).
+- **Client revive UX**: downed ships render dimmed with a green revive-progress
+  ring; the local downed ship still renders (and the HUD shows DOWNED). Local
+  prediction feeds neutral input while downed so it stays aligned with the
+  server-held ship (no reconcile snap-back). The interpolator now carries each
+  ship's `downed`/`reviveProgress`.
+
+### Tests
+- `tests/unit/sim-coop.test.js` — revive on teammate presence, no-revive when
+  out of range, progress decay, and living-ship progress reset.
+
 ## [0.5.0] - 2026-05-27
 
 ### Added

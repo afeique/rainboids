@@ -5,9 +5,9 @@
 // WebGL renderer / shared shape helpers is a later polish step; the point of
 // this module is a clear, dependency-free visualization of authoritative state.
 
-import { SHIP_RADIUS } from '../sim/constants.js';
+import { SHIP_RADIUS, REVIVE_TICKS } from '../sim/constants.js';
 
-function drawShip(ctx, x, y, angle, color, label, isLocal) {
+function drawShip(ctx, x, y, angle, color, label, isLocal, downed = false, reviveProgress = 0) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
@@ -18,17 +18,37 @@ function drawShip(ctx, x, y, angle, color, label, isLocal) {
   ctx.lineTo(-r * 0.5, 0);
   ctx.lineTo(-r, -r * 0.8);
   ctx.closePath();
+  ctx.globalAlpha = downed ? 0.35 : 1;
   ctx.fillStyle = color;
   ctx.fill();
   if (isLocal) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
+  ctx.globalAlpha = 1;
   ctx.restore();
+
+  // Revive progress ring around a downed ship.
+  if (downed) {
+    const frac = Math.max(0, Math.min(1, reviveProgress / REVIVE_TICKS));
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 8, 0, Math.PI * 2);
+    ctx.stroke();
+    if (frac > 0) {
+      ctx.strokeStyle = '#9ece6a';
+      ctx.beginPath();
+      ctx.arc(x, y, r + 8, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   if (label != null) {
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.font = '14px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(label, x, y - r - 8);
+    ctx.fillText(downed ? `${label} ↯DOWN` : label, x, y - r - 8);
     ctx.restore();
   }
 }
@@ -85,7 +105,7 @@ function drawEnemy(ctx, e) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, bullets, effects, now, localId }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, bullets, effects, now, localId, localDowned, localReviveProgress }) {
   // Background.
   ctx.fillStyle = '#070710';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -132,11 +152,11 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
 
   // Remote ships (interpolated).
   for (const [id, s] of remoteShips) {
-    drawShip(ctx, s.x, s.y, s.angle, '#54d6ff', `P${id}`, false);
+    drawShip(ctx, s.x, s.y, s.angle, '#54d6ff', `P${id}`, false, s.downed, s.reviveProgress);
   }
 
   // Local ship (predicted).
   if (localShip) {
-    drawShip(ctx, localShip.x, localShip.y, localShip.angle, '#ffd23f', `P${localId} (you)`, true);
+    drawShip(ctx, localShip.x, localShip.y, localShip.angle, '#ffd23f', `P${localId} (you)`, true, localDowned, localReviveProgress);
   }
 }
