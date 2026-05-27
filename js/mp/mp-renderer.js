@@ -13,9 +13,14 @@ import {
   ASTEROID_EDGES, ASTEROID_FOV,
 } from '../modules/render/shapes.js';
 import { makeRng } from '../sim/rng.js';
+import { nebulaRenderer } from '../modules/performance/nebula-renderer.js';
 
 // Map the headless-sim enemy type keys → the SP shape registry's type strings.
 const SP_ENEMY_SHAPE = { chaser: 'HUNTER' };
+
+// SP nebula background (shared Canvas2D renderer, self-contained). Generated
+// once for the arena, then drawn stationary behind everything each frame.
+let _nebulaReady = false;
 
 // Per-asteroid cosmetic cache (keyed by entity id, which is monotonic so never
 // reused). Each rock gets stable seeded 3D vertices + hue params so it looks
@@ -155,6 +160,12 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
   // Background.
   ctx.fillStyle = '#070710';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // SP nebula background (shared renderer; generated once for the arena).
+  try {
+    if (!_nebulaReady) { nebulaRenderer.generate(canvas.width, canvas.height); _nebulaReady = true; }
+    nebulaRenderer.draw(ctx, 0, 0, 0, 0, 0, canvas.width, canvas.height);
+  } catch { /* background is non-essential — never break the frame */ }
 
   // Arena border.
   ctx.strokeStyle = '#1d2440';

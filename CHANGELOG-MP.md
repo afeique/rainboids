@@ -7,6 +7,20 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.17.0] - 2026-05-27
+
+### Changed
+- **MP renders the SP nebula background** (Path A, Group G3 — background). The MP
+  client reuses the shared `performance/nebula-renderer.js` (self-contained
+  Canvas2D, zero engine coupling): generated once for the arena, drawn stationary
+  behind all entities. Wrapped in try/catch so a background hiccup can never
+  break the frame. Replaces the flat dark backdrop. (WebGL bullet/particle/
+  starfield layers are the next G3 steps.)
+
+### Tests
+- `tests/qa/12-mp2-ws.spec.js` page-error guard green (4/4) — the background
+  draws every frame in-browser without throwing.
+
 ## [0.16.0] - 2026-05-27
 
 ### Changed
