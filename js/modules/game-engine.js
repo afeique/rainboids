@@ -35,7 +35,7 @@ import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
-import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed, setDebugUnlockResolvers, applyResell, UNLOCK_CATEGORIES } from './shop/armory.js';
+import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed, setDebugUnlockResolvers, setAllUnlocked, applyResell, UNLOCK_CATEGORIES } from './shop/armory.js';
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
 import { isDebugMode, debugUnlockAllFor } from './core/debug-config.js';
 import { DebugMenu, installDebugConsoleApi } from './ui/debug-menu.js';
@@ -104,7 +104,6 @@ import { ArmoryOverlay } from './ui/armory-overlay.js';
 import { HangarOverlay } from './ui/hangar-overlay.js';
 import { SettingsOverlay } from './ui/settings-overlay.js';
 import { LoadoutOverlay } from './ui/loadout-overlay.js';
-import { AbilityGiftOverlay } from './ui/ability-gift.js';
 import { AnalogStick } from './ui/analog-stick.js';
 
 // 5.100.0 — localStorage key for the analog-stick side preference.
@@ -838,6 +837,9 @@ export class GameEngine {
             }
         };
         setDebugUnlockResolvers(debugUnlockAllFor, allIds);
+        // 8.x looter pivot (T20) — EVERYTHING is unlocked from the start; power
+        // is looted/crafted, not unlock-gated. Uses the same allIds resolver.
+        setAllUnlocked(true);
 
         // Only mount the overlay + console API when debug mode is active.
         if (!isDebugMode()) return;
@@ -4626,10 +4628,6 @@ export class GameEngine {
         shopDom.setPreRunRunConfig((meta.loadout && meta.loadout.runConfig) || DEFAULT_RUN_CONFIG);
         this._preRunTreeOpen = true;
         shopDom.showShopDom(true);
-        // 6.x — First-ability milestone gift (deferred to here per the agreed
-        // "or first run" branch): if the player has cleared Stage 1 and hasn't
-        // been gifted yet, offer a free choice of one ability over the BUILD UI.
-        this.maybeOfferFirstAbilityGift();
     }
 
     // 6.x — Re-seed the pre-run BUILD screen's selection state from the current
@@ -4645,22 +4643,6 @@ export class GameEngine {
             shopDom.setPreRunPassives((meta.loadout && meta.loadout.passives) || []);
             if (typeof shopDom.renderShopDom === 'function') shopDom.renderShopDom();
         } catch (_) { /* ignore */ }
-    }
-
-    // 6.x — Offer the free first-ability gift over the BUILD screen, once per
-    // account (gated by meta.clearedStage1 + meta.firstAbilityGifted).
-    maybeOfferFirstAbilityGift() {
-        let meta;
-        try { meta = loadMeta() || {}; } catch { return; }
-        if (!meta.clearedStage1 || meta.firstAbilityGifted) return;
-        // Curated, readable starter abilities to teach the system gently.
-        const CHOICES = ['BULWARK', 'FIELD_MEDIC', 'DEFLECTOR_ORBS', 'BLINK'];
-        const choices = CHOICES
-            .filter((id) => ABILITIES[id])
-            .map((id) => ({ id, name: ABILITIES[id].name, description: ABILITIES[id].description, color: ABILITIES[id].color }));
-        if (!choices.length) return;
-        if (!this._abilityGiftOverlay) this._abilityGiftOverlay = new AbilityGiftOverlay();
-        this._abilityGiftOverlay.open(choices, (id) => this._grantFirstAbility(id));
     }
 
     // 6.x — Resell a purchased unlock for a 100% refund. Selling a weapon also
@@ -4695,21 +4677,6 @@ export class GameEngine {
         this.events?.emit?.('ui:show-message', { title: 'SOLD', subtitle: `+${totalRefund.toLocaleString()} Gold`, duration: 1200 });
         this._reseedPreRun();
         return true;
-    }
-
-    _grantFirstAbility(id) {
-        if (!ABILITIES[id]) return;
-        const meta = loadMeta() || {};
-        const owned = Array.isArray(meta.unlockedAbilities) ? meta.unlockedAbilities.slice() : [];
-        if (!owned.includes(id)) owned.push(id);
-        // Pre-equip into slot 0 of the saved loadout so it's ready to use.
-        const loadout = (meta.loadout && typeof meta.loadout === 'object') ? { ...meta.loadout } : {};
-        const abil = Array.isArray(loadout.abilities) ? loadout.abilities.slice() : [];
-        if (!abil.includes(id)) abil.unshift(id);
-        loadout.abilities = abil.slice(0, 4);
-        saveMeta({ unlockedAbilities: owned, firstAbilityGifted: true, loadout });
-        this.events?.emit?.('ui:show-message', { title: 'ABILITY UNLOCKED', subtitle: ABILITIES[id].name, duration: 1600 });
-        this._reseedPreRun();
     }
 
     // 6.157.0 — open the HANGAR cosmetic ship-skin selector (from the title

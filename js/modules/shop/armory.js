@@ -80,12 +80,22 @@ export function setDebugUnlockResolvers(unlockAllFn, allIdsFn) {
     _debugAllIdsResolver = (typeof allIdsFn === 'function') ? allIdsFn : null;
 }
 
+// 8.x looter pivot (T20) — EVERYTHING IS UNLOCKED. The game-engine flips this on
+// at boot, so getUnlockedSet returns the full id list (via the injected allIds
+// resolver) regardless of `meta`. Kept as a runtime flag (not baked into the
+// pure base+purchased logic) so the unit tests keep exercising the real
+// base/purchased behavior; absent the flag + resolver, getUnlockedSet is unchanged.
+let _allUnlocked = false;
+export function setAllUnlocked(on) { _allUnlocked = !!on; }
+export function isAllUnlocked() { return _allUnlocked; }
+
 /** The set of ids the player can equip in `category`: base ∪ purchased
- *  (∪ everything, when a debug "unlock all" covers the category). */
+ *  (∪ everything, when all-unlocked or a debug "unlock all" covers the category). */
 export function getUnlockedSet(category, meta) {
     const c = UNLOCK_CATEGORIES[category];
     if (!c) return new Set();
-    if (_debugUnlockAllResolver && _debugAllIdsResolver && _debugUnlockAllResolver(category)) {
+    const everything = (_allUnlocked || (_debugUnlockAllResolver && _debugUnlockAllResolver(category)));
+    if (everything && _debugAllIdsResolver) {
         return new Set([...c.base, ...(_debugAllIdsResolver(category) || [])]);
     }
     const purchased = (meta && Array.isArray(meta[c.metaKey])) ? meta[c.metaKey] : [];

@@ -26,7 +26,6 @@ import {
 } from '../world/run-shop.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { rewardMultiplier } from '../world/reward-dial.js';
-import { saveMeta } from '../core/storage.js';
 // RUN-05a — Adaptive Difficulty Director (RUN-04). Read D_hp at the enemy-HP
 // chokepoint (applyEnemyLevelScaling) and feed the director one outcome per
 // wave clear (tickWave). Absent director ⇒ ×1.0 (default below) and no feed.
@@ -233,11 +232,6 @@ export function updateWaveSystem() {
         if (stageClear && this.player && typeof this.player.setPassiveSlotsUnlocked === 'function') {
             const totalStages = getRunConfig(this.game).stages;
             this.player.setPassiveSlotsUnlocked(passiveSlotsUnlockedAfter(getStage(clearedWave, runWavesPerStage(this.game)), totalStages));
-        }
-        // 6.x — Mark the first Stage-1 clear so the next BUILD-screen visit
-        // offers the free first-ability gift (game-engine.maybeOfferFirstAbilityGift).
-        if (stageClear && getStage(clearedWave, runWavesPerStage(this.game)) === 1) {
-            saveMeta({ clearedStage1: true });
         }
         const bonusXP = 40 + clearedWave * 15; // gainExperience is a no-op since 6.0.0; kept for back-compat
         // 6.x — Wave-clear GOLD bonus REMOVED. Gold now comes only from per-kill

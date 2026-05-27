@@ -45,7 +45,7 @@ import { wavesPerStageRewardMultForWps } from '../world/reward-dial.js';
 import { MODES, DEFAULT_MODE, modeReward } from '../wave/difficulty-constants.js';
 // 2026-05-23 — pre-run BUILD mode reuses the loadout-selection helpers so the
 // tree can act as the start-of-run weapon/ability picker (see _preRun below).
-import { toggleSelection, getUnlockedSet, unlockCost, LOADOUT_SLOTS, BASE_LOADOUT } from './armory.js';
+import { toggleSelection, getUnlockedSet, unlockCost, LOADOUT_SLOTS, BASE_LOADOUT, isAllUnlocked } from './armory.js';
 import { loadMeta } from '../core/storage.js';
 import { debugState } from '../core/debug-config.js';
 
@@ -1070,8 +1070,10 @@ function _renderCompactList(container, groups, player, category) {
         row.appendChild(pick);
 
         // Sell (100% refund) — only for purchased, non-base items. Not a
-        // `.shop-node`, so the equip handler ignores it; own listener.
-        if (!_isBaseKit(category, wid)) {
+        // `.shop-node`, so the equip handler ignores it; own listener. 8.x:
+        // suppressed while everything is unlocked (nothing is "purchased" to sell;
+        // weapon buy/sell is retired by the weapons-as-loot rework, T30).
+        if (!_isBaseKit(category, wid) && !isAllUnlocked()) {
             const sell = document.createElement('button');
             sell.type = 'button';
             sell.className = 'shop-prerun-sell';

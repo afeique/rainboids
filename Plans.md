@@ -49,7 +49,8 @@
 ## ▶ SERIAL INTEGRATION SPINE (🔴 ordered — one owner per file at a time)
 ### Phase 0 — rip-out & rename
 - [x] **T21** 🔴 Rename Gold→Rainshards (R$) — **DONE (display-layer)**: HUD readout, pickup feedback, stats/banner labels, shop/armory labels, streak "+N% R$" now show **R$ / Rainshards**. Internal `money`/`accountGold`/`createMoneyOrb` identifiers RETAINED (166 refs + save schema — display-only rename is the right scope; mapped to "Rainshards" at the display layer).
-- [ ] **T20** 🔴 Unlock everything + remove milestone gift; loadout lists all [T21]
+- [x] **T20** 🔴 Unlock everything + remove milestone gift — **DONE**: `armory.setAllUnlocked(true)` at boot → `getUnlockedSet` returns all (pure fn + unit tests unchanged; runtime layer). Milestone gift + `ability-gift.js` + `clearedStage1` removed. Compact-list store auto-hides (nothing locked); sell button suppressed while all-unlocked. Unit 2233 green + boot smoke 12/12.
+>   ⚠ **Deferred QA:** specs `08-armory`/`12-abilities`/`19-run-setup`/`31-build-flow` assert the OLD locked/owned behavior → now stale; reconcile at **T70** (after weapons-as-loot T30 + UI T42/43 settle, to avoid churning them 2-3×).
 - [ ] **T22** 🔴 Remove card draft + powerup picks (powerups→weapon traits) [T21]
 - [ ] **T23** 🔴 Eliminate Cores → salvage to R$; crafting costs in R$ [T21]
 ### Phase 1 — progression + PWR
