@@ -1129,11 +1129,14 @@ export class GameEngine {
             }
         }
         // T33 — apply the chosen CLASS (per-run soft SP lens + unique-mechanic
-        // hook + a FREE class-exclusive signature ability). `_pendingClass` is
-        // set by the BUILD class picker (T43); absent → clearClass (no class this
-        // run). The signature ability is granted into the owned pool and equipped
-        // into the first free ability slot (without clobbering chosen ones).
-        const pendingClass = this._pendingClass;
+        // hook + a FREE class-exclusive signature ability). The class is set by
+        // the BUILD class picker (T43) via setSelectedClass → persisted as
+        // `meta.selectedClass`; a transient `_pendingClass` overrides it. Absent
+        // both → clearClass (no class this run). The signature ability is granted
+        // into the owned pool + equipped into the first free ability slot.
+        const _classMeta = loadMeta();
+        const pendingClass = this._pendingClass
+            || (_classMeta && typeof _classMeta.selectedClass === 'string' ? _classMeta.selectedClass : null);
         this._pendingClass = null;
         if (pendingClass && CLASSES[pendingClass]) {
             applyClass(this.player, pendingClass);
@@ -1793,6 +1796,26 @@ export class GameEngine {
         saveMeta({ stash, accountGold: res.rainshards });
         this.game.accountGold = res.rainshards;
         return { ok: true, item, rainshards: res.rainshards };
+    }
+
+    // T43 — class selection (BUILD picker). Persists the chosen class to
+    // `meta.selectedClass` (the default for future runs) and sets the transient
+    // `_pendingClass` that init() applies via class-system.applyClass. Pass
+    // null/'' (or an unknown id) to CLEAR — that run gets no class. Returns the
+    // resolved id (or null).
+    setSelectedClass(classId) {
+        const id = (classId && CLASSES[classId]) ? classId : null;
+        this._pendingClass = id;
+        try { saveMeta({ selectedClass: id }); } catch (_e) { /* storage best-effort */ }
+        return id;
+    }
+
+    // The currently-selected class (transient pending pick, else the persisted
+    // meta.selectedClass), validated against CLASSES; null if none.
+    getSelectedClass() {
+        if (this._pendingClass && CLASSES[this._pendingClass]) return this._pendingClass;
+        const m = loadMeta();
+        return (m && typeof m.selectedClass === 'string' && CLASSES[m.selectedClass]) ? m.selectedClass : null;
     }
 
     // Phase R8.1/R8.4 — append this run's collected items to the persistent
