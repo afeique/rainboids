@@ -1,29 +1,37 @@
-// js/mp/mp-renderer.js — minimal Canvas2D renderer for the MP client.
+// js/mp/mp-renderer.js — Canvas2D renderer for the MP client.
 //
-// Deliberately simple: it proves the netcode end-to-end (local predicted ship +
-// interpolated remote ships in a shared arena). Reusing the full single-player
-// WebGL renderer / shared shape helpers is a later polish step; the point of
-// this module is a clear, dependency-free visualization of authoritative state.
+// Path A / Group G (look-like-SP): ships and enemies render through the shared
+// single-player shape helpers (js/modules/render/shapes.js), so they look
+// exactly like single-player. Asteroids (which need a per-id 3D vertex cache +
+// SP hue params) and the WebGL particle/bullet/starfield layers are subsequent
+// Group-G steps; everything else here is interpolated authoritative state.
 
 import { SHIP_RADIUS, REVIVE_TICKS } from '../sim/constants.js';
+import { drawShipShape, drawEnemyShapeByType, SHIP_PALETTE_MAGENTA } from '../modules/render/shapes.js';
 
-function drawShip(ctx, x, y, angle, color, label, isLocal, downed = false, reviveProgress = 0) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.beginPath();
+// Map the headless-sim enemy type keys → the SP shape registry's type strings.
+const SP_ENEMY_SHAPE = { chaser: 'HUNTER' };
+
+function drawShip(ctx, x, y, angle, label, isLocal, downed = false, reviveProgress = 0) {
   const r = SHIP_RADIUS;
-  ctx.moveTo(r * 1.4, 0);
-  ctx.lineTo(-r, r * 0.8);
-  ctx.lineTo(-r * 0.5, 0);
-  ctx.lineTo(-r, -r * 0.8);
-  ctx.closePath();
+  // SP ship hull (shared render/shapes.js) — drawShipShape owns its own
+  // translate/rotate. Downed ships dim via inherited globalAlpha.
+  ctx.save();
   ctx.globalAlpha = downed ? 0.35 : 1;
-  ctx.fillStyle = color;
-  ctx.fill();
-  if (isLocal) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
-  ctx.globalAlpha = 1;
+  drawShipShape(ctx, x, y, angle, { radius: r, palette: SHIP_PALETTE_MAGENTA });
   ctx.restore();
+
+  // Local-ship highlight ring for co-op readability (per-player tint is a
+  // follow-up; SP ships are all magenta).
+  if (isLocal && !downed) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Revive progress ring around a downed ship.
   if (downed) {
@@ -76,23 +84,15 @@ function drawAsteroid(ctx, x, y, angle, r) {
   ctx.restore();
 }
 
-function drawEnemy(ctx, e) {
+function drawEnemy(ctx, e, now) {
+  // SP enemy silhouette (shared render/shapes.js). Enemy shapes draw at the
+  // origin, so pre-translate + rotate to the enemy's facing; `now` drives idle
+  // animation. The headless-sim type maps to the SP shape registry.
+  const type = SP_ENEMY_SHAPE[e.type] || 'HUNTER';
   ctx.save();
   ctx.translate(e.x, e.y);
   ctx.rotate(e.angle);
-  ctx.beginPath();
-  const r = e.r;
-  // Arrowhead pointing at its heading.
-  ctx.moveTo(r, 0);
-  ctx.lineTo(-r * 0.8, r * 0.9);
-  ctx.lineTo(-r * 0.3, 0);
-  ctx.lineTo(-r * 0.8, -r * 0.9);
-  ctx.closePath();
-  ctx.fillStyle = '#ff5d7a';
-  ctx.fill();
-  ctx.strokeStyle = '#ffd0db';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  drawEnemyShapeByType(ctx, type, { radius: e.r, now: now || 0 });
   ctx.restore();
 
   // HP pip bar when damaged.
@@ -137,7 +137,7 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
 
   // Enemies (interpolated).
   if (enemies) {
-    for (const [, e] of enemies) drawEnemy(ctx, e);
+    for (const [, e] of enemies) drawEnemy(ctx, e, now);
   }
 
   // Drops (interpolated).
@@ -172,12 +172,12 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
 
   // Remote ships (interpolated).
   for (const [id, s] of remoteShips) {
-    drawShip(ctx, s.x, s.y, s.angle, '#54d6ff', `P${id}`, false, s.downed, s.reviveProgress);
+    drawShip(ctx, s.x, s.y, s.angle, `P${id}`, false, s.downed, s.reviveProgress);
   }
 
   // Local ship (predicted).
   if (localShip) {
-    drawShip(ctx, localShip.x, localShip.y, localShip.angle, '#ffd23f', `P${localId} (you)`, true, localDowned, localReviveProgress);
+    drawShip(ctx, localShip.x, localShip.y, localShip.angle, `P${localId} (you)`, true, localDowned, localReviveProgress);
   }
 
   // Center banner (wave/game-over announcements).

@@ -63,6 +63,12 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     const a = await ctxA.newPage();
     const b = await ctxB.newPage();
 
+    // Catch render-time throws (e.g. the SP shapes.js draw path) — the rAF loop
+    // would otherwise swallow them while state updates keep flowing.
+    const pageErrors = [];
+    a.on('pageerror', (e) => pageErrors.push(String(e)));
+    a.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text()); });
+
     await a.goto(url);
     await b.goto(url);
 
@@ -114,6 +120,9 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     // A's fire should produce server-authoritative bullets visible to B.
     await expect.poll(() => b.evaluate(() => window.__mp.bulletCount()), { timeout: 4000 })
       .toBeGreaterThan(0);
+
+    // The SP shapes.js render path (ships/enemies) must not throw at runtime.
+    expect(pageErrors, `unexpected page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);
 
     await ctxA.close();
     await ctxB.close();

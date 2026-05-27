@@ -7,6 +7,23 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.15.0] - 2026-05-27
+
+### Changed
+- **MP client renders ships + enemies in true single-player style** (Path A,
+  Group G — the "look like SP" track). `js/mp/mp-renderer.js` now draws ships via
+  the shared `js/modules/render/shapes.js` `drawShipShape` (SP magenta hull) and
+  enemies via `drawEnemyShapeByType` (pre-translated to facing, `now`-animated;
+  the headless-sim type maps to the SP shape registry), replacing the placeholder
+  triangles/arrowheads. Local ship gets a co-op readability ring; downed-dim +
+  revive ring preserved. Asteroids + the WebGL particle/bullet/starfield layers
+  are subsequent Group-G steps.
+
+### Tests
+- `tests/qa/12-mp2-ws.spec.js` — adds a page-error/console-error guard so a
+  throw in the SP shapes.js draw path fails the e2e (the rAF loop would otherwise
+  swallow it). All four MP e2e cases green.
+
 ## [0.14.0] - 2026-05-27
 
 ### Changed
