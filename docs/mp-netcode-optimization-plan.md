@@ -340,3 +340,28 @@ Each feature is independently revertable:
 - **Delta:** `SnapshotEncoder.encode` returns `buildFullSnapshot` unconditionally
   (`full: true` every tick); `ingest` already handles all-full streams.
 - **Worker:** `RenderBridge` forces `this.supported = false` (direct-draw path).
+
+---
+
+## Implementation status (2026-05-27)
+
+Implemented **sequentially by one agent** (not the parallel subagents above —
+unsafe while sharing `master` with the looter-pivot agent), one commit each:
+
+- ✅ **Phase 0 — seams** (mp 0.12.0): `SnapshotStream` + `RenderBridge`,
+  `mp-main` rewired, `WIRE_VERSION`→2. Behavior-preserving.
+- ✅ **Feature 2 — delta snapshots** (mp 0.13.0): `js/sim/snapshot-delta.js`,
+  keyframe-on-join + field-level deltas, client reconstruction. Round-trip
+  unit-tested.
+- ✅ **Feature 1 — binary codec** (mp 0.14.0): hand-rolled MessagePack in
+  `codec.js` (no msgpackr/vendoring/import-map needed — chosen over the plan's
+  vendored-ESM approach because this project has no bundler and tests run
+  offline). Round-trip unit-tested.
+- ⏸️ **Feature 3 — OffscreenCanvas render worker: DEFERRED.** Rationale: the MP
+  Canvas2D renderer is already cheap (a few dozen primitives/frame) — it is not
+  a main-thread bottleneck — while a worker adds real complexity (worker
+  lifecycle, `transferControlToOffscreen`, per-frame state transfer) and is hard
+  to verify headlessly, so it's poor risk/reward today. The `RenderBridge` seam
+  is in place, so it can be filled later (e.g., once the full WebGL renderer is
+  ported and rendering actually becomes the bottleneck) with no change above the
+  seam.
