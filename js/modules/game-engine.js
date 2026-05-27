@@ -41,7 +41,7 @@ import { applyClass, clearClass } from './player/class-system.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed, setDebugUnlockResolvers, setAllUnlocked, applyResell, UNLOCK_CATEGORIES } from './shop/armory.js';
 // T31 — Fabricate weapons: the crafting engine rolls, item-system decorates.
 import { fabricate } from './shop/crafting.js';
-import { decorateWeaponItem, decorateGearItem } from './world/item-system.js';
+import { decorateWeaponItem, decorateGearItem, createWeaponItem, createItem } from './world/item-system.js';
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
 import { isDebugMode, debugUnlockAllFor } from './core/debug-config.js';
 import { DebugMenu, installDebugConsoleApi } from './ui/debug-menu.js';
@@ -338,6 +338,10 @@ function _convexHull2D(points, n, out) {
     for (let i = 0; i < lower.length; i++) out.push(lower[i]);
     for (let i = 0; i < upper.length; i++) out.push(upper[i]);
 }
+
+// T60 — new-account starter R$ stipend: ~2 common Fabricates (FAB_BASE 300)
+// worth, so run one can try the craft loop. Tunable at the T71 balance pass.
+const STARTER_RAINSHARDS = 800;
 
 export class GameEngine {
     constructor(canvas, uiManager, audioManager, inputHandler) {
@@ -712,7 +716,24 @@ export class GameEngine {
             // fork and the first ARMORY unlock is a couple of runs away. Gated on
             // `!_meta` + persisted immediately, so an existing player is never
             // re-granted and the grant can't be farmed.
-            if (!_meta) { saveMeta(newAccountSeed()); _meta = loadMeta(); }
+            if (!_meta) {
+                const seed = newAccountSeed();
+                // T60 — starter kit: a brand-new account begins with a basic
+                // weapon + a gear piece in the stash and a small R$ stipend, so
+                // run one immediately exposes the loot / equip / craft loop
+                // (everything else is unlocked, T20). Item rolls are best-effort
+                // — a roll failure still grants the wallet seed.
+                try {
+                    seed.stash = [
+                        createWeaponItem(1, 'common', 'PULSE'),
+                        createItem('hull', 1, 'common'),
+                    ];
+                    seed.accountGold = (seed.accountGold | 0) + STARTER_RAINSHARDS;
+                    seed.levelMigrated = true; // fresh account: nothing to migrate
+                } catch (_e) { /* item roll failed — keep the wallet seed */ }
+                saveMeta(seed);
+                _meta = loadMeta();
+            }
             this.game.accountGold = resolveAccountGold(_meta);
             this.game.cores = (_meta && typeof _meta.cores === 'number') ? Math.max(0, _meta.cores | 0) : 0;
         } catch {}
