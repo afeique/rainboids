@@ -118,4 +118,25 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     await ctxA.close();
     await ctxB.close();
   });
+
+  test('separate room codes isolate players', async ({ browser }) => {
+    const ctxA = await browser.newContext();
+    const ctxB = await browser.newContext();
+    const a = await ctxA.newPage();
+    const b = await ctxB.newPage();
+
+    await a.goto(`/mp.html?server=localhost:${MP_PORT}&room=alpha`);
+    await b.goto(`/mp.html?server=localhost:${MP_PORT}&room=beta`);
+
+    await expect.poll(() => a.evaluate(() => window.__mp?.connected())).toBe(true);
+    await expect.poll(() => b.evaluate(() => window.__mp?.connected())).toBe(true);
+
+    // Different rooms → each sees only itself, no remote ships.
+    await expect.poll(() => a.evaluate(() => window.__mp.roster().length)).toBe(1);
+    await expect.poll(() => b.evaluate(() => window.__mp.roster().length)).toBe(1);
+    expect(await a.evaluate(() => window.__mp.remoteShips().length)).toBe(0);
+
+    await ctxA.close();
+    await ctxB.close();
+  });
 });

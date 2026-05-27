@@ -7,6 +7,27 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.9.0] - 2026-05-27
+
+### Added
+- **Matchmaking (multi-room + code-based join)**: `RoomManager.getOrCreateRoom()`
+  keys rooms by a join code — a blank/absent code routes to the shared `public`
+  room, any other code creates/joins a private room, so separate groups play
+  isolated games. `Welcome` echoes the room id; empty rooms are closed
+  (`closeRoom`) on last-leave to reclaim their tick loop.
+- **Client room UI**: a room-code field on `mp.html` (pre-filled from `?room=`,
+  Enter reloads into that room); the join code is sent in `Hello` and shown in
+  the status line.
+- **Resilience — server heartbeat**: the WebSocket transport pings clients every
+  15 s and terminates any that miss a pong (reaps dead/zombie connections;
+  browsers auto-respond). Heartbeat is cleared on shutdown.
+
+### Tests
+- `tests/unit/server-room.test.js` — `RoomManager` create/reuse/isolation,
+  blank-code → public, and `closeRoom` teardown.
+- `tests/qa/12-mp2-ws.spec.js` — new case: clients with different room codes are
+  isolated (no shared roster / remote ships).
+
 ## [0.8.0] - 2026-05-27
 
 ### Added

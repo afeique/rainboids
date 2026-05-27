@@ -27,6 +27,14 @@ function resolveServerUrl() {
   return `${proto}//${host}:${DEFAULT_PORT}${WS_PATH}`;
 }
 
+function resolveRoomCode() {
+  const q = new URLSearchParams(location.search);
+  const fromUrl = q.get('room');
+  if (fromUrl != null) return fromUrl.trim();
+  const input = document.getElementById('room');
+  return input ? input.value.trim() : '';
+}
+
 function setStatus(text) {
   const el = document.getElementById('status');
   if (el) el.textContent = text;
@@ -38,6 +46,21 @@ async function main() {
   canvas.height = FIELD_HEIGHT;
   const ctx = canvas.getContext('2d');
   const input = new MpInput(canvas);
+
+  // Room-code field: pre-fill from ?room=, and on Enter reload into that room
+  // (a full reload is the simplest, reliable "switch rooms" — no reconnect
+  // bookkeeping). The actual join code is read by resolveRoomCode() at connect.
+  const roomInput = document.getElementById('room');
+  if (roomInput) {
+    roomInput.value = new URLSearchParams(location.search).get('room') || '';
+    roomInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const params = new URLSearchParams(location.search);
+      const code = roomInput.value.trim();
+      if (code) params.set('room', code); else params.delete('room');
+      location.search = params.toString();
+    });
+  }
 
   const transport = new WebSocketClientTransport();
   const interp = new Interpolator();
@@ -84,7 +107,7 @@ async function main() {
         playerId = msg.playerId;
         roster = msg.roster || [playerId];
         predictor = new Predictor(playerId, msg.spawnX, msg.spawnY, FIELD_WIDTH, FIELD_HEIGHT);
-        setStatus(`connected — you are P${playerId}`);
+        setStatus(`connected — P${playerId} · room "${msg.room || 'public'}"`);
         break;
       case S2C.SNAPSHOT: {
         lastSnapshotTick = msg.tick;
@@ -144,7 +167,7 @@ async function main() {
     setStatus(`could not connect to ${url} — is the server running? (cd server && npm start)`);
     return;
   }
-  transport.send({ t: C2S.HELLO, wireVersion: WIRE_VERSION, name: 'pilot' });
+  transport.send({ t: C2S.HELLO, wireVersion: WIRE_VERSION, name: 'pilot', room: resolveRoomCode() });
 
   // Fixed-timestep loop: predict + send input at the sim rate, render at rAF.
   let last = performance.now();

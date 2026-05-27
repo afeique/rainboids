@@ -113,6 +113,7 @@ export class Room {
     conn.send({
       t: S2C.WELCOME,
       playerId,
+      room: this.id,
       serverTick: this.world.tick,
       seed: this.world.seed,
       spawnX: sp.x,

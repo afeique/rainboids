@@ -46,10 +46,10 @@ transport.onConnection((conn) => {
         return;
       }
       clearTimeout(helloTimer);
-      room = rooms.getDefaultRoom();
+      room = rooms.getOrCreateRoom(msg.room);
       playerId = room.join(conn, msg.name);
       joined = true;
-      console.log(`[mp] player ${playerId} joined room ${room.id} (pop ${room.population})`);
+      console.log(`[mp] player ${playerId} joined room "${room.id}" (pop ${room.population})`);
       return;
     }
 
@@ -70,7 +70,12 @@ transport.onConnection((conn) => {
     clearTimeout(helloTimer);
     if (joined && room) {
       room.leave(playerId);
-      console.log(`[mp] player ${playerId} left room ${room.id} (pop ${room.population})`);
+      console.log(`[mp] player ${playerId} left room "${room.id}" (pop ${room.population})`);
+      // Reclaim the tick loop once a room empties out.
+      if (room.population === 0) {
+        rooms.closeRoom(room.id);
+        console.log(`[mp] closed empty room "${room.id}"`);
+      }
     }
   });
 });
