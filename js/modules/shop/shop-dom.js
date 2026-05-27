@@ -693,8 +693,10 @@ function _applyPreRunChrome() {
     if (_elements.closeBtn) _elements.closeBtn.style.display = _preRun ? 'none' : '';
     const title = _elements.menu ? _elements.menu.querySelector('.shop-tree-title') : null;
     if (title) title.textContent = _preRun ? 'BUILD YOUR LOADOUT' : 'UPGRADES';
-    // Cores readout is BUILD-only; hidden (but keeps its grid column) in-run.
-    if (_elements.coresBox) _elements.coresBox.style.visibility = _preRun ? 'visible' : 'hidden';
+    // 8.x looter pivot (T23) — Cores RETIRED: GEAR crafting/salvage spends the
+    // persistent Rainshard wallet (shown by the coins readout). The ✦ Cores box
+    // is now vestigial and always hidden.
+    if (_elements.coresBox) _elements.coresBox.style.visibility = 'hidden';
     // Pre-run instructions hint (BUILD-only).
     if (_elements.prerunHint) {
         _elements.prerunHint.style.display = _preRun ? '' : 'none';

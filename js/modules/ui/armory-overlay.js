@@ -71,7 +71,10 @@ export class ArmoryOverlay {
         gold.className = 'armory-gold';
         const cores = document.createElement('div');
         cores.className = 'armory-cores';
-        header.append(title, cores, gold);
+        // 8.x (T23) — Cores retired; the header keeps a single Rainshard (R$)
+        // readout (`gold`). `cores` stays in this.elements for back-compat but
+        // is no longer mounted.
+        header.append(title, gold);
         panel.appendChild(header);
 
         const sub = document.createElement('div');
@@ -156,11 +159,14 @@ export class ArmoryOverlay {
         return true;
     }
 
+    // 8.x looter pivot (T23) — Cores RETIRED. GEAR salvage/reroll/tier-up/
+    // resist-target/passive-reroll now spend the persistent Rainshard wallet
+    // (accountGold). Method name kept internal; it returns the R$ balance.
     _cores() {
         const ge = this.gameEngine;
-        if (ge && ge.game && typeof ge.game.cores === 'number') return ge.game.cores | 0;
+        if (ge && ge.game && typeof ge.game.accountGold === 'number') return ge.game.accountGold | 0;
         const meta = loadMeta();
-        return (meta && typeof meta.cores === 'number') ? meta.cores | 0 : 0;
+        return (meta && typeof meta.accountGold === 'number') ? meta.accountGold | 0 : 0;
     }
 
     _equippedBySlot() {
@@ -177,8 +183,8 @@ export class ArmoryOverlay {
         const gained = salvageValue(item);
         stash.splice(index, 1);
         const cores = this._cores() + gained;
-        saveMeta({ stash, cores });
-        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = cores;
+        saveMeta({ stash, accountGold: cores });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.accountGold = cores;
         this.render();
         return gained;
     }
@@ -194,8 +200,8 @@ export class ArmoryOverlay {
         if (cores < cost) return false;
         stash[index] = rerollItemAffixes(item);
         const remaining = cores - cost;
-        saveMeta({ stash, cores: remaining });
-        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = remaining;
+        saveMeta({ stash, accountGold: remaining });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.accountGold = remaining;
         this.render();
         return true;
     }
@@ -210,8 +216,8 @@ export class ArmoryOverlay {
         const cost = tierUpCost(item);
         stash[index] = tierUpItem(item);
         const remaining = this._cores() - cost;
-        saveMeta({ stash, cores: remaining });
-        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = remaining;
+        saveMeta({ stash, accountGold: remaining });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.accountGold = remaining;
         this.render();
         return true;
     }
@@ -233,8 +239,8 @@ export class ArmoryOverlay {
         if (!res || !res.ok) return false;
         stash[index] = copy;
         const remaining = cores - cost;
-        saveMeta({ stash, cores: remaining });
-        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = remaining;
+        saveMeta({ stash, accountGold: remaining });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.accountGold = remaining;
         this.render();
         return true;
     }
@@ -256,8 +262,8 @@ export class ArmoryOverlay {
         if (!res || !res.ok) return false;
         stash[index] = copy;
         const remaining = cores - cost;
-        saveMeta({ stash, cores: remaining });
-        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = remaining;
+        saveMeta({ stash, accountGold: remaining });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.accountGold = remaining;
         this.render();
         return true;
     }
@@ -292,8 +298,8 @@ export class ArmoryOverlay {
         if (salvage.length === 0) return 0;
         const gained = salvage.reduce((s, it) => s + salvageValue(it), 0);
         const cores = this._cores() + gained;
-        saveMeta({ stash: keep, cores });
-        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.cores = cores;
+        saveMeta({ stash: keep, accountGold: cores });
+        if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.accountGold = cores;
         this.render();
         return gained;
     }
@@ -316,7 +322,7 @@ export class ArmoryOverlay {
             c.replaceChildren();
             const head = document.createElement('div');
             head.className = 'armory-section-title';
-            head.textContent = `CORES: ${this._cores()} ✦`;
+            head.textContent = `RAINSHARDS: R$ ${this._cores()}`;
             c.appendChild(head);
             this._renderEquipment(c, meta);
             this._renderStash(c, meta);
@@ -325,8 +331,9 @@ export class ArmoryOverlay {
         const { gold, cores, body } = this.elements;
         if (!body) return;
         const accountGold = this._accountGold();
-        if (gold) gold.textContent = `${accountGold} ⬢`;
-        if (cores) cores.textContent = `${this._cores()} ✦`;
+        if (gold) gold.textContent = `R$ ${accountGold}`;
+        // 8.x (T23) — Cores retired; the second header readout is now blank.
+        if (cores) cores.textContent = '';
         body.replaceChildren();
 
         const meta = loadMeta() || {};
@@ -339,7 +346,7 @@ export class ArmoryOverlay {
             const secTitle = document.createElement('div');
             secTitle.className = 'armory-section-title';
             const cost = unlockCost(category);
-            secTitle.textContent = `${cat.label}  ·  ${cost} ⬢ each`;
+            secTitle.textContent = `${cat.label}  ·  R$ ${cost} each`;
             section.appendChild(secTitle);
 
             const owned = getUnlockedSet(category, meta);
@@ -377,7 +384,7 @@ export class ArmoryOverlay {
                 btn.className = 'armory-buy';
                 const affordable = accountGold >= cost;
                 btn.disabled = !affordable;
-                btn.textContent = `UNLOCK · ${cost} ⬢`;
+                btn.textContent = `UNLOCK · R$ ${cost}`;
                 btn.addEventListener('click', () => this.buy(category, id));
                 row.append(name, btn);
                 list.appendChild(row);
@@ -468,7 +475,7 @@ export class ArmoryOverlay {
         if (stash.length === 0) {
             const empty = document.createElement('div');
             empty.className = 'armory-sub';
-            empty.textContent = 'Loot you collect on a run is committed here when the run ends. Salvage it for Cores (✦).';
+            empty.textContent = 'Loot you collect on a run is committed here when the run ends. Salvage it for Rainshards (R$).';
             section.appendChild(empty);
             body.appendChild(section);
             return;
@@ -501,7 +508,7 @@ export class ArmoryOverlay {
             const reBtn = document.createElement('button');
             reBtn.className = 'armory-buy';
             reBtn.disabled = !canAffordReroll(it, cores);
-            reBtn.textContent = `REROLL · ${reCost} ✦`;
+            reBtn.textContent = `REROLL · R$ ${reCost}`;
             reBtn.addEventListener('click', () => this.reroll(i));
             actions.appendChild(reBtn);
 
@@ -511,7 +518,7 @@ export class ArmoryOverlay {
                 const tuBtn = document.createElement('button');
                 tuBtn.className = 'armory-buy';
                 tuBtn.disabled = !canAffordTierUp(it, cores);
-                tuBtn.textContent = `TIER-UP · ${tuCost} ✦`;
+                tuBtn.textContent = `TIER-UP · R$ ${tuCost}`;
                 tuBtn.addEventListener('click', () => this.tierUp(i));
                 actions.appendChild(tuBtn);
             }
@@ -519,7 +526,7 @@ export class ArmoryOverlay {
             // Salvage (R8.5).
             const btn = document.createElement('button');
             btn.className = 'armory-buy';
-            btn.textContent = `SALVAGE · ${salvageValue(it)} ✦`;
+            btn.textContent = `SALVAGE · R$ ${salvageValue(it)}`;
             btn.addEventListener('click', () => this.salvage(i));
             actions.appendChild(btn);
 
@@ -557,7 +564,7 @@ export class ArmoryOverlay {
         lbl.className = 'armory-row-name';
         lbl.textContent = locked
             ? `  ↳ TARGET RESIST — tier-locked (${item.rarityLabel || item.rarity})`
-            : `  ↳ TARGET RESIST · ${cost} ✦  (RESIST ${current}/${cap})`;
+            : `  ↳ TARGET RESIST · R$ ${cost}  (RESIST ${current}/${cap})`;
         if (locked) lbl.style.opacity = '0.5';
         sub.appendChild(lbl);
 
@@ -617,8 +624,8 @@ export class ArmoryOverlay {
             return sub;
         }
         lbl.textContent = currentName
-            ? `  ↳ PASSIVE: ${currentName} · ${cost} ✦`
-            : `  ↳ PASSIVE: — none — · ${cost} ✦`;
+            ? `  ↳ PASSIVE: ${currentName} · R$ ${cost}`
+            : `  ↳ PASSIVE: — none — · R$ ${cost}`;
         sub.appendChild(lbl);
 
         const actions = document.createElement('span');
@@ -629,7 +636,7 @@ export class ArmoryOverlay {
         // when the lone eligible passive is already on the item (no-alternatives).
         const onlyOption = pool.length === 1 && item.passive === pool[0].id;
         btn.disabled = !affordable || onlyOption;
-        btn.textContent = currentName ? `REROLL PASSIVE · ${cost} ✦` : `ROLL PASSIVE · ${cost} ✦`;
+        btn.textContent = currentName ? `REROLL PASSIVE · R$ ${cost}` : `ROLL PASSIVE · R$ ${cost}`;
         btn.addEventListener('click', () => this.rerollPassive(index));
         actions.appendChild(btn);
         sub.appendChild(actions);
