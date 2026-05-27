@@ -1315,7 +1315,20 @@ export function applyWeaponTraits(bullet) {
             bullet.element = t.id;
         } else if (t.class === 'BEHAVIOR') {
             _applyBehaviorTrait(bullet, t);
+        } else if (t.id === 'BIG_BULLETS') {
+            const m = 1 + (Number.isFinite(t.value) ? t.value : 0) / 100;
+            bullet.radius = (bullet.radius || 4) * m;
+            bullet.baseRadius = bullet.radius;
+        } else if (t.id === 'LONG_RANGE') {
+            const m = 1 + (Number.isFinite(t.value) ? t.value : 0) / 100;
+            bullet.rangeMultiplier = (bullet.rangeMultiplier || 1) * m;
+        } else if (t.id === 'PROJECTILE_SPEED_PCT') {
+            const m = 1 + (Number.isFinite(t.value) ? t.value : 0) / 100;
+            if (bullet.vel) { bullet.vel.x *= m; bullet.vel.y *= m; }
         }
+        // DAMAGE_PCT/OVERCHARGE → getEffectivePrimaryDamage; FIRE_RATE_PCT/
+        // RAPIDFIRE → getEffectivePrimaryFireRate; CRIT_*_PCT → the crit getters;
+        // MULTISHOT/VOLLEY → fire dispatch (sub-step C).
     }
 }
 
@@ -2477,6 +2490,14 @@ export function getEffectivePrimaryFireRate() {
     // DEFAULT-SAFE: no passive (or heat 0) → rate is byte-for-byte unchanged.
     if (typeof this.hasPassive === 'function' && this.hasPassive('HEAT_SINK')) {
         rate = heatSinkFireRate(rate, this.heat || 0);
+    }
+
+    // T30 — equipped weapon-loot: +% Fire Rate (STAT) and Rapidfire (POWERUP)
+    // traits shorten the fire interval. No-op without a weapon item.
+    const w = this.equippedWeapon;
+    if (w) {
+        const frPct = _weaponTraitVal(w, 'FIRE_RATE_PCT') + _weaponTraitVal(w, 'RAPIDFIRE');
+        if (frPct > 0) rate /= 1 + frPct / 100;
     }
 
     return Math.round(rate);

@@ -527,6 +527,16 @@ export function getEffectiveMaxHealth() {
     return Math.min(600, totalMaxHealth);
 }
 
+// T30 — summed value of an equipped weapon-loot STAT trait (0 if no weapon /
+// no such trait). Reads the item directly so it's stub-safe in unit tests.
+function _weaponTrait(player, id) {
+    const w = player && player.equippedWeapon;
+    if (!w || !Array.isArray(w.traits)) return 0;
+    let total = 0;
+    for (const t of w.traits) if (t && t.id === id) total += Number.isFinite(t.value) ? t.value : 1;
+    return total;
+}
+
 export function getEffectiveCritChance() {
     // §6c no-downsides rework — Purist can crit now; its anchor is +40% flat
     // damage + shots pierce (no-crit downside removed).
@@ -534,9 +544,10 @@ export function getEffectiveCritChance() {
     const critChanceStacks = this.getPowerupStacks('CRIT_CHANCE');
     const critChanceBonus = critChanceStacks * 7; // +7% per stack (was +5%)
 
-    // T26 — SP CRIT_CHANCE, gear-amplified (§2.1).
+    // T26 — SP CRIT_CHANCE, gear-amplified (§2.1). T30 — + weapon CRIT_CHANCE_PCT.
     const totalCritChance = baseCritChance + critChanceBonus
-        + _ampSp(this, 'CRIT_CHANCE') + _passiveMod(this, 'critChance');
+        + _ampSp(this, 'CRIT_CHANCE') + _passiveMod(this, 'critChance')
+        + _weaponTrait(this, 'CRIT_CHANCE_PCT');
     return Math.min(60, totalCritChance); // Cap raised 50% → 60%
 }
 
@@ -545,8 +556,9 @@ export function getEffectiveCritDamage() {
     const critDamageBonus = critDamageStacks * 15; // +15% per stack (was +10%)
 
     // Randomize between 2x (200%) and 3x (300%) base, plus stacks.
-    // T26 — SP CRIT_DAMAGE, gear-amplified (§2.1).
-    const itemCritDmg = _ampSp(this, 'CRIT_DAMAGE') + _passiveMod(this, 'critDamage');
+    // T26 — SP CRIT_DAMAGE, gear-amplified (§2.1). T30 — + weapon CRIT_DAMAGE_PCT.
+    const itemCritDmg = _ampSp(this, 'CRIT_DAMAGE') + _passiveMod(this, 'critDamage')
+        + _weaponTrait(this, 'CRIT_DAMAGE_PCT');
     const minCrit = this.baseCritDamage; // 200%
     const maxCrit = 300 + critDamageBonus + itemCritDmg; // 300% + stacks + items + SP + passives
     const totalCritDamage = minCrit + Math.random() * (maxCrit - minCrit);

@@ -7,7 +7,9 @@ import { describe, expect, test } from '@jest/globals';
 import {
     applyWeaponTraits, equipWeaponItem, getEquippedWeapon,
     hasWeaponTrait, weaponTraitValue, getEffectivePrimaryDamage,
+    getEffectivePrimaryFireRate,
 } from '../../js/modules/player/weapons.js';
+import { getEffectiveCritChance } from '../../js/modules/player/progression.js';
 import { weaponLevelScale, archetypeToWeaponId } from '../../js/modules/combat/weapon-data.js';
 
 function weapon(archetype, traits = []) {
@@ -103,5 +105,47 @@ describe('T30 — primary damage scales with level + damage traits', () => {
         );
         // +30% + 20% = +50% at level 1 (level scale ×1.0 for both).
         expect(buffed / plain).toBeCloseTo(1.5, 5);
+    });
+});
+
+describe('T30 — fire rate / crit / per-bullet POWERUP+STAT traits (sub-step B)', () => {
+    function frStub(traits = []) {
+        return {
+            activePrimary: 'RAIL_DRIVER',
+            overdriveTimer: 0,
+            heat: 0,
+            equippedWeapon: traits.length ? weapon('RAIL', traits) : null,
+            getActivePrimaryConfig: () => ({ fireRate: 400 }),
+            getPowerupStacks: () => 0,
+            hasPassive: () => false,
+        };
+    }
+
+    test('Fire Rate / Rapidfire traits shorten the fire interval', () => {
+        expect(getEffectivePrimaryFireRate.call(frStub())).toBe(400);
+        // +25% fire rate → 400 / 1.25 = 320ms.
+        expect(getEffectivePrimaryFireRate.call(frStub([{ id: 'FIRE_RATE_PCT', class: 'STAT', value: 25 }]))).toBe(320);
+        expect(getEffectivePrimaryFireRate.call(frStub([{ id: 'RAPIDFIRE', class: 'POWERUP', value: 25 }]))).toBe(320);
+    });
+
+    test('CRIT_CHANCE_PCT adds to effective crit chance', () => {
+        const base = { baseCritChance: 8, getPowerupStacks: () => 0, spStats: {}, equippedItems: {}, level: 1, equippedWeapon: null };
+        expect(getEffectiveCritChance.call(base)).toBe(8);
+        const buffed = { ...base, equippedWeapon: weapon('RAIL', [{ id: 'CRIT_CHANCE_PCT', class: 'STAT', value: 10 }]) };
+        expect(getEffectiveCritChance.call(buffed)).toBe(18);
+    });
+
+    test('BIG_BULLETS / LONG_RANGE / PROJECTILE_SPEED stamp the bullet', () => {
+        const p = { equippedWeapon: weapon('PULSE', [
+            { id: 'BIG_BULLETS', class: 'POWERUP', value: 40 },
+            { id: 'LONG_RANGE', class: 'POWERUP', value: 40 },
+            { id: 'PROJECTILE_SPEED_PCT', class: 'STAT', value: 50 },
+        ]) };
+        const b = { radius: 5, rangeMultiplier: 1, vel: { x: 10, y: 0 } };
+        applyWeaponTraits.call(p, b);
+        expect(b.radius).toBeCloseTo(7, 6);     // 5 × 1.4
+        expect(b.baseRadius).toBeCloseTo(7, 6);
+        expect(b.rangeMultiplier).toBeCloseTo(1.4, 6);
+        expect(b.vel.x).toBeCloseTo(15, 6);     // 10 × 1.5
     });
 });
