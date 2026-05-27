@@ -7,6 +7,21 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.12.0] - 2026-05-27
+
+### Changed
+- **Netcode-optimization seams (Phase 0, behavior-preserving)** to enable
+  binary-wire / delta-snapshot / render-worker work behind stable contracts:
+  - `js/mp/netcode/snapshot-stream.js` (new) — `SnapshotStream.ingest(msg)`
+    reconstruction seam (pass-through for now).
+  - `js/mp/render-bridge.js` (new) — `RenderBridge.present(state)` render seam
+    that owns canvas-context acquisition (needed for a later OffscreenCanvas
+    worker); `mp-main.js` no longer calls `getContext` directly.
+  - `mp-main.js` rewired to both seams (snapshot → `ingest`, draw → `present`);
+    no behavior change (all MP e2e + unit tests still green).
+  - `WIRE_VERSION` 1 → 2 (reserves binary wire + delta snapshots; handshake
+    rejects mismatched clients so no mixed-format clients connect).
+
 ## [0.11.0] - 2026-05-27
 
 ### Added

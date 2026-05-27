@@ -4,7 +4,10 @@
 // Bumping WIRE_VERSION forces a handshake mismatch so old clients can't speak
 // to a newer server with an incompatible message shape.
 
-export const WIRE_VERSION = 1;
+// v2 reserves the binary (msgpack) wire + delta snapshots (rolled out
+// incrementally behind the codec / snapshot-stream seams). Mismatched clients
+// are rejected at handshake, so no mixed-format clients connect.
+export const WIRE_VERSION = 2;
 
 // Client → Server message types.
 export const C2S = Object.freeze({

@@ -43,7 +43,7 @@ describe('codec', () => {
 
 describe('protocol', () => {
   it('defines distinct message-type tables', () => {
-    expect(WIRE_VERSION).toBe(1);
+    expect(WIRE_VERSION).toBe(2);
     expect(Object.values(C2S)).toContain('hello');
     expect(Object.values(S2C)).toContain('snapshot');
   });

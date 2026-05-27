@@ -10,7 +10,8 @@ import { WebTransportClientTransport } from './net/webtransport-transport.js';
 import { Predictor } from './netcode/predictor.js';
 import { Interpolator } from './netcode/interpolator.js';
 import { MpInput } from './mp-input.js';
-import { render } from './mp-renderer.js';
+import { SnapshotStream } from './netcode/snapshot-stream.js';
+import { RenderBridge } from './render-bridge.js';
 import { WIRE_VERSION, C2S, S2C, WS_PATH, DEFAULT_PORT } from '../sim/protocol.js';
 import { TICK_MS, FIELD_WIDTH, FIELD_HEIGHT } from '../sim/constants.js';
 import { EV } from '../sim/events.js';
@@ -45,8 +46,10 @@ async function main() {
   const canvas = document.getElementById('game');
   canvas.width = FIELD_WIDTH;
   canvas.height = FIELD_HEIGHT;
-  const ctx = canvas.getContext('2d');
   const input = new MpInput(canvas);
+  // Seams: snapshot reconstruction + render backend (see their modules).
+  const snapStream = new SnapshotStream();
+  const bridge = new RenderBridge(canvas);
 
   // Room-code field: pre-fill from ?room=, and on Enter reload into that room
   // (a full reload is the simplest, reliable "switch rooms" — no reconnect
@@ -112,13 +115,14 @@ async function main() {
         setStatus(`connected — P${playerId} · room "${msg.room || 'public'}"`);
         break;
       case S2C.SNAPSHOT: {
-        lastSnapshotTick = msg.tick;
-        latestBullets = msg.bullets || [];
-        if (typeof msg.wave === 'number') wave = msg.wave;
-        if (msg.ws) waveState = msg.ws;
-        interp.add(msg);
+        const full = snapStream.ingest(msg);
+        lastSnapshotTick = full.tick;
+        latestBullets = full.bullets || [];
+        if (typeof full.wave === 'number') wave = full.wave;
+        if (full.ws) waveState = full.ws;
+        interp.add(full);
         if (predictor) {
-          const me = msg.ships.find((s) => s.id === playerId);
+          const me = full.ships.find((s) => s.id === playerId);
           if (me) {
             localHp = me.hp;
             localDowned = !!me.dn;
@@ -252,7 +256,7 @@ async function main() {
     // Banner fades after ~2.5 s.
     if (banner && now - banner.born > 2500) banner = null;
 
-    render(ctx, canvas, {
+    bridge.present({
       localShip: predictor ? predictor.ship : null,
       remoteShips: remote,
       asteroids,
