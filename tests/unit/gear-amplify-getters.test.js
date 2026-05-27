@@ -1,0 +1,100 @@
+// T26 — gear amplification folded into the effective-stat getters (§2.1).
+//
+// Verifies the contract: equipped gear affixes `{ stat, pct }` AMPLIFY the
+// invested SP for that stat (never flat), ramped by the per-run level —
+//   effective = SP_value × (1 + ampPct × levelRamp(level))
+// so gear is DORMANT at level 1, reaches FULL strength at LEVEL_SOFTCAP, and
+// amplifies NOTHING for a stat with no invested SP. Exercised through the real
+// progression getters (getEffectiveMaxHealth / getEffectiveShield) and the
+// player-facing getSpStatValue (spStatTotal), which external consumers
+// (combat-manager THORNS/VAMPIRISM, lifecycle DODGE, power-level) inherit.
+
+import * as progression from '../../js/modules/player/progression.js';
+import { LEVEL_SOFTCAP } from '../../js/modules/core/gear-scaling.js';
+
+// Minimal player stub matching how the getters read state.
+function makePlayer({ spStats = {}, equippedItems = {}, level = 1 } = {}) {
+    return {
+        maxHealth: 40,
+        shield: 15,
+        spStats,
+        equippedItems,
+        level,
+        getPowerupStacks: () => 0,
+        getPassiveMod: () => 0,
+        getPassiveMaxHpMult: () => 1,
+    };
+}
+
+// One gear item carrying a single `{ stat, pct }` amplifier affix.
+function gear(stat, pct) {
+    return { affixes: [{ stat, pct }] };
+}
+
+describe('T26 — gear amplifies invested SP, level-ramped', () => {
+    // HEALTH SP: 10 pts × (400/20) = 200 raw max-HP from SP.
+    const spHealth10 = { HEALTH: 10 };
+
+    test('level 1 → gear DORMANT (levelRamp 0): effective = raw SP only', () => {
+        const p = makePlayer({
+            spStats: spHealth10,
+            equippedItems: { hull: gear('HEALTH', 50) }, // +50% HEALTH amp
+            level: 1,
+        });
+        // base 40 + SP 200 × (1 + 0.5×0) = 240
+        expect(progression.getEffectiveMaxHealth.call(p)).toBe(240);
+    });
+
+    test('level LEVEL_SOFTCAP → gear at FULL strength (levelRamp 1)', () => {
+        const p = makePlayer({
+            spStats: spHealth10,
+            equippedItems: { hull: gear('HEALTH', 50) },
+            level: LEVEL_SOFTCAP,
+        });
+        // base 40 + SP 200 × (1 + 0.5×1) = 40 + 300 = 340
+        expect(progression.getEffectiveMaxHealth.call(p)).toBe(340);
+    });
+
+    test('no invested SP → gear amplifies NOTHING (amplifySP(0,…)=0)', () => {
+        const p = makePlayer({
+            spStats: { HEALTH: 0 },
+            equippedItems: { hull: gear('HEALTH', 80) },
+            level: LEVEL_SOFTCAP,
+        });
+        // base 40 + SP 0 × (1+0.8) = 40
+        expect(progression.getEffectiveMaxHealth.call(p)).toBe(40);
+    });
+
+    test('amp stacks across multiple equipped affixes on the same stat', () => {
+        const p = makePlayer({
+            spStats: { TOUGHNESS: 8 }, // 8 × (50/20) = 20 raw % DR
+            equippedItems: {
+                a: gear('TOUGHNESS', 30),
+                b: gear('TOUGHNESS', 20), // total +50% amp
+            },
+            level: LEVEL_SOFTCAP,
+        });
+        // base shield 15 + SP 20 × (1 + 0.5) = 15 + 30 = 45 (< 75 cap)
+        expect(progression.getEffectiveShield.call(p)).toBe(45);
+    });
+
+    test('a different stat is unaffected by the gear amp (stat-scoped)', () => {
+        const p = makePlayer({
+            spStats: { HEALTH: 10 },
+            equippedItems: { hull: gear('CRIT_CHANCE', 90) }, // amps CRIT, not HEALTH
+            level: LEVEL_SOFTCAP,
+        });
+        // HEALTH gets no amp from a CRIT affix → 40 + 200 = 240
+        expect(progression.getEffectiveMaxHealth.call(p)).toBe(240);
+    });
+
+    test('getSpStatValue (external consumers) returns the gear-amplified value', () => {
+        const p = makePlayer({
+            spStats: { THORNS: 10 }, // 10 × (100/20) = 50 raw %
+            equippedItems: { a: gear('THORNS', 40) }, // +40% amp
+            level: LEVEL_SOFTCAP,
+        });
+        // 50 × (1 + 0.4) = 70
+        expect(progression.spStatTotal.call(p, 'THORNS')).toBeCloseTo(70, 6);
+    });
+});

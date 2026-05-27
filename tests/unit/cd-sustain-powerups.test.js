@@ -14,9 +14,11 @@ import * as progression from '../../js/modules/player/progression.js';
 import { POWERUP_TYPES } from '../../js/modules/world/powerup.js';
 import { LIFE_ON_KILL_HEAL } from '../../js/modules/combat/combat-manager.js';
 
-// Minimal player stub matching how getEffectiveRegen reads state. `regen` sources
-// are funneled through item-affix regen (a clean single dial >3 HP/s), and the
-// REGENERATOR powerup is toggled via getPowerupStacks so the cap path is isolated.
+// Minimal player stub matching how getEffectiveRegen reads state. T26 — gear
+// regen is now a %-amplifier of SP REGENERATION (capped low, ≤2 HP/s), so this
+// suite drives its >3 HP/s regen dial (`itemRegen`) through the uncapped
+// passive-mod path instead; the REGENERATOR powerup is toggled via
+// getPowerupStacks so the cap conditional stays isolated.
 function makePlayer({ hasRegenerator = false, itemRegen = 0, regenStacks = 0 } = {}) {
     return {
         getPowerupStacks: (id) => {
@@ -24,8 +26,8 @@ function makePlayer({ hasRegenerator = false, itemRegen = 0, regenStacks = 0 } =
             if (id === 'REGENERATOR') return hasRegenerator ? 1 : 0;
             return 0;
         },
-        getItemAffixTotal: (key) => (key === 'regen' ? itemRegen : 0),
-        // no getPassiveMod / spStats → _passiveMod + _spVal contribute 0
+        getPassiveMod: (key) => (key === 'regen' ? itemRegen : 0),
+        // no spStats / equippedItems → _ampSp('REGENERATION') contributes 0
     };
 }
 

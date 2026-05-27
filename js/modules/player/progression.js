@@ -27,6 +27,10 @@ export function levelUp() { return false; }
 // (serializeRunState) so CONTINUE resumes the in-run climb.
 import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-stats.js';
 import { EFFICIENCY_CAP, FLUX_PER_STACK, CAPACITOR_BANK_OVERCHARGE_MULT, CAPACITOR_BANK_DECAY_PER_SEC } from '../core/constants.js';
+// T26 — Gear amplification (§2.1). Gear/Matrix/set bonuses are % AMPLIFIERS of
+// an invested SP stat, ramped by the per-run level (dormant at L1, full at
+// LEVEL_SOFTCAP). amplifySP(spValue, ampPct, level) is the single source.
+import { amplifySP } from '../core/gear-scaling.js';
 import { frameClock } from '../core/frame-clock.js';
 import { playerChillSpeedMult } from './player-status.js';
 // SYS-8 / ENMY-05 — buff-strip suppression convention. After a Leech strips a
@@ -134,12 +138,42 @@ export function deallocateSp(statId) {
     return true;
 }
 
-// Effective value of an SP stat (points × max/20).
+// Raw value of an SP stat (points × max/20) — the pre-amplification base.
 function _spVal(player, statId) {
     const def = SP_STATS.find((s) => s.id === statId);
     if (!def || !player || !player.spStats) return 0;
     const pts = player.spStats[statId] | 0;
     return pts * (def.max / SP_STAT_MAX_POINTS);
+}
+
+// T26 — Σ of the rolled % amplifiers for `statId` across equipped gear, as a
+// fraction. New gear affixes are `{ stat: <SP id>, pct }` (item-templates /
+// gear-gen §2.1); Matrices + resonance + set bonuses fold in here at T28. The
+// OLD flat `{ type, value }` affixes (resists, legacy gear) carry no `stat`, so
+// they contribute nothing — gear is now %-amp, never flat. Returns 0 with no
+// equipped gear (→ amplifySP collapses to the raw SP value).
+function _gearAmpPct(player, statId) {
+    let pct = 0;
+    const eq = player && player.equippedItems;
+    if (eq) {
+        for (const slot of Object.keys(eq)) {
+            const it = eq[slot];
+            if (it && Array.isArray(it.affixes)) {
+                for (const a of it.affixes) {
+                    if (a && a.stat === statId && Number.isFinite(a.pct)) pct += a.pct;
+                }
+            }
+        }
+    }
+    return pct / 100;
+}
+
+// T26 — effective SP-stat value WITH gear amplification + level ramp:
+//   amplifySP(SP_value, gearAmpPct, level) = SP_value × (1 + ampPct × levelRamp).
+// Default-safe: no invested SP → 0; no gear OR level 1 → just the raw SP value
+// (so the starter + un-geared early waves read exactly as before T26).
+function _ampSp(player, statId) {
+    return amplifySP(_spVal(player, statId), _gearAmpPct(player, statId), (player && player.level) || 1);
 }
 
 // P2 — additive contribution of the active rule-modifier passives for a stat
@@ -148,8 +182,11 @@ function _spVal(player, statId) {
 function _passiveMod(player, key) {
     return (player && typeof player.getPassiveMod === 'function') ? player.getPassiveMod(key) : 0;
 }
+// T26 — the player-facing effective SP-stat value is now gear-amplified, so
+// external consumers (combat-manager THORNS/VAMPIRISM, lifecycle DODGE,
+// power-level PWR prior) all inherit §2.1 amplification through getSpStatValue.
 export function spStatTotal(statId) {
-    return _spVal(this, statId);
+    return _ampSp(this, statId);
 }
 
 export function grantLevelUpBonus() {
@@ -380,11 +417,11 @@ export function getItemAffixTotal(type) {
 
 export function getMovementSpeedMultiplier() {
     const speedBoostStacks = this.getPowerupStacks('SPEED_BOOST');
-    // Each stack: +65% thrust. 6.32.0 — item speed affixes; 6.35.0 — SP
-    // SPEED allocation; both add their rolled percentage on top.
-    const itemSpeedPct = (this.getItemAffixTotal('speed') + _spVal(this, 'SPEED')) / 100;
+    // Each stack: +65% thrust. T26 — SP SPEED, gear-amplified (§2.1), adds its
+    // effective % on top (gear amplifies the SP investment, never flat).
+    const speedPct = _ampSp(this, 'SPEED') / 100;
     // A.E9-S1 — CHILL (from enemy Cryo hits) slows the player's thrust/top speed.
-    return (1 + speedBoostStacks * 0.65 + itemSpeedPct) * playerChillSpeedMult(this, frameClock.now);
+    return (1 + speedBoostStacks * 0.65 + speedPct) * playerChillSpeedMult(this, frameClock.now);
 }
 
 // 6.x — Gold-find is RETIRED. The gold economy is intentionally flat +
@@ -432,9 +469,8 @@ export function getEffectiveRegen() {
     let regen = BASE_PASSIVE_REGEN;
     const stacks = this.getPowerupStacks ? this.getPowerupStacks('REGEN') : 0;
     if (stacks > 0) regen += stacks * 0.5;
-    regen += this.getItemAffixTotal('regen'); // 6.32.0 — item regen affixes
     regen += _passiveMod(this, 'regen');       // P2 — passive numeric mods
-    regen += _spVal(this, 'REGENERATION');     // CD-08 — permanent SP regen stat (default-safe: 0 pts → 0)
+    regen += _ampSp(this, 'REGENERATION');     // CD-08/T26 — SP regen, gear-amplified (§2.1); 0 pts → 0
     // CD-04 (T2) — Regenerator: while held, the cap rises 3.0 → 5.0 HP/s.
     // Default-safe: without the powerup the cap is the existing 3.0.
     const cap = (this.getPowerupStacks?.('REGENERATOR') > 0)
@@ -449,16 +485,12 @@ export function getEffectiveShield() {
     // +8% damage reduction per stack (was +5%). Cap stays at 75%.
     const shieldBoostAmount = shieldBoostStacks * 8;
 
-    // 5.99.4 — Diablo defensive items. Each equipped toughness item
-    // (shielding, chassis — slot keys rethemed in 6.2.2) adds its
-    // `bonus` directly to the shield percentage. Stacks on top of
-    // SHIELD_BOOST. `this.shield` (the base 15% damage reduction) is
-    // a different concept and unrelated to the inventory slot.
-    // 6.32.0 — Any equipped item rolling a toughness affix contributes,
-    // regardless of slot. 6.35.0 — + SP TOUGHNESS allocation.
-    const itemBonus = this.getItemAffixTotal('toughness');
-
-    const totalShield = baseShield + shieldBoostAmount + itemBonus + _spVal(this, 'TOUGHNESS') + _passiveMod(this, 'toughness');
+    // T26 — SP TOUGHNESS, gear-amplified (§2.1): equipped gear amplifies the
+    // invested TOUGHNESS SP (a % of it, ramped by level) rather than adding a
+    // flat % — so toughness gear is dormant early and rewards specialization.
+    // `this.shield` (the base 15% DR) is a separate concept; SHIELD_BOOST
+    // powerup stacks on top.
+    const totalShield = baseShield + shieldBoostAmount + _ampSp(this, 'TOUGHNESS') + _passiveMod(this, 'toughness');
     return Math.min(75, totalShield); // Cap at 75%
 }
 
@@ -467,17 +499,14 @@ export function getEffectiveMaxHealth() {
     const healthBoostStacks = this.getPowerupStacks('HEALTH_BOOST');
     const healthBoostAmount = healthBoostStacks * 35; // +35 max health per stack (was +25)
 
-    // 5.99.4 — Diablo defensive items (HP slots). Each equipped HP
-    // item (cockpit, hull — slot keys rethemed in 6.2.2) adds its
-    // `bonus` to max health. Stacks on top of HEALTH_BOOST.
-    // 6.32.0 — Any equipped item rolling an HP affix contributes.
-    // 6.35.0 — + SP HEALTH allocation.
-    const itemBonus = this.getItemAffixTotal('hp') + _spVal(this, 'HEALTH');
+    // T26 — SP HEALTH, gear-amplified (§2.1): gear amplifies the invested
+    // HEALTH SP rather than adding flat max-HP, so HP gear is dormant early.
+    const spHealth = _ampSp(this, 'HEALTH');
 
     // P6 — passive max-HP multipliers (Glass Cannon ×0.5, Failsafe ×0.85, …)
     // apply AFTER the additive bonuses, so "−50% max HP" halves the whole pool.
     const hpMult = (typeof this.getPassiveMaxHpMult === 'function') ? this.getPassiveMaxHpMult() : 1;
-    const totalMaxHealth = (baseMaxHealth + healthBoostAmount + itemBonus + _passiveMod(this, 'maxHp')) * hpMult;
+    const totalMaxHealth = (baseMaxHealth + healthBoostAmount + spHealth + _passiveMod(this, 'maxHp')) * hpMult;
     // Cap raised to 600 to accommodate the higher per-stack value while
     // still preventing infinite scaling.
     return Math.min(600, totalMaxHealth);
@@ -490,9 +519,9 @@ export function getEffectiveCritChance() {
     const critChanceStacks = this.getPowerupStacks('CRIT_CHANCE');
     const critChanceBonus = critChanceStacks * 7; // +7% per stack (was +5%)
 
-    // 6.32.0 — item critChance affixes. 6.35.0 — + SP CRIT_CHANCE.
+    // T26 — SP CRIT_CHANCE, gear-amplified (§2.1).
     const totalCritChance = baseCritChance + critChanceBonus
-        + this.getItemAffixTotal('critChance') + _spVal(this, 'CRIT_CHANCE') + _passiveMod(this, 'critChance');
+        + _ampSp(this, 'CRIT_CHANCE') + _passiveMod(this, 'critChance');
     return Math.min(60, totalCritChance); // Cap raised 50% → 60%
 }
 
@@ -500,9 +529,9 @@ export function getEffectiveCritDamage() {
     const critDamageStacks = this.getPowerupStacks('CRIT_DAMAGE');
     const critDamageBonus = critDamageStacks * 15; // +15% per stack (was +10%)
 
-    // Randomize between 2x (200%) and 3x (300%) base, plus stacks +
-    // 6.32.0 item critDamage affixes.
-    const itemCritDmg = this.getItemAffixTotal('critDamage') + _spVal(this, 'CRIT_DAMAGE') + _passiveMod(this, 'critDamage');
+    // Randomize between 2x (200%) and 3x (300%) base, plus stacks.
+    // T26 — SP CRIT_DAMAGE, gear-amplified (§2.1).
+    const itemCritDmg = _ampSp(this, 'CRIT_DAMAGE') + _passiveMod(this, 'critDamage');
     const minCrit = this.baseCritDamage; // 200%
     const maxCrit = 300 + critDamageBonus + itemCritDmg; // 300% + stacks + items + SP + passives
     const totalCritDamage = minCrit + Math.random() * (maxCrit - minCrit);
@@ -558,7 +587,7 @@ export function getEffectiveBurstStarHealing() {
 // OVERFLOW_CAPACITOR passive (§6c, no-downsides rework) multiplies the reservoir
 // by 1.5 (+50% max). Default-safe: without the passive, ×1.
 export function getEffectiveMaxEnergy() {
-    const base = (this.maxEnergy || 100) + _spVal(this, 'CAPACITOR');
+    const base = (this.maxEnergy || 100) + _ampSp(this, 'CAPACITOR'); // T26 — gear-amplified SP
     const overflow = (typeof this.hasPassive === 'function' && this.hasPassive('OVERFLOW_CAPACITOR')) ? 1.5 : 1;
     return base * overflow;
 }
@@ -595,13 +624,13 @@ export function capacitorBankDecayStep(energy, normalMax, dtMs) {
 export function getEffectiveEnergyRegenMult() {
     // OVERFLOW_CAPACITOR passive (§6c) doubles regen (×2). Default-safe: ×1 without it.
     const overflow = (typeof this.hasPassive === 'function' && this.hasPassive('OVERFLOW_CAPACITOR')) ? 2 : 1;
-    return (1 + _spVal(this, 'REACTOR') / 100 + (this._fluxStacks || 0) * FLUX_PER_STACK) * overflow;
+    return (1 + _ampSp(this, 'REACTOR') / 100 + (this._fluxStacks || 0) * FLUX_PER_STACK) * overflow; // T26 — gear-amplified SP
 }
 
 // EFFICIENCY — discounts power-weapon energy cost. 0 pts → baseCost.
 // The discount fraction is capped at EFFICIENCY_CAP (CD-05, 0.5) so a power
 // weapon never costs less than 50% of base, no matter how much piles in.
 export function getEffectivePowerCost(baseCost) {
-    const discount = Math.min(EFFICIENCY_CAP, _spVal(this, 'EFFICIENCY') / 100);
+    const discount = Math.min(EFFICIENCY_CAP, _ampSp(this, 'EFFICIENCY') / 100); // T26 — gear-amplified SP
     return baseCost * (1 - discount);
 }
