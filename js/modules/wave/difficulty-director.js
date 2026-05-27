@@ -103,14 +103,33 @@ function validateMode(mode) {
     return MODES.includes(mode) ? mode : DEFAULT_MODE;
 }
 
-// The combined preload × mode-base scalar folded onto the reactive axes to make
-// the EFFECTIVE difficulty. = 1.0 at PWR_REF + NORMAL (default-safe). preload is
-// already clamped [0.8, 3.0] by difficulty-constants.pwrPreload; mBase is the
-// static per-mode multiplier (1.0 at NORMAL).
+// T34 — drafted-stage threat offset. The chosen stage's threat is on the PWR
+// scale (run-randomizer's difficultyBudget(1) = 100 = PWR_REF). When the stage
+// OUT-threatens the build (threat > pwr — a risky draft pick or an under-levelled
+// run) the effective difficulty bumps; a gentle exponent + cap keep it from
+// becoming a bullet-sponge wall, and it NEVER eases below 1.0 (the reactive loop
+// + mercy own easing). threat 0 (no stage drafted yet) ⇒ exactly 1.0 → the draft
+// has no effect until a stage is picked (default-safe).
+const THREAT_OFFSET_EXP = 0.5;   // sqrt of the over-threat ratio (gentle)
+const THREAT_OFFSET_CAP = 1.5;   // a risky stage adds at most +50% atop preload
+function threatScale(state) {
+    const t = state.threat;
+    if (!Number.isFinite(t) || t <= 0) return 1;
+    const pwr = Math.max(1, Number.isFinite(state.pwr) ? state.pwr : PWR_REF);
+    const ratio = t / pwr;
+    if (ratio <= 1) return 1; // a stage at/below the build's PWR adds nothing here
+    return Math.min(THREAT_OFFSET_CAP, Math.pow(ratio, THREAT_OFFSET_EXP));
+}
+
+// The combined preload × mode-base × stage-threat scalar folded onto the reactive
+// axes to make the EFFECTIVE difficulty. = 1.0 at PWR_REF + NORMAL + no-stage
+// (default-safe). preload is clamped [0.8, 3.0] by difficulty-constants.pwrPreload;
+// mBase is the static per-mode multiplier (1.0 at NORMAL); threat is the T34 offset.
 function contextScale(state) {
     const preload = pwrPreload(state.pwr, PWR_REF); // 1.0 at PWR_REF, clamp [0.8,3.0]
     const mBase = modeBase(state.mode);             // 1.0 at NORMAL
-    return { preload, mBase, scale: preload * mBase };
+    const threat = threatScale(state);              // 1.0 until a stage out-threatens the build
+    return { preload, mBase, threat, scale: preload * mBase * threat };
 }
 
 // Mode-biased reactive params. At NORMAL this returns the *unmodified* cfg values
@@ -173,6 +192,10 @@ export function createDirector(opts = {}) {
         // pwr: the build-strength prior (DIR-05 feeds the live PWR per wave); at
         // PWR_REF the pre-load is exactly 1.0 so live difficulty is unchanged.
         pwr: Number.isFinite(opts.pwr) ? opts.pwr : PWR_REF,
+        // T34 — the DRAFTED stage's threat (run-randomizer, PWR-scaled). 0 until
+        // a stage is drafted ⇒ neutral; folded into the EFFECTIVE difficulty so a
+        // stage that out-threatens the build is genuinely harder.
+        threat: Number.isFinite(opts.threat) ? opts.threat : 0,
         // mode: difficulty mode (validated against MODES; unknown ⇒ NORMAL).
         mode: validateMode(opts.mode),
         cfg,
@@ -187,10 +210,11 @@ export function createDirector(opts = {}) {
  * Returns `state` for chaining. DEFAULT-SAFE: setting pwr=PWR_REF + mode=NORMAL
  * restores neutral context (= current behavior).
  * @param {object} state director state from createDirector.
- * @param {{pwr?: number, mode?: string}} [ctx]
+ * @param {{pwr?: number, threat?: number, mode?: string}} [ctx]
  */
 export function setDirectorContext(state, ctx = {}) {
     if (Number.isFinite(ctx.pwr)) state.pwr = ctx.pwr;
+    if (Number.isFinite(ctx.threat)) state.threat = ctx.threat; // T34 — drafted stage threat
     if (ctx.mode !== undefined) state.mode = validateMode(ctx.mode);
     return state;
 }
@@ -208,6 +232,7 @@ export function recordWave(state, outcome = {}) {
     // EFFECTIVE difficulty pre-loads from this wave (default-safe: omitted ⇒
     // unchanged; PWR_REF + NORMAL ⇒ neutral). Reactive math below is untouched.
     if (Number.isFinite(outcome.pwr)) state.pwr = outcome.pwr;
+    if (Number.isFinite(outcome.threat)) state.threat = outcome.threat; // T34 — drafted stage threat
     if (outcome.mode !== undefined) state.mode = validateMode(outcome.mode);
 
     const a = state.cfg.alpha;
