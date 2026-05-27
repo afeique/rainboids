@@ -31,6 +31,9 @@ import { EFFICIENCY_CAP, FLUX_PER_STACK, CAPACITOR_BANK_OVERCHARGE_MULT, CAPACIT
 // an invested SP stat, ramped by the per-run level (dormant at L1, full at
 // LEVEL_SOFTCAP). amplifySP(spValue, ampPct, level) is the single source.
 import { amplifySP } from '../core/gear-scaling.js';
+// T28 — socketed Matrices amplify the same SP stats as gear affixes (§2.2):
+// aggregateMatrixAmp folds the per-slot Matrix line (×tier) + per-type resonance.
+import { aggregateMatrixAmp } from '../world/matrix-system.js';
 import { frameClock } from '../core/frame-clock.js';
 import { playerChillSpeedMult } from './player-status.js';
 // SYS-8 / ENMY-05 — buff-strip suppression convention. After a Leech strips a
@@ -156,13 +159,24 @@ function _gearAmpPct(player, statId) {
     let pct = 0;
     const eq = player && player.equippedItems;
     if (eq) {
+        let anyMatrix = false;
         for (const slot of Object.keys(eq)) {
             const it = eq[slot];
-            if (it && Array.isArray(it.affixes)) {
+            if (!it) continue;
+            if (it.matrix) anyMatrix = true;
+            if (Array.isArray(it.affixes)) {
                 for (const a of it.affixes) {
                     if (a && a.stat === statId && Number.isFinite(a.pct)) pct += a.pct;
                 }
             }
+        }
+        // T28 — socketed Matrices (+ per-type resonance) amplify the same SP
+        // stats as gear affixes (§2.2). aggregateMatrixAmp folds each piece's
+        // per-slot Matrix line × tier + the resonance bonus. Skipped entirely
+        // when no socket is filled (the common early-game case).
+        if (anyMatrix) {
+            const matrixAmp = aggregateMatrixAmp(Object.values(eq).filter(Boolean));
+            if (Number.isFinite(matrixAmp[statId])) pct += matrixAmp[statId];
         }
     }
     return pct / 100;

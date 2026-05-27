@@ -98,3 +98,52 @@ describe('T26 — gear amplifies invested SP, level-ramped', () => {
         expect(progression.spStatTotal.call(p, 'THORNS')).toBeCloseTo(70, 6);
     });
 });
+
+describe('T28 — socketed Matrices amplify SP stats (+ resonance)', () => {
+    // vital@hull@t1 = +12% HEALTH; vital@cockpit@t1 = +8% HEALTH.
+    const spHealth10 = { HEALTH: 10 }; // 200 raw max-HP from SP
+
+    test('a socketed Matrix adds its per-slot %-amp to the stat', () => {
+        const p = makePlayer({
+            spStats: spHealth10,
+            equippedItems: { hull: { slot: 'hull', affixes: [], matrix: { id: 'vital', tier: 1 } } },
+            level: LEVEL_SOFTCAP,
+        });
+        // +12% HEALTH → 200 × 1.12 = 224 → base 40 = 264
+        expect(progression.getEffectiveMaxHealth.call(p)).toBe(40 + 224);
+    });
+
+    test('Matrix amp stacks with gear affix amp on the same stat', () => {
+        const p = makePlayer({
+            spStats: spHealth10,
+            equippedItems: {
+                hull: { slot: 'hull', affixes: [{ stat: 'HEALTH', pct: 8 }], matrix: { id: 'vital', tier: 1 } },
+            },
+            level: LEVEL_SOFTCAP,
+        });
+        // affix +8% + matrix +12% = +20% → 200 × 1.20 = 240 → base 40 = 280
+        expect(progression.getEffectiveMaxHealth.call(p)).toBe(40 + 240);
+    });
+
+    test('resonance: 2 pieces of the same Matrix add a flat +3% to each line', () => {
+        const p = makePlayer({
+            spStats: spHealth10,
+            equippedItems: {
+                cockpit: { slot: 'cockpit', affixes: [], matrix: { id: 'vital', tier: 1 } },
+                hull:    { slot: 'hull',    affixes: [], matrix: { id: 'vital', tier: 1 } },
+            },
+            level: LEVEL_SOFTCAP,
+        });
+        // cockpit 8+3, hull 12+3 = 26% → 200 × 1.26 = 252 → base 40 = 292
+        expect(progression.getEffectiveMaxHealth.call(p)).toBe(40 + 252);
+    });
+
+    test('an empty socket contributes nothing (matrix amp only when filled)', () => {
+        const p = makePlayer({
+            spStats: spHealth10,
+            equippedItems: { hull: { slot: 'hull', affixes: [], sockets: 1 } }, // no matrix
+            level: LEVEL_SOFTCAP,
+        });
+        expect(progression.getEffectiveMaxHealth.call(p)).toBe(40 + 200);
+    });
+});

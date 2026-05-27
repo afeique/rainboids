@@ -9,6 +9,10 @@ import * as playerRenderer from './renderer.js';
 import { loadSettings } from '../core/storage.js';
 import { DEFAULT_SKIN_ID } from './skins/index.js';
 import { scoreItem } from '../world/item-system.js';
+// T28 — Matrix sockets on equipped gear. The amp/resonance read happens in the
+// effective-stat getters (progression._gearAmpPct); these thin wrappers let the
+// inventory UI (T42) socket/unsocket a Matrix onto an equipped piece.
+import { socketMatrix as _socketMatrix, unsocketMatrix as _unsocketMatrix, getSocketedMatrix as _getSocketedMatrix } from '../world/matrix-system.js';
 import { debugState } from '../core/debug-config.js';
 // Mobile auto-fire (5.92.0): when running in mobile mode the player
 // has no spare hand to tap a power-weapon button — the spec auto-
@@ -1344,6 +1348,34 @@ export class Player {
     deallocateSp(statId) { return progression.deallocateSp.call(this, statId); }
     getSpStatValue(statId) { return progression.spStatTotal.call(this, statId); }
     saveMetaState() { return progression.saveMetaState.call(this); }
+
+    // T28 — socket a Matrix into the equipped gear at `slot`. socketMatrix is
+    // PURE (returns a NEW gear object), so reassign the slot. Returns the
+    // displaced Matrix (or null) for the caller to return to the stash; returns
+    // null without change on invalid input. Persists the equip change.
+    socketMatrixAt(slot, matrix) {
+        const gear = this.equippedItems && this.equippedItems[slot];
+        if (!gear) return null;
+        const displaced = _getSocketedMatrix(gear);
+        try {
+            this.equippedItems[slot] = _socketMatrix(gear, matrix);
+        } catch (_e) {
+            return null; // invalid matrix — leave the slot unchanged
+        }
+        this.gameEngine?.markMetaDirty?.();
+        return displaced || null;
+    }
+
+    // T28 — pull the Matrix out of the equipped gear at `slot`. Returns the
+    // removed Matrix (or null if the socket was empty / no gear).
+    unsocketMatrixAt(slot) {
+        const gear = this.equippedItems && this.equippedItems[slot];
+        if (!gear) return null;
+        const { matrix, gear: next } = _unsocketMatrix(gear);
+        this.equippedItems[slot] = next;
+        if (matrix) this.gameEngine?.markMetaDirty?.();
+        return matrix || null;
+    }
 
     fireWeapons(bulletPool, audioManager) {
         return weapons.fireWeapons.call(this, bulletPool, audioManager);
