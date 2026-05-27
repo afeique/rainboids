@@ -1,0 +1,26 @@
+# systemd unit for the Rainboids multiplayer server.
+#   sudo cp server/deploy/rainboids-mp.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now rainboids-mp
+#
+# Assumes the repo is deployed at /opt/rainboids and Node is on PATH.
+
+[Unit]
+Description=Rainboids multiplayer server (Node.js, WebSocket)
+After=network.target
+
+[Service]
+Type=simple
+User=rainboids
+WorkingDirectory=/opt/rainboids/server
+Environment=MP_PORT=8091
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
