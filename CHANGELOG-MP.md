@@ -7,6 +7,15 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.13.1] - 2026-05-27
+
+### Fixed
+- **Title-screen MULTIPLAYER button overflowed short landscape phones.** On
+  mobile-landscape the four secondary buttons now lay out as a 2×2 grid
+  (TUTORIAL/HANGAR · SETTINGS/MULTIPLAYER) so all six fit a 640×360 canvas;
+  portrait (single column) and desktop (full-width stacked) are unchanged.
+  Restores the `title-screen-layout` unit test's "multiplayer fits" assertion.
+
 ## [0.13.0] - 2026-05-27
 
 ### Added

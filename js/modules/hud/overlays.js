@@ -270,8 +270,12 @@ export function drawTitleScreen() {
         if (mobilePortrait) {
             // Stack: NEW GAME + CONTINUE + TUTORIAL + HANGAR + SETTINGS + MULTIPLAYER.
             buttonsBlockH = buttonH * 6 + buttonGap * 5;
+        } else if (mobileLandscape) {
+            // Primary pair + a 2×2 secondary grid (TUTORIAL/HANGAR · SETTINGS/
+            // MULTIPLAYER) so all six fit on a short 360px-tall landscape phone.
+            buttonsBlockH = buttonH * 3 + 18 + 14;
         } else {
-            // Side-by-side primary row + TUTORIAL + HANGAR + SETTINGS + MULTIPLAYER.
+            // Desktop: side-by-side primary row + TUTORIAL + HANGAR + SETTINGS + MULTIPLAYER.
             buttonsBlockH = buttonH * 5 + 18 * 4;
         }
         // 5.99.1 — recordH shrinks on mobile to match the smaller record
@@ -401,38 +405,22 @@ export function drawTitleScreen() {
                 rects.newGame  = { id: 'newGame',  x: x0,                       y: yTop, w: buttonW, h: buttonH, disabled: false };
                 rects.continue = { id: 'continue', x: x0 + buttonW + buttonGap, y: yTop, w: buttonW, h: buttonH, disabled: !hasSavedRun };
                 const tutY = yTop + buttonH + 18;
-                rects.tutorial = {
-                    id: 'tutorial',
-                    x: x0,
-                    y: tutY,
-                    w: totalW,
-                    h: buttonH,
-                    disabled: false,
-                };
-                rects.hangar = {
-                    id: 'hangar',
-                    x: x0,
-                    y: tutY + buttonH + 18,
-                    w: totalW,
-                    h: buttonH,
-                    disabled: false,
-                };
-                rects.settings = {
-                    id: 'settings',
-                    x: x0,
-                    y: tutY + 2 * (buttonH + 18),
-                    w: totalW,
-                    h: buttonH,
-                    disabled: false,
-                };
-                rects.multiplayer = {
-                    id: 'multiplayer',
-                    x: x0,
-                    y: tutY + 3 * (buttonH + 18),
-                    w: totalW,
-                    h: buttonH,
-                    disabled: false,
-                };
+                const xRight = x0 + buttonW + buttonGap;
+                if (mobileLandscape) {
+                    // 2×2 secondary grid so all six buttons fit a short landscape
+                    // phone: TUTORIAL | HANGAR  /  SETTINGS | MULTIPLAYER.
+                    const row2 = tutY + buttonH + 14;
+                    rects.tutorial    = { id: 'tutorial',    x: x0,     y: tutY, w: buttonW, h: buttonH, disabled: false };
+                    rects.hangar      = { id: 'hangar',      x: xRight, y: tutY, w: buttonW, h: buttonH, disabled: false };
+                    rects.settings    = { id: 'settings',    x: x0,     y: row2, w: buttonW, h: buttonH, disabled: false };
+                    rects.multiplayer = { id: 'multiplayer', x: xRight, y: row2, w: buttonW, h: buttonH, disabled: false };
+                } else {
+                    // Desktop — full-width stacked rows (ample vertical room).
+                    rects.tutorial    = { id: 'tutorial',    x: x0, y: tutY,                     w: totalW, h: buttonH, disabled: false };
+                    rects.hangar      = { id: 'hangar',      x: x0, y: tutY + (buttonH + 18),     w: totalW, h: buttonH, disabled: false };
+                    rects.settings    = { id: 'settings',    x: x0, y: tutY + 2 * (buttonH + 18), w: totalW, h: buttonH, disabled: false };
+                    rects.multiplayer = { id: 'multiplayer', x: x0, y: tutY + 3 * (buttonH + 18), w: totalW, h: buttonH, disabled: false };
+                }
             }
 
             this._titleButtonRects = rects;
