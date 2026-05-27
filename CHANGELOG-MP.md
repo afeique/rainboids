@@ -7,6 +7,29 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.10.0] - 2026-05-27
+
+### Added
+- **Client auto-reconnect**: the MP client now reconnects automatically after a
+  dropped connection (retries every 2 s, re-sends `Hello`; prediction is rebuilt
+  on the next `Welcome`). `mp-main.js` is refactored around a reusable
+  `connect()` + `handleMessage()` so the render loop survives transport churn.
+- **WebTransport placeholder seam**: `net/webtransport-transport.js` is a stub
+  implementing the client `Transport` interface (documents the intended
+  datagram/stream mapping, throws on connect). A transport selector tries
+  WebTransport only when requested (`?transport=webtransport`) and **falls back
+  to WebSocket** when it isn't available — making the deferred Phase 8 a
+  ready-to-fill seam without changing anything above it.
+
+### Fixed
+- **Graceful shutdown**: `WebSocketTransport.close()` now terminates live
+  connections before closing, so shutdown doesn't block on upgraded WS sockets
+  (and clients are dropped promptly, triggering their reconnect).
+
+### Tests
+- `tests/qa/12-mp2-ws.spec.js` — new case: a client **auto-reconnects after the
+  server is killed and restarted** on the same port.
+
 ## [0.9.0] - 2026-05-27
 
 ### Added

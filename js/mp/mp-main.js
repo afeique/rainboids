@@ -6,6 +6,7 @@
 // authoritative state in each snapshot.
 
 import { WebSocketClientTransport } from './net/websocket-transport.js';
+import { WebTransportClientTransport } from './net/webtransport-transport.js';
 import { Predictor } from './netcode/predictor.js';
 import { Interpolator } from './netcode/interpolator.js';
 import { MpInput } from './mp-input.js';
@@ -62,7 +63,8 @@ async function main() {
     });
   }
 
-  const transport = new WebSocketClientTransport();
+  let transport = null;
+  let reconnectTimer = null;
   const interp = new Interpolator();
   let predictor = null;
   let playerId = null;
@@ -101,7 +103,7 @@ async function main() {
     waveState: () => waveState,
   };
 
-  transport.onMessage((msg) => {
+  function handleMessage(msg) {
     switch (msg.t) {
       case S2C.WELCOME:
         playerId = msg.playerId;
@@ -155,19 +157,65 @@ async function main() {
       default:
         break;
     }
-  });
-  transport.onClose(() => setStatus('disconnected'));
-  transport.onError(() => setStatus('connection error'));
-
-  const url = resolveServerUrl();
-  setStatus(`connecting to ${url} …`);
-  try {
-    await transport.connect(url);
-  } catch {
-    setStatus(`could not connect to ${url} — is the server running? (cd server && npm start)`);
-    return;
   }
-  transport.send({ t: C2S.HELLO, wireVersion: WIRE_VERSION, name: 'pilot', room: resolveRoomCode() });
+
+  // Transport selection: WebSocket today. WebTransport is tried only when
+  // explicitly requested (?transport=webtransport) and available; the WT
+  // transport is a deferred Phase-8 placeholder, so connect() falls back to
+  // WebSocket if it isn't implemented.
+  function makeTransport(preferWt) {
+    if (preferWt && typeof window.WebTransport !== 'undefined') {
+      return new WebTransportClientTransport();
+    }
+    return new WebSocketClientTransport();
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 2000);
+  }
+
+  function wire(t) {
+    t.onMessage(handleMessage);
+    t.onError(() => {});
+    t.onClose(() => {
+      predictor = null; // drop prediction; rebuilt on the next Welcome
+      setStatus('disconnected — reconnecting…');
+      scheduleReconnect();
+    });
+  }
+
+  async function connect() {
+    const url = resolveServerUrl();
+    const preferWt = new URLSearchParams(location.search).get('transport') === 'webtransport';
+
+    transport = makeTransport(preferWt);
+    wire(transport);
+    setStatus(`connecting to ${url} …`);
+    try {
+      await transport.connect(url);
+    } catch {
+      // WebTransport requested but unavailable → fall back to WebSocket once.
+      if (preferWt) {
+        transport = new WebSocketClientTransport();
+        wire(transport);
+        try {
+          await transport.connect(url);
+        } catch {
+          setStatus(`can't reach ${url} — retrying… (start it: cd server && npm start)`);
+          scheduleReconnect();
+          return;
+        }
+      } else {
+        setStatus(`can't reach ${url} — retrying… (start it: cd server && npm start)`);
+        scheduleReconnect();
+        return;
+      }
+    }
+    transport.send({ t: C2S.HELLO, wireVersion: WIRE_VERSION, name: 'pilot', room: resolveRoomCode() });
+  }
+
+  connect();
 
   // Fixed-timestep loop: predict + send input at the sim rate, render at rAF.
   let last = performance.now();
@@ -185,7 +233,7 @@ async function main() {
         ? { up: false, down: false, left: false, right: false, fire: false, aimX: null, aimY: null }
         : input.snapshot();
       const clientTick = predictor.step(inp);
-      transport.sendInput({ t: C2S.INPUT, ...inp, clientTick });
+      if (transport && transport.isOpen) transport.sendInput({ t: C2S.INPUT, ...inp, clientTick });
       acc -= TICK_MS;
     }
 

@@ -91,7 +91,12 @@ export class WebSocketTransport {
 
   async close() {
     if (this._heartbeat) clearInterval(this._heartbeat);
-    if (this.wss) await new Promise((r) => this.wss.close(r));
+    if (this.wss) {
+      // Terminate live connections so close() resolves promptly (otherwise
+      // httpServer.close() blocks on the upgraded WS sockets).
+      for (const ws of this.wss.clients) { try { ws.terminate(); } catch { /* ignore */ } }
+      await new Promise((r) => this.wss.close(r));
+    }
     if (this.httpServer) await new Promise((r) => this.httpServer.close(r));
   }
 }

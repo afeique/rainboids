@@ -139,4 +139,29 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     await ctxA.close();
     await ctxB.close();
   });
+
+  // Runs last: it restarts the shared server (leaving a live one for afterAll).
+  test('client auto-reconnects after a server restart', async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.goto(`/mp.html?server=localhost:${MP_PORT}`);
+    await expect.poll(() => page.evaluate(() => window.__mp?.connected())).toBe(true);
+
+    // Hard-kill the server → the TCP drop makes the client detect it.
+    const exited = new Promise((r) => server.on('exit', r));
+    server.kill('SIGKILL');
+    await exited;
+    await expect.poll(() => page.evaluate(() => window.__mp?.connected()), { timeout: 6000 }).toBe(false);
+
+    // Bring the server back on the same port → client should auto-reconnect.
+    server = spawn('node', ['server/src/index.js'], {
+      cwd: REPO_ROOT,
+      env: { ...process.env, MP_PORT: String(MP_PORT) },
+      stdio: 'ignore',
+    });
+    await waitForHealthz(MP_PORT);
+    await expect.poll(() => page.evaluate(() => window.__mp?.connected()), { timeout: 10000 }).toBe(true);
+
+    await ctx.close();
+  });
 });
