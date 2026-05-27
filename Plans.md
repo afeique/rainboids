@@ -94,8 +94,8 @@
 - [ ] **T45** 🔴 Bounty board wiring + progress events [T15,T41]
 
 ## ▶ COLD-START, MIGRATION & SHIP
-- [ ] **T60** 🔴 New-player starter kit (basic weapons + gear) [T10,T11,T30,T27]
-- [ ] **T61** 🔴 Account migration (old meta → R$ + gear convert) [T21,T23,T24,T26]
+- [x] **T60** 🔴 New-player starter kit — **DONE**: the `!loadMeta` new-account seed (game-engine boot) now grants a basic weapon-loot item (common PULSE) + a gear piece (common hull) into the stash + an 800 R$ stipend (`STARTER_RAINSHARDS`, ~2 common Fabricates), stamps `levelMigrated`. Item rolls best-effort. Boot smoke 12/12 (fresh account boots clean).
+- [x] **T61** 🔴 Account migration — **DONE**: extended `_migrateBankedProgression` to fold banked Cores (1:1) + banked level (×1500/lvl, T24) → R$ in one `levelMigrated`-gated pass, clearing the retired keys (level/xp/sp/spStats/cores). Old `{type,value}` gear left dormant (not broken; manually salvageable). +5 `account-migration.test.js`. Suite 2335 green.
 - [ ] **T70** 🟡 Tests pass (unit + QA updates + new-module specs)
 - [ ] **T71** 🟡 Balance pass (income vs sink; levelRamp; weapon-scaling; budget)
 - [ ] **T72** 🔴 README/CHANGELOG/VERSION (MAJOR bump)
