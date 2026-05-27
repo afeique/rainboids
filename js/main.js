@@ -208,11 +208,12 @@ class RainboidsGame {
             if (rects.tutorial && hit(rects.tutorial)) return 'tutorial';
             if (rects.hangar   && hit(rects.hangar))   return 'hangar';
             if (rects.settings && hit(rects.settings)) return 'settings';
+            if (rects.multiplayer && hit(rects.multiplayer)) return 'multiplayer';
             return null;
         };
 
-        // (Multiplayer shelved — the /mp navigation handler was removed.
-        // See /multiplayer/RESTORE.md to bring it back.)
+        // MULTIPLAYER button → the experimental Node.js/WebSocket co-op client
+        // (mp.html). Handled in onClick by id below.
 
         const onMove = (e) => {
             const g = ge();
@@ -273,6 +274,12 @@ class RainboidsGame {
             if (id === 'settings') {
                 try { this.audioManager.playSound?.('coin'); } catch {}
                 ge().openSettings?.();
+                return;
+            }
+            // MULTIPLAYER button → experimental co-op client (separate page).
+            if (id === 'multiplayer') {
+                try { this.audioManager.playSound?.('coin'); } catch {}
+                window.location.href = 'mp.html';
                 return;
             }
             launch(id === 'newGame' ? 'new' : 'continue');

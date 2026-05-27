@@ -264,17 +264,15 @@ export function drawTitleScreen() {
         // Compute the buttons-block height so we can lay out the title
         // ABOVE it (instead of the old `centerY - 100` magic number that
         // pushed the title above the canvas on phones).
-        // 6.28.0 — Multiplayer button replaced by an always-present
-        // TUTORIAL button, so there's always one extra row below the
-        // NEW GAME / CONTINUE pair.
-        const mpRows = 1;
+        // 6.28.0 — TUTORIAL row below the NEW GAME / CONTINUE pair.
+        // MP — plus a MULTIPLAYER row at the very bottom (experimental co-op).
         let buttonsBlockH;
         if (mobilePortrait) {
-            // Vertical stack: NEW GAME + CONTINUE + TUTORIAL + HANGAR + SETTINGS.
-            buttonsBlockH = buttonH * (4 + mpRows) + buttonGap * (3 + mpRows);
+            // Stack: NEW GAME + CONTINUE + TUTORIAL + HANGAR + SETTINGS + MULTIPLAYER.
+            buttonsBlockH = buttonH * 6 + buttonGap * 5;
         } else {
-            // Side-by-side primary row + TUTORIAL + HANGAR + SETTINGS rows below.
-            buttonsBlockH = buttonH * (3 + mpRows) + (mpRows ? 18 * 3 : 0);
+            // Side-by-side primary row + TUTORIAL + HANGAR + SETTINGS + MULTIPLAYER.
+            buttonsBlockH = buttonH * 5 + 18 * 4;
         }
         // 5.99.1 — recordH shrinks on mobile to match the smaller record
         // font (10/12 px) so the layout block computes the correct
@@ -383,6 +381,14 @@ export function drawTitleScreen() {
                     h: buttonH,
                     disabled: false,
                 };
+                rects.multiplayer = {
+                    id: 'multiplayer',
+                    x: x0,
+                    y: yTop + 5 * (buttonH + buttonGap),
+                    w: buttonW,
+                    h: buttonH,
+                    disabled: false,
+                };
             } else {
                 // Landscape / desktop — side-by-side NEW GAME + CONTINUE
                 // with optional MULTIPLAYER row beneath. This is the
@@ -415,6 +421,14 @@ export function drawTitleScreen() {
                     id: 'settings',
                     x: x0,
                     y: tutY + 2 * (buttonH + 18),
+                    w: totalW,
+                    h: buttonH,
+                    disabled: false,
+                };
+                rects.multiplayer = {
+                    id: 'multiplayer',
+                    x: x0,
+                    y: tutY + 3 * (buttonH + 18),
                     w: totalW,
                     h: buttonH,
                     disabled: false,
@@ -494,6 +508,9 @@ export function drawTitleScreen() {
             }
             if (rects.settings) {
                 drawButton(rects.settings, 'SETTINGS');
+            }
+            if (rects.multiplayer) {
+                drawButton(rects.multiplayer, 'MULTIPLAYER');
             }
 
             if (this.game.survivalRecord > 0) {

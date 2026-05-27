@@ -7,6 +7,20 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.11.0] - 2026-05-27
+
+### Added
+- **Title-screen entry point**: a **MULTIPLAYER** button on the solo title screen
+  (below SETTINGS) navigates to `/mp.html`. Mirrors the existing TUTORIAL/HANGAR
+  button pattern in `js/modules/hud/overlays.js` (layout + draw) and routes by id
+  in `js/main.js` (hit-test + click → `window.location = 'mp.html'`).
+
+### Notes
+- This is a bridge change (touches the solo title screen to reach the MP
+  product). The solo `VERSION`/`CHANGELOG.md` bump is intentionally **deferred**
+  to avoid colliding with the concurrent looter-pivot agent that owns solo
+  versioning on this shared branch — fold it into the next solo bump.
+
 ## [0.10.0] - 2026-05-27
 
 ### Added

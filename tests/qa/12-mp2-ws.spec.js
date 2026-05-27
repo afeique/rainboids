@@ -140,6 +140,28 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     await ctxB.close();
   });
 
+  test('title screen MULTIPLAYER button navigates to mp.html', async ({ page }) => {
+    await page.goto('/');
+    // Canvas-drawn title buttons; click the multiplayer rect the same way
+    // QA-02 clicks NEW GAME (convert canvas px → client coords).
+    await page.waitForFunction(
+      () => window.gameEngine?._titleButtonRects?.multiplayer,
+      { timeout: 15000 },
+    );
+    const pos = await page.evaluate(() => {
+      const ge = window.gameEngine;
+      const r = ge._titleButtonRects.multiplayer;
+      const c = ge.canvas;
+      const cb = c.getBoundingClientRect();
+      return {
+        x: cb.left + (r.x + r.w / 2) * (cb.width / c.width),
+        y: cb.top + (r.y + r.h / 2) * (cb.height / c.height),
+      };
+    });
+    await page.mouse.click(pos.x, pos.y);
+    await expect.poll(() => page.url(), { timeout: 5000 }).toContain('mp.html');
+  });
+
   // Runs last: it restarts the shared server (leaving a live one for afterAll).
   test('client auto-reconnects after a server restart', async ({ browser }) => {
     const ctx = await browser.newContext();
