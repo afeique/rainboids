@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "http-server -p 8090 -o -c-1",
     "start": "http-server -p 8090 -o -c-1",
+    "server": "node server/src/index.js",
     "generate-playlist": "node tools/scripts/generate-playlist.js",
     "generate-sfx": "node tools/scripts/generate-sfx.js",
     "__MULTIPLAYER__": "── Node.js multiplayer server (experimental; see server/) ─",
