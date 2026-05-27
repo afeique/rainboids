@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rainboids — Multiplayer (experimental)</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; background: #04040a;
+      color: #cdd6f4; font-family: monospace; overflow: hidden;
+    }
+    #wrap { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #game {
+      background: #070710;
+      max-width: 100vw; max-height: calc(100vh - 60px);
+      width: auto; height: auto; aspect-ratio: 16 / 9;
+      image-rendering: pixelated; cursor: crosshair;
+      box-shadow: 0 0 40px rgba(84, 214, 255, 0.15);
+    }
+    #bar {
+      position: fixed; top: 0; left: 0; right: 0; height: 28px;
+      display: flex; gap: 18px; align-items: center; padding: 4px 12px;
+      font-size: 13px; background: rgba(0,0,0,0.5);
+    }
+    #status { color: #a6e3a1; }
+    #hud { color: #89b4fa; }
+    .tag { color: #f38ba8; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <span class="tag">RAINBOIDS · MP</span>
+    <span id="status">starting…</span>
+    <span id="hud"></span>
+  </div>
+  <div id="wrap">
+    <canvas id="game"></canvas>
+  </div>
+  <script type="module" src="js/mp/mp-main.js"></script>
+</body>
+</html>

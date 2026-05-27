@@ -7,6 +7,38 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.2.0] - 2026-05-27
+
+### Added
+- **Browser MP client** (`js/mp/`) + entry page (`mp.html`):
+  - `net/transport.js` + `net/websocket-transport.js` — client-side `Transport`
+    seam and its WebSocket implementation (mirrors the server seam; WebTransport
+    deferred).
+  - `netcode/predictor.js` — client-side prediction + reconciliation for the
+    local ship (runs the shared `js/sim` step locally, replays unacked inputs
+    against each authoritative snapshot).
+  - `netcode/interpolator.js` — buffered snapshot interpolation for remote
+    ships (renders ~100 ms in the past, lerps between bracketing snapshots).
+  - `mp-input.js` — keyboard + mouse capture mapped to world-space aim.
+  - `mp-renderer.js` — minimal Canvas2D visualization (local predicted ship +
+    interpolated remote ships in a shared arena).
+  - `mp-main.js` — bootstrap + fixed-timestep loop (predict + stream input at
+    sim rate, render at rAF), with a `window.__mp` debug/test hook.
+
+### Tests
+- `tests/unit/mp-netcode.test.js` — prediction/reconciliation + interpolation
+  (headless).
+- `tests/qa/12-mp2-ws.spec.js` — two-client WebSocket smoke: both clients
+  connect, see each other, and input on one propagates through the authoritative
+  server to the other's interpolated view (spawns the MP server itself).
+
+### Notes
+- Root `package.json` dev scripts and `README.md` structure updates are
+  intentionally **deferred** while sharing the `master` branch with the
+  concurrent looter-pivot agent (avoids edit collisions on shared files). The MP
+  server runs via `cd server && npm start`; the client is served by the existing
+  `npm run dev` at `/mp.html`.
+
 ## [0.1.0] - 2026-05-27
 
 ### Added
