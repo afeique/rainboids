@@ -105,7 +105,22 @@ function drawEnemy(ctx, e) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, bullets, effects, now, localId, localDowned, localReviveProgress }) {
+function drawDrop(ctx, d) {
+  if (d.kind === 'health') {
+    ctx.fillStyle = '#73e08a';
+    ctx.fillRect(d.x - 7, d.y - 2, 14, 4);
+    ctx.fillRect(d.x - 2, d.y - 7, 4, 14);
+  } else { // gold
+    ctx.save();
+    ctx.translate(d.x, d.y);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = '#ffd23f';
+    ctx.fillRect(-6, -6, 12, 12);
+    ctx.restore();
+  }
+}
+
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, now, localId, localDowned, localReviveProgress }) {
   // Background.
   ctx.fillStyle = '#070710';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -123,6 +138,11 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
   // Enemies (interpolated).
   if (enemies) {
     for (const [, e] of enemies) drawEnemy(ctx, e);
+  }
+
+  // Drops (interpolated).
+  if (drops) {
+    for (const [, d] of drops) drawDrop(ctx, d);
   }
 
   // Bullets (latest snapshot positions).

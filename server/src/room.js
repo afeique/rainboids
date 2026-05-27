@@ -41,6 +41,7 @@ function buildSnapshot(world) {
       al: s.alive,
       dn: s.downed,
       rp: s.reviveProgress,
+      g: s.gold,
       li: s.lastInputTick, // per-ship acked input tick (owning client reconciles)
     });
   }
@@ -68,7 +69,11 @@ function buildSnapshot(world) {
   for (const [, b] of world.bullets) {
     bullets.push({ id: b.id, x: round(b.x), y: round(b.y), o: b.ownerId });
   }
-  return { t: S2C.SNAPSHOT, tick: world.tick, ships, asteroids, bullets, enemies };
+  const drops = [];
+  for (const [, d] of world.drops) {
+    drops.push({ id: d.id, x: round(d.x), y: round(d.y), k: d.kind });
+  }
+  return { t: S2C.SNAPSHOT, tick: world.tick, ships, asteroids, bullets, enemies, drops };
 }
 
 export class Room {

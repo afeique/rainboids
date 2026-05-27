@@ -13,6 +13,7 @@ import { createShip } from './ship.js';
 import { createAsteroid } from './asteroid.js';
 import { createBullet } from './bullet.js';
 import { createEnemy } from './enemy.js';
+import { createDrop } from './drop.js';
 import {
   BULLET_RADIUS, BULLET_DAMAGE, BULLET_TTL,
   ENEMY_MAX_COUNT, ENEMY_SPAWN_INTERVAL,
@@ -30,6 +31,7 @@ export function createWorld({ seed = 1, width = FIELD_WIDTH, height = FIELD_HEIG
     asteroids: new Map(), // entityId -> asteroid
     bullets: new Map(), // entityId -> bullet
     enemies: new Map(), // entityId -> enemy
+    drops: new Map(), // entityId -> drop
     enemySpawnTimer: ENEMY_SPAWN_INTERVAL,
     nextEntityId: 1, // id space for non-player entities (asteroids, bullets, …)
     events: [], // cleared + repopulated each tick
@@ -41,6 +43,16 @@ export function spawnBullet(world, x, y, vx, vy, ownerId) {
   const b = createBullet(world.nextEntityId++, x, y, vx, vy, ownerId, BULLET_RADIUS, BULLET_DAMAGE, BULLET_TTL);
   world.bullets.set(b.id, b);
   return b;
+}
+
+/** Spawn a loot drop at (x, y) with a small random pop; emits DROP_SPAWN. */
+export function spawnDrop(world, x, y, kind, value) {
+  const ang = world.rng.range(0, Math.PI * 2);
+  const spd = world.rng.range(0.5, 2);
+  const d = createDrop(world.nextEntityId++, x, y, Math.cos(ang) * spd, Math.sin(ang) * spd, kind, value);
+  world.drops.set(d.id, d);
+  emit(world, EV.DROP_SPAWN, { id: d.id, x, y, kind });
+  return d;
 }
 
 /** Spawn an enemy at (x, y); emits ENEMY_SPAWN. */

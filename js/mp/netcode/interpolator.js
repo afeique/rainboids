@@ -35,6 +35,7 @@ export class Interpolator {
       ships: toMap(snapshot.ships),
       asteroids: toMap(snapshot.asteroids),
       enemies: toMap(snapshot.enemies),
+      drops: toMap(snapshot.drops),
     });
     if (this.buf.length > BUFFER_CAP) this.buf.shift();
   }
@@ -124,6 +125,22 @@ export class Interpolator {
         mhp: sb.mhp,
         type: sb.ty,
       });
+    }
+    return out;
+  }
+
+  /**
+   * Sample interpolated drop render states at `now`.
+   * @returns {Map<number, {x,y,kind}>}
+   */
+  sampleDrops(now) {
+    const out = new Map();
+    const br = this._bracket(now);
+    if (!br) return out;
+    const { a, b, f } = br;
+    for (const [id, sb] of b.drops) {
+      const sa = a.drops.get(id) || sb;
+      out.set(id, { x: lerp(sa.x, sb.x, f), y: lerp(sa.y, sb.y, f), kind: sb.k });
     }
     return out;
   }

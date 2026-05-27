@@ -7,7 +7,11 @@
 // this same function signature.
 
 import { EV, emit } from './events.js';
-import { ENEMY_CONTACT_DAMAGE, ENEMY_CONTACT_COOLDOWN } from './constants.js';
+import { spawnDrop } from './world.js';
+import {
+  ENEMY_CONTACT_DAMAGE, ENEMY_CONTACT_COOLDOWN,
+  GOLD_VALUE, HEALTH_VALUE, ENEMY_HEALTH_DROP_CHANCE, ASTEROID_GOLD_CHANCE,
+} from './constants.js';
 
 function hits(ax, ay, ar, bx, by, br) {
   const dx = ax - bx;
@@ -36,6 +40,8 @@ export function resolveCollisions(world) {
       if (e.hp <= 0) {
         e.alive = false;
         emit(world, EV.ENEMY_DEATH, { id: e.id, x: e.x, y: e.y, ownerId: b.ownerId });
+        spawnDrop(world, e.x, e.y, 'gold', GOLD_VALUE);
+        if (world.rng() < ENEMY_HEALTH_DROP_CHANCE) spawnDrop(world, e.x, e.y, 'health', HEALTH_VALUE);
       }
       consumed = true;
       break;
@@ -51,6 +57,7 @@ export function resolveCollisions(world) {
       if (ast.hp <= 0) {
         ast.alive = false;
         emit(world, EV.ASTEROID_DESTROYED, { id: ast.id, x: ast.x, y: ast.y, r: ast.radius, ownerId: b.ownerId });
+        if (world.rng() < ASTEROID_GOLD_CHANCE) spawnDrop(world, ast.x, ast.y, 'gold', GOLD_VALUE);
       }
       break;
     }
@@ -72,6 +79,20 @@ export function resolveCollisions(world) {
         emit(world, EV.SHIP_DOWNED, { id: ship.playerId, x: ship.x, y: ship.y });
       }
       break; // one enemy hits at most one ship per contact
+    }
+  }
+
+  // Drop pickup: first living ship to touch a drop collects it (shared loot).
+  for (const [, d] of world.drops) {
+    if (!d.alive) continue;
+    for (const [, ship] of world.ships) {
+      if (!ship.alive) continue;
+      if (!hits(d.x, d.y, d.radius, ship.x, ship.y, ship.radius)) continue;
+      d.alive = false;
+      if (d.kind === 'health') ship.hp = Math.min(ship.maxHp, ship.hp + d.value);
+      else if (d.kind === 'gold') ship.gold = (ship.gold || 0) + d.value;
+      emit(world, EV.DROP_COLLECTED, { id: d.id, x: d.x, y: d.y, kind: d.kind, by: ship.playerId });
+      break; // one drop collected by one ship
     }
   }
 }

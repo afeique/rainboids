@@ -7,6 +7,27 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.7.0] - 2026-05-27
+
+### Added
+- **Loot drops** — the reward loop:
+  - `drop.js` — health/gold orbs that drift with friction, magnet toward a
+    nearby ship, and despawn on TTL.
+  - `world.js` — `drops` map + `spawnDrop()`.
+  - `collision.js` — enemy deaths drop gold (+ a chance of health); destroyed
+    asteroids have a chance to drop gold; living ships collect drops on contact
+    (heal / add gold), emitting `DROP_SPAWN` / `DROP_COLLECTED`. Shared loot
+    (first ship to touch collects).
+  - `ship.js` — `gold` field; `tick.js` steps + reaps drops;
+    `server/src/room.js` snapshots drops + ship gold.
+- **Client**: drops interpolated (`sampleDrops`) and drawn (green cross = health,
+  gold diamond = gold); HUD shows the local player's gold;
+  `window.__mp.dropCount()` / `localGold()` exposed.
+
+### Tests
+- `tests/unit/sim-drops.test.js` — drop motion/magnet, gold pickup + event,
+  capped healing, and gold-drop-on-enemy-kill.
+
 ## [0.6.0] - 2026-05-27
 
 ### Added

@@ -58,3 +58,15 @@ export const REVIVE_RADIUS = 90; // px a reviver must be within
 export const REVIVE_TICKS = 120; // ticks of nearby presence to revive (~2 s)
 export const REVIVE_HP = 50; // HP a revived ship comes back with
 export const REVIVE_DECAY = 2; // progress lost per tick when no reviver is near
+
+// Loot drops — health/gold orbs from kills; magnet toward a nearby ship; picked
+// up on contact. Drops are shared (first ship to touch collects).
+export const DROP_RADIUS = 10;
+export const DROP_TTL = 600; // ticks (~10 s) before despawn
+export const DROP_FRICTION = 0.95;
+export const DROP_MAGNET_RADIUS = 130; // px within which a drop homes on a ship
+export const DROP_MAGNET_ACCEL = 0.45;
+export const GOLD_VALUE = 5;
+export const HEALTH_VALUE = 15;
+export const ENEMY_HEALTH_DROP_CHANCE = 0.3; // chance an enemy also drops health
+export const ASTEROID_GOLD_CHANCE = 0.5; // chance a destroyed asteroid drops gold

@@ -33,6 +33,7 @@ export function createShip(playerId, x, y) {
     alive: true,
     downed: false, // set when hp hits 0; awaits a co-op revive
     reviveProgress: 0, // ticks of nearby-teammate presence accrued while downed
+    gold: 0, // collected from gold drops
     // Ticks until this ship can fire again (counts down in tick()).
     fireCooldown: 0,
     // Last input tick the sim has applied for this ship — echoed in snapshots

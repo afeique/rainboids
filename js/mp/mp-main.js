@@ -52,6 +52,8 @@ async function main() {
   let localHp = null;
   let localDowned = false;
   let localReviveProgress = 0;
+  let localGold = 0;
+  let lastDrops = new Map();
   const effects = []; // ephemeral client-side juice: { x, y, r, born }
 
   // Debug/test hook: lets QA specs (and the console) inspect live client state
@@ -66,7 +68,9 @@ async function main() {
     asteroidCount: () => lastAsteroids.size,
     enemyCount: () => lastEnemies.size,
     bulletCount: () => latestBullets.length,
+    dropCount: () => lastDrops.size,
     localHp: () => localHp,
+    localGold: () => localGold,
   };
 
   transport.onMessage((msg) => {
@@ -87,6 +91,7 @@ async function main() {
             localHp = me.hp;
             localDowned = !!me.dn;
             localReviveProgress = me.rp || 0;
+            localGold = me.g || 0;
             predictor.reconcile(
               { x: me.x, y: me.y, vx: me.vx, vy: me.vy, angle: me.a },
               me.li,
@@ -149,9 +154,11 @@ async function main() {
     const remote = interp.sample(now, playerId);
     const asteroids = interp.sampleAsteroids(now);
     const enemies = interp.sampleEnemies(now);
+    const drops = interp.sampleDrops(now);
     lastRemote = remote;
     lastAsteroids = asteroids;
     lastEnemies = enemies;
+    lastDrops = drops;
     // Age out finished destruction rings (~500 ms lifetime).
     for (let i = effects.length - 1; i >= 0; i--) {
       if (now - effects[i].born > 500) effects.splice(i, 1);
@@ -161,6 +168,7 @@ async function main() {
       remoteShips: remote,
       asteroids,
       enemies,
+      drops,
       bullets: latestBullets,
       effects,
       now,
@@ -173,7 +181,7 @@ async function main() {
     const hud = document.getElementById('hud');
     if (hud) {
       const hp = localHp != null ? `· hp ${Math.ceil(localHp)}${localDowned ? ' DOWNED' : ''} ` : '';
-      hud.textContent = `tick ${lastSnapshotTick} · players ${roster.length} ${hp}· enemies ${enemies.size}`;
+      hud.textContent = `tick ${lastSnapshotTick} · players ${roster.length} ${hp}· gold ${localGold} · enemies ${enemies.size}`;
     }
 
     requestAnimationFrame(frame);

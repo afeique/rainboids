@@ -9,6 +9,7 @@ import { stepShip, EMPTY_INPUT } from './ship.js';
 import { stepAsteroid } from './asteroid.js';
 import { stepBullet } from './bullet.js';
 import { stepEnemy } from './enemy.js';
+import { stepDrop } from './drop.js';
 import { spawnBullet, tickEnemySpawner } from './world.js';
 import { resolveCollisions } from './collision.js';
 import { updateRevives } from './coop.js';
@@ -51,13 +52,17 @@ export function tick(world, inputsByPlayer) {
   for (const [, b] of world.bullets) {
     stepBullet(b, world.width, world.height);
   }
+  for (const [, d] of world.drops) {
+    stepDrop(d, world);
+  }
 
-  // Authoritative collisions (bullets↔enemies/asteroids, enemies↔ships), then
-  // remove the dead.
+  // Authoritative collisions (bullets↔enemies/asteroids, enemies↔ships,
+  // drops↔ships), then remove the dead.
   resolveCollisions(world);
   for (const [id, b] of world.bullets) if (!b.alive) world.bullets.delete(id);
   for (const [id, a] of world.asteroids) if (!a.alive) world.asteroids.delete(id);
   for (const [id, e] of world.enemies) if (!e.alive) world.enemies.delete(id);
+  for (const [id, d] of world.drops) if (!d.alive) world.drops.delete(id);
 
   updateRevives(world);
   tickEnemySpawner(world);
