@@ -8,7 +8,10 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { loadMeta, saveMeta } from '../core/storage.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES, PRIMARY_ARCHETYPES } from '../combat/weapon-data.js';
+// T42 — Fabricate (the R$ sink): cost lookup for the craft UI. (crafting-costs
+// keys rarities Capitalized; the gear/weapon vocab is lowercase — see _fabCost.)
+import { fabricateCost } from '../shop/crafting-costs.js';
 import {
     UNLOCK_CATEGORIES, unlockCost, getUnlockedSet, getLockedIds, applyUnlock,
 } from '../shop/armory.js';
@@ -24,7 +27,7 @@ import {
     eligibleItemPassives, rerollItemPassive,
 } from '../world/item-system.js';
 import { getEquipped, stashForSlot, equipFromStash, unequipSlot, equipDelta } from '../world/inventory.js';
-import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
+import { SLOT_ORDER, SLOT_LABEL, RARITY_ORDER } from '../world/item-names.js';
 import { ELEMENTS } from '../combat/elements.js';
 import { getPassive } from '../combat/passive-data.js';
 
@@ -328,6 +331,7 @@ export class ArmoryOverlay {
             head.className = 'armory-section-title';
             head.textContent = `RAINSHARDS: R$ ${this._cores()}`;
             c.appendChild(head);
+            this._renderFabricate(c, meta);
             this._renderEquipment(c, meta);
             this._renderStash(c, meta);
             return;
@@ -461,6 +465,91 @@ export class ArmoryOverlay {
             }
         }
         section.appendChild(list);
+        body.appendChild(section);
+    }
+
+    // crafting-costs keys rarities Capitalized; the gear/weapon vocab is
+    // lowercase ('common'…). Capitalize-first matches the cost table.
+    _fabCost(rarity) {
+        const cap = rarity.charAt(0).toUpperCase() + rarity.slice(1);
+        return fabricateCost(cap, {});
+    }
+
+    // T42 — FABRICATE: spend Rainshards to roll a fresh gear/weapon ITEM into
+    // the stash (the R$ sink). A shared rarity picker drives the cost; gear
+    // picks a slot, weapon picks an archetype. A successful craft re-renders.
+    _renderFabricate(body, meta) {
+        const ge = this.gameEngine;
+        if (!ge || typeof ge.fabricateGear !== 'function') return;
+        const wallet = this._cores();
+        const rarity = RARITY_ORDER.includes(this._fabRarity) ? this._fabRarity : 'common';
+        const cost = this._fabCost(rarity);
+
+        const section = document.createElement('div');
+        section.className = 'armory-section';
+        const title = document.createElement('div');
+        title.className = 'armory-section-title';
+        title.textContent = 'FABRICATE  ·  craft new loot for R$';
+        section.appendChild(title);
+
+        const mkSelect = (options, value, onChange, fmt) => {
+            const sel = document.createElement('select');
+            sel.className = 'armory-buy armory-fab-select';
+            for (const o of options) {
+                const opt = document.createElement('option');
+                opt.value = o;
+                opt.textContent = fmt ? fmt(o) : o;
+                sel.appendChild(opt);
+            }
+            sel.value = value;
+            sel.addEventListener('change', () => onChange(sel.value));
+            return sel;
+        };
+
+        // Shared rarity picker.
+        const rarityRow = document.createElement('div');
+        rarityRow.className = 'armory-row';
+        const rLabel = document.createElement('span');
+        rLabel.className = 'armory-row-name';
+        rLabel.textContent = `Rarity (R$ ${cost})`;
+        rarityRow.append(rLabel, mkSelect(RARITY_ORDER, rarity,
+            (v) => { this._fabRarity = v; this.render(); }, (r) => r.toUpperCase()));
+        section.appendChild(rarityRow);
+
+        // Gear fabricate row.
+        const slot = SLOT_ORDER.includes(this._fabSlot) ? this._fabSlot : SLOT_ORDER[0];
+        const gearRow = document.createElement('div');
+        gearRow.className = 'armory-row';
+        gearRow.appendChild(mkSelect(SLOT_ORDER, slot,
+            (v) => { this._fabSlot = v; this.render(); }, (s) => (SLOT_LABEL[s] || s).toUpperCase()));
+        const gearBtn = document.createElement('button');
+        gearBtn.className = 'armory-buy';
+        gearBtn.textContent = `FABRICATE GEAR · R$ ${cost}`;
+        gearBtn.disabled = wallet < cost;
+        gearBtn.addEventListener('click', () => {
+            const r = ge.fabricateGear({ slot, rarity });
+            if (r && r.ok) this.render();
+        });
+        gearRow.appendChild(gearBtn);
+        section.appendChild(gearRow);
+
+        // Weapon fabricate row.
+        const arch = PRIMARY_ARCHETYPES.includes(this._fabArchetype) ? this._fabArchetype : PRIMARY_ARCHETYPES[0];
+        const wepRow = document.createElement('div');
+        wepRow.className = 'armory-row';
+        wepRow.appendChild(mkSelect(PRIMARY_ARCHETYPES, arch,
+            (v) => { this._fabArchetype = v; this.render(); }));
+        const wepBtn = document.createElement('button');
+        wepBtn.className = 'armory-buy';
+        wepBtn.textContent = `FABRICATE WEAPON · R$ ${cost}`;
+        wepBtn.disabled = wallet < cost;
+        wepBtn.addEventListener('click', () => {
+            const r = ge.fabricateWeapon({ archetype: arch, rarity });
+            if (r && r.ok) this.render();
+        });
+        wepRow.appendChild(wepBtn);
+        section.appendChild(wepRow);
+
         body.appendChild(section);
     }
 

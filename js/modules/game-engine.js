@@ -41,7 +41,7 @@ import { applyClass, clearClass } from './player/class-system.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed, setDebugUnlockResolvers, setAllUnlocked, applyResell, UNLOCK_CATEGORIES } from './shop/armory.js';
 // T31 — Fabricate weapons: the crafting engine rolls, item-system decorates.
 import { fabricate } from './shop/crafting.js';
-import { decorateWeaponItem } from './world/item-system.js';
+import { decorateWeaponItem, decorateGearItem } from './world/item-system.js';
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
 import { isDebugMode, debugUnlockAllFor } from './core/debug-config.js';
 import { DebugMenu, installDebugConsoleApi } from './ui/debug-menu.js';
@@ -1771,6 +1771,23 @@ export class GameEngine {
         if (!res.ok) return { ok: false, reason: res.reason, rainshards: before };
         const level = (this.player && this.player.level) || (this.game && this.game.currentWave) || 1;
         const item = decorateWeaponItem(res.item, level);
+        const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
+        stash.push(item);
+        saveMeta({ stash, accountGold: res.rainshards });
+        this.game.accountGold = res.rainshards;
+        return { ok: true, item, rainshards: res.rainshards };
+    }
+
+    // T42 — Fabricate a GEAR piece from Rainshards (mirrors fabricateWeapon):
+    // cost-checked roll via the crafting engine, decorated into a stash-ready
+    // ITEM, committed to the stash, R$ deducted. The Fabricate UI calls this.
+    fabricateGear({ slot = 'cockpit', rarity = 'common', template = null, lean = 'None', focus = 'None' } = {}) {
+        const meta = loadMeta() || {};
+        const before = resolveAccountGold(meta);
+        const res = fabricate({ kind: 'gear', params: { slot, rarity, template, lean, focus } }, before);
+        if (!res.ok) return { ok: false, reason: res.reason, rainshards: before };
+        const level = (this.player && this.player.level) || (this.game && this.game.currentWave) || 1;
+        const item = decorateGearItem(res.item, level);
         const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
         stash.push(item);
         saveMeta({ stash, accountGold: res.rainshards });

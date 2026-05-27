@@ -274,6 +274,12 @@ export function createItem(slot, level, rarityKey = null) {
     return item;
 }
 
+// T42 — public wrapper so the Fabricator (game-engine.fabricateGear) can turn a
+// raw rollGear item into a stash-ready gear ITEM (mirrors decorateWeaponItem).
+export function decorateGearItem(rolled, level) {
+    return _decorateGear(rolled, level);
+}
+
 // ── T31 — Weapon loot factory ────────────────────────────────────────────────
 // A display name for a weapon archetype = its mapped firing pattern's name.
 function _weaponArchetypeName(archetype) {
