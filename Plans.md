@@ -89,7 +89,7 @@
 
 ## ▶ UI TRACK
 - [~] **T42** 🔴 Crafting/inventory UI panel (Fabricate/Reroll/Calibrate/Target/Upgrade/Combine/Salvage) — **Fabricate DONE**: armory GEAR tab now has a FABRICATE section (rarity picker → cost; gear-slot + weapon-archetype craft buttons) wired to `game-engine.fabricateGear`/`fabricateWeapon` (cost-checked R$ sink → stash). `item-system.decorateGearItem` added. Reroll/Upgrade(tier)/Salvage/Target-resist already exist in the GEAR tab (R$, T23/T27). +3 `fabricate.test.js`. **Remaining:** Combine matrices + matrix-socket UI (needs a matrix drop/stash path), Calibrate trait-reroll, weapon-item crafting rows (needs T43 weapon inventory). Suite 2313 green.
-- [ ] **T43** 🔴 Class-pick + loadout in BUILD [T07,T33]
+- [~] **T43** 🔴 Class-pick + loadout in BUILD — **wiring DONE**: `game-engine.setSelectedClass(id)`/`getSelectedClass()` persist `meta.selectedClass` + arm `_pendingClass`; `init()` reads it so the class (lens + signature + mechanic hook, T33) applies + persists across sessions. +4 `class-select.test.js`. **Remaining (UI polish, best in playtest):** the visual class-picker + weapon/Matrix loadout panels in BUILD (shop-dom/static-dom/css) — they call `setSelectedClass` / `equipWeaponItem` / `socketMatrixAt`. Suite 2324 green.
 - [ ] **T44** 🟡 Loot QoL (auto-salvage, lock, stash sort, loadout presets) [T27]
 - [ ] **T45** 🔴 Bounty board wiring + progress events [T15,T41]
 
