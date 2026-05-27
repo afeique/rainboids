@@ -29,6 +29,7 @@
 // player.isDashIFrameActive(), checked at the collision sites.)
 
 import { GAME_STATES, WAVES_PER_STAGE } from '../core/constants.js';
+import { STAT_CAPS } from '../core/sp-stats.js'; // T35 — global stat caps (DODGE)
 import { random } from '../core/utils.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { rumble, RUMBLE } from '../platform/rumble.js';
@@ -256,7 +257,9 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
             ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
         if (maxHp > 0 && this.player.health <= maxHp * 0.30) passiveDodge = 0.20;
     }
-    const dodgeChance = Math.min(0.5, dodgeStacks * 0.05 + (itemDodge + spDodge) / 100 + passiveDodge);
+    // T35 — global DODGE cap (was a flat 0.50). spDodge is now gear-amplified +
+    // class-lensed (T26/T33), so the ceiling lives in STAT_CAPS.
+    const dodgeChance = Math.min(STAT_CAPS.DODGE, dodgeStacks * 0.05 + (itemDodge + spDodge) / 100 + passiveDodge);
     if (dodgeChance > 0 && Math.random() < dodgeChance) {
         if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
         // P6 — Backlash: a dodge retaliates with a strike at the attacker.

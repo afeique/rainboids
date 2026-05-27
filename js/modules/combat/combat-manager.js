@@ -1,5 +1,6 @@
 // Combat effects, debris, orb drops, powerup collection, damage numbers, kill streaks
 import { GAME_CONFIG, GAME_STATES, getEnemyDropProfile, BLOODLUST_MAX_STACKS, RESONANT_SURGE_ENERGY } from '../core/constants.js';
+import { STAT_CAPS } from '../core/sp-stats.js'; // T35 — global stat caps (VAMPIRISM, THORNS)
 import { random } from '../core/utils.js';
 import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, ABILITIES } from './weapon-data.js';
@@ -1589,7 +1590,9 @@ export function applyVampirism(damageDealt) {
     // 6.32.0 — item vampirism affixes; 6.35.0 — SP VAMPIRISM allocation.
     const itemVamp = this.player.getItemAffixTotal ? this.player.getItemAffixTotal('vampirism') : 0;
     const spVamp = this.player.getSpStatValue ? this.player.getSpStatValue('VAMPIRISM') : 0;
-    const lifestealFrac = stacks * 0.05 + (itemVamp + spVamp) / 100; // 5% per stack
+    // T35 — global VAMPIRISM cap. spVamp is gear-amplified + class-lensed
+    // (T26/T33; REAPER favors it), so the lifesteal fraction is ceiling'd.
+    const lifestealFrac = Math.min(STAT_CAPS.VAMPIRISM, stacks * 0.05 + (itemVamp + spVamp) / 100); // 5% per stack
     if (lifestealFrac <= 0) return 0;
     const wouldHeal = damageDealt * lifestealFrac;
     if (!(wouldHeal > 0)) return 0;
@@ -1625,7 +1628,8 @@ export function applyThorns(damageTaken, source) {
     // 6.32.0 — item thorns affixes; 6.35.0 — SP THORNS allocation.
     const itemThorns = this.player.getItemAffixTotal ? this.player.getItemAffixTotal('thorns') : 0;
     const spThorns = this.player.getSpStatValue ? this.player.getSpStatValue('THORNS') : 0;
-    const reflectFrac = stacks * 0.25 + (itemThorns + spThorns) / 100; // 25% per stack
+    // T35 — global THORNS cap (spThorns is gear-amplified + class-lensed).
+    const reflectFrac = Math.min(STAT_CAPS.THORNS, stacks * 0.25 + (itemThorns + spThorns) / 100); // 25% per stack
     if (reflectFrac <= 0) return 0;
     const reflected = damageTaken * reflectFrac;
     if (!(reflected > 0)) return 0;

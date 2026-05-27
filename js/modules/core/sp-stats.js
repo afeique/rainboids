@@ -13,6 +13,17 @@
 export const MAX_LEVEL = 100;
 export const SP_STAT_MAX_POINTS = 20;
 
+// T35 — Global EFFECTIVE-stat caps. Gear amplification (T26) + the class
+// favored-stat lens (T33) can now pile onto a single SP stat, so these ceilings
+// keep one stat from trivializing the game. (CRIT chance 60%, CRIT damage 550%,
+// and TOUGHNESS 75% are already capped at their getters in player/progression.js;
+// these cover the stats consumed outside those getters.)
+export const STAT_CAPS = Object.freeze({
+    DODGE: 0.60,      // max dodge chance (fraction) — was a flat 0.50
+    VAMPIRISM: 0.50,  // max lifesteal as a fraction of damage dealt
+    THORNS: 2.0,      // max reflected fraction of damage taken (thorns is niche → generous)
+});
+
 // Each entry: id, display name, icon slug, the value at full investment
 // (`max`), and a label fn for the menu. `perPoint` is derived as
 // max / SP_STAT_MAX_POINTS.
