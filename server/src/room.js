@@ -10,6 +10,11 @@ import { EMPTY_INPUT } from '../../js/sim/ship.js';
 import { TICK_MS, ASTEROID_COUNT } from '../../js/sim/constants.js';
 import { S2C } from '../../js/sim/protocol.js';
 import { encode } from '../../js/sim/codec.js';
+import { buildDelta } from '../../js/sim/snapshot-delta.js';
+
+// Send a full keyframe at least this often (and whenever a player joins) so new
+// clients get a baseline and any drift is bounded. Deltas in between.
+const KEYFRAME_TICKS = 30;
 
 function sanitizeInput(m) {
   return {
@@ -88,6 +93,10 @@ export class Room {
     this.players = new Map(); // playerId -> { conn, input, name }
     this.nextPlayerId = 1;
     this._timer = null;
+    // Delta-snapshot state.
+    this._lastFull = null;       // last full snapshot clients have reconstructed
+    this._sinceKeyframe = 0;
+    this._forceKeyframe = false; // set on join so the newcomer gets a keyframe
   }
 
   get running() { return this._timer !== null; }
@@ -109,6 +118,7 @@ export class Room {
     const sp = spawnPointFor(this.world);
     addShip(this.world, playerId, sp.x, sp.y);
     this.players.set(playerId, { conn, input: { ...EMPTY_INPUT }, name: name || `player${playerId}` });
+    this._forceKeyframe = true; // next snapshot is a full keyframe for the newcomer
 
     conn.send({
       t: S2C.WELCOME,
@@ -142,7 +152,19 @@ export class Room {
 
     const events = tick(this.world, inputs);
 
-    const snapRaw = encode(buildSnapshot(this.world));
+    // Keyframe (full) on first tick / join / interval; field-level delta otherwise.
+    const full = buildSnapshot(this.world);
+    let payload;
+    if (!this._lastFull || this._forceKeyframe || this._sinceKeyframe >= KEYFRAME_TICKS) {
+      payload = { ...full, full: true };
+      this._sinceKeyframe = 0;
+      this._forceKeyframe = false;
+    } else {
+      payload = { t: S2C.SNAPSHOT, full: false, ...buildDelta(this._lastFull, full) };
+      this._sinceKeyframe += 1;
+    }
+    this._lastFull = full;
+    const snapRaw = encode(payload);
     for (const [, p] of this.players) p.conn.sendRaw(snapRaw);
 
     if (events.length) {

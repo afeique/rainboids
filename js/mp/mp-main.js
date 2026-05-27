@@ -116,6 +116,7 @@ async function main() {
         break;
       case S2C.SNAPSHOT: {
         const full = snapStream.ingest(msg);
+        if (!full) break; // delta before a keyframe — wait for the next keyframe
         lastSnapshotTick = full.tick;
         latestBullets = full.bullets || [];
         if (typeof full.wave === 'number') wave = full.wave;

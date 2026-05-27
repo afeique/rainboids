@@ -7,6 +7,27 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.13.0] - 2026-05-27
+
+### Added
+- **Delta snapshots** (roadmap Feature 2) — the server now sends a full keyframe
+  on join / first tick / every 30 ticks and **field-level deltas** in between
+  (only changed scalars + changed entity fields, plus removed ids). The client's
+  `SnapshotStream` reconstructs the full snapshot from the last keyframe, so
+  everything downstream (interp, reconcile, render) is unchanged.
+  - `js/sim/snapshot-delta.js` (new) — shared `buildDelta()` / `applyDelta()`.
+  - `server/src/room.js` — keyframe/delta broadcast + force-keyframe on join.
+  - `js/mp/netcode/snapshot-stream.js` — baseline + delta application; `mp-main`
+    skips a delta that arrives before its first keyframe.
+  - Cuts wire size by omitting unchanged fields (static hp/maxHp/radius/type/
+    weapon, idle entities) every tick — pairs with the upcoming binary codec.
+
+### Tests
+- `tests/unit/snapshot-delta.test.js` — round-trip (moves, field changes, adds/
+  removes, scalar changes, 20-tick chain) + `SnapshotStream` keyframe/delta
+  sequence and pre-keyframe skip. MP e2e remains green (delta is invisible to
+  gameplay; reconnect exercises the keyframe path).
+
 ## [0.12.0] - 2026-05-27
 
 ### Changed
