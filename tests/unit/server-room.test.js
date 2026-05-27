@@ -9,6 +9,7 @@ import { describe, it, expect } from '@jest/globals';
 import { Room } from '../../server/src/room.js';
 import { RoomManager } from '../../server/src/room-manager.js';
 import { S2C } from '../../js/sim/protocol.js';
+import { decode } from '../../js/sim/codec.js';
 
 function fakeConn(id) {
   const sent = [];
@@ -16,7 +17,7 @@ function fakeConn(id) {
     id,
     isOpen: true,
     send(obj) { sent.push(obj); },
-    sendRaw(str) { sent.push(JSON.parse(str)); },
+    sendRaw(bytes) { sent.push(decode(bytes)); }, // bytes = encode() output (binary)
     onMessage(cb) { this._m = cb; },
     onClose(cb) { this._c = cb; },
     close() { this.isOpen = false; if (this._c) this._c(); },

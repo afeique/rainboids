@@ -7,6 +7,23 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.14.0] - 2026-05-27
+
+### Changed
+- **Binary wire codec** (roadmap Feature 1) — `js/sim/codec.js` now encodes to
+  **MessagePack** (`encode` → `Uint8Array`) instead of JSON, hand-rolled and
+  dependency-free so it runs identically in Node + browser with no bundler /
+  vendoring / import map. `decode` accepts string|Buffer|ArrayBuffer|Uint8Array,
+  still tolerates a JSON string, and returns null on malformed input. The
+  transports already send/receive binary frames, so no change above the seam.
+  Smaller, faster wire on top of delta snapshots.
+
+### Tests
+- `tests/unit/codec.test.js` — binary round-trips (mixed int/float, negatives,
+  bool/null, unicode, empty containers, large ints), Buffer/ArrayBuffer decode
+  paths, and JSON-string tolerance. `server-room.test.js` fake conn decodes the
+  binary `sendRaw` payload. MP e2e green over the binary wire.
+
 ## [0.13.1] - 2026-05-27
 
 ### Fixed
