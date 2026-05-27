@@ -1063,6 +1063,18 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         const big = Math.random() < 0.10;
         this.createMoneyOrb(x, y, vary(perKill * (big ? 0.30 : 0.12)), false);
     }
+
+    // T45 — advance the bounty board on the kill. Tags carry the equipped
+    // weapon's element + archetype so kill_element / kill_weapon goals match.
+    if (isEnemy && typeof this.recordBountyEvent === 'function') {
+        const w = player && player.equippedWeapon;
+        const tags = [];
+        if (w && w.element) tags.push(w.element);
+        if (w && w.archetype) tags.push(w.archetype);
+        if (entity.isBoss) this.recordBountyEvent({ type: 'boss-kill', tags });
+        else if (entity.isElite) this.recordBountyEvent({ type: 'elite-kill', tags });
+        else this.recordBountyEvent({ type: 'kill', tags });
+    }
 }
 
 // ── Powerups ──

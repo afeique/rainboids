@@ -51,6 +51,9 @@ import { MAX_STAGES, WAVES_PER_STAGE, DEFAULT_RUN_CONFIG, runMaxWaves, getRunMod
 // normalizes the chosen option into the stage spec stored on game.runStage.
 import { nextDraft, applyPick } from './wave/run-randomizer.js';
 import { DraftOverlay } from './ui/draft-overlay.js';
+// T45 — bounty board: persistent directed goals advanced by gameplay events.
+import { rollBoard, recordEvent as recordBountyProgress, claim as claimBountyReward, rerollBounty, activeBountyTags } from './world/bounty-engine.js';
+import { BountyOverlay } from './ui/bounty-overlay.js';
 // DIR-03 — canonical difficulty mode list + fallback (the DIR-02 table is the
 // single source of truth; imported directly so game-engine doesn't depend on a
 // re-export from core/constants.js).
@@ -1839,6 +1842,53 @@ export class GameEngine {
         return (m && typeof m.selectedClass === 'string' && CLASSES[m.selectedClass]) ? m.selectedClass : null;
     }
 
+    // ── T45 — Bounty board ───────────────────────────────────────────────────
+    // The persistent board lives in meta.bountyBoard; rolled lazily on first
+    // access. Returns the board object (mutated in place by recordEvent/claim).
+    _bountyBoard() {
+        const meta = loadMeta() || {};
+        if (meta.bountyBoard && Array.isArray(meta.bountyBoard.dailies)) return meta.bountyBoard;
+        const board = rollBoard();
+        try { saveMeta({ bountyBoard: board }); } catch (_e) { /* best-effort */ }
+        return board;
+    }
+
+    // Advance bounty progress from a gameplay event ({type, amount?, tags?});
+    // persists the board. Returns the ids that newly completed (for a toast).
+    recordBountyEvent(event) {
+        if (!event || !event.type) return [];
+        const board = this._bountyBoard();
+        const { completed } = recordBountyProgress(board, event);
+        try { saveMeta({ bountyBoard: board }); } catch (_e) { /* best-effort */ }
+        return completed;
+    }
+
+    // Claim a completed bounty → grant its reward.rainshards into the account
+    // wallet (matrix/fabricate-token rewards are deferred — noted). Returns the
+    // reward, or null if not claimable.
+    claimBounty(bountyId) {
+        const board = this._bountyBoard();
+        const reward = claimBountyReward(board, bountyId);
+        if (!reward) return null;
+        const meta = loadMeta() || {};
+        const accountGold = resolveAccountGold(meta) + Math.max(0, reward.rainshards | 0);
+        try { saveMeta({ bountyBoard: board, accountGold }); } catch (_e) { /* best-effort */ }
+        if (this.game) this.game.accountGold = accountGold;
+        return reward;
+    }
+
+    // Open the bounty board overlay (lazy). CLAIM → claimBounty; REROLL →
+    // rerollBounty (persisted); CLOSE just hides it.
+    openBountyBoard() {
+        if (!this.bountyOverlay) this.bountyOverlay = new BountyOverlay();
+        const board = this._bountyBoard();
+        return this.bountyOverlay.open(board, {
+            onClaim: (id) => { this.claimBounty(id); this.bountyOverlay.refresh(this._bountyBoard()); },
+            onReroll: (id) => { rerollBounty(board, id); try { saveMeta({ bountyBoard: board }); } catch (_e) {} this.bountyOverlay.refresh(board); },
+            onClose: () => {},
+        });
+    }
+
     // Phase R8.1/R8.4 — append this run's collected items to the persistent
     // meta stash (capped so a marathon run can't bloat localStorage). Items
     // are plain objects from createItem, JSON-serializable as-is.
@@ -3052,6 +3102,9 @@ export class GameEngine {
         try {
             if (!this.draftOverlay) this.draftOverlay = new DraftOverlay();
             if (!this.game.runState) this.game.runState = { lastModifier: null, activeBountyTags: [] };
+            // T45 — bias one draft option toward an active bounty (§4.2 rule 6):
+            // feed the live bounty tags into the randomizer's runState.
+            try { this.game.runState.activeBountyTags = activeBountyTags(this._bountyBoard()); } catch (_e) { /* board optional */ }
             // depth = the stage ABOUT to start (just-cleared stage + 1).
             const wavesPer = runWavesPerStage(this.game);
             const depth = getStage(this.game.currentWave, wavesPer) + 1;
