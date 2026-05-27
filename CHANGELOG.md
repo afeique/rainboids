@@ -11,6 +11,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.0.0] - 2026-05-27
+
+The **Looter-Economy Pivot** — Rainboids becomes a looter-shooter. Per-run power
+(level + SP reset every run) layered on top of *persistent* Rainshards, gear,
+weapons, and Matrices; everything unlocked from the start; randomized drafted
+stages, bounties, and a per-run class. *(All functional systems have landed on
+this version; the BUILD-screen UI polish + the balance pass are still in
+progress, and it is not yet deployed.)*
+
+### Added
+
+- **Rainshards (R$)** — the single persistent currency (Gold renamed; Cores
+  retired). Per-kill income now scales with wave depth, difficulty mode, and
+  killstreak (a deep run ≈ 39k R$).
+- **Gear = level-scaled %-amplifiers of SP.** Gear affixes, socketed **Matrices**
+  (+ resonance), and the class lens all amplify *invested* SP, ramped by the
+  per-run level (dormant early, full by ~L25) — rewarding specialization.
+- **Weapons as loot** — weapons are rolled items (archetype + traits spanning
+  Element / Behavior / Powerup / Stat) that drop, can be Fabricated, and stamp
+  their traits onto bullets; base damage scales with the run level.
+- **Drafted stages** — clear a stage and choose the next from 2–3 risk/reward
+  options, with a PWR-vs-threat readout; the chosen modifiers/reward feed the
+  income + difficulty director.
+- **Classes** (7) — a per-run soft stat lens + a free class signature ability.
+- **Bounties** — directed goals advanced by gameplay events, claimed for R$.
+- **Crafting** — Fabricate / Reroll / Tier-up / Salvage in the BUILD GEAR tab,
+  all spending R$.
+- **Loot QoL** — item lock (never bulk-salvaged), stash sorting, opt-in
+  auto-salvage of below-equipped drops.
+- New-player **starter kit** (a basic weapon + gear + R$) and a one-time
+  **account migration** folding banked level + Cores into R$.
+
+### Changed
+
+- **Per-run level & SP** — both reset each run (the in-run weak→strong climb);
+  only Rainshards, items, and Matrices persist.
+- **PWR** is now *live current power* — the effective-stat getters fold in
+  level-scaled gear, weapon power, and SP, so it ramps within a run; the
+  difficulty director reads live PWR **and** the drafted-stage threat.
+- Global stat caps (DODGE 60% / VAMPIRISM 50% / THORNS 200%) keep amplified
+  stats bounded.
+
+### Removed
+
+- **Cores** crafting currency (folded into R$).
+- The in-game **card draft / powerup picks** (the choose-moment moved to the run
+  draft; powerups became weapon traits).
+- Weapon / ability **purchase-locking** — everything is unlocked from the start.
+
 ## [7.1.0] - 2026-05-26
 
 ### Changed
