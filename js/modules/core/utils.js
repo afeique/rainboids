@@ -9,7 +9,17 @@ export const GameDimensions = {
 };
 
 // Utility functions
-export const random = (a, b) => Math.random() * (b - a) + a;
+//
+// Path A / S2 — the sim's central RNG seam. `random()` draws from
+// `_randomSource`, which defaults to `Math.random` so single-player behavior is
+// unchanged. The headless server installs a seeded source via setRandomSource()
+// for reproducible, replayable simulation. Cosmetic randomness (particles,
+// starfield, HUD jitter) stays on `Math.random` directly and is intentionally
+// NOT routed through this seam.
+let _randomSource = Math.random;
+export function setRandomSource(fn) { _randomSource = (typeof fn === 'function') ? fn : Math.random; }
+export function getRandomSource() { return _randomSource; }
+export const random = (a, b) => _randomSource() * (b - a) + a;
 
 export function wrap(object, width, height) {
     if (object.x < 0) object.x += width;

@@ -52,7 +52,7 @@ if (typeof globalThis.Path2D === 'undefined') {
   globalThis.Path2D = class Path2D { constructor() {} };
 }
 
-import { wrap, wrapValue, random, collision } from '../../js/modules/core/utils.js';
+import { wrap, wrapValue, random, collision, setRandomSource, getRandomSource } from '../../js/modules/core/utils.js';
 
 // ---------------------------------------------------------------------------
 // wrap()
@@ -173,6 +173,35 @@ describe('random()', () => {
 
   test('a === b returns a (zero-width range)', () => {
     expect(random(7, 7)).toBe(7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Path A / S2 — injectable RNG seam (setRandomSource / getRandomSource)
+// ---------------------------------------------------------------------------
+
+describe('random() RNG seam', () => {
+  afterEach(() => setRandomSource(null)); // restore default Math.random
+
+  test('defaults to Math.random (single-player behavior unchanged)', () => {
+    expect(getRandomSource()).toBe(Math.random);
+  });
+
+  test('a seeded source makes random() reproducible', () => {
+    const seq = () => {
+      // tiny LCG-style deterministic source
+      let s = 12345;
+      setRandomSource(() => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; });
+      return Array.from({ length: 20 }, () => random(0, 100));
+    };
+    expect(seq()).toEqual(seq());
+  });
+
+  test('setRandomSource(null) restores the default', () => {
+    setRandomSource(() => 0.5);
+    expect(random(0, 10)).toBe(5);
+    setRandomSource(null);
+    expect(getRandomSource()).toBe(Math.random);
   });
 });
 
