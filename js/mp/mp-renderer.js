@@ -7,10 +7,39 @@
 // Group-G steps; everything else here is interpolated authoritative state.
 
 import { SHIP_RADIUS, REVIVE_TICKS } from '../sim/constants.js';
-import { drawShipShape, drawEnemyShapeByType, SHIP_PALETTE_MAGENTA } from '../modules/render/shapes.js';
+import {
+  drawShipShape, drawEnemyShapeByType, SHIP_PALETTE_MAGENTA,
+  generateAsteroidVertices, projectAsteroidVertices, drawAsteroidShape,
+  ASTEROID_EDGES, ASTEROID_FOV,
+} from '../modules/render/shapes.js';
+import { makeRng } from '../sim/rng.js';
 
 // Map the headless-sim enemy type keys → the SP shape registry's type strings.
 const SP_ENEMY_SHAPE = { chaser: 'HUNTER' };
+
+// Per-asteroid cosmetic cache (keyed by entity id, which is monotonic so never
+// reused). Each rock gets stable seeded 3D vertices + hue params so it looks
+// like its single-player counterpart; the snapshot only carries one `angle`, so
+// we fabricate a 3-axis tumble from it + per-id phase offsets.
+const _astCosmetics = new Map();
+function asteroidCosmetics(ast) {
+  let c = _astCosmetics.get(ast.id);
+  if (!c) {
+    const rng = makeRng(ast.id >>> 0 || 1);
+    c = {
+      verts: generateAsteroidVertices(rng, ast.r),
+      projected: null, // reused projection buffer
+      baseHue: rng() * 360,
+      hueSpread: 30 + rng() * 70,
+      hueCycleSpeed: 10 + rng() * 20,
+      saturation: 80 + rng() * 15,
+      lightness: 65 + rng() * 15,
+      phase: { x: rng() * 6.283, y: rng() * 6.283, z: rng() * 6.283 },
+    };
+    _astCosmetics.set(ast.id, c);
+  }
+  return c;
+}
 
 function drawShip(ctx, x, y, angle, label, isLocal, downed = false, reviveProgress = 0) {
   const r = SHIP_RADIUS;
@@ -61,26 +90,28 @@ function drawShip(ctx, x, y, angle, label, isLocal, downed = false, reviveProgre
   }
 }
 
-function drawAsteroid(ctx, x, y, angle, r) {
+function drawAsteroid(ctx, ast, now) {
+  // SP tumbling-wireframe asteroid (shared render/shapes.js). Project the
+  // seeded 3D verts under a tumble derived from the snapshot angle, then draw
+  // at the asteroid's center (drawAsteroidShape works in entity-local coords).
+  const c = asteroidCosmetics(ast);
+  const a = ast.angle;
+  const rot3D = { x: a + c.phase.x, y: a * 1.3 + c.phase.y, z: a * 0.7 + c.phase.z };
+  c.projected = projectAsteroidVertices(c.verts, rot3D, ASTEROID_FOV, c.projected);
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.beginPath();
-  // Lumpy octagon so rotation is visible.
-  const sides = 8;
-  for (let i = 0; i < sides; i++) {
-    const a = (i / sides) * Math.PI * 2;
-    const rr = r * (0.78 + 0.22 * ((i % 2) ? 1 : 0.6));
-    const px = Math.cos(a) * rr;
-    const py = Math.sin(a) * rr;
-    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.fillStyle = '#2a3350';
-  ctx.fill();
-  ctx.strokeStyle = '#586a9c';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  ctx.translate(ast.x, ast.y);
+  drawAsteroidShape(ctx, {
+    projectedVertices: c.projected,
+    edges: ASTEROID_EDGES,
+    fov: ASTEROID_FOV,
+    radius: ast.r,
+    baseHue: c.baseHue,
+    hueCycleSpeed: c.hueCycleSpeed,
+    hueSpread: c.hueSpread,
+    saturation: c.saturation,
+    lightness: c.lightness,
+    now: now || 0,
+  });
   ctx.restore();
 }
 
@@ -130,9 +161,13 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
   ctx.lineWidth = 4;
   ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
 
-  // Asteroids (interpolated).
+  // Asteroids (interpolated) — SP tumbling-wireframe style.
   if (asteroids) {
-    for (const [, ast] of asteroids) drawAsteroid(ctx, ast.x, ast.y, ast.angle, ast.r);
+    for (const [, ast] of asteroids) drawAsteroid(ctx, ast, now);
+    // Evict cosmetics for despawned asteroids.
+    if (_astCosmetics.size > asteroids.size) {
+      for (const id of _astCosmetics.keys()) if (!asteroids.has(id)) _astCosmetics.delete(id);
+    }
   }
 
   // Enemies (interpolated).

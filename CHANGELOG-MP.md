@@ -7,6 +7,21 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.16.0] - 2026-05-27
+
+### Changed
+- **MP asteroids render in true single-player style** (Path A, Group G2). The MP
+  client now draws asteroids via the shared `render/shapes.js` tumbling-wireframe
+  helpers (`generateAsteroidVertices` → `projectAsteroidVertices` →
+  `drawAsteroidShape`), replacing the placeholder octagon. A per-asteroid
+  cosmetic cache (keyed by entity id, seeded via `makeRng(id)`) gives each rock
+  stable verts + hue params; a 3-axis tumble is fabricated from the snapshot
+  angle + per-id phase offsets. Cache evicts despawned asteroids.
+
+### Tests
+- Covered by `tests/qa/12-mp2-ws.spec.js`'s page-error guard (the asteroid field
+  exists from room creation, so the draw path is exercised every frame). 4/4 green.
+
 ## [0.15.0] - 2026-05-27
 
 ### Changed
