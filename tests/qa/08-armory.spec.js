@@ -372,16 +372,24 @@ test.describe('QA-08b: Stash + Cores salvage (Phase R8)', () => {
         await startGame(page);
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
+            // T70 — start from a known-empty stash: T60 seeds a starter kit
+            // (weapon + gear) on a fresh account, so assert the DELTA, not an
+            // absolute count.
+            const m0 = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
+            m0.stash = [];
+            localStorage.setItem('rainboidsMeta', JSON.stringify(m0));
             ge.player.runCollected = [
                 { slot: 'cockpit', level: 5, rarity: 'rare', name: 'Test Core',
                   affixes: [{ type: 'hp', value: 20, label: '+20 HP' }] },
             ];
             ge._runGoldBanked = false;
-            ge.game.state = 'GAME_OVER'; // banks gold + commits loot
+            ge.bankRunGold(); // banks gold + commits loot (state-string assign no longer triggers it)
             const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
-            return { stashLen: (meta.stash || []).length, collected: ge.player.runCollected.length };
+            const stash = meta.stash || [];
+            return { stashLen: stash.length, hasItem: stash.some((s) => s && s.name === 'Test Core'), collected: ge.player.runCollected.length };
         });
         expect(r.stashLen).toBe(1);
+        expect(r.hasItem).toBe(true);   // the collected item landed in the stash
         expect(r.collected).toBe(0); // cleared after commit
     });
 
