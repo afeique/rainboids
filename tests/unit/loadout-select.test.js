@@ -51,8 +51,10 @@ describe('Loadout — normalizeLoadout', () => {
         expect(out.primaries).toContain('PULSE_CANNON');
     });
 
-    test('every chosen id is from the unlocked pool', () => {
+    test('every chosen id is from the unlocked pool (locked ids dropped)', () => {
+        // 6.x — BULWARK / FIELD_MEDIC are no longer free base kit, so with a
+        // meta that only owns EMP_PULSE + SENTRY_DRONE they're filtered out.
         const out = normalizeLoadout({ abilities: ['BULWARK', 'FIELD_MEDIC', 'EMP_PULSE', 'SENTRY_DRONE'] }, meta);
-        expect(out.abilities).toEqual(['BULWARK', 'FIELD_MEDIC', 'EMP_PULSE', 'SENTRY_DRONE']);
+        expect(out.abilities).toEqual(['EMP_PULSE', 'SENTRY_DRONE']);
     });
 });

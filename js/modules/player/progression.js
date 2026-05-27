@@ -374,19 +374,12 @@ export function getMovementSpeedMultiplier() {
     return (1 + speedBoostStacks * 0.65 + itemSpeedPct) * playerChillSpeedMult(this, frameClock.now);
 }
 
-// 6.0.0 — Gold Find now scales with WAVE, not player level. Same
-// shape: +10% per wave past 1. W1=1.0×, W5=1.4×, W10=1.9×, W30=3.9×.
-// Reads through the live gameEngine reference (set by main.js) since
-// the Player doesn't carry a wave field directly.
+// 6.x — Gold-find is RETIRED. The gold economy is intentionally flat +
+// decoupled from level/gear/wave (per-kill drops roll a fixed range × the
+// killstreak multiplier, and nothing else). This stays a stable 1.0 so any
+// legacy reader keeps working; there is deliberately NO way to boost gold-find.
 export function getGoldFindMultiplier() {
-    const ge = this.gameEngine
-        || ((typeof window !== 'undefined') ? window.gameEngine : null);
-    const wave = (ge && ge.game) ? (ge.game.currentWave | 0) : 1;
-    let mult = 1 + Math.max(0, wave - 1) * 0.10;
-    // P6 — Hoarder's Greed passive: +100% gold-find (the ↯ +15% damage taken
-    // downside is applied in lifecycle takeDamage).
-    if (typeof this.hasPassive === 'function' && this.hasPassive('HOARDERS_GREED')) mult *= 2;
-    return mult;
+    return 1;
 }
 
 export function getRangeMultiplier() {
@@ -417,8 +410,13 @@ export function getRangeMultiplier() {
 const REGEN_RATE_CAP = 3.0;
 // CD-04 (T2) — Regenerator powerup raises the ceiling to 5.0 HP/s while held.
 const REGEN_RATE_CAP_BOOSTED = 5.0;
+// 6.x — Baseline passive regen: EVERY player slowly heals out of combat (after
+// the 4s no-damage gate in updatePowerups), even with zero regen investment.
+// Gentle (heals the 40-HP active tank in ~80s) so it's a recovery aid, not a
+// crutch; REGEN/items/SP stack on top, still capped by REGEN_RATE_CAP.
+const BASE_PASSIVE_REGEN = 0.5;
 export function getEffectiveRegen() {
-    let regen = 0;
+    let regen = BASE_PASSIVE_REGEN;
     const stacks = this.getPowerupStacks ? this.getPowerupStacks('REGEN') : 0;
     if (stacks > 0) regen += stacks * 0.5;
     regen += this.getItemAffixTotal('regen'); // 6.32.0 — item regen affixes

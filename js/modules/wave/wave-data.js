@@ -9,33 +9,40 @@
 //   Stage  1 (1-1..1-3)  : First Contact   — HUNTER + WASP, DRIFTER debut; boss Harbinger
 //   Stage  2 (2-1..2-3)  : Iron Wall       — adds GUARDIAN + TANGERINE (bomber); boss Aegis
 //   Stage  3 (3-1..3-3)  : Crossfire       — adds STALKER (sniper) + WEAVER; boss Lumen
-//   Stage  4 (4-1..4-3)  : Twin Iron       — DRIFTER/TANGERINE ramp; LEECH debut
-//   Stage  5 (5-1..5-3)  : Triple Threat   — adds SENTINEL; WRAITHWORM debut
-//
-// 6.x — EARLY-ENGAGEMENT pass: enemy variety is front-loaded across stages 1-3
-// so a new player meets a distinct new threat almost every wave (7 types + 3
-// different bosses by wave 9) instead of grinding HUNTER/WASP for three waves.
-// Only "fair" enemies are pulled forward (DRIFTER arc-lightning, TANGERINE
-// mines, WEAVER spiral-laser); the punishing/mechanic-heavy roster (LEECH strip,
-// PHANTOM cloak, DEVOURER absorb, PRISM_MIRROR reflect, NULL_DRONE suppress, …)
-// stays back-loaded so the opening teaches one readable behavior at a time.
-//   Stage  6 (6-1..6-3)  : Iron Quartet    — adds PROWLER (full roster); NULL_DRONE debut
-//   Stage  7 (7-1..7-3)  : Iron Crown      — combined arms, dense; PHANTOM debut
-//   Stage  8 (8-1..8-3)  : The Long Walk   — compounding pressure; DEVOURER + PRISM_MIRROR debut
-//   Stage  9 (9-1..9-3)  : Apocalypse      — peak density; new-type roster at full ramp
+//   Stage  4 (4-1..4-3)  : Wildfire        — PYRO gauntlet: CINDER + ASHEN_DETONATOR; boss Gemini
+//   Stage  5 (5-1..5-3)  : Deep Freeze     — CRYO gauntlet: GLACIER + FROST_LANCE; boss Maelstrom
+//   Stage  6 (6-1..6-3)  : Overload        — VOLT gauntlet: TESLA_WRAITH + WRAITHWORM + NULL_DRONE; boss Hivemother
+//   Stage  7 (7-1..7-3)  : Outbreak        — TOXIC gauntlet: PLAGUEBEARER + SPORE_CARRIER + LEECH + HYDRA; boss Iron Throne
+//   Stage  8 (8-1..8-3)  : Hall of Mirrors — VOID/trick gauntlet: PHANTOM + DEVOURER + PRISM_MIRROR + LUMEN_DRONE; boss Warden Prime
+//   Stage  9 (9-1..9-3)  : Apocalypse      — peak density; a taste of every theme; boss Nullmaw
 //   Stage 10 (10-1..10-3): The Last Stand  — finale; new-type showcase; 10-3 = FINAL BOSS
 //
-// New-type roster insertion (non-boss waves only; the live Adaptive
-// Difficulty Director is the safety net for the difficulty shift):
-//   LEECH        (Toxic strip)   : 11(1), 13(2), 22(2), 26(2)
-//   WRAITHWORM   (Volt blink)    : 14(1), 19(2), 25(1)
-//   NULL_DRONE   (Volt suppress) : 17(1), 20(1), 26(1)   — always solo
-//   PHANTOM      (Void cloak)    : 19(1), 23(2), 28(1), 29(1)
-//   DEVOURER     (Void absorb)   : 22(1), 26(1), 28(1)
-//   PRISM_MIRROR (Radiant reflect): 23(1), 28(1)         — count 1 only
-//   CONDUIT_NODE (Volt heal-aura) : 25(1)                — count 1 only; debut
-//   JUGGERNAUT   (Kinetic ram)    : 22(1)                — count 1 only; debut (charge-and-ram bruiser)
-//   THORNBACK    (Kinetic counter): 25(1)                — count 1 only; debut (counter-attack bruiser)
+// 6.x — EARLY-ENGAGEMENT + MID-GAME-IDENTITY pass:
+//  • Early (stages 1-3): variety front-loaded so a new player meets a distinct
+//    new threat almost every wave (7 types + 3 bosses by wave 9) instead of
+//    grinding HUNTER/WASP. Only "fair" enemies are pulled forward (DRIFTER,
+//    TANGERINE, WEAVER); the punishing roster stays back-loaded.
+//  • Mid (stages 4-9): each stage is now a distinct ELEMENTAL/THEME gauntlet
+//    (Fire → Ice → Lightning → Plague → Mirrors → Apocalypse) so the stages no
+//    longer blur into one kinetic backbone + garnish. The themed family is
+//    PROMINENT (not garnish); each stage keeps a small kinetic spine + a role
+//    spread (fast / tank / ranged); and every potent mechanic enemy was only
+//    pushed LATER, never earlier (the player is stronger by the time it lands).
+//    Each elemental gauntlet doubles as a soft resistance puzzle — bring the
+//    counter element and it melts; kinetic still works at par. The Adaptive
+//    Difficulty Director remains the HP-scaling safety net; composition feel is
+//    a playtest-tuning target.
+//
+// New-type roster insertion (non-boss waves only; counts kept low):
+//   WRAITHWORM   (Volt blink)     : 16(1), 17(1), 25(1)
+//   NULL_DRONE   (Volt suppress)  : 17(1), 26(1)          — always solo
+//   LEECH        (Toxic strip)    : 19(2), 20(2), 26(2)
+//   PHANTOM      (Void cloak)     : 22(1), 23(2), 26(1), 28(1), 29(1)
+//   DEVOURER     (Void absorb)    : 22(1), 26(1), 28(1)
+//   PRISM_MIRROR (Radiant reflect): 23(1), 28(1)          — count 1 only
+//   CONDUIT_NODE (Volt heal-aura) : 25(1)                 — count 1 only
+//   JUGGERNAUT   (Kinetic ram)    : 22(1)                 — charge-and-ram bruiser
+//   THORNBACK    (Kinetic counter): 25(1)                 — counter-attack bruiser
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
@@ -124,157 +131,157 @@ export const WAVE_DATA = {
         ],
     },
 
-    // ── Stage 4: Twin Iron (adds DRIFTER + TANGERINE; LEECH debut) ──
-    // 11-3 introduces the LEECH (Toxic harrier) as a 1-count accent — a
-    // low-HP nuisance that strips player buffs. It debuts here in the
-    // toxic-flavored stage (alongside PLAGUEBEARER) before ramping later.
+    // ── Stage 4: Wildfire (PYRO gauntlet — boss Gemini) ──
+    // The first themed gauntlet. CINDER (fast fire swarm), ASHEN_DETONATOR
+    // (death-flare bomber — kill it at range), and TANGERINE (mine bomber) are
+    // the PROMINENT backbone, with a thin HUNTER/GUARDIAN kinetic spine for a
+    // fast/tank/ranged spread. Soft resistance puzzle: Pyro enemies resist fire
+    // and fold to CRYO — freeze the swarm. Kinetic still works at par.
     10: { asteroids: 4, subWaves: [
-        [{ type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'CINDER', count: 2 }],
-        [{ type: 'DRIFTER', count: 2 }, { type: 'ASHEN_DETONATOR', count: 2 }, { type: 'HUNTER', count: 1 }],
+        [{ type: 'CINDER', count: 3 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'ASHEN_DETONATOR', count: 2 }, { type: 'CINDER', count: 2 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'CINDER', count: 2 }, { type: 'HUNTER', count: 1 }],
     ] },
     11: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'CINDER', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'TESLA_WRAITH', count: 2 }, { type: 'PLAGUEBEARER', count: 1 }, { type: 'LEECH', count: 1 }],
+        [{ type: 'CINDER', count: 3 }, { type: 'ASHEN_DETONATOR', count: 1 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+        [{ type: 'ASHEN_DETONATOR', count: 2 }, { type: 'CINDER', count: 3 }, { type: 'TANGERINE', count: 1 }],
     ] },
-    // 4-3 BOSS — Twin Iron: 2× TITAN T2.
+    // 4-3 BOSS — Gemini (stage 4): 2× TITAN T2 with a Pyro escort.
     12: {
         asteroids: 3, isBossWave: true, bossTier: 2,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
-            [{ type: 'TITAN', count: 2, isBoss: true, bossTier: 2 }, { type: 'STALKER', count: 2 }, { type: 'TANGERINE', count: 1 }],
+            [{ type: 'CINDER', count: 3 }, { type: 'ASHEN_DETONATOR', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+            [{ type: 'TITAN', count: 2, isBoss: true, bossTier: 2 }, { type: 'CINDER', count: 2 }, { type: 'TANGERINE', count: 1 }],
         ],
     },
 
-    // ── Stage 5: Triple Threat (adds WEAVER + SENTINEL; LEECH ramps, WRAITHWORM debut) ──
-    // LEECH (Toxic) steps up to 2 here. WRAITHWORM (Volt blink-burrow)
-    // makes its first appearance on 14-3 as a single accent — it warps
-    // around the field, so it shows up sparingly before ramping in Stage 7+.
+    // ── Stage 5: Deep Freeze (CRYO gauntlet — boss Maelstrom) ──
+    // GLACIER (slow ice tank) and FROST_LANCE (ice sniper) are the prominent
+    // pair, anchored by SENTINEL bastions and a GUARDIAN tank spine — a slow,
+    // walling stage that contrasts hard with Wildfire's fast swarm. Soft puzzle:
+    // Cryo enemies resist freeze and are WEAK to PYRO — burn them down. A few
+    // WASP keep a fast element in the mix so it's not one-note.
     13: { asteroids: 4, subWaves: [
-        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'GLACIER', count: 2 }, { type: 'STALKER', count: 1 }, { type: 'LEECH', count: 2 }],
+        [{ type: 'GLACIER', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'FROST_LANCE', count: 2 }, { type: 'GLACIER', count: 1 }],
+        [{ type: 'GLACIER', count: 2 }, { type: 'FROST_LANCE', count: 2 }, { type: 'SENTINEL', count: 1 }],
     ] },
     14: { asteroids: 4, subWaves: [
-        [{ type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'GLACIER', count: 2 }, { type: 'WEAVER', count: 1 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'FROST_LANCE', count: 2 }, { type: 'WEAVER', count: 1 }, { type: 'WRAITHWORM', count: 1 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'FROST_LANCE', count: 2 }],
+        [{ type: 'GLACIER', count: 2 }, { type: 'SENTINEL', count: 1 }, { type: 'WEAVER', count: 1 }],
+        [{ type: 'FROST_LANCE', count: 2 }, { type: 'GLACIER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
     ] },
-    // 5-3 BOSS — Triple Threat: 3× TITAN T3.
+    // 5-3 BOSS — Maelstrom (stage 5): 3× TITAN T3 with a Cryo escort.
     15: {
         asteroids: 2, isBossWave: true, bossTier: 3,
         subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 1 }],
-            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 1 }],
+            [{ type: 'GLACIER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'FROST_LANCE', count: 1 }],
+            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'GLACIER', count: 2 }, { type: 'FROST_LANCE', count: 1 }],
         ],
     },
 
-    // ── Stage 6: Iron Quartet (adds PROWLER — full roster; NULL_DRONE debut) ──
-    // NULL_DRONE (Volt suppress-aura) debuts on 17-3 as a SINGLE escort —
-    // its aura damps the player's fire rate, so it's introduced one at a
-    // time and always solo, never stacked. Pair it with the support-style
-    // units (HYDRA/WARDEN) that already anchor this stage.
+    // ── Stage 6: Overload (VOLT gauntlet — boss Hivemother) ──
+    // The electric stage: TESLA_WRAITH (fast volt skirmisher) + DRIFTER
+    // (arc-lightning) lead, WRAITHWORM (blink-burrow, relocated here from its old
+    // 14 debut) warps in as a 1-count accent, and NULL_DRONE (suppress-aura)
+    // debuts SOLO on 6-2 — its aura damps your cooldowns, so kill it to get your
+    // tempo back. PROWLER anchors the standoff. Volt enemies fold to TOXIC.
     16: { asteroids: 4, subWaves: [
-        [{ type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'SPORE_CARRIER', count: 1 }],
-        [{ type: 'WARDEN', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'TESLA_WRAITH', count: 2 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'WRAITHWORM', count: 1 }, { type: 'TESLA_WRAITH', count: 2 }, { type: 'PROWLER', count: 1 }],
+        [{ type: 'DRIFTER', count: 2 }, { type: 'TESLA_WRAITH', count: 2 }, { type: 'PROWLER', count: 2 }],
     ] },
     17: { asteroids: 4, subWaves: [
-        [{ type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'HYDRA', count: 1 }, { type: 'NULL_DRONE', count: 1 }, { type: 'WASP', count: 2 }],
+        [{ type: 'TESLA_WRAITH', count: 2 }, { type: 'WRAITHWORM', count: 1 }, { type: 'PROWLER', count: 2 }],
+        [{ type: 'DRIFTER', count: 3 }, { type: 'NULL_DRONE', count: 1 }, { type: 'GUARDIAN', count: 2 }],
+        [{ type: 'TESLA_WRAITH', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'WASP', count: 2 }],
     ] },
-    // 6-3 BOSS — Iron Quartet: 3× TITAN T3 + PROWLER escort.
+    // 6-3 BOSS — Hivemother (stage 6): 3× TITAN T3 with a Volt escort.
     18: {
         asteroids: 2, isBossWave: true, bossTier: 3,
         subWaves: [
-            [{ type: 'PROWLER', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
-            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+            [{ type: 'DRIFTER', count: 3 }, { type: 'TESLA_WRAITH', count: 2 }, { type: 'PROWLER', count: 2 }],
+            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'TESLA_WRAITH', count: 2 }, { type: 'DRIFTER', count: 1 }],
         ],
     },
 
-    // ── Stage 7: Iron Crown (combined arms, dense; PHANTOM debut, WRAITHWORM/NULL_DRONE ramp) ──
-    // PHANTOM (Void cloak) makes its first appearance on 19-3 as a single
-    // accent — it phases off auto-aim/homing, so it slips in among the
-    // dense roster. WRAITHWORM steps up to 2 (mid-wave). NULL_DRONE
-    // reappears solo on 20-2 to keep the suppress pressure occasional.
+    // ── Stage 7: Outbreak (TOXIC gauntlet — boss Iron Throne) ──
+    // The blight stage: PLAGUEBEARER (acid-trail mine-layer) is the backbone,
+    // SPORE_CARRIER births WASP drones (kill the carrier to stop the bleeding),
+    // LEECH (relocated from its old 11 debut) harries in 2-count packs to strip
+    // your buffs, and HYDRA splits on death. WARDEN (adaptive resist) shows up as
+    // an anti-meta wall. Toxic enemies fold to RADIANT — purge the rot.
     19: { asteroids: 4, subWaves: [
-        [{ type: 'HUNTER', count: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'LUMEN_DRONE', count: 1 }, { type: 'WRAITHWORM', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'PHANTOM', count: 1 }, { type: 'TANGERINE', count: 1 }],
+        [{ type: 'PLAGUEBEARER', count: 2 }, { type: 'HUNTER', count: 2 }],
+        [{ type: 'SPORE_CARRIER', count: 1 }, { type: 'PLAGUEBEARER', count: 1 }, { type: 'WASP', count: 2 }],
+        [{ type: 'PLAGUEBEARER', count: 2 }, { type: 'LEECH', count: 2 }, { type: 'GUARDIAN', count: 2 }],
     ] },
     20: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'NULL_DRONE', count: 1 }, { type: 'HUNTER', count: 1 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'HYDRA', count: 1 }, { type: 'PLAGUEBEARER', count: 1 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'WARDEN', count: 1 }, { type: 'LEECH', count: 2 }, { type: 'WASP', count: 3 }],
+        [{ type: 'PLAGUEBEARER', count: 2 }, { type: 'HYDRA', count: 1 }, { type: 'GUARDIAN', count: 2 }],
     ] },
-    // 7-3 BOSS — Iron Crown: 4× TITAN T4 + STALKER escort.
+    // 7-3 BOSS — Iron Throne (stage 7): 4× TITAN T4 with a Toxic escort.
     21: {
         asteroids: 2, isBossWave: true, bossTier: 4,
         subWaves: [
-            [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WEAVER', count: 1 }],
-            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 2 }],
+            [{ type: 'PLAGUEBEARER', count: 2 }, { type: 'SPORE_CARRIER', count: 1 }, { type: 'GUARDIAN', count: 2 }],
+            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'PLAGUEBEARER', count: 1 }, { type: 'STALKER', count: 2 }],
         ],
     },
 
-    // ── Stage 8: The Long Walk (compounding pressure; DEVOURER + PRISM_MIRROR debut) ──
-    // DEVOURER (Void projectile-absorb) debuts on 22-3 as a single accent —
-    // it eats incoming shots, rewarding repositioning. LEECH ramps to 2
-    // here. PRISM_MIRROR (Radiant reflect) makes its FIRST appearance on
-    // 23-3 as a single unit only — reflection is potent, so it stays at 1.
-    // PHANTOM steps up to 2 (cloak pressure in the late game). JUGGERNAUT
-    // (Kinetic charge-and-ram bruiser) DEBUTS on 22-1 as a single accent
-    // among the Kinetic-flavored TANGERINE/GUARDIAN/HUNTER opener — a
-    // read-the-tell threat that telegraphs a lethal charge.
+    // ── Stage 8: Hall of Mirrors (VOID / trick gauntlet — boss Warden Prime) ──
+    // The stage where your shots stop behaving: PHANTOM (cloaks off your
+    // auto-aim/homing), DEVOURER (eats bullets into its maw — flank it / beam
+    // it), PRISM_MIRROR (front-arc reflector — hit it from the side), and
+    // LUMEN_DRONE (shields its escort — kill the drone first). JUGGERNAUT's
+    // telegraphed charge adds a melee read. Potent enemies stay at count 1-2;
+    // the lesson is positioning, not DPS.
     22: { asteroids: 4, subWaves: [
-        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }, { type: 'JUGGERNAUT', count: 1 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'LEECH', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'DEVOURER', count: 1 }, { type: 'WASP', count: 2 }],
+        [{ type: 'PHANTOM', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }, { type: 'JUGGERNAUT', count: 1 }],
+        [{ type: 'LUMEN_DRONE', count: 1 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'DEVOURER', count: 1 }, { type: 'PHANTOM', count: 1 }, { type: 'PROWLER', count: 2 }],
     ] },
     23: { asteroids: 4, subWaves: [
-        [{ type: 'HUNTER', count: 5 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'PHANTOM', count: 2 }],
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'PRISM_MIRROR', count: 1 }, { type: 'DRIFTER', count: 1 }],
+        [{ type: 'PHANTOM', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'LUMEN_DRONE', count: 1 }, { type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }],
+        [{ type: 'PRISM_MIRROR', count: 1 }, { type: 'GUARDIAN', count: 3 }, { type: 'PHANTOM', count: 1 }],
     ] },
-    // 8-3 BOSS — Iron Quintet: 4× TITAN T4 + TANGERINE.
+    // 8-3 BOSS — Warden Prime (stage 8): 4× TITAN T4 with a kinetic escort
+    // (no support auras / cloakers on the boss sub-wave — keep the fight clean).
     24: {
         asteroids: 2, isBossWave: true, bossTier: 4,
         subWaves: [
-            [{ type: 'TANGERINE', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }],
-            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'TANGERINE', count: 2 }, { type: 'PROWLER', count: 2 }],
+            [{ type: 'SENTINEL', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }],
+            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 2 }],
         ],
     },
 
-    // ── Stage 9: Apocalypse (peak density; new-type roster at full ramp; CONDUIT_NODE debut) ──
-    // The new types reach their late-game presence here: WRAITHWORM
-    // (blink) on 25-2, then DEVOURER (absorb) + NULL_DRONE (suppress) +
-    // LEECH (strip) layered across 26. Counts stay 1-2 each — the
-    // Adaptive Difficulty Director carries the scaling — but every new
-    // mechanic is now live in the player's face at peak density.
-    // CONDUIT_NODE (Volt HEAL-aura support) makes its FIRST appearance on
-    // 25-2 as a SINGLE accent — it sits among the Volt-flavored WRAITHWORM
-    // and a beefy SENTINEL/PROWLER escort whose HP its aura can meaningfully
-    // mend, so killing the node first becomes the priority. Count 1 only.
-    // THORNBACK (Kinetic counter-attack bruiser) DEBUTS on 25-1 as a single
-    // accent among the Kinetic-flavored STALKER/GUARDIAN/WASP opener — a
-    // punish-point-blank threat that rewards measured fire from range. Count 1.
+    // ── Stage 9: Apocalypse (everything — boss Nullmaw) ──
+    // The kitchen-sink stage: a taste of every gauntlet at peak density. Fire
+    // (CINDER), Ice (GLACIER), Lightning (TESLA_WRAITH/WRAITHWORM), Plague
+    // (PLAGUEBEARER/LEECH), and Mirrors (PHANTOM/DEVOURER) all reappear, plus the
+    // two debuts that fit a "no rules left" finale-before-the-finale: CONDUIT_NODE
+    // (Volt HEAL-aura — kill the node or its escort keeps mending) and THORNBACK
+    // (Kinetic counter — punishes point-blank fire, so range it). Counts stay 1-2
+    // for the potent types; the Director carries the HP curve.
     25: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }, { type: 'THORNBACK', count: 1 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WRAITHWORM', count: 1 }, { type: 'CONDUIT_NODE', count: 1 }],
-        [{ type: 'TANGERINE', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 3 }],
+        [{ type: 'THORNBACK', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'CINDER', count: 2 }],
+        [{ type: 'TESLA_WRAITH', count: 2 }, { type: 'WRAITHWORM', count: 1 }, { type: 'CONDUIT_NODE', count: 1 }, { type: 'PROWLER', count: 1 }],
+        [{ type: 'GLACIER', count: 2 }, { type: 'PLAGUEBEARER', count: 1 }, { type: 'SENTINEL', count: 2 }],
     ] },
     26: { asteroids: 4, subWaves: [
-        [{ type: 'PROWLER', count: 3 }, { type: 'NULL_DRONE', count: 1 }, { type: 'TANGERINE', count: 2 }],
-        [{ type: 'WEAVER', count: 3 }, { type: 'LEECH', count: 2 }, { type: 'GUARDIAN', count: 2 }],
-        [{ type: 'HUNTER', count: 4 }, { type: 'DEVOURER', count: 1 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'PHANTOM', count: 1 }, { type: 'DEVOURER', count: 1 }, { type: 'GUARDIAN', count: 2 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'LEECH', count: 2 }, { type: 'TESLA_WRAITH', count: 2 }],
+        [{ type: 'HUNTER', count: 4 }, { type: 'NULL_DRONE', count: 1 }, { type: 'DRIFTER', count: 2 }],
     ] },
-    // 9-3 BOSS — Iron Tide: 5× TITAN T4 + WEAVER escort.
+    // 9-3 BOSS — Nullmaw (stage 9): 5× TITAN T4 with a kinetic escort.
     27: {
         asteroids: 2, isBossWave: true, bossTier: 4,
         subWaves: [
-            [{ type: 'WEAVER', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }],
-            [{ type: 'TITAN', count: 5, isBoss: true, bossTier: 4 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
+            [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 2 }],
+            [{ type: 'TITAN', count: 5, isBoss: true, bossTier: 4 }, { type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
         ],
     },
 
@@ -494,31 +501,31 @@ export function getEnemyBulletSpeedMultiplier(waveNumber, maxWaves = MAX_WAVES) 
 export const WAVE_SUBTITLES = {
     1:  "Don't worry, they die easy.",
     2:  "Arc-lightning inbound — meet the Drifter.",
-    3:  "BOSS — Iron Scout. Aim for the bolts.",
+    3:  "BOSS — Harbinger. Aim for the bolts.",
     4:  "Heavies on deck.",
     5:  "Bombs away — mind the Bomber's mines.",
-    6:  "BOSS — Iron Sentinel. Walking armor.",
+    6:  "BOSS — Aegis. Walking armor.",
     7:  "Sniper line. Don't stand still.",
     8:  "Weavers spinning up. Keep moving.",
-    9:  "BOSS — Iron Vanguard. Bring a hammer.",
-    10: "Stragglers and squadrons.",
-    11: "Heavy weather. Bring a coat.",
-    12: "BOSS — Twin Iron. Doubled, redoubled.",
-    13: "Storms in space — who knew?",
-    14: "Defense wall. Bring a hammer.",
-    15: "BOSS — Triple Threat. Three. Of. Them.",
-    16: "Predators inbound. Pack hunters.",
-    17: "All-star roster. They're showing off.",
-    18: "BOSS — Iron Quartet. Four for the price of three.",
-    19: "Combined arms — every type, every angle.",
-    20: "Bullet hell sample platter.",
-    21: "BOSS — Iron Crown. The throne is overdue.",
-    22: "Aftershocks. They aren't done.",
-    23: "The walls are closing in.",
-    24: "BOSS — Iron Quintet. Five-tier salute.",
-    25: "Apocalypse. Light at the end is a missile.",
+    9:  "BOSS — Lumen. Bring a hammer.",
+    10: "Wildfire. They burn — so freeze them.",
+    11: "Embers everywhere. Mind the death-flares.",
+    12: "BOSS — Gemini. Fire and frost, twinned.",
+    13: "Deep freeze. Thaw them with heat.",
+    14: "Ice wall. Bring something that burns.",
+    15: "BOSS — Maelstrom. Eye of the storm.",
+    16: "Overload. Arc-lightning, everywhere.",
+    17: "Static field — watch your cooldowns.",
+    18: "BOSS — Hivemother. Mind the brood.",
+    19: "Outbreak. It's toxic, and it spreads.",
+    20: "Blight. Purge it — radiant burns clean.",
+    21: "BOSS — Iron Throne. Four elements, one seat.",
+    22: "Hall of mirrors — your shots lie.",
+    23: "Cloaks, maws, mirrors. Trust nothing.",
+    24: "BOSS — Warden Prime. It learns — switch it up.",
+    25: "Apocalypse. Everything, all at once.",
     26: "There is no off-switch.",
-    27: "BOSS — Iron Tide. Endless onslaught.",
+    27: "BOSS — Nullmaw. Into the dark.",
     28: "Edge of doom. One more push.",
     29: "Final approach. Steady hands.",
     30: "FINAL BOSS — The Last Stand.",

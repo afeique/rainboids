@@ -87,7 +87,6 @@ function _buildTutorialOverlay() {
         'Primary weapon — hold LEFT CLICK to fire continuously.',
         'Power weapon — RIGHT CLICK / SPACE (costs energy — see below).',
         'Abilities — 1 / 2 / 3 / 4.   Dash — SHIFT.',
-        'Weapon radials — hold F (primary), E (power), R (defense ability).',
         'Pause — ESC.   Stats — backtick (`).',
     ]));
     // GAMEPAD section — built hidden; the engine reveals it whenever a pad
@@ -261,8 +260,9 @@ function _buildPauseMenu() {
         { key: 'controls', label: 'CONTROLS', active: true },
         { key: 'gamepad',  label: 'GAMEPAD' },
         { key: 'stats',    label: 'STATS' },
-        { key: 'primary',  label: 'PRIMARY' },
-        { key: 'power',    label: 'POWER' },
+        // 6.x — PRIMARY + POWER tabs replaced by a single compact LOADOUT tab
+        // (weapon + attunement / power + attunement / abilities + attunements).
+        { key: 'loadout',  label: 'LOADOUT' },
         { key: 'passives', label: 'PASSIVES' },
         { key: 'assists',  label: 'ASSISTS' },
         { key: 'display',  label: 'DISPLAY' },
@@ -289,8 +289,9 @@ function _buildPauseMenu() {
     // STATS tab — populated by ui-manager.updateStatsTab() with the
     // shared SP-allocation card (passive stat icons + [−]/[+] controls).
     menu.appendChild(el('div', { id: 'stats-tab',    className: 'pause-tab-content' }));
-    menu.appendChild(el('div', { id: 'primary-tab',  className: 'pause-tab-content' }));
-    menu.appendChild(el('div', { id: 'power-tab',    className: 'pause-tab-content' }));
+    // LOADOUT tab — populated by ui-manager.updateLoadoutTab(): compact active
+    // weapon/power/abilities + their attunements, owned-only, switch in-flight.
+    menu.appendChild(el('div', { id: 'loadout-tab',  className: 'pause-tab-content' }));
     // PASSIVES tab — populated by ui-manager.updatePassivesTab(): the in-run
     // swap panel (assign owned passives to unlocked slots; P5b).
     menu.appendChild(el('div', { id: 'passives-tab', className: 'pause-tab-content' }));

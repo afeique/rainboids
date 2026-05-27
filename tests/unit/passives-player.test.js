@@ -339,16 +339,16 @@ describe('P6 batch 4 — Purist (+40% damage + pierce, §6c no-downsides)', () =
     });
 });
 
-describe('P6 batch 2 — Hoarder\'s Greed gold-find', () => {
-    test('getGoldFindMultiplier doubles with Hoarder\'s Greed active', () => {
+describe('6.x — gold-find is retired (flat economy)', () => {
+    test('getGoldFindMultiplier is a flat 1.0, unaffected by Hoarder\'s Greed', () => {
         const base = makeStub();
         base.hasPassive = () => false;
         base.gameEngine = null;
         const withGreed = makeStub();
         withGreed.hasPassive = (id) => id === 'HOARDERS_GREED';
         withGreed.gameEngine = null;
-        const b = progression.getGoldFindMultiplier.call(base);
-        const g = progression.getGoldFindMultiplier.call(withGreed);
-        expect(g).toBeCloseTo(b * 2);
+        expect(progression.getGoldFindMultiplier.call(base)).toBe(1);
+        // HOARDERS_GREED was repurposed off the gold axis — no gold-find boost.
+        expect(progression.getGoldFindMultiplier.call(withGreed)).toBe(1);
     });
 });

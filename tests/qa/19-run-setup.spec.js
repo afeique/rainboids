@@ -113,8 +113,10 @@ test.describe('QA-19: RUN SETUP UI', () => {
             document.getElementById('shop-runsetup-wps-6').click();
             document.getElementById('shop-runsetup-stages-inc').click();
             // Equip a primary so START enables (PULSE_CANNON is the base primary).
+            // 7.0.0 — compact list marks the active pick with `shop-node--equipped`
+            // (Pulse Cannon is equipped by default); only click to select if it isn't.
             const primary = document.querySelector('#shop-tree-primary .shop-node--parent[data-id="PULSE_CANNON"]');
-            if (primary && !primary.classList.contains('shop-node--owned')) primary.click();
+            if (primary && !primary.classList.contains('shop-node--equipped')) primary.click();
             const startBtn = document.getElementById('shop-prerun-start');
             const startDisabled = startBtn.disabled;
             startBtn.click();
@@ -209,8 +211,10 @@ test.describe('QA-19: RUN SETUP UI', () => {
             const ge = window.gameEngine;
             ge.openArmory();
             document.getElementById('shop-runsetup-mode-hard').click();
+            // 7.0.0 — compact list marks the active pick with `shop-node--equipped`
+            // (Pulse Cannon is equipped by default); only click to select if it isn't.
             const primary = document.querySelector('#shop-tree-primary .shop-node--parent[data-id="PULSE_CANNON"]');
-            if (primary && !primary.classList.contains('shop-node--owned')) primary.click();
+            if (primary && !primary.classList.contains('shop-node--equipped')) primary.click();
             document.getElementById('shop-prerun-start').click();
             return { mode: ge.game.runConfig.mode };
         });

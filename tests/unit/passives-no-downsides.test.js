@@ -104,13 +104,13 @@ describe('§6c batch 1 — HOARDERS_GREED no longer increases damage taken', () 
         expect(greed.player.health).toBe(baseline.player.health);
     });
 
-    test('HOARDERS_GREED gold-find upside is intact (×2)', () => {
+    test('HOARDERS_GREED no longer touches gold-find (retired, repurposed to heal)', () => {
+        // 6.x — gold-find is retired (flat economy); HOARDERS_GREED was
+        // repurposed off the gold axis (now heals on gold pickup).
         const base = { hasPassive: () => false, gameEngine: null };
         const greed = { hasPassive: (id) => id === 'HOARDERS_GREED', gameEngine: null };
-        const b = progression.getGoldFindMultiplier.call(base);
-        const g = progression.getGoldFindMultiplier.call(greed);
-        expect(g).toBeCloseTo(b * 2, 5);
-        expect(g).toBeGreaterThan(b); // still boosted
+        expect(progression.getGoldFindMultiplier.call(base)).toBe(1);
+        expect(progression.getGoldFindMultiplier.call(greed)).toBe(1);
     });
 });
 

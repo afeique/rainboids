@@ -40,27 +40,30 @@ describe('CD-08 — REGENERATION stat definition', () => {
 });
 
 describe('CD-08 — getEffectiveRegen folds in the REGENERATION stat', () => {
-    test('default-safe: 0 pts + no powerups/items → 0 regen (unchanged)', () => {
-        expect(progression.getEffectiveRegen.call(makePlayer())).toBe(0);
+    // 6.x — every player has a 0.5 HP/s BASELINE passive regen; the stat /
+    // powerups / items stack on top of it.
+    const BASE = 0.5;
+    test('baseline-only: 0 pts + no powerups/items → 0.5 HP/s baseline', () => {
+        expect(progression.getEffectiveRegen.call(makePlayer())).toBe(BASE);
     });
 
-    test('full REGENERATION alone → 2 HP/s', () => {
-        expect(progression.getEffectiveRegen.call(makePlayer({ REGENERATION: FULL }))).toBe(2);
+    test('full REGENERATION + baseline → 2.5 HP/s', () => {
+        expect(progression.getEffectiveRegen.call(makePlayer({ REGENERATION: FULL }))).toBe(2 + BASE);
     });
 
-    test('partial REGENERATION (10 pts) → 1 HP/s', () => {
-        expect(progression.getEffectiveRegen.call(makePlayer({ REGENERATION: 10 }))).toBe(1);
+    test('partial REGENERATION (10 pts) + baseline → 1.5 HP/s', () => {
+        expect(progression.getEffectiveRegen.call(makePlayer({ REGENERATION: 10 }))).toBe(1 + BASE);
     });
 
     test('stacks with the REGEN powerup, sharing the 3 HP/s cap', () => {
-        // REGENERATION 2 + 4× REGEN powerup (2.0) = 4.0 → capped at 3.0.
+        // baseline 0.5 + REGENERATION 2 + 4× REGEN powerup (2.0) = 4.5 → capped at 3.0.
         const p = makePlayer({ REGENERATION: FULL }, { regenStacks: 4 });
         expect(progression.getEffectiveRegen.call(p)).toBe(3);
     });
 
-    test('the stat does NOT change regen when un-allocated, even with other sources', () => {
-        // 2× REGEN powerup = 1.0; 0 REGENERATION must leave it at exactly 1.0.
+    test('the REGENERATION stat adds nothing when un-allocated (baseline + powerup only)', () => {
+        // baseline 0.5 + 2× REGEN powerup (1.0) = 1.5; 0 REGENERATION adds nothing.
         const p = makePlayer({ REGENERATION: 0 }, { regenStacks: 2 });
-        expect(progression.getEffectiveRegen.call(p)).toBe(1);
+        expect(progression.getEffectiveRegen.call(p)).toBe(1 + BASE);
     });
 });

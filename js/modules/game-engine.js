@@ -35,8 +35,10 @@ import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
-import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed } from './shop/armory.js';
+import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed, setDebugUnlockResolvers, applyResell, UNLOCK_CATEGORIES } from './shop/armory.js';
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
+import { isDebugMode, debugUnlockAllFor } from './core/debug-config.js';
+import { DebugMenu, installDebugConsoleApi } from './ui/debug-menu.js';
 import { MAX_STAGES, WAVES_PER_STAGE, DEFAULT_RUN_CONFIG, runMaxWaves, getRunMode } from './core/constants.js';
 // DIR-03 — canonical difficulty mode list + fallback (the DIR-02 table is the
 // single source of truth; imported directly so game-engine doesn't depend on a
@@ -102,6 +104,7 @@ import { ArmoryOverlay } from './ui/armory-overlay.js';
 import { HangarOverlay } from './ui/hangar-overlay.js';
 import { SettingsOverlay } from './ui/settings-overlay.js';
 import { LoadoutOverlay } from './ui/loadout-overlay.js';
+import { AbilityGiftOverlay } from './ui/ability-gift.js';
 import { AnalogStick } from './ui/analog-stick.js';
 
 // 5.100.0 — localStorage key for the analog-stick side preference.
@@ -801,11 +804,10 @@ export class GameEngine {
         this._refreshCameraZoom();
         
         // Initialize cheat flags
-        // 5.96.0 — Reverted the 5.95.0 mobile-only `onePunchMan = true`
-        //   default. Mobile is a tower-defense RPG, not fruit-ninja:
-        //   weapon upgrades, damage multipliers, and kill streaks all
-        //   need to matter. The cheat stays available via the console
-        //   (`gameEngine.cheats.onePunchMan = true`) for dev work.
+        // 6.x — In-game cheats removed. `onePunchMan` survives ONLY as a flag
+        //   driven by the debug menu's "Instakill" toggle (and the test
+        //   harness); it is never enabled in normal play. See ui/debug-menu.js
+        //   + core/debug-config.js.
         this.cheats = {
             onePunchMan: false,
         };
@@ -816,22 +818,37 @@ export class GameEngine {
         // Shop filtered items cache
         this.shopFilteredItems = [];
 
-        // Expose cheat functions globally (case insensitive)
-        this.setupCheatCodes();
+        // Developer debug mode (?debug=1). Inert unless the flag is set.
+        this.setupDebugMode();
 
     }
-    
-    setupCheatCodes() {
-        // Display available keyboard cheats
-        console.log(`
-  CHEAT CODES (keyboard, during gameplay):
-  [        – +1000 Gold
-  ]        – +5 SP
-  (SHIFT+ cheats removed in 5.64.11 — SHIFT is now the ability-cycle key.
-   For dev/testing, drive cheats from the console:
-       window.gameEngine.cheats.onePunchMan = true
-       window.gameEngine.game.money += N
-       window.gameEngine.player.skillPoints += N)`);
+
+    setupDebugMode() {
+        // Wire the armory "unlock all" resolvers so the debug checkboxes can
+        // surface every weapon/ability/passive without touching real saves.
+        const allIds = (category) => {
+            switch (category) {
+                case 'primaries': return Object.keys(PRIMARY_WEAPONS);
+                case 'powers': return Object.keys(POWER_WEAPONS);
+                case 'abilities': return Object.keys(ABILITIES);
+                case 'attunements': return Object.keys(ATTUNEMENTS);
+                case 'abilityAttunements': return Object.keys(ABILITY_ATTUNEMENTS || {});
+                case 'passives': return Object.keys(PASSIVES);
+                default: return [];
+            }
+        };
+        setDebugUnlockResolvers(debugUnlockAllFor, allIds);
+
+        // Only mount the overlay + console API when debug mode is active.
+        if (!isDebugMode()) return;
+        try {
+            this._debugMenu = new DebugMenu();
+            this._debugMenu.setGameEngine(this);
+            installDebugConsoleApi(() => this);
+            console.log('%c[DEBUG] ?debug enabled — press ? for the debug menu, or use window.dbg.help()', 'color:#4ad7ff');
+        } catch (e) {
+            console.warn('Debug mode failed to initialize:', e);
+        }
     }
 
     /**
@@ -4609,6 +4626,90 @@ export class GameEngine {
         shopDom.setPreRunRunConfig((meta.loadout && meta.loadout.runConfig) || DEFAULT_RUN_CONFIG);
         this._preRunTreeOpen = true;
         shopDom.showShopDom(true);
+        // 6.x — First-ability milestone gift (deferred to here per the agreed
+        // "or first run" branch): if the player has cleared Stage 1 and hasn't
+        // been gifted yet, offer a free choice of one ability over the BUILD UI.
+        this.maybeOfferFirstAbilityGift();
+    }
+
+    // 6.x — Re-seed the pre-run BUILD screen's selection state from the current
+    // saved meta + re-render (used after the first-ability gift grants an
+    // ability so it shows up + is pre-selected).
+    _reseedPreRun() {
+        try {
+            const meta = loadMeta() || {};
+            shopDom.setPreRunSelection(normalizeLoadout(meta.loadout || {}, meta));
+            shopDom.setPreRunAttunements((meta.loadout && meta.loadout.attunements) || {});
+            shopDom.setPreRunMods((meta.loadout && meta.loadout.mods) || {});
+            shopDom.setPreRunAbilityAttune((meta.loadout && meta.loadout.abilityAttune) || {});
+            shopDom.setPreRunPassives((meta.loadout && meta.loadout.passives) || []);
+            if (typeof shopDom.renderShopDom === 'function') shopDom.renderShopDom();
+        } catch (_) { /* ignore */ }
+    }
+
+    // 6.x — Offer the free first-ability gift over the BUILD screen, once per
+    // account (gated by meta.clearedStage1 + meta.firstAbilityGifted).
+    maybeOfferFirstAbilityGift() {
+        let meta;
+        try { meta = loadMeta() || {}; } catch { return; }
+        if (!meta.clearedStage1 || meta.firstAbilityGifted) return;
+        // Curated, readable starter abilities to teach the system gently.
+        const CHOICES = ['BULWARK', 'FIELD_MEDIC', 'DEFLECTOR_ORBS', 'BLINK'];
+        const choices = CHOICES
+            .filter((id) => ABILITIES[id])
+            .map((id) => ({ id, name: ABILITIES[id].name, description: ABILITIES[id].description, color: ABILITIES[id].color }));
+        if (!choices.length) return;
+        if (!this._abilityGiftOverlay) this._abilityGiftOverlay = new AbilityGiftOverlay();
+        this._abilityGiftOverlay.open(choices, (id) => this._grantFirstAbility(id));
+    }
+
+    // 6.x — Resell a purchased unlock for a 100% refund. Selling a weapon also
+    // refunds its purchased attunements. Persists meta + the live wallet, then
+    // re-seeds the BUILD screen. Returns true on success.
+    sellUnlock(category, id) {
+        if (!UNLOCK_CATEGORIES[category]) return false;
+        let meta = loadMeta() || {};
+        let gold = resolveAccountGold(meta);
+        const first = applyResell(category, id, meta, gold);
+        if (!first.ok) return false;
+        meta = first.meta; gold = first.accountGold;
+        let totalRefund = first.refund;
+        // Weapons also refund their owned attunements (you don't lose them).
+        if (category === 'primaries' || category === 'powers') {
+            const attIds = Object.keys(ATTUNEMENTS)
+                .filter((aid) => ATTUNEMENTS[aid] && ATTUNEMENTS[aid].weapon === id);
+            for (const aid of attIds) {
+                const r = applyResell('attunements', aid, meta, gold);
+                if (r.ok) { meta = r.meta; gold = r.accountGold; totalRefund += r.refund; }
+            }
+        }
+        // Persist only the touched keys (+ wallet) so we never clobber others.
+        const patch = { accountGold: gold };
+        const catKey = UNLOCK_CATEGORIES[category].metaKey;
+        patch[catKey] = Array.isArray(meta[catKey]) ? meta[catKey] : [];
+        if (category === 'primaries' || category === 'powers') {
+            patch.unlockedAttunements = Array.isArray(meta.unlockedAttunements) ? meta.unlockedAttunements : [];
+        }
+        saveMeta(patch);
+        this.game.accountGold = gold;
+        this.events?.emit?.('ui:show-message', { title: 'SOLD', subtitle: `+${totalRefund.toLocaleString()} Gold`, duration: 1200 });
+        this._reseedPreRun();
+        return true;
+    }
+
+    _grantFirstAbility(id) {
+        if (!ABILITIES[id]) return;
+        const meta = loadMeta() || {};
+        const owned = Array.isArray(meta.unlockedAbilities) ? meta.unlockedAbilities.slice() : [];
+        if (!owned.includes(id)) owned.push(id);
+        // Pre-equip into slot 0 of the saved loadout so it's ready to use.
+        const loadout = (meta.loadout && typeof meta.loadout === 'object') ? { ...meta.loadout } : {};
+        const abil = Array.isArray(loadout.abilities) ? loadout.abilities.slice() : [];
+        if (!abil.includes(id)) abil.unshift(id);
+        loadout.abilities = abil.slice(0, 4);
+        saveMeta({ unlockedAbilities: owned, firstAbilityGifted: true, loadout });
+        this.events?.emit?.('ui:show-message', { title: 'ABILITY UNLOCKED', subtitle: ABILITIES[id].name, duration: 1600 });
+        this._reseedPreRun();
     }
 
     // 6.157.0 — open the HANGAR cosmetic ship-skin selector (from the title

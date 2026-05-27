@@ -688,6 +688,13 @@ export function handleCollisions() {
             const moneyAmount = drop.value || GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN;
             this.game.money += moneyAmount;
             this.addMoneyPickup(moneyAmount);
+            // 6.x — Hoarder's Greed (repurposed off the retired gold-find axis):
+            // each gold orb collected heals a few HP.
+            if (this.player && this.player.hasPassive && this.player.hasPassive('HOARDERS_GREED')) {
+                const maxHp = this.player.getEffectiveMaxHealth
+                    ? this.player.getEffectiveMaxHealth() : (this.player.maxHealth || 0);
+                this.player.health = Math.min(maxHp, (this.player.health || 0) + 4);
+            }
             this.events.emit('audio:coin');
 
             const moneyParticle = this.particlePool.get(this.player.x, this.player.y, 'starBlip');

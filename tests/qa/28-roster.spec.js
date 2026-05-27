@@ -117,13 +117,15 @@ test.describe('QA-28: New-type wave roster', () => {
     test('documented intro waves still carry their new type', async ({ page }) => {
         const roster = await readRoster(page);
         // (wave, expected new type) — the first-appearance / showcase waves.
+        // 6.x mid-game-identity pass relocated the themed gauntlets; the
+        // showcase/first-appearance waves moved (always LATER, never earlier).
         const expectations = [
-            [11, 'LEECH'],
-            [14, 'WRAITHWORM'],
-            [17, 'NULL_DRONE'],
-            [19, 'PHANTOM'],
-            [22, 'DEVOURER'],
-            [23, 'PRISM_MIRROR'],
+            [16, 'WRAITHWORM'],   // Overload (Volt) — was 14
+            [17, 'NULL_DRONE'],   // Overload (Volt) — unchanged
+            [19, 'LEECH'],        // Outbreak (Toxic) — was 11
+            [22, 'PHANTOM'],      // Hall of Mirrors (Void) — was 19
+            [22, 'DEVOURER'],     // Hall of Mirrors (Void) — unchanged
+            [23, 'PRISM_MIRROR'], // Hall of Mirrors (Radiant) — unchanged
         ];
         for (const [w, type] of expectations) {
             expect(roster[w], `wave ${w} should exist`).toBeDefined();
@@ -136,53 +138,55 @@ test.describe('QA-28: New-type wave roster', () => {
     // pool with its ability wired (LIVE spawn path, not the debug hook).
     // ------------------------------------------------------------------
 
-    test('wave 22 roster spawns a live DEVOURER + LEECH with abilities wired', async ({ page }) => {
+    test('wave 22 roster spawns a live DEVOURER + PHANTOM with abilities wired', async ({ page }) => {
         const types = await spawnWaveRoster(page, 22);
-        // Wave 22 carries both DEVOURER (absorb) and LEECH (strip).
+        // Wave 22 (Hall of Mirrors) carries both DEVOURER (absorb) and PHANTOM (cloak).
         expect(types).toContain('DEVOURER');
-        expect(types).toContain('LEECH');
+        expect(types).toContain('PHANTOM');
 
         const wired = await page.evaluate(() => {
             const ge = window.gameEngine;
             const dev = ge.enemyPool.activeObjects.find((e) => e.type === 'DEVOURER' && e.active);
-            const leech = ge.enemyPool.activeObjects.find((e) => e.type === 'LEECH' && e.active);
+            const ph = ge.enemyPool.activeObjects.find((e) => e.type === 'PHANTOM' && e.active);
             return {
                 devActive: !!dev,
                 devEats: !!(dev && dev.eatsProjectiles && dev.maw),
                 devElement: dev ? dev.element : null,
-                leechActive: !!leech,
-                leechStrips: !!(leech && leech.stripsBuff),
-                leechElement: leech ? leech.element : null,
+                phantomActive: !!ph,
+                phantomCloak: !!(ph && ph.cloak),
+                phantomElement: ph ? ph.element : null,
             };
         });
         expect(wired.devActive).toBe(true);
         expect(wired.devEats).toBe(true);
         expect(wired.devElement).toBe('VOID');
-        expect(wired.leechActive).toBe(true);
-        expect(wired.leechStrips).toBe(true);
-        expect(wired.leechElement).toBe('TOXIC');
-    });
-
-    test('wave 19 roster spawns a live PHANTOM with cloak wired', async ({ page }) => {
-        const types = await spawnWaveRoster(page, 19);
-        expect(types).toContain('PHANTOM');
-        expect(types).toContain('WRAITHWORM');
-
-        const wired = await page.evaluate(() => {
-            const ge = window.gameEngine;
-            const ph = ge.enemyPool.activeObjects.find((e) => e.type === 'PHANTOM' && e.active);
-            const ww = ge.enemyPool.activeObjects.find((e) => e.type === 'WRAITHWORM' && e.active);
-            return {
-                phantomCloak: !!(ph && ph.cloak),
-                phantomElement: ph ? ph.element : null,
-                wraithBlink: !!(ww && ww.blink),
-                wraithElement: ww ? ww.element : null,
-            };
-        });
+        expect(wired.phantomActive).toBe(true);
         expect(wired.phantomCloak).toBe(true);
         expect(wired.phantomElement).toBe('VOID');
-        expect(wired.wraithBlink).toBe(true);
-        expect(wired.wraithElement).toBe('VOLT');
+    });
+
+    test('wave 16 spawns a live WRAITHWORM (blink) and wave 19 a live LEECH (strip)', async ({ page }) => {
+        // Overload (Volt) — WRAITHWORM's blink-burrow is wired on spawn.
+        const w16 = await spawnWaveRoster(page, 16);
+        expect(w16).toContain('WRAITHWORM');
+        const ww = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const e = ge.enemyPool.activeObjects.find((x) => x.type === 'WRAITHWORM' && x.active);
+            return { blink: !!(e && e.blink), element: e ? e.element : null };
+        });
+        expect(ww.blink).toBe(true);
+        expect(ww.element).toBe('VOLT');
+
+        // Outbreak (Toxic) — LEECH's buff-strip is wired on spawn.
+        const w19 = await spawnWaveRoster(page, 19);
+        expect(w19).toContain('LEECH');
+        const leech = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            const e = ge.enemyPool.activeObjects.find((x) => x.type === 'LEECH' && x.active);
+            return { strips: !!(e && e.stripsBuff), element: e ? e.element : null };
+        });
+        expect(leech.strips).toBe(true);
+        expect(leech.element).toBe('TOXIC');
     });
 
     // ------------------------------------------------------------------
@@ -210,8 +214,8 @@ test.describe('QA-28: New-type wave roster', () => {
         const errors = attachErrorCollector(page);
 
         // Spawn a spread of late-wave rosters that between them cover all six
-        // new types (17 → NULL_DRONE, 19 → PHANTOM+WRAITHWORM, 22 → DEVOURER+
-        // LEECH, 23 → PRISM_MIRROR+PHANTOM), running real frames between each
+        // new types (17 → NULL_DRONE+WRAITHWORM, 19 → LEECH, 22 → PHANTOM+
+        // DEVOURER, 23 → PRISM_MIRROR+PHANTOM), running real frames between each
         // so update()/draw() tick every ability.
         for (const w of [17, 19, 22, 23]) {
             await spawnWaveRoster(page, w);

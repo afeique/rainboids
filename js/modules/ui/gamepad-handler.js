@@ -26,6 +26,7 @@
 // button commits it (dead-zone release cancels).
 
 import { GAME_STATES } from '../core/constants.js';
+import { debugState } from '../core/debug-config.js';
 import { ACTIONS, GAMEPAD_BUTTON, GAMEPAD_LAYOUTS, createGamepadBindingState } from './bindings.js';
 import { GamepadFocusController } from './gamepad-focus.js';
 
@@ -271,11 +272,13 @@ export class GamepadHandler {
         // slice, release commits (or cancels in the dead zone).
         const radial = this.engine.radialMenu;
         if (!radial) return;
+        // 6.x — Weapon radials are a developer affordance now (gated by the
+        // ?debug toggles), and the ability radial was removed. Classic-layout
+        // bumpers only open a radial when its debug flag is enabled.
         const classic = this.getLayout() === 'classic';
         const want = classic
-            ? (this._pressed(gp, BTN_R1) ? 'primary'
-                : this._pressed(gp, BTN_L1) ? 'power'
-                : this._pressed(gp, BTN_TRIANGLE) ? 'ability'
+            ? (debugState.primaryRadial && this._pressed(gp, BTN_R1) ? 'primary'
+                : debugState.powerRadial && this._pressed(gp, BTN_L1) ? 'power'
                 : null)
             : null;
         const state = this.engine.game && this.engine.game.state;

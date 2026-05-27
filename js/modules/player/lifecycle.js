@@ -36,6 +36,7 @@ import { frameClock } from '../core/frame-clock.js';
 import { applyPlayerStatus, playerCorrodeMult } from './player-status.js';
 import { getDifficulty } from '../wave/difficulty-director.js';
 import { deathCauseString } from '../hud/death-cause.js';
+import { debugState } from '../core/debug-config.js';
 
 // FB-3 — derive a compact, serializable death-cause descriptor from the live
 // damage source passed into takeDamage (opts.source) plus call-context flags.
@@ -217,6 +218,8 @@ export function applyBloodshieldSoak(player, dmg) {
 
 export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
     if (this.player.invincible) return 0;
+    // 6.x — Debug god mode: ignore all incoming damage (dev-only flag).
+    if (debugState.godMode) return 0;
 
     // PHASE_DASH i-frames zero the hit entirely (dash-through). Was only
     // honored at the enemy / enemy-bullet sites; asteroid collisions
@@ -607,9 +610,14 @@ export function accumulateOverflowToTank(credit) {
             this.spawnTankRecharge(this.healthTanks);
         }
     }
-    // Cap progress at <1 once at max tanks so overflow doesn't sit forever.
-    if (this.healthTanks >= MAX_HEALTH_TANKS && this.player._tankProgress > 1) {
-        this.player._tankProgress = 1;
+    // 6.x — BUGFIX: at MAX tanks there's nothing to recover, so DISCARD the
+    // overflow and clear progress. Previously this capped progress at 1, which
+    // left a permanent light-blue "overfill" overlay painted across the health
+    // bar — the behavior the player flagged as wrong. The cyan progress overlay
+    // (status.js, gated on _tankProgress > 0) now appears ONLY while a lost
+    // tank is actively being rebuilt, then converts into a triforce triangle.
+    if (this.healthTanks >= MAX_HEALTH_TANKS) {
+        this.player._tankProgress = 0;
     }
 }
 

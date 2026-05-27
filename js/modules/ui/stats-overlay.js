@@ -37,7 +37,6 @@ function buildStatsModel(player, gameEngine) {
     const critC = player.getEffectiveCritChance?.() ?? 0;
     const critDStacks = player.getPowerupStacks?.('CRIT_DAMAGE') | 0;
     const critDMax = Math.min(550, 300 + critDStacks * 15);
-    const goldFind = player.getGoldFindMultiplier?.() ?? 1;
     const streakMul = player.getHitStreakMultiplier?.() ?? 1;
     const stacks = (id) => player.getPowerupStacks ? player.getPowerupStacks(id) : 0;
 
@@ -101,18 +100,9 @@ function buildStatsModel(player, gameEngine) {
     });
 
     // ── Economy ────────────────────────────────────────────────────────
-    // 5.102.0 — Per-level orb/drop scaling rows dropped — they're
-    // invisible to the player in-game and never inform a decision.
-    sections.push({
-        title: 'ECONOMY',
-        rows: [
-            {
-                key: 'Gold Find',
-                value: `${mult(goldFind)}`,
-                tip: `+10% per wave (wave ${gameEngine?.game?.currentWave ?? 1}).`,
-            },
-        ],
-    });
+    // 6.x — ECONOMY / Gold Find row removed: gold-find is retired (the gold
+    // economy is flat + decoupled from gear/level/wave), so there is no
+    // multiplier to surface.
 
     // ── Powerups (just an inventory peek) ────────────────────────────
     const ownedPowerups = [];

@@ -18,10 +18,13 @@ test.describe('QA-13: Attunements (BUILD tree)', () => {
         await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
     });
 
-    test('weapon clusters show attunement orbit nodes in BUILD mode', async ({ page }) => {
+    test('the equipped weapon shows attunement chips in BUILD mode', async ({ page }) => {
+        // 7.0.0 — the pre-run BUILD screen is now a compact owned-only list;
+        // attunements render as `.shop-prerun-chip[data-kind="attunement"]`
+        // dropdown chips under the EQUIPPED weapon (Pulse Cannon by default).
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
-            const nodes = [...document.querySelectorAll('#shop-tree-primary .shop-node--attune')];
+            const nodes = [...document.querySelectorAll('#shop-tree-primary .shop-prerun-chip[data-kind="attunement"]')];
             return { count: nodes.length, ids: nodes.map((n) => n.dataset.id) };
         });
         expect(r.count).toBeGreaterThan(0);
@@ -123,10 +126,12 @@ test.describe('QA-13b: Mechanic mods (BUILD tree, Phase W5)', () => {
         await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
     });
 
-    test('weapon clusters show mechanic-mod orbit nodes in BUILD mode', async ({ page }) => {
+    test('the equipped weapon shows mechanic-mod chips in BUILD mode', async ({ page }) => {
+        // 7.0.0 — mods render as `.shop-prerun-chip[data-kind="mod"]` dropdown
+        // chips under the equipped weapon (compact list replaced the orbit tree).
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
-            const nodes = [...document.querySelectorAll('#shop-tree-primary .shop-node--mod')];
+            const nodes = [...document.querySelectorAll('#shop-tree-primary .shop-prerun-chip[data-kind="mod"]')];
             return { count: nodes.length, ids: nodes.map((n) => n.dataset.id) };
         });
         expect(r.count).toBeGreaterThan(0);

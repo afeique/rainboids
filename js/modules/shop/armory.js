@@ -12,25 +12,28 @@
 // live run + the rainboidsMeta store.
 
 // Always-available loadout — never costs gold, never appears in the store.
-// R6.2 base kit: Bulwark + Field Medic from run one (Phase Dash is the free
-// SHIFT movement primitive, not a 4-slot ability).
+// 6.x — Pulse Cannon + Charge Shot ONLY. Abilities are now purchase-locked so
+// the early game is a focused shooting experience; the player's FIRST ability
+// is granted by the milestone gift on the first Stage-1 clear (game-engine),
+// after which more abilities are bought with account-gold. (Phase Dash is the
+// free SHIFT movement primitive, not a 4-slot ability.)
 export const BASE_LOADOUT = {
     primaries: ['PULSE_CANNON'],
     powers:    ['CHARGE_SHOT'],
-    abilities: ['BULWARK', 'FIELD_MEDIC'],
+    abilities: [],
 };
 
 // Per-category meta key + base set + unlock price. Abilities are priced
 // higher than weapons so the early game stays weapon-led (design §4).
 export const UNLOCK_CATEGORIES = {
-    // W7 — costs dialed way up (per the design intent): unlocks are long-term
-    // meta-progression goals, not pocket change. Hierarchy preserved
-    // (abilities > powers > primaries). A weapon now costs more than a single
-    // attunement/mod, so the weapon is the headline commitment and tuning it is
-    // the follow-up investment.
-    primaries: { metaKey: 'unlockedPrimaries', base: BASE_LOADOUT.primaries, cost: 8000 },
+    // 6.x — FLAT pricing: every weapon AND every ability costs the same 10k so
+    // unlocks never feel "cheap" later in a run (the gold economy is flat +
+    // decoupled from level/gear, so 10k always costs the same number of kills).
+    // Attunements stay cheaper than a whole weapon (they're tuning, not new
+    // tools). 100% resell (game-engine) lets the player experiment freely.
+    primaries: { metaKey: 'unlockedPrimaries', base: BASE_LOADOUT.primaries, cost: 10000 },
     powers:    { metaKey: 'unlockedPowers',    base: BASE_LOADOUT.powers,    cost: 10000 },
-    abilities: { metaKey: 'unlockedAbilities', base: BASE_LOADOUT.abilities, cost: 12000 },
+    abilities: { metaKey: 'unlockedAbilities', base: BASE_LOADOUT.abilities, cost: 10000 },
     // Per-weapon Attunements (element upgrades). Flat cost for now; finer
     // per-attunement (signature vs exotic) tuning is a later pass.
     attunements: { metaKey: 'unlockedAttunements', base: [], cost: 7000 },
@@ -44,26 +47,18 @@ export const UNLOCK_CATEGORIES = {
     passives: { metaKey: 'unlockedPassives', base: ['OPPORTUNIST', 'LAST_BASTION'], cost: 9000 },
 };
 
-// ── New-account starter grant (early-engagement pass) ──────────────────────
-// A brand-new account (no meta in localStorage yet) is seeded ONCE with a small
-// gold head-start + a handful of extra unlocks beyond BASE_LOADOUT, so:
-//   • the run-one LOADOUT screen is a real "opening fork" — 3 primaries / 2
-//     powers / 3 abilities to choose between, not a single forced kit — and
-//   • the first ARMORY unlock is reachable in ~1-2 runs instead of ~15.
-// This does NOT change BASE_LOADOUT (the always-free floor); it only pre-fills
-// the persistent unlock lists for a fresh save. The starter gold sits BELOW the
-// cheapest unlock (mods, 5000) so it can't be spent directly — it just shortens
-// the grind to the first purchase, never trivializes it.
-export const STARTER_ACCOUNT_GOLD = 3000;
-export const STARTER_UNLOCKS = {
-    unlockedPrimaries: ['SCATTER_GUN', 'RAIL_DRIVER'], // + base PULSE_CANNON → rapid / spread / pierce
-    unlockedPowers:    ['MINE_LAYER'],                 // + base CHARGE_SHOT  → burst / area
-    unlockedAbilities: ['DEFLECTOR_ORBS'],             // + base BULWARK + FIELD_MEDIC
-};
+// ── New-account starter grant ──────────────────────────────────────────────
+// 6.x — The early-engagement starter grant was REMOVED. A brand-new account
+// now starts with ZERO account-gold and ONLY the base kit (Pulse + Charge) —
+// everything else is earned + purchased. Run 1 is a deliberately simple
+// shooting experience; the first ability arrives via the Stage-1 milestone
+// gift. Kept as named exports (value 0 / empty) for back-compat with callers.
+export const STARTER_ACCOUNT_GOLD = 0;
+export const STARTER_UNLOCKS = {};
 
 /**
  * The one-time meta blob seeded for a brand-new account (no meta yet). Callers
- * MUST gate on `!loadMeta()` so an existing player is never re-granted.
+ * MUST gate on `!loadMeta()` so an existing player is never re-seeded.
  */
 export function newAccountSeed() {
     return { accountGold: STARTER_ACCOUNT_GOLD, ...STARTER_UNLOCKS };
@@ -75,10 +70,24 @@ export function unlockCost(category) {
     return c ? c.cost : 0;
 }
 
-/** The set of ids the player can equip in `category`: base ∪ purchased. */
+// Debug "unlock all" hook. Kept INJECTABLE so this module stays pure +
+// dependency-free (and unit-tests see the real behavior). game-engine.js wires
+// real resolvers in debug mode; absent injection, getUnlockedSet is unchanged.
+let _debugUnlockAllResolver = null; // (category) => boolean
+let _debugAllIdsResolver = null;    // (category) => string[]
+export function setDebugUnlockResolvers(unlockAllFn, allIdsFn) {
+    _debugUnlockAllResolver = (typeof unlockAllFn === 'function') ? unlockAllFn : null;
+    _debugAllIdsResolver = (typeof allIdsFn === 'function') ? allIdsFn : null;
+}
+
+/** The set of ids the player can equip in `category`: base ∪ purchased
+ *  (∪ everything, when a debug "unlock all" covers the category). */
 export function getUnlockedSet(category, meta) {
     const c = UNLOCK_CATEGORIES[category];
     if (!c) return new Set();
+    if (_debugUnlockAllResolver && _debugAllIdsResolver && _debugUnlockAllResolver(category)) {
+        return new Set([...c.base, ...(_debugAllIdsResolver(category) || [])]);
+    }
     const purchased = (meta && Array.isArray(meta[c.metaKey])) ? meta[c.metaKey] : [];
     return new Set([...c.base, ...purchased]);
 }
@@ -160,6 +169,23 @@ export function applyUnlock(category, id, meta, accountGold) {
     const cur = (meta && Array.isArray(meta[c.metaKey])) ? meta[c.metaKey] : [];
     const nextMeta = { ...(meta || {}), [c.metaKey]: [...cur, id] };
     return { ok: true, reason: 'ok', meta: nextMeta, accountGold: (accountGold | 0) - check.cost };
+}
+
+/**
+ * Pure resell. Removes `id` from the category's purchased list and refunds the
+ * FULL unlock cost (100% — single-player; the point is free experimentation,
+ * so swapping costs nothing beyond having earned the gold once). Base-kit ids
+ * and not-owned ids are no-ops. Returns a NEW { ok, reason, meta, accountGold, refund }.
+ */
+export function applyResell(category, id, meta, accountGold) {
+    const c = UNLOCK_CATEGORIES[category];
+    if (!c) return { ok: false, reason: 'bad-category', meta, accountGold, refund: 0 };
+    if (c.base.includes(id)) return { ok: false, reason: 'base', meta, accountGold, refund: 0 };
+    const cur = (meta && Array.isArray(meta[c.metaKey])) ? meta[c.metaKey] : [];
+    if (!cur.includes(id)) return { ok: false, reason: 'not-owned', meta, accountGold, refund: 0 };
+    const refund = unlockCost(category); // 100% refund
+    const nextMeta = { ...(meta || {}), [c.metaKey]: cur.filter((x) => x !== id) };
+    return { ok: true, reason: 'ok', meta: nextMeta, accountGold: (accountGold | 0) + refund, refund };
 }
 
 /** Bank a run's leftover run-gold into the account wallet. */

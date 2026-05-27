@@ -11,6 +11,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [7.1.0] - 2026-05-26
+
+### Changed
+
+- **HUD vitals cluster redesign.** The top-left status row is now an evenly
+  spaced strip: a red **health sphere** and the weapon-energy sphere sit side
+  by side where the old health bar was, followed by the account **LEVEL** (gold)
+  with a pulsing **"+N SP"** badge stacked directly beneath it, then — after a
+  small gap — the build's **PWR** readout (violet-gold). The two orbs, the level
+  column, and the PWR readout all share one horizontal midline so the row reads
+  as a clean, polished strip.
+- Health now renders as a glass orb whose red core fills by current/max HP,
+  carrying over the eased drain animation (a hit reads as a chunk leaving the
+  orb) and the low-HP warning, now a pulsing red rim. The heart icon + HP
+  numbers sit centered beneath the orb.
+- PWR readout relabeled from `P` to `PWR`.
+
+### Removed
+
+- The angled **health bar** — including its bevel-corner geometry, per-tier
+  gradient cache, and overflow-fill strip — replaced by the health sphere.
+- The **"LV" shield badge**; the level now reads as a plain `LV n` label to the
+  right of the energy sphere.
+
+## [7.0.0] - 2026-05-26
+
+A fundamental progression + economy overhaul: weapons are now earned, gold is
+flat and skill-based, in-game cheats are gone, and a developer debug mode plus a
+compact loadout UI replace the old pre-run bubble tree.
+
+### Added
+
+- **Developer debug mode (`?debug=1`)** — persisted (survives reload; `?debug=0`
+  clears it). Press **?** for an overlay that pauses the game: unlock all
+  weapons / abilities / passives, toggle the Primary/Power weapon radials, grant
+  gold (+1k/10k/100k), XP (+1k/10k), levels (+1/5/10, with SP) and SP
+  (+5/10/100), plus god mode, instakill, infinite energy, jump-to-wave,
+  kill-all, refill HP+tanks, set HP to 1, reset cooldowns, and a bubble-tree
+  preview toggle. Also exposes a `window.dbg` console API (`dbg.help()`).
+- **First-ability milestone gift** — since abilities are purchase-locked, the
+  first time you clear Stage 1 the Build screen offers a free choice of one
+  ability (and pre-equips it).
+- **Compact loadout selector** — the pre-run Build screen now lists only the
+  weapons/abilities you OWN as tight equip buttons; clicking one expands its
+  attunements as a dropdown. A collapsible "unlock more" section purchases
+  locked items with account-gold.
+- **Pause → LOADOUT tab** — replaces the PRIMARY/POWER tabs with one compact
+  panel (active weapon + attunements, power + attunements, the four ability
+  slots); switch your active weapon/power in-flight. Controls tab now lists the
+  1–4 ability keys.
+- **Wave/stage health drops** — a few health pickups at every wave clear, more
+  at every stage clear.
+- **Baseline passive regen** — every player slowly heals (0.5 HP/s) out of
+  combat after the 4s no-damage gate, even with no regen investment.
+
+### Changed
+
+- **All weapons are locked by default.** The base kit is **Pulse Cannon + Charge
+  Shot only**; every other weapon and ability must be purchased with
+  account-gold (flat **10,000** each; attunements **7,000**). **100% resell** on
+  any purchased weapon/ability/attunement (selling a weapon refunds its
+  attunements). Abilities are activated with **1–4** only.
+- **Gold is now flat, randomized, and decoupled from level/gear/wave.** Each drop
+  rolls a fixed range × your killstreak multiplier (the ONLY modifier): enemies
+  25–55, bosses 250–1100 by tier, asteroids ~55% chance of 5–20 (rarely 30–50).
+  A wave-30 kill pays the same as a wave-1 kill, so flat prices never feel cheap
+  late (~3k by wave 5, ~22–32k over a full 30-wave run).
+- Hoarder's Greed repurposed off the (now-retired) gold-find axis — it now heals
+  on gold pickup.
+
+### Removed
+
+- **All in-game cheats** — the `[` (+gold) and `]` (+SP) keys are gone (dev
+  grants live behind `?debug`; the `onePunchMan` flag survives only for the
+  debug "instakill" toggle + the test harness).
+- **Weapon-selection radials are off by default** — `E`/`R`/`F` do nothing in
+  normal play; the Primary/Power radials are dev-only toggles and the ability
+  radial (`R`) was removed.
+- The wave-clear / stage-clear **gold bonus** (gold is per-kill only now).
+- The new-account starter grant (run 1 is now Pulse + Charge only).
+- The "Gold Find" stat row from the stats screen (gold-find is retired).
+
+### Fixed
+
+- **Energy-tank recovery** — over-healing at full tanks no longer paints a
+  permanent light-blue "overfill" overlay on the health bar. The cyan progress
+  overlay now appears only while a lost tank is being rebuilt, then converts into
+  a triforce triangle.
+
+---
+
+## [6.229.0] - 2026-05-26
+
+### Changed — mid-game stages are now distinct themed gauntlets (less repetitive)
+
+- Re-authored waves 10–27 so each mid-game stage has a clear identity instead of
+  blurring into "the same kinetic backbone + a 1-count accent." Stages 4–9 are
+  now **elemental/theme gauntlets** where the themed family is the *prominent*
+  roster, not garnish:
+  - **Stage 4 Wildfire** (Pyro) — Cinder swarms, Ashen Detonators, Bombers; *freeze them*.
+  - **Stage 5 Deep Freeze** (Cryo) — Glaciers + Frost Lances behind Sentinel walls; *burn them*.
+  - **Stage 6 Overload** (Volt) — Tesla Wraiths, Drifters, Wraithworm, Null Drone.
+  - **Stage 7 Outbreak** (Toxic) — Plaguebearers, Spore Carriers, Leeches, Hydras, Warden.
+  - **Stage 8 Hall of Mirrors** (Void/trick) — Phantom, Devourer, Prism Mirror, Lumen Drone, Juggernaut.
+  - **Stage 9 Apocalypse** — a taste of every gauntlet at peak density.
+- Each gauntlet keeps a small kinetic spine + a fast/tank/ranged role spread, and
+  doubles as a **soft resistance puzzle** (bring the counter element and it melts;
+  kinetic still works at par). Every potent mechanic enemy was only pushed
+  **later**, never earlier (the player is stronger when it lands): Wraithworm
+  14→16, Leech 11→19, Phantom 19→22. Boss waves keep their unique modular boss
+  and stay free of the special mechanic enemies. The adaptive difficulty director
+  remains the HP-scaling safety net; composition feel is a playtest target.
+- Boss-intro subtitles now name the actual boss (Harbinger, Aegis, Lumen, Gemini,
+  Maelstrom, Hivemother, Iron Throne, Warden Prime, Nullmaw) so the 10 distinct
+  bosses read as distinct.
+
 ## [6.228.2] - 2026-05-26
 
 ### Added — gamepad rumble on power-weapon fire (GP-4 cue)

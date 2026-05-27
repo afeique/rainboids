@@ -45,8 +45,9 @@ import { wavesPerStageRewardMultForWps } from '../world/reward-dial.js';
 import { MODES, DEFAULT_MODE, modeReward } from '../wave/difficulty-constants.js';
 // 2026-05-23 — pre-run BUILD mode reuses the loadout-selection helpers so the
 // tree can act as the start-of-run weapon/ability picker (see _preRun below).
-import { toggleSelection, getUnlockedSet, unlockCost, LOADOUT_SLOTS } from './armory.js';
+import { toggleSelection, getUnlockedSet, unlockCost, LOADOUT_SLOTS, BASE_LOADOUT } from './armory.js';
 import { loadMeta } from '../core/storage.js';
+import { debugState } from '../core/debug-config.js';
 
 // Per-element icon for attunement bubbles (falls back to 'spiral').
 const _ELEM_ICON = {
@@ -93,6 +94,10 @@ let _lastBuyAt = 0;
 // consumed by startNewRun; _unlockedSets caches per-category unlocks.
 let _preRun = false;
 let _preRunSel = { primaries: [], powers: [], abilities: [] };
+// 6.x — per-category "unlock more" store expansion on the compact BUILD list.
+// Collapsed by default so the screen shows ONLY owned items (the loadout);
+// expanding reveals the locked items to purchase with account-gold.
+let _prerunStoreOpen = { primaries: false, powers: false, abilities: false };
 let _unlockedSets = null;
 // W5 — per-weapon ACTIVE attunement ids chosen for the run: { weaponId: [id…] }.
 // Seeded from meta.loadout.attunements; flows into player.activeAttunements on
@@ -1007,10 +1012,173 @@ function _collectDefenseGroups() {
     return groups;
 }
 
+// 6.x — COMPACT pre-run selector (replaces the bubble tree on the BUILD
+// screen). Shows ONLY owned items as a tight list of equip buttons; clicking a
+// weapon equips it AND expands its attunements/mods as a dropdown below. Reuses
+// the tree's delegated click handler by emitting the same `.shop-node` +
+// data-* nodes the bubble tree uses, so equip/attune/unlock/radio logic is
+// shared. The bubble tree is preserved (debugState.showBubbleTree toggles it).
+function _isBaseKit(category, id) {
+    const base = BASE_LOADOUT[category];
+    return Array.isArray(base) && base.includes(id);
+}
+
+function _renderCompactList(container, groups, player, category) {
+    container.replaceChildren();
+    const ownedSet = _unlockedSets ? _unlockedSets[category] : null;
+    const sel = (_preRunSel && _preRunSel[category]) || [];
+
+    const list = document.createElement('div');
+    list.className = 'shop-prerun-list';
+
+    const ownedGroups = groups.filter((g) => !ownedSet || ownedSet.has(g.parent.id));
+    if (ownedGroups.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'shop-prerun-empty';
+        empty.textContent = category === 'abilities'
+            ? 'No abilities yet. Clear Stage 1 for a free pick, or buy more in the Armory.'
+            : 'Only your starter is unlocked. Earn gold, then buy more in the Armory.';
+        list.appendChild(empty);
+        container.appendChild(list);
+        return;
+    }
+
+    for (const group of ownedGroups) {
+        const wid = group.parent.id;
+        const equipped = sel.includes(wid);
+
+        const row = document.createElement('div');
+        row.className = 'shop-prerun-row' + (equipped ? ' is-equipped' : '');
+        row.style.setProperty('--node-accent', group.parent.color || '#8bd');
+
+        // Equip toggle — a `.shop-node--parent` so the tree click handler equips
+        // it (≤4 per category). Marked selectable since it's owned.
+        const pick = document.createElement('button');
+        pick.type = 'button';
+        pick.className = 'shop-node shop-node--parent shop-prerun-pick'
+            + (equipped ? ' shop-node--equipped' : '');
+        pick.dataset.id = wid;
+        pick.dataset.category = category;
+        pick.dataset.prerunSelectable = '1';
+        const nm = document.createElement('span');
+        nm.className = 'shop-prerun-name';
+        nm.textContent = group.parent.name;
+        const badge = document.createElement('span');
+        badge.className = 'shop-prerun-badge';
+        badge.textContent = equipped ? '✓ EQUIPPED' : 'EQUIP';
+        pick.append(nm, badge);
+        row.appendChild(pick);
+
+        // Sell (100% refund) — only for purchased, non-base items. Not a
+        // `.shop-node`, so the equip handler ignores it; own listener.
+        if (!_isBaseKit(category, wid)) {
+            const sell = document.createElement('button');
+            sell.type = 'button';
+            sell.className = 'shop-prerun-sell';
+            sell.textContent = `SELL ${unlockCost(category).toLocaleString()}`;
+            sell.title = 'Resell for a full refund';
+            sell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (_engine && typeof _engine.sellUnlock === 'function') _engine.sellUnlock(category, wid);
+            });
+            row.appendChild(sell);
+        }
+        list.appendChild(row);
+
+        // Attunement / mod dropdown — only while equipped. Reuses the bubble
+        // tree's `.shop-node[data-kind=...]` nodes so the existing handler
+        // toggles/unlocks/radio-sets them.
+        if (equipped && Array.isArray(group.upgrades) && group.upgrades.length) {
+            const drop = document.createElement('div');
+            drop.className = 'shop-prerun-attune';
+            for (const up of group.upgrades) {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'shop-node shop-prerun-chip';
+                chip.dataset.id = up.id;
+                chip.dataset.kind = up.kind;
+                if (up.weaponId) chip.dataset.weapon = up.weaponId;
+                if (up.abilityId) chip.dataset.ability = up.abilityId;
+
+                let owned = false, active = false;
+                if (up.kind === 'attunement') {
+                    owned = !!(_unlockedAttune && _unlockedAttune.has(up.id));
+                    active = (_preRunAttune[up.weaponId] || []).includes(up.id);
+                } else if (up.kind === 'mod') {
+                    owned = !!(_unlockedMods && _unlockedMods.has(up.id));
+                    active = (_preRunMods[up.weaponId] || []).includes(up.id);
+                } else if (up.kind === 'abilityAttune') {
+                    owned = !!(_unlockedAbilityAttune && _unlockedAbilityAttune.has(up.id));
+                    active = _preRunAbilityAttune[up.abilityId] === up.id;
+                }
+                chip.classList.toggle('is-active', active);
+                chip.classList.toggle('is-owned', owned && !active);
+                chip.classList.toggle('is-locked', !owned);
+                if (up.element && ELEMENTS[up.element]) chip.style.setProperty('--chip-accent', ELEMENTS[up.element].color || '#8bd');
+                chip.textContent = owned ? up.name : `${up.name} · ${unlockCost(up.kind === 'mod' ? 'mods' : up.kind === 'abilityAttune' ? 'abilityAttunements' : 'attunements').toLocaleString()}`;
+                drop.appendChild(chip);
+            }
+            list.appendChild(drop);
+        }
+    }
+
+    // ── "Unlock more" store — collapsed by default so the screen stays an
+    // owned-only loadout list. Expanding shows LOCKED items to buy with
+    // account-gold (clicking a locked parent routes to the unlock handler).
+    const lockedGroups = ownedSet ? groups.filter((g) => !ownedSet.has(g.parent.id)) : [];
+    if (lockedGroups.length) {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'shop-prerun-store-toggle';
+        const open = !!_prerunStoreOpen[category];
+        toggle.textContent = open
+            ? `− Hide store`
+            : `＋ Unlock more (${lockedGroups.length}) · ${unlockCost(category).toLocaleString()} ea`;
+        toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            _prerunStoreOpen[category] = !_prerunStoreOpen[category];
+            renderShopDom();
+        });
+        list.appendChild(toggle);
+
+        if (open) {
+            const store = document.createElement('div');
+            store.className = 'shop-prerun-store';
+            for (const group of lockedGroups) {
+                const buy = document.createElement('button');
+                buy.type = 'button';
+                // Locked parent: NO data-prerun-selectable → the tree handler
+                // routes the click to unlockPreRunItem (buy + auto-equip).
+                buy.className = 'shop-node shop-node--parent shop-prerun-pick shop-prerun-pick--locked';
+                buy.dataset.id = group.parent.id;
+                buy.dataset.category = category;
+                buy.style.setProperty('--node-accent', group.parent.color || '#8bd');
+                const nm = document.createElement('span');
+                nm.className = 'shop-prerun-name';
+                nm.textContent = group.parent.name;
+                const badge = document.createElement('span');
+                badge.className = 'shop-prerun-badge';
+                badge.textContent = `UNLOCK ${unlockCost(category).toLocaleString()}`;
+                buy.append(nm, badge);
+                store.appendChild(buy);
+            }
+            list.appendChild(store);
+        }
+    }
+
+    container.appendChild(list);
+}
+
 // Weapon-style cluster: parent + orbiting upgrades. One subgroup per
 // weapon, separated by a thin divider.
 function _renderWeaponCluster(container, groups, player, category) {
     if (!container) return;
+    // 6.x — Pre-run uses the compact list selector by default; the bubble tree
+    // is preserved and shown only when the debug "Show bubble tree" toggle is on.
+    if (_preRun && !debugState.showBubbleTree) {
+        _renderCompactList(container, groups, player, category);
+        return;
+    }
     container.replaceChildren();
 
     for (const group of groups) {

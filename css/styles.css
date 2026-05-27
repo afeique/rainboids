@@ -5189,3 +5189,76 @@ h1, h2, h3,
 .font-size-row { display: flex; justify-content: space-between; align-items: baseline; }
 .font-size-pct { color: #ffd75c; }
 .font-size-slider { width: 100%; margin-top: 2px; accent-color: #8fd0ff; cursor: pointer; }
+
+/* ── 6.x — Compact pre-run / loadout selector (replaces the bubble tree) ── */
+/* Owned-only list of equip buttons; clicking a weapon expands its attunements
+   as a dropdown. Reuses .shop-node nodes for the shared click handler, so we
+   reset the circular bubble styling here (scoped for specificity). */
+.shop-prerun-list { display: flex; flex-direction: column; gap: 8px; width: 100%;
+    max-width: 560px; margin: 0 auto; padding: 8px 4px; align-items: stretch; }
+.shop-prerun-empty { color: #8a9bbd; font-size: calc(11px * var(--font-body-scale, 1));
+    text-align: center; padding: 24px 12px; line-height: 1.6; }
+.shop-prerun-row { display: flex; align-items: stretch; gap: 8px; }
+
+/* Equip button — reset the bubble circle to a full-width pill. */
+.shop-prerun-list .shop-prerun-pick {
+    width: auto; height: auto; border-radius: 8px; flex: 1 1 auto;
+    flex-direction: row; justify-content: space-between; gap: 10px;
+    padding: 10px 14px; position: static; border-width: 2px;
+    --node-color: var(--node-accent, #8bd);
+    background: rgba(18, 24, 36, 0.92);
+}
+.shop-prerun-list .shop-prerun-pick.shop-node--equipped {
+    background: color-mix(in srgb, var(--node-accent, #8bd) 22%, rgba(18,24,36,0.92));
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.6), 0 0 16px color-mix(in srgb, var(--node-accent,#8bd) 50%, transparent);
+}
+.shop-prerun-name { font-size: calc(12px * var(--font-body-scale, 1)); letter-spacing: 0.5px; }
+.shop-prerun-badge { font-size: calc(9px * var(--font-body-scale, 1)); color: #cfe4ff; opacity: 0.85; }
+.shop-prerun-pick.shop-node--equipped .shop-prerun-badge { color: #aef0c4; opacity: 1; }
+
+/* Sell button — small, danger-tinted, beside the equip pill. */
+.shop-prerun-sell { font-family: var(--font-body); font-size: calc(9px * var(--font-body-scale, 1));
+    background: rgba(40, 18, 24, 0.9); color: #ff9bb0; border: 1px solid rgba(255, 90, 120, 0.5);
+    border-radius: 8px; padding: 0 12px; cursor: pointer; white-space: nowrap; }
+.shop-prerun-sell:hover { background: rgba(70, 24, 34, 0.95); border-color: #ff5a78; color: #ffd0da; }
+
+/* Attunement dropdown — chips below an equipped weapon. */
+.shop-prerun-attune { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 8px 8px 18px; }
+.shop-prerun-list .shop-prerun-chip {
+    width: auto; height: auto; border-radius: 6px; flex: 0 0 auto;
+    flex-direction: row; padding: 6px 10px; position: static; border-width: 2px;
+    font-size: calc(9px * var(--font-body-scale, 1));
+    --node-color: var(--chip-accent, #5a6f90);
+    background: rgba(14, 19, 28, 0.92);
+}
+.shop-prerun-list .shop-prerun-chip.is-locked { opacity: 0.55; border-style: dashed; color: #f8d670; }
+.shop-prerun-list .shop-prerun-chip.is-owned { opacity: 0.9; }
+.shop-prerun-list .shop-prerun-chip.is-active {
+    background: color-mix(in srgb, var(--chip-accent, #5a6f90) 35%, rgba(14,19,28,0.92));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--chip-accent,#5a6f90) 55%, transparent);
+}
+
+/* "Unlock more" store — collapsed by default; the loadout list stays owned-only. */
+.shop-prerun-store-toggle { font-family: var(--font-body); font-size: calc(9px * var(--font-body-scale, 1));
+    background: none; border: 1px dashed rgba(143, 208, 255, 0.4); color: #8fd0ff;
+    border-radius: 8px; padding: 8px 12px; cursor: pointer; margin-top: 4px; }
+.shop-prerun-store-toggle:hover { border-color: #8fd0ff; background: rgba(40, 60, 90, 0.4); }
+.shop-prerun-store { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 0; }
+.shop-prerun-list .shop-prerun-pick--locked { opacity: 0.78; border-style: dashed; }
+.shop-prerun-list .shop-prerun-pick--locked .shop-prerun-badge { color: #f8d670; opacity: 1; }
+
+/* ── 6.x — Pause-menu LOADOUT tab ── */
+.pause-loadout-head { font-size: calc(13px * var(--font-body-scale, 1)); letter-spacing: 1px;
+    margin: 16px 0 8px; border-bottom: 1px solid rgba(255,255,255,0.12); padding-bottom: 4px; }
+.pause-loadout-head:first-of-type { margin-top: 6px; }
+.pause-loadout-empty { color: #8a9bbd; font-size: calc(11px * var(--font-body-scale, 1));
+    padding: 8px 2px 12px; line-height: 1.6; }
+.pause-loadout-att { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0 10px 50px; }
+.pause-loadout-chip { font-size: calc(9px * var(--font-body-scale, 1)); color: #bfe0ff;
+    background: rgba(40, 80, 120, 0.35); border: 1px solid rgba(120, 200, 255, 0.4);
+    border-radius: 6px; padding: 3px 8px; }
+.pause-loadout-slot { display: flex; align-items: center; gap: 12px; padding: 9px 12px;
+    border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); }
+.pause-loadout-slotkey { font-size: calc(13px * var(--font-body-scale, 1)); color: #cc88ff;
+    min-width: 22px; text-align: center; border: 1px solid rgba(204,136,255,0.5); border-radius: 5px; padding: 3px 0; }
+.pause-loadout-slotname { font-size: calc(12px * var(--font-body-scale, 1)); }

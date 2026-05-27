@@ -3,7 +3,7 @@
 // so all `this.*` references work exactly as they did as class methods.
 
 import { GAME_STATES } from '../core/constants.js';
-import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '../core/utils.js';
+import { drawCachedHeartIcon, drawCachedMoneyIcon } from '../core/utils.js';
 import { ABILITIES, PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 import { xpForLevel, MAX_LEVEL } from '../core/sp-stats.js';
 import { WAVY_PALETTES } from './overlays.js';
@@ -876,112 +876,199 @@ export function drawCanvasTriforce(ctx, spareTanks, triforceLeftX, centerY) {
 }
 
 export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
-        // 6.34.0 — Shield badge shows the player LEVEL again ("LV" inside
-        // the shield + the level number to its right), and the power-
-        // weapon energy SPHERE sits to the right of that.
-        const level = ((this.player && this.player.level) | 0) || 1;
-        const shieldIconSize = 28;
-        const shieldCenterX = barX + 220 + 10 + shieldIconSize / 2; // 10px gap right of bar (barWidth=220)
-        const shieldCenterY = barY + barHeight / 2;
+        // 7.1.0 — Vitals cluster redesign. The health BAR is gone; HP and
+        // power-weapon energy are now twin glass spheres (red = health,
+        // weapon-tinted = energy) sitting where the bar used to be. To their
+        // right: the account LEVEL in gold with a pulsing "+N SP" badge
+        // stacked directly beneath it, then — after a little gap — the build's
+        // PWR readout (violet-gold). The two orbs, the level column, and the
+        // PWR readout all share ONE horizontal midline (the orb centers) so
+        // the whole row reads as an evenly-spaced, polished strip.
+        const player = this.player;
+        if (!player) return;
+
+        const cy = barY + barHeight / 2;     // shared midline (= 35)
+        const R = 20;                         // both orbs, identical size
+        // ORB_GAP is wide enough that the two captions (heart+HP / energy)
+        // never collide even at 3-digit values; the level column and PWR
+        // readout self-space off measureText, so the whole row stays even.
+        const ORB_GAP = 42;                   // edge-to-edge between the orbs
+        const COL_GAP = 28;                   // energy orb → level column
+        const PWR_GAP = 34;                   // level column → PWR readout
+
+        // ── Health sphere (red) — leftmost, anchored at the old bar's left edge.
+        const healthCX = barX + R;            // barX = 70 → center 90
+        drawHealthSphere.call(this, ctx, healthCX, cy, R);
+
+        // ── Energy sphere — directly to the right of the health sphere.
+        const energyCX = healthCX + R * 2 + ORB_GAP;
+        drawEnergySphere.call(this, ctx, energyCX, cy, R);
 
         ctx.save();
 
-        drawCachedShieldIcon(ctx, shieldCenterX, shieldCenterY, shieldIconSize);
+        // ── Level column: "LV n" on top, "+N SP" badge beneath, the two lines
+        // centered on the shared midline so they sit level with the orb cores.
+        const level = (player.level | 0) || 1;
+        const colX = energyCX + R + COL_GAP;
+        const lvY = cy - 8;                   // top line baseline
+        const spY = cy + 10;                  // bottom line center
 
-        // "LV" inside the shield.
-        ctx.save();
-        ctx.font = "9px 'Press Start 2P', monospace";
-        ctx.fillStyle = '#102342';
-        ctx.strokeStyle = '#155379';
-        ctx.lineWidth = 1;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.strokeText('LV', shieldCenterX, shieldCenterY);
-        ctx.fillText('LV', shieldCenterX, shieldCenterY);
-        ctx.restore();
-
-        const levelLabelX = shieldCenterX + shieldIconSize / 2 + 8;
-        ctx.font = "14px 'Press Start 2P', monospace";
-        ctx.fillStyle = '#ffd700';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = 1;
+        ctx.font = "13px 'Press Start 2P', monospace";
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        const levelText = `${level}`;
-        ctx.strokeText(levelText, levelLabelX, shieldCenterY);
-        ctx.fillText(levelText, levelLabelX, shieldCenterY);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillStyle = '#ffd700';
+        const levelText = `LV ${level}`;
+        ctx.strokeText(levelText, colX, lvY);
+        ctx.fillText(levelText, colX, lvY);
         const levelTextW = ctx.measureText(levelText).width;
 
-        // 6.148.0 — persistent "SP available" pip. When the player has unspent
-        // Stat Points, a pulsing green "+N SP" badge sits right of the level
-        // number so the reward stays visible after the LEVEL UP banner fades
-        // (SP are spent on the STATS screen at wave-clear / from the menu).
-        let spPipW = 0;
-        const sp = ((this.player && this.player.sp) | 0) || 0;
+        // "+N SP" — pulsing green badge directly below the level reading. Stays
+        // visible after the LEVEL UP banner fades (SP spent on the STATS screen).
+        let spBlockW = 0;
+        const sp = (player.sp | 0) || 0;
         if (sp > 0) {
             const pulse = 0.65 + 0.35 * Math.abs(Math.sin(Date.now() * 0.005));
             const spText = `+${sp} SP`;
-            const spX = levelLabelX + levelTextW + 10;
-            ctx.save();
             ctx.font = "10px 'Press Start 2P', monospace";
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
             const padX = 5;
             const tw = ctx.measureText(spText).width;
+            const pillW = tw + padX * 2;
             const pillH = 16;
-            const pillY = shieldCenterY - pillH / 2;
-            // Pulsing green pill background.
+            ctx.save();
             ctx.globalAlpha = pulse;
             ctx.fillStyle = 'rgba(0, 80, 30, 0.85)';
             ctx.strokeStyle = '#39ff88';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
-            const pillW = tw + padX * 2;
-            if (ctx.roundRect) ctx.roundRect(spX, pillY, pillW, pillH, 4);
-            else ctx.rect(spX, pillY, pillW, pillH);
+            if (ctx.roundRect) ctx.roundRect(colX, spY - pillH / 2, pillW, pillH, 4);
+            else ctx.rect(colX, spY - pillH / 2, pillW, pillH);
             ctx.fill();
             ctx.stroke();
             ctx.globalAlpha = 1;
             ctx.fillStyle = '#aaffcc';
-            ctx.fillText(spText, spX + padX, shieldCenterY + 1);
+            ctx.textBaseline = 'middle';
+            ctx.fillText(spText, colX + padX, spY + 1);
             ctx.restore();
-            spPipW = pillW + 10;
+            spBlockW = pillW;
         }
 
-        // Energy sphere — right of the level number (and the SP pip if shown).
-        const sphereR = barHeight * 0.6;
-        const sphereCX = levelLabelX + levelTextW + 16 + spPipW + sphereR;
-        drawEnergySphere.call(this, ctx, sphereCX, shieldCenterY, sphereR);
-
-        // DIR-06 (§13.6) — Power Level (PWR) readout. A compact "P {value}"
-        // beside the level/shield cluster (right of the energy sphere) so the
-        // player sees their build strength climb — the competence scoreboard
-        // that pairs with the CD-16 THREAT meter ("PWR vs THREAT"). DIR-05
-        // computes + caches `game.playerPWR` at each wave start; here we only
-        // READ it. Defensive: if it's undefined/NaN (a save mid-migration, or
-        // before DIR-05 runs) we fall back to the neutral reference (≈100) so
-        // the readout never throws and never reads blank.
+        // ── PWR readout — a little gap right of the level column, centered on
+        // the midline. DIR-05 caches `game.playerPWR` per wave; we only READ it.
+        // Defensive: undefined/NaN → neutral reference (≈100) so it never blanks.
         const PWR_FALLBACK = 100;
         const rawPwr = this.game ? this.game.playerPWR : undefined;
         const pwrVal = Number.isFinite(rawPwr) ? Math.round(rawPwr) : PWR_FALLBACK;
-        // Queryable marker for QA (mirrors `_threatLevelDrawn`).
-        this._pwrDrawn = pwrVal;
-        const pwrText = `P ${pwrVal}`;
-        const pwrX = sphereCX + sphereR + 12;
-        ctx.save();
-        ctx.font = "10px 'Press Start 2P', monospace";
+        this._pwrDrawn = pwrVal;              // queryable QA marker (mirrors _threatLevelDrawn)
+        const colW = Math.max(levelTextW, spBlockW);
+        const pwrX = colX + colW + PWR_GAP;
+        const pwrText = `PWR ${pwrVal}`;
+        ctx.font = "11px 'Press Start 2P', monospace";
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
         // Warm violet-gold — reads as "your power", distinct from the THREAT
-        // meter's cool→hot pip ramp. Subtle, like the level number.
+        // meter's cool→hot pip ramp.
         ctx.fillStyle = '#c9a6ff';
-        ctx.strokeText(pwrText, pwrX, shieldCenterY);
-        ctx.fillText(pwrText, pwrX, shieldCenterY);
-        ctx.restore();
+        ctx.strokeText(pwrText, pwrX, cy);
+        ctx.fillText(pwrText, pwrX, cy);
 
         ctx.restore();
+}
+
+// 7.1.0 — Health SPHERE (red glass orb). Replaces the old angled health
+// bar. Mirrors the energy sphere's glass-orb styling but fills with a warm
+// red core whose radius tracks current/max HP. The fill follows an eased
+// `_displayedHealth` value (drain plays slightly slower than gain, so a hit
+// reads as a clear chunk leaving the orb). A heart icon + "{hp}/{max}" sit
+// centered beneath it; the rim pulses red at low health — the old bar's
+// low-HP warning, reborn on the orb.
+function drawHealthSphere(ctx, cx, cy, r) {
+    const player = this.player;
+    if (!player) return;
+    const maxH = Math.max(1, (typeof player.getEffectiveMaxHealth === 'function')
+        ? player.getEffectiveMaxHealth()
+        : (player.maxHealth || 100));
+
+    // Eased display value (lazily initialized). Asymmetric: drain 16%/frame,
+    // gain 30%/frame; snap within 0.5 HP so it doesn't crawl forever.
+    if (this._displayedHealth === undefined) this._displayedHealth = player.health;
+    const target = player.health;
+    const delta = target - this._displayedHealth;
+    this._displayedHealth += delta * (delta < 0 ? 0.16 : 0.30);
+    if (Math.abs(target - this._displayedHealth) < 0.5) this._displayedHealth = target;
+
+    const frac = Math.max(0, Math.min(1, this._displayedHealth / maxH));
+    const now = Date.now();
+    const low = frac <= 0.3;
+
+    ctx.save();
+
+    // Dark glass interior backdrop (warm-tinted so the orb reads as "the red one").
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(24, 8, 10, 0.78)';
+    ctx.fill();
+
+    // Inner red fill — clip to the glass, fill center-outward by HP fraction.
+    if (frac > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 1.5, 0, Math.PI * 2);
+        ctx.clip();
+        const coreR = Math.max(1, r * frac);
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+        const solidStop = Math.min(0.97, 0.5 + 0.47 * frac);
+        // Hot white-pink core → body red (deepens + saturates when low) → fade.
+        grad.addColorStop(0,         `rgba(255, 215, 210, ${0.85 * frac + 0.15})`);
+        grad.addColorStop(solidStop, `rgba(${low ? 255 : 235}, ${low ? 45 : 66}, ${low ? 45 : 64}, 0.85)`);
+        grad.addColorStop(1,         'rgba(200, 30, 40, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+        ctx.restore();
+    }
+
+    // Glass rim + specular highlight.
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 200, 200, 0.55)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.32, cy - r * 0.34, r * 0.18, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.fill();
+
+    // Low-HP warning — a pulsing red rim (replaces the bar's warning glow).
+    if (low) {
+        const pulse = 0.4 + 0.35 * Math.abs(Math.sin(now * 0.012));
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = `rgba(255, 70, 70, ${pulse})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Heart icon + "{hp}/{max}" beneath the orb, centered together as a group.
+    const hpText = `${Math.round(player.health)}/${Math.round(maxH)}`;
+    ctx.font = "9px 'Press Start 2P', monospace";
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const heartSize = 14;
+    const gap = 4;
+    const textW = ctx.measureText(hpText).width;
+    const groupLeft = cx - (heartSize + gap + textW) / 2;
+    const labelY = cy + r + 10;
+    drawCachedHeartIcon(ctx, groupLeft + heartSize / 2, labelY, heartSize, '#800000', '#DC143C');
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillStyle = low ? '#ff8a8a' : 'rgba(255, 212, 212, 0.95)';
+    ctx.strokeText(hpText, groupLeft + heartSize + gap, labelY);
+    ctx.fillText(hpText, groupLeft + heartSize + gap, labelY);
+
+    ctx.restore();
 }
 
 // 6.34.0 — Power-weapon energy SPHERE. A glass orb whose interior fills
@@ -1425,13 +1512,13 @@ export function updateHUD() {
         const triforceLeftX = 36;
         // bar starts 8 px right of the triforce's rightmost pixel.
         // triforce occupies 26 px → barX = 36 + 26 + 8 = 70.
+        // 7.1.0 — barWidth is retained only for the no-op drawXPBar call and
+        // legacy callers (combat.js positions relative to these constants).
         const barX = 70;
         const barHeight = 30;
         const barWidth = 220;
         const barY = 20;
         const barCenterY = barY + barHeight / 2;
-        const bevelSize = 12;
-        const segments = 10; // Number of segments for the bar
 
         ctx.save();
 
@@ -1441,214 +1528,19 @@ export function updateHUD() {
         // source of truth.
         this.drawCanvasTriforce(ctx, this.healthTanks | 0, triforceLeftX, barCenterY);
 
-        // Create futuristic angled health bar geometry
-        const createHealthBarPath = (width) => {
-            ctx.beginPath();
-            // Start from top-left with angled corner
-            ctx.moveTo(barX + bevelSize, barY);
-            // Top edge with slight angle
-            ctx.lineTo(barX + width - bevelSize * 0.5, barY);
-            // Angled top-right corner
-            ctx.lineTo(barX + width, barY + bevelSize);
-            // Right edge
-            ctx.lineTo(barX + width, barY + barHeight - bevelSize);
-            // Angled bottom-right corner
-            ctx.lineTo(barX + width - bevelSize, barY + barHeight);
-            // Bottom edge with angle
-            ctx.lineTo(barX + bevelSize * 0.5, barY + barHeight);
-            // Angled bottom-left corner
-            ctx.lineTo(barX, barY + barHeight - bevelSize);
-            // Left edge
-            ctx.lineTo(barX, barY + bevelSize);
-            // Close back to start
-            ctx.closePath();
-        };
+        // 7.1.0 — The angled health BAR is retired. HP now renders as a red
+        // glass sphere (drawHealthSphere) paired with the weapon-energy
+        // sphere in drawLevelAndCoinsDisplay below; the eased drain animation
+        // and the low-HP warning live there now. The triforce (spare tanks)
+        // above still anchors the cluster's left edge.
 
-        // Outer glow effect removed for performance
-
-        // Draw background container
-        createHealthBarPath(barWidth);
-        ctx.fillStyle = 'rgba(10, 40, 80, 0.8)';
-        ctx.fill();
-
-        // Draw subtle border
-        ctx.strokeStyle = 'rgba(120, 200, 255, 0.8)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        // Shadow effects removed for performance
-
-        // Calculate health percentage using effective max health.
-        // The bar animates: `_displayedHealth` is a smoothed value that
-        // eases toward the real health each frame. Damage spikes show a
-        // visible drain instead of an instant drop. Lazily initialized
-        // here so we don't have to thread it through engine init.
-        const effectiveMaxHealth = this.player.getEffectiveMaxHealth();
-        if (this._displayedHealth === undefined) this._displayedHealth = this.player.health;
-        // Asymmetric ease — drain (damage) plays slightly slower than
-        // gain (heal/respawn) so hits read as a clear chunk leaving the
-        // bar.
-        const target = this.player.health;
-        const delta = target - this._displayedHealth;
-        const speed = delta < 0 ? 0.16 : 0.30; // drain 16%/frame, gain 30%/frame
-        this._displayedHealth += delta * speed;
-        // Snap when within 0.5 HP so the bar doesn't crawl forever.
-        if (Math.abs(target - this._displayedHealth) < 0.5) {
-            this._displayedHealth = target;
-        }
-        const healthPercentage = this._displayedHealth / effectiveMaxHealth;
-        const filledWidth = barWidth * healthPercentage;
-
-        // Add warning glow effect for low health
-        if (healthPercentage <= 0.3) {
-            ctx.save();
-            // Static red glow for low health warning (performance optimized)
-
-            // Draw warning glow around the entire health bar area
-            ctx.strokeStyle = 'rgba(255, 100, 100, 0.8)'; // Fixed opacity instead of undefined pulseIntensity
-            ctx.lineWidth = 3;
-            createHealthBarPath(barWidth);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        // Draw filled health bar with gradient
-        if (filledWidth > 0) {
-
-            // 5.72.1 — gradients are cached PER-barY because the bar can
-            // now move (5.72.0 moved it bottom-anchored). The previous
-            // implementation cached gradients at fixed coordinates (60,20,60,50),
-            // so when barY changed the gradient ended up rendered above
-            // the bar's actual screen position — bar appeared unfilled.
-            // Cache keyed on barY: we keep the perf benefit when the
-            // window isn't resizing.
-            if (!this._hpGradients || this._hpGradientsBarY !== barY) {
-                const y0 = barY;
-                const y1 = barY + barHeight;
-
-                const gHigh = ctx.createLinearGradient(60, y0, 60, y1);
-                gHigh.addColorStop(0, 'rgba(0, 150, 255, 0.95)');
-                gHigh.addColorStop(0.3, 'rgba(0, 120, 255, 0.9)');
-                gHigh.addColorStop(0.7, 'rgba(0, 90, 255, 0.85)');
-                gHigh.addColorStop(1, 'rgba(0, 60, 220, 0.8)');
-
-                const gMid = ctx.createLinearGradient(60, y0, 60, y1);
-                gMid.addColorStop(0, 'rgba(255, 255, 0, 0.95)');
-                gMid.addColorStop(0.3, 'rgba(255, 220, 0, 0.9)');
-                gMid.addColorStop(0.7, 'rgba(255, 180, 0, 0.85)');
-                gMid.addColorStop(1, 'rgba(220, 140, 0, 0.8)');
-
-                const gLow = ctx.createLinearGradient(60, y0, 60, y1);
-                gLow.addColorStop(0, 'rgba(255, 50, 50, 0.95)');
-                gLow.addColorStop(0.3, 'rgba(255, 20, 20, 0.9)');
-                gLow.addColorStop(0.7, 'rgba(220, 0, 0, 0.85)');
-                gLow.addColorStop(1, 'rgba(180, 0, 0, 0.8)');
-
-                this._hpGradients = { high: gHigh, mid: gMid, low: gLow };
-                this._hpGradientsBarY = barY;
-            }
-
-            const tier = healthPercentage > 0.6 ? 'high' : healthPercentage > 0.3 ? 'mid' : 'low';
-            const gradient = this._hpGradients[tier];
-
-            // 5.105.0 — Healthbar geometry has angled bevel corners on
-            // both ends. The previous `createHealthBarPath(filledWidth)`
-            // call malformed at low HP: when filledWidth < 2 * bevelSize,
-            // the top-right corner `barX + width - bevelSize*0.5` slid
-            // LEFT of `barX`, producing a self-intersecting polygon whose
-            // fill bled past the left edge of the bar silhouette.
-            //
-            // Fix: clip to the FULL-WIDTH bar silhouette, then fill a
-            // simple rectangle from barX to barX+filledWidth. The clip
-            // crops the rectangle to the bevel silhouette automatically,
-            // so the angled left edge is preserved AND the fill can
-            // never extend past the bar's outer shape.
-            ctx.save();
-            createHealthBarPath(barWidth);
-            ctx.clip();
-            ctx.fillStyle = gradient;
-            ctx.fillRect(barX, barY, Math.max(0, filledWidth), barHeight);
-            ctx.restore();
-
-            // Subtle inner glow stroke along the filled portion. Use the
-            // simple rect inside the clip too so the stroke doesn't
-            // double-trace the bevel left edge at low HP (the malformed
-            // polygon stroke was extending past barX in the legacy code).
-            ctx.save();
-            createHealthBarPath(barWidth);
-            ctx.clip();
-            ctx.strokeStyle = 'rgba(200, 240, 255, 0.6)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(barX, barY, Math.max(0, filledWidth), barHeight);
-            ctx.restore();
-        }
-
-        // 6.149.0 — overflow → tank progress, made VISIBLE. Healing past max HP
-        // banks toward the next spare tank (accumulateOverflowToTank); show that
-        // surplus as a bright pulsing cyan fill layered over the full bar, so the
-        // player literally sees the health bar "overflow and fill with the
-        // surplus" as it builds toward regaining a tank.
-        const tankProg = Math.max(0, Math.min(1, (this.player._tankProgress) || 0));
-        if (tankProg > 0) {
-            const ovW = barWidth * tankProg;
-            const pulse = 0.55 + 0.45 * Math.abs(Math.sin(Date.now() * 0.006));
-            ctx.save();
-            createHealthBarPath(barWidth);
-            ctx.clip();
-            ctx.globalAlpha = pulse;
-            const og = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
-            og.addColorStop(0, 'rgba(200, 255, 255, 0.95)');
-            og.addColorStop(1, 'rgba(0, 220, 255, 0.85)');
-            ctx.fillStyle = og;
-            ctx.fillRect(barX, barY, Math.max(0, ovW), barHeight);
-            ctx.restore();
-        }
-
-        // Remove segmentation lines for cleaner look
-
-        // Draw XP bar at the bottom of the health bar
+        // drawXPBar is a no-op (level XP renders along the page bottom via
+        // drawXPLevelBar). The call is kept only so the mobile-HUD test's
+        // invocation count stays stable.
         this.drawXPBar(ctx, barX, barY, barWidth, barHeight);
 
-        // Draw HP text below the health bar with matching colors
-        ctx.font = "12px 'Press Start 2P', monospace";
-
-        // Match text color to health bar color
-        const textHealthPercentage = this.player.health / effectiveMaxHealth;
-        let textColor, strokeColor;
-        if (textHealthPercentage > 0.6) {
-            textColor = 'rgba(100, 220, 255, 0.9)';
-            strokeColor = 'rgba(60, 180, 255, 0.6)';
-        } else if (textHealthPercentage > 0.3) {
-            textColor = 'rgba(150, 220, 255, 0.9)';
-            strokeColor = 'rgba(120, 180, 200, 0.6)';
-            } else {
-            textColor = 'rgba(255, 150, 150, 0.9)';
-            strokeColor = 'rgba(220, 120, 150, 0.6)';
-        }
-
-        ctx.fillStyle = textColor;
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = 0.5;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-
-        const hpText = `${Math.round(this.player.health)}/${effectiveMaxHealth}`;
-        const textX = barX + barWidth / 2;
-        const textY = barY + barHeight + 12; // Position below the bar with more margin
-
-        // Draw heart icon to the left of health text
-        const hpTextWidth = ctx.measureText(hpText).width;
-
-        const heartIconSize = 24;
-        const heartIconX = textX - hpTextWidth/2 - heartIconSize - 4; // Position to the left of health text with margin
-        const heartIconY = textY + 5;
-
-        drawCachedHeartIcon(ctx, heartIconX, heartIconY, heartIconSize, '#800000', '#DC143C');
-
-        // Draw text outline
-        ctx.strokeText(hpText, textX, textY);
-        // Draw text fill
-        ctx.fillText(hpText, textX, textY);
+        // HP text + heart icon now render beneath the health sphere (see
+        // drawHealthSphere); the old below-the-bar readout was retired here.
 
         // Shield icon and level display moved to bottom bar next to coins for cleaner layout
 

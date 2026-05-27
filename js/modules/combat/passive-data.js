@@ -227,9 +227,11 @@ export const PASSIVES = {
         id: 'SCAVENGER', name: 'Scavenger', desc: '+50% item drop rate, huge pickup radius',
         hooks: ['drop', 'pickup'], tags: ['econ'], slot: true, item: false, stack: A,
     },
+    // 6.x — Gold-find is retired (the gold economy is flat). Repurposed off the
+    // gold axis: now a sustain econ-keystone — each gold orb you collect heals.
     HOARDERS_GREED: {
-        id: 'HOARDERS_GREED', name: "Hoarder's Greed", desc: '+100% gold-find; gold orbs heal 1 HP',
-        hooks: ['gold', 'drop', 'damageTaken'], tags: ['econ'], slot: true, item: false, stack: B,
+        id: 'HOARDERS_GREED', name: "Hoarder's Greed", desc: 'Each gold orb collected heals 4 HP',
+        hooks: ['pickup', 'heal'], tags: ['econ'], slot: true, item: false, stack: B,
     },
 
     // ── Round-3 §10.1 — additional keystones (slot-only, build-defining, binary) ──

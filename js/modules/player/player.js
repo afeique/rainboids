@@ -9,6 +9,7 @@ import * as playerRenderer from './renderer.js';
 import { loadSettings } from '../core/storage.js';
 import { DEFAULT_SKIN_ID } from './skins/index.js';
 import { scoreItem } from '../world/item-system.js';
+import { debugState } from '../core/debug-config.js';
 // Mobile auto-fire (5.92.0): when running in mobile mode the player
 // has no spare hand to tap a power-weapon button — the spec auto-
 // fires the equipped power weapon the moment it's ready (off
@@ -161,8 +162,10 @@ export class Player {
         this.activeAttunements = {};
         this.ownedPrimaries = new Set(['PULSE_CANNON']);
         this.ownedPowers = new Set(['CHARGE_SHOT']);
-        // R6.2 base kit — Bulwark + Field Medic available from run one.
-        this.ownedAbilities = new Set(['BULWARK', 'FIELD_MEDIC']);
+        // 6.x — Base kit is Pulse + Charge ONLY. Abilities are purchase-locked
+        // (the first arrives via the Stage-1 milestone gift), so the player
+        // owns no abilities by default; the run-start loadout fills these.
+        this.ownedAbilities = new Set();
 
         // Phase B.S1 — 4-slot defense-ability loadout (NEW source of truth).
         //   equippedAbilities[i]   — ability id in slot i (0..3), or null.
@@ -176,9 +179,10 @@ export class Player {
         // `activeAbilityCooldownMax` properties are defined as getter/setter
         // accessors below that proxy slot 0, so HUD / input / shop / save
         // code that still reads or writes those names keeps working until the
-        // S2/S3/S4 phases migrate them. Migrate the old single-ability default
-        // (`'BULWARK'`) into slot 0.
-        this.equippedAbilities = ['BULWARK', null, null, null];
+        // S2/S3/S4 phases migrate them. 6.x — no ability is equipped by
+        // default (abilities are now purchase-locked); the run-start loadout
+        // populates these slots from the player's unlocked + chosen abilities.
+        this.equippedAbilities = [null, null, null, null];
         this.abilityCooldowns = [0, 0, 0, 0];
         this.abilityCooldownsMax = [0, 0, 0, 0];
         this._defineAbilitySlotAccessors();
@@ -1117,6 +1121,8 @@ export class Player {
                 const energyCap = this.getEnergyOverchargeCap();
                 this.energy = Math.min(energyCap, (this.energy || 0) + maxE * regenMult * dtMs / ENERGY_FILL_MS);
             }
+            // 6.x — Debug: infinite energy keeps the power meter topped off.
+            if (debugState.infiniteEnergy) this.energy = this.getEnergyOverchargeCap();
 
             // P6 — Siege passive: ramp damage while ~stationary, decay it while
             // moving. Reuses the energy block's clamped real-time delta (dtMs).

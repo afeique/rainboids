@@ -1,12 +1,15 @@
 // UI management for overlays, messages, and interface elements
 import { MusicPlayer } from '../audio/music-player.js';
 import { POWERUP_TYPES, powerupGoldCost } from '../world/powerup.js';
-import { loadSettings, saveSettings } from '../core/storage.js';
+import { loadSettings, saveSettings, loadMeta } from '../core/storage.js';
+import { getUnlockedSet } from '../shop/armory.js';
+import { ATTUNEMENTS, ABILITIES } from '../combat/weapon-data.js';
 import { renderIconHTML, detectControllerFamily, bindingGlyph } from './icons.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { setRumbleEnabled, isRumbleEnabled } from '../platform/rumble.js';
 import { renderSpAllocation } from './sp-allocation.js';
 import { getPassive, getSlotPassives } from '../combat/passive-data.js';
+import { debugState } from '../core/debug-config.js';
 
 // 5.79.3 — Beam-aware powerup description swap. When the equipped
 //   primary is a continuous-tether beam (Lance Beam, Arc Lightning),
@@ -327,9 +330,8 @@ export class UIManager {
             //   stub showed for a frame before innerHTML repopulated.
             //   Removed — no per-open update needed.
 
-            // Refresh weapon-equip tabs so the EQUIPPED badge stays current.
-            this.updatePrimaryTab();
-            this.updatePowerTab();
+            // Refresh the LOADOUT tab so the active weapon/power stays current.
+            this.updateLoadoutTab();
         }
         return !isPaused;
     }
@@ -399,29 +401,30 @@ export class UIManager {
                         { kind: 'or' },
                         { kind: 'sprite', file: 'ARROWDOWN.png', alt: 'Down' },
                     ] },
-                    { action: 'Activate Ability', keys: [
-                        { kind: 'sprite', file: 'TAB.png', alt: 'Tab' },
-                    ] },
+                    // 6.x — Abilities are activated with number keys 1-4 (one
+                    // per equipped slot). Replaces the retired TAB binding.
+                    { action: 'Ability 1', keys: [{ kind: 'text', label: '1' }] },
+                    { action: 'Ability 2', keys: [{ kind: 'text', label: '2' }] },
+                    { action: 'Ability 3', keys: [{ kind: 'text', label: '3' }] },
+                    { action: 'Ability 4', keys: [{ kind: 'text', label: '4' }] },
                 ],
             },
-            {
-                name: 'Loadout',
+            // 6.x — Weapon radials are a developer affordance now (enabled via
+            // the ?debug menu). Only show their rows when a radial is on, and
+            // only the enabled ones. In normal play this section is absent.
+            ...((debugState.primaryRadial || debugState.powerRadial) ? [{
+                name: 'Loadout (debug)',
                 accent: 'pink',
                 iconPath: 'M13 2 L4 14 H10 L9 22 L20 9 H13 Z',
                 rows: [
-                    // Hold to open the weapon/ability radial; the cursor picks
-                    // a slice and a click equips it (event-setup.js).
-                    { action: 'Primary Radial', keys: [
+                    ...(debugState.primaryRadial ? [{ action: 'Primary Radial', keys: [
                         { kind: 'sprite', file: 'F.png', alt: 'F' },
-                    ] },
-                    { action: 'Power Radial', keys: [
+                    ] }] : []),
+                    ...(debugState.powerRadial ? [{ action: 'Power Radial', keys: [
                         { kind: 'sprite', file: 'E.png', alt: 'E' },
-                    ] },
-                    { action: 'Defense Radial', keys: [
-                        { kind: 'sprite', file: 'R.png', alt: 'R' },
-                    ] },
+                    ] }] : []),
                 ],
-            },
+            }] : []),
             {
                 name: 'System',
                 accent: 'gold',
@@ -840,102 +843,131 @@ export class UIManager {
         renderSpAllocation(tab, player, { onChange: () => this.updateStatsTab() });
     }
 
-    updatePrimaryTab() {
-        // 5.79.59 — Owns the entire #primary-tab now (h2 + subtitle +
-        //   list). Was scoped to the inner #primary-weapon-list
-        //   container with the heading hardcoded in index.html, which
-        //   meant the tab couldn't be pre-rendered without leaving
-        //   stale static markup behind. Now the function builds
-        //   everything from scratch via createElement so a single
-        //   stub `<div id="primary-tab">` in index.html is enough.
-        const tab = document.getElementById('primary-tab');
+    // ── Pause-menu LOADOUT tab (6.x) ───────────────────────────────────────
+    // Replaces the separate PRIMARY + POWER tabs with one compact panel:
+    // active WEAPON + its attunements, active POWER + its attunements, and the
+    // four ABILITY slots. Only OWNED weapons are offered (purchase-locked
+    // economy); clicking one switches your active weapon/power in-flight.
+    updateLoadoutTab() {
+        const tab = document.getElementById('loadout-tab');
         if (!tab) return;
-        const player = this.gameEngine && this.gameEngine.player;
-        if (!player) {
-            tab.replaceChildren();
-            return;
-        }
-
+        const ge = this.gameEngine;
+        const player = ge && ge.player;
         tab.replaceChildren();
+        if (!player) return;
+
         const h2 = document.createElement('h2');
-        h2.textContent = 'PRIMARY WEAPON';
+        h2.textContent = 'LOADOUT';
         tab.appendChild(h2);
         const subtitle = document.createElement('div');
         subtitle.className = 'pause-tab-subtitle';
-        subtitle.textContent = 'Click a weapon to equip it';
+        subtitle.textContent = 'Switch your active weapon & power in-flight. Activate abilities with 1-4.';
         tab.appendChild(subtitle);
 
-        const list = document.createElement('div');
-        list.id = 'primary-weapon-list';
-        list.className = 'pause-tab-list';
-        tab.appendChild(list);
+        const meta = loadMeta() || {};
+        const PRIMARY = ge.PRIMARY_WEAPONS_LIST || {};
+        const POWER = ge.POWER_WEAPONS_LIST || {};
 
-        const PRIMARY = this.gameEngine.PRIMARY_WEAPONS_LIST;
-        if (!PRIMARY) {
-            const placeholder = document.createElement('div');
-            placeholder.style.color = '#888';
-            placeholder.textContent = 'Weapon list unavailable.';
-            list.appendChild(placeholder);
+        this._buildLoadoutSection(tab, 'WEAPON', '#00ccff',
+            [...getUnlockedSet('primaries', meta)].filter((id) => PRIMARY[id]),
+            PRIMARY, player.activePrimary,
+            (id) => { player.equipPrimary(id); this.updateLoadoutTab(); },
+            player.activeAttunements);
+
+        this._buildLoadoutSection(tab, 'POWER', '#ffaa00',
+            [...getUnlockedSet('powers', meta)].filter((id) => POWER[id]),
+            POWER, player.activePower,
+            (id) => { player.equipPower(id); this.updateLoadoutTab(); },
+            player.activeAttunements);
+
+        this._buildLoadoutAbilities(tab, player);
+    }
+
+    _buildLoadoutSection(tab, label, color, ids, defs, activeId, onEquip, attMap) {
+        const head = document.createElement('div');
+        head.className = 'pause-loadout-head';
+        head.style.color = color;
+        head.textContent = label;
+        tab.appendChild(head);
+        if (!ids.length) {
+            const none = document.createElement('div');
+            none.className = 'pause-loadout-empty';
+            none.textContent = 'None unlocked — buy more in the Build screen.';
+            tab.appendChild(none);
             return;
         }
-        for (const id of Object.keys(PRIMARY)) {
-            const equipped = player.activePrimary === id;
-            list.appendChild(this._buildWeaponRow(PRIMARY[id], id, equipped, '#00ccff', () => {
-                if (player.ownedPrimaries && !player.ownedPrimaries.has(id)) {
-                    player.ownedPrimaries.add(id);
-                }
-                player.equipPrimary(id);
-                this.updatePrimaryTab();
-            }));
+        const list = document.createElement('div');
+        list.className = 'pause-tab-list';
+        for (const id of ids) {
+            const equipped = activeId === id;
+            list.appendChild(this._buildWeaponRow(defs[id], id, equipped, color, () => onEquip(id)));
+            if (equipped) {
+                const chips = this._attuneChips(attMap && attMap[id]);
+                if (chips) list.appendChild(chips);
+            }
+        }
+        tab.appendChild(list);
+    }
+
+    // Read-only chips for a weapon's active attunements (set in the Build
+    // screen; locked for the run).
+    _attuneChips(ids) {
+        if (!Array.isArray(ids) || !ids.length) return null;
+        const wrap = document.createElement('div');
+        wrap.className = 'pause-loadout-att';
+        for (const aid of ids) {
+            const def = ATTUNEMENTS[aid];
+            const chip = document.createElement('span');
+            chip.className = 'pause-loadout-chip';
+            chip.textContent = def ? def.name : aid;
+            wrap.appendChild(chip);
+        }
+        return wrap;
+    }
+
+    _buildLoadoutAbilities(tab, player) {
+        const head = document.createElement('div');
+        head.className = 'pause-loadout-head';
+        head.style.color = '#cc88ff';
+        head.textContent = 'ABILITIES (1-4)';
+        tab.appendChild(head);
+        const slots = Array.isArray(player.equippedAbilities) ? player.equippedAbilities : [];
+        const list = document.createElement('div');
+        list.className = 'pause-tab-list';
+        let any = false;
+        for (let i = 0; i < 4; i++) {
+            const id = slots[i] || null;
+            const row = document.createElement('div');
+            row.className = 'pause-loadout-slot';
+            const key = document.createElement('span');
+            key.className = 'pause-loadout-slotkey';
+            key.textContent = String(i + 1);
+            const name = document.createElement('span');
+            name.className = 'pause-loadout-slotname';
+            if (id && ABILITIES[id]) {
+                name.textContent = ABILITIES[id].name;
+                if (ABILITIES[id].color) name.style.color = ABILITIES[id].color;
+                any = true;
+            } else {
+                name.textContent = '— empty —';
+                name.style.opacity = '0.5';
+            }
+            row.append(key, name);
+            list.appendChild(row);
+        }
+        tab.appendChild(list);
+        if (!any) {
+            const hint = document.createElement('div');
+            hint.className = 'pause-loadout-empty';
+            hint.textContent = 'No abilities equipped. The first Stage-1 clear grants one free; pick more in the Build screen.';
+            tab.appendChild(hint);
         }
     }
 
-    // ── Pause-menu POWER tab ───────────────────────────────────────────────
-    // Lists every power weapon. Click a row to equip it. Powers are now
-    // free and always available — same model as primaries. Upgrades are
-    // still purchased in the shop's POWER tab (which surfaces the upgrades
-    // for whichever power is currently equipped).
-    updatePowerTab() {
-        // 5.79.59 — Owns the entire #power-tab now (h2 + subtitle +
-        //   list). Same refactor pattern as updatePrimaryTab: a single
-        //   stub `<div id="power-tab">` in index.html is enough; the
-        //   function builds everything from scratch on each call.
-        const tab = document.getElementById('power-tab');
-        if (!tab) return;
-        const player = this.gameEngine && this.gameEngine.player;
-        if (!player) {
-            tab.replaceChildren();
-            return;
-        }
-
-        tab.replaceChildren();
-        const h2 = document.createElement('h2');
-        h2.textContent = 'POWER WEAPON';
-        tab.appendChild(h2);
-        const subtitle = document.createElement('div');
-        subtitle.className = 'pause-tab-subtitle';
-        subtitle.textContent = 'Click a weapon to equip it';
-        tab.appendChild(subtitle);
-
-        const list = document.createElement('div');
-        list.id = 'power-weapon-list';
-        list.className = 'pause-tab-list';
-        tab.appendChild(list);
-
-        const POWER = this.gameEngine.POWER_WEAPONS_LIST;
-        if (!POWER) return;
-        for (const id of Object.keys(POWER)) {
-            const equipped = player.activePower === id;
-            list.appendChild(this._buildWeaponRow(POWER[id], id, equipped, '#ffaa00', () => {
-                // Auto-add to ownedPowers (set still gates equipPower).
-                if (player.ownedPowers && !player.ownedPowers.has(id)) {
-                    player.ownedPowers.add(id);
-                }
-                player.equipPower(id);
-                this.updatePowerTab();
-            }));
-        }
-    }
+    // Back-compat aliases — older callers (engine equip path) refresh via these.
+    updatePrimaryTab() { this.updateLoadoutTab(); }
+    updatePowerTab() { this.updateLoadoutTab(); }
+    refreshLoadoutTab() { this.updateLoadoutTab(); }
 
     // ── Pause-menu PASSIVES tab (P5b) ──────────────────────────────────────
     // The in-run swap panel: assign any OWNED, slot-deliverable passive into any
@@ -1984,8 +2016,7 @@ export class UIManager {
         }
 
         // Refresh equip lists when their tabs are opened.
-        if (tabName === 'primary') this.updatePrimaryTab();
-        if (tabName === 'power') this.updatePowerTab();
+        if (tabName === 'loadout') this.updateLoadoutTab();
         if (tabName === 'passives') this.updatePassivesTab();
         if (tabName === 'stats') this.updateStatsTab();
         if (tabName === 'assists') this.syncAssistsTab();

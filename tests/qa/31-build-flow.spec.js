@@ -110,35 +110,31 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
     //    parents render as selectable equip toggles.
     // ------------------------------------------------------------------
     test('base loadout parents render selectable and start equipped', async ({ page }) => {
+        // 7.0.0 — base kit is Pulse Cannon + Charge Shot ONLY; abilities are
+        // purchase-locked so none render in the compact owned-only list on a
+        // clean meta. Equipped state is marked with `shop-node--equipped`.
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
             const parent = (id) => document.querySelector(`.shop-node--parent[data-id="${id}"]`);
-            const pulse = parent('PULSE_CANNON');   // PRIMARY
-            const charge = parent('CHARGE_SHOT');   // POWER
-            const bulwark = parent('BULWARK');       // DEFENSE / ability
-            const medic = parent('FIELD_MEDIC');     // DEFENSE / ability
             const read = (n) => n && ({
                 category: n.dataset.category,
                 selectable: n.dataset.prerunSelectable,
-                equipped: n.classList.contains('shop-node--owned'),
+                equipped: n.classList.contains('shop-node--equipped'),
             });
             return {
-                pulse: read(pulse),
-                charge: read(charge),
-                bulwark: read(bulwark),
-                medic: read(medic),
+                pulse: read(parent('PULSE_CANNON')),
+                charge: read(parent('CHARGE_SHOT')),
+                bulwarkPresent: !!parent('BULWARK'),
+                medicPresent: !!parent('FIELD_MEDIC'),
             };
         });
 
         // The base primary/power are unlocked (selectable) and equipped by default.
         expect(r.pulse).toEqual({ category: 'primaries', selectable: '1', equipped: true });
         expect(r.charge).toEqual({ category: 'powers', selectable: '1', equipped: true });
-        // Both base abilities are unlocked; FIELD_MEDIC may or may not be the
-        // default-equipped one, but BULWARK is the first base ability.
-        expect(r.bulwark.category).toBe('abilities');
-        expect(r.bulwark.selectable).toBe('1');
-        expect(r.medic.category).toBe('abilities');
-        expect(r.medic.selectable).toBe('1');
+        // No ability is owned on a clean meta, so the DEFENSE list is empty.
+        expect(r.bulwarkPresent).toBe(false);
+        expect(r.medicPresent).toBe(false);
         expect(fatalErrors(page._jsErrors)).toEqual([]);
     });
 
@@ -148,13 +144,16 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
     test('toggling a defense ability updates the equipped state', async ({ page }) => {
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
+            // 7.0.0 — abilities are owned-only now; seed FIELD_MEDIC as owned so
+            // it renders as a toggleable row (equipped state = shop-node--equipped).
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ unlockedAbilities: ['BULWARK', 'FIELD_MEDIC'] }));
             ge.openArmory();
             const medic = () => document.querySelector('.shop-node--parent[data-id="FIELD_MEDIC"]');
-            const before = medic().classList.contains('shop-node--owned');
+            const before = medic().classList.contains('shop-node--equipped');
             medic().click();                 // toggle FIELD_MEDIC
-            const after1 = medic().classList.contains('shop-node--owned');
+            const after1 = medic().classList.contains('shop-node--equipped');
             medic().click();                 // toggle back
-            const after2 = medic().classList.contains('shop-node--owned');
+            const after2 = medic().classList.contains('shop-node--equipped');
             return { before, after1, after2 };
         });
         // Toggling flips the equipped state, and flips it back on a second click.
@@ -172,6 +171,9 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
     test('START threads run shape + loadout into the live run', async ({ page }) => {
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
+            // 7.0.0 — seed the two former base abilities as owned so they render
+            // in the compact (owned-only) DEFENSE list and can be toggled.
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ unlockedAbilities: ['BULWARK', 'FIELD_MEDIC'] }));
             ge.openArmory();
 
             // Configure a NON-default run: 6 waves/stage, stages 10 → 20, HARD mode.
@@ -180,16 +182,15 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
             document.getElementById('shop-runsetup-mode-hard').click();
 
             // Pick the loadout: ensure PULSE_CANNON (primary), CHARGE_SHOT
-            // (power), and exactly FIELD_MEDIC for the ability slot. The base
-            // selection already has these equipped except possibly the ability
-            // — normalize the ability to FIELD_MEDIC by toggling as needed.
+            // (power), and exactly FIELD_MEDIC for the ability slot. Equipped
+            // state is marked with `shop-node--equipped` (7.0.0 compact list).
             const ensureEquipped = (id) => {
                 const n = document.querySelector(`.shop-node--parent[data-id="${id}"]`);
-                if (n && !n.classList.contains('shop-node--owned')) n.click();
+                if (n && !n.classList.contains('shop-node--equipped')) n.click();
             };
             const ensureUnequipped = (id) => {
                 const n = document.querySelector(`.shop-node--parent[data-id="${id}"]`);
-                if (n && n.classList.contains('shop-node--owned')) n.click();
+                if (n && n.classList.contains('shop-node--equipped')) n.click();
             };
             ensureEquipped('PULSE_CANNON');
             ensureEquipped('CHARGE_SHOT');

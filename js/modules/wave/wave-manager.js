@@ -26,6 +26,7 @@ import {
 } from '../world/run-shop.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { rewardMultiplier } from '../world/reward-dial.js';
+import { saveMeta } from '../core/storage.js';
 // RUN-05a — Adaptive Difficulty Director (RUN-04). Read D_hp at the enemy-HP
 // chokepoint (applyEnemyLevelScaling) and feed the director one outcome per
 // wave clear (tickWave). Absent director ⇒ ×1.0 (default below) and no feed.
@@ -233,14 +234,29 @@ export function updateWaveSystem() {
             const totalStages = getRunConfig(this.game).stages;
             this.player.setPassiveSlotsUnlocked(passiveSlotsUnlockedAfter(getStage(clearedWave, runWavesPerStage(this.game)), totalStages));
         }
+        // 6.x — Mark the first Stage-1 clear so the next BUILD-screen visit
+        // offers the free first-ability gift (game-engine.maybeOfferFirstAbilityGift).
+        if (stageClear && getStage(clearedWave, runWavesPerStage(this.game)) === 1) {
+            saveMeta({ clearedStage1: true });
+        }
         const bonusXP = 40 + clearedWave * 15; // gainExperience is a no-op since 6.0.0; kept for back-compat
-        const baseCoins = 50 + clearedWave * 25;
-        // RUN-03 — Reward Dial. Default 10×3 run → ×1.0 (no-op); richer runs
-        // (wps ≥ 6) scale gold by the waves-per-stage × stage-depth factor.
-        const rewardMult = rewardMultiplier(this.game, clearedWave);
-        const bonusCoins = Math.round((stageClear ? baseCoins * 2 : baseCoins * 0.6) * rewardMult);
+        // 6.x — Wave-clear GOLD bonus REMOVED. Gold now comes only from per-kill
+        // drops (flat + randomized), so clearing a wave grants no lump sum —
+        // keeping gold-find purely skill-based (kill fast / hold streaks).
         this.player.gainExperience(bonusXP);
-        this.game.money += bonusCoins;
+        // 6.x — Health pickups on clear: a few every wave, more at a stage
+        // clear. The flat economy no longer hands out wave-clear gold and
+        // ability heals are scarce early, so this keeps sustain healthy.
+        if (typeof this.createHealthOrb === 'function') {
+            const hx = this.player ? this.player.x : (this.width || 800) / 2;
+            const hy = this.player ? this.player.y : (this.height || 600) / 2;
+            const orbCount = stageClear ? 5 : 2;
+            for (let i = 0; i < orbCount; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                const rad = 60 + Math.random() * 130;
+                this.createHealthOrb(hx + Math.cos(ang) * rad, hy + Math.sin(ang) * rad);
+            }
+        }
         const _mob = isMobile();
         // RUN-01b — the card draft fires on EVERY stage clear EXCEPT the final
         // stage (runConfig-aware → default 10×3 run: waves 3,6,…,27 but NOT
@@ -251,7 +267,6 @@ export function updateWaveSystem() {
         // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
         // the bonus gold + pick info to the message renderer.
         this._waveClearRecap = {
-            bonusCoins,
             picks: survivorWave ? 1 : 0,
             mission: this.game.mission ? {
                 completed: !!this.game.mission.completed,
@@ -580,7 +595,7 @@ export function showWaveComplete() {
     // bigger gold bonus + survivor card hint. Mission ✓ / ✗ tag stays.
     const cleared = this.game.currentWave;
     const isStage = isStageClear(cleared, runWavesPerStage(this.game));
-    const r = this._waveClearRecap || { bonusCoins: 0, picks: 0, mission: null };
+    const r = this._waveClearRecap || { picks: 0, mission: null };
     const missionTag = !r.mission
         ? ''
         : r.mission.completed
@@ -591,9 +606,10 @@ export function showWaveComplete() {
     const title = isStage
         ? `STAGE ${getStage(cleared, runWavesPerStage(this.game))} CLEAR!`
         : `WAVE CLEAR`;
+    // 6.x — no gold lump sum on clear; advertise the powerup pick / mission only.
     const subtitle = isStage
-        ? `+${r.bonusCoins}G  ·  POWERUP INCOMING${missionTag}`
-        : `+${r.bonusCoins}G${missionTag}`;
+        ? `POWERUP INCOMING${missionTag}`
+        : (missionTag ? missionTag.replace(/^ · /, '') : 'WAVE CLEAR');
     // 6.22.1 — Mid-stage WAVE CLEAR banner suppressed (set active:false)
     // per user request — banner felt redundant on every sub-wave clear.
     // Stage clear banners (1-3, 2-3, 3-3) still fire below. To restore
@@ -1292,17 +1308,15 @@ export function completeWave() {
     this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level, _mw);
     this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave, _mw);
 
-    // Wave clear bonus: XP + coins scale with wave number, plus a
-    // free powerup pick (5.70.0) the player redeems in the shop.
-    // Picks accumulate, so skipping the shop one wave doesn't waste them.
+    // Wave clear bonus: XP + a free powerup pick (5.70.0) the player redeems
+    // in the shop. 6.x — the GOLD lump sum was removed (gold is per-kill only,
+    // flat + randomized). Picks accumulate, so skipping the shop doesn't waste
+    // them. The +1 SP per stage clear is unchanged.
     const bonusXP = 20 + clearedWave * 10;
-    // RUN-03 — Reward Dial (no-op at the default 10×3 run → ×1.0).
-    const bonusCoins = Math.round((50 + clearedWave * 25) * rewardMultiplier(this.game, clearedWave));
     this.player.gainExperience(bonusXP);
-    this.game.money += bonusCoins;
     this.player.skillPoints += 1;
     this.queueNotification(`STAGE ${getStageLabel(clearedWave, runWavesPerStage(this.game))} CLEARED`,
-        `+${bonusCoins} gold`, 2500);
+        `+1 SP`, 2500);
 
     // Phase R2.3 — wave-milestone weapon unlocks RETIRED. Weapons/abilities
     // are now permanent account UNLOCKS bought with account-gold in the

@@ -61,9 +61,9 @@ test.describe('QA-08: BUILD screen + gold economy', () => {
             return { ok, gold: ge.game.accountGold, unlocked: meta.unlockedPrimaries || [], metaGold: meta.accountGold };
         });
         expect(r.ok).toBe(true);
-        expect(r.gold).toBe(20000 - 8000); // primary unlock dialed up to 8000 (W7)
+        expect(r.gold).toBe(20000 - 10000); // 7.0.0 — flat 10k per weapon unlock
         expect(r.unlocked).toContain('STORM_NEEDLES');
-        expect(r.metaGold).toBe(12000);
+        expect(r.metaGold).toBe(10000);
     });
 
     test('cannot buy an unlock you cannot afford', async ({ page }) => {
@@ -228,7 +228,8 @@ test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (
             // Click each equipped primary parent to toggle it off (the tree
             // re-renders on each click, so re-query in a loop).
             let guard = 0, node;
-            while ((node = document.querySelector('#shop-tree-primary .shop-node--parent.shop-node--owned')) && guard++ < 12) {
+            // 7.0.0 — compact list marks the equipped pick with `shop-node--equipped`.
+            while ((node = document.querySelector('#shop-tree-primary .shop-node--parent.shop-node--equipped')) && guard++ < 12) {
                 node.click();
             }
             const btn = document.getElementById('shop-prerun-start');

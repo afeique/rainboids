@@ -40,19 +40,16 @@ test.describe('QA-07: Weapon system and shop tabs', () => {
         expect(owned.powers).toContain('CHARGE_SHOT');
     });
 
-    test('player has a single equipped ability (5.64.11 — was 4 slots)', async ({ page }) => {
+    test('player has no equipped ability by default (7.0.0 — abilities are purchase-locked)', async ({ page }) => {
+        // Abilities are now purchase-locked (Pulse + Charge is the base kit),
+        // so slot 0 is empty until the player buys / is gifted one.
         const ability = await page.evaluate(() => window.gameEngine?.player?.activeAbility);
-        expect(typeof ability).toBe('string');
-        expect(ability.length).toBeGreaterThan(0);
+        expect(ability == null).toBe(true);
     });
 
-    test('player starts with default ability in ownedAbilities', async ({ page }) => {
-        const data = await page.evaluate(() => ({
-            size: window.gameEngine?.player?.ownedAbilities?.size ?? -1,
-            active: window.gameEngine?.player?.activeAbility,
-        }));
-        expect(data.size).toBeGreaterThanOrEqual(1);
-        expect(data.active).toBeTruthy();
+    test('player owns no abilities by default (7.0.0)', async ({ page }) => {
+        const size = await page.evaluate(() => window.gameEngine?.player?.ownedAbilities?.size ?? -1);
+        expect(size).toBe(0);
     });
 
     // ------------------------------------------------------------------

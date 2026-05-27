@@ -3,6 +3,7 @@ import { GAME_STATES } from '../core/constants.js';
 import { random } from '../core/utils.js';
 import { hideHint } from './hint-system.js';
 import { isMobile } from '../platform/platform-detect.js';
+import { isDebugMode, debugState } from '../core/debug-config.js';
 
 // 5.79.2 — Hit-test the bottom-center HUD button bar. Mirrors
 // hudButtonHitTest in hud-buttons.js but kept inline here to avoid a
@@ -84,6 +85,19 @@ export function setupEventListeners() {
                 return;
             }
         }
+        // 6.x — '?' opens the developer debug menu (only when ?debug is active;
+        // the overlay is mounted in that case). Shift+/ produces '?'.
+        if (e.key === '?' && !e.repeat && isDebugMode() && this._debugMenu) {
+            const allowed =
+                this.game.state === GAME_STATES.PLAYING ||
+                this.game.state === GAME_STATES.WAVE_TRANSITION ||
+                this.game.state === GAME_STATES.PAUSED;
+            if (allowed) {
+                this._debugMenu.toggle();
+                e.preventDefault();
+                return;
+            }
+        }
         // Keybind layout:
         //   E (hold)  — radial menu: PRIMARY weapon (mouse picks, click commits)
         //   R (hold)  — radial menu: POWER weapon
@@ -102,69 +116,34 @@ export function setupEventListeners() {
             this.game.state === GAME_STATES.PLAYING ||
             this.game.state === GAME_STATES.WAVE_TRANSITION;
 
-        // 5.79.3 — keybind reshuffle (per user request):
-        //   F → primary weapon radial
-        //   E → power weapon radial
-        //   R → defense ability radial (6.54.0 — RE-ENABLED; defensive
-        //       abilities returned in 6.35.0). Hold R to pick the equipped
-        //       ability; TAB still activates it.
-        // The radial-menu types stay 'primary' / 'power' / 'ability'; only
-        // the keys that open each are remapped.
+        // 6.x — Weapon-selection radials are now a DEVELOPER affordance only.
+        //   F → primary radial, E → power radial — each opens ONLY when its
+        //   debug toggle is enabled (?debug → debug menu). R (the old ability
+        //   radial) is removed entirely; abilities are activated with 1-4.
+        //   In normal play F/E/R do nothing here.
         const radialKey =
-            e.code === 'KeyF' ? 'primary' :
-            e.code === 'KeyE' ? 'power'   :
-            e.code === 'KeyR' ? 'ability'   :
+            (e.code === 'KeyF' && debugState.primaryRadial) ? 'primary' :
+            (e.code === 'KeyE' && debugState.powerRadial)   ? 'power'   :
             null;
-        if (radialKey && !e.shiftKey && cycleAllowed && !e.repeat) {
+        if (radialKey && !e.shiftKey && cycleAllowed && !e.repeat && this.radialMenu) {
             this.radialMenu.openFor(radialKey);
             hideHint();
         }
-        // TAB activates the equipped defense ability/ability (6.x; the
-        // pulse is set in input-handler.handleKeyDown). preventDefault
-        // here too so TAB never shifts browser focus off the canvas.
+        // TAB never shifts browser focus off the canvas.
         if (e.code === 'Tab') {
             e.preventDefault();
         }
-        // 5.74.17 — P-key powerup spawn cheat removed. Powerups are now
-        // purchase-only via the POWERUPS pause-tab; ground pickups and
-        // random grants are gone, so this debug spawner has no place.
-        // Solo-key cheat codes (no shift required, gameplay only).
-        //   [   → +1000 gold
-        //   ]   → +5 SP   (5.79.3 — restored. SP currency came back
-        //                  with the 5.78.0 powerupPicks → skillPoints
-        //                  rename. Earlier the cheat had been
-        //                  redirected to gold; now it grants picks
-        //                  again to match the documented behavior.)
-        if (this.game.state === GAME_STATES.PLAYING && !e.shiftKey) {
-            if (e.code === 'BracketLeft') {
-                this.game.money += 1000;
-                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+1000 Gold', duration: 1200 });
-            } else if (e.code === 'BracketRight') {
-                if (this.player) {
-                    this.player.skillPoints = (this.player.skillPoints || 0) + 5;
-                }
-                this.events.emit('ui:show-message', { title: 'CHEAT', subtitle: '+5 SP', duration: 1200 });
-            }
-        }
-
-        // 5.64.11 — SHIFT+ cheat codes removed. They didn't fire reliably
-        // (the SHIFT key is now the ability-cycle binding so shift+letter
-        // combos are partially intercepted by the input handler's
-        // shift-tap-to-cycle bookkeeping). The bracket cheats above are
-        // the supported quick-test path now; full cheats live behind
-        // dev-tools console (`window.gameEngine.cheats.*`).
+        // 6.x — In-game cheat keys ([ +gold / ] +SP) removed. Dev grants now
+        // live behind the debug menu (?debug=1) and window.dbg console API.
     });
 
-    // Radial-menu keyup — releasing F/E/R closes the menu without changing
-    // the equipped item. Tied to the specific key that opened it so other
-    // unrelated keyups don't dismiss it. (5.79.3 keybind reshuffle mirrors
-    // the keydown above.)
+    // Radial-menu keyup — releasing F/E closes the (debug-only) radial without
+    // changing the equipped item. Tied to the key that opened it.
     document.addEventListener('keyup', (e) => {
         if (!this.radialMenu || !this.radialMenu.isOpen()) return;
         const t = this.radialMenu.type;
         if ((e.code === 'KeyF' && t === 'primary') ||
-            (e.code === 'KeyE' && t === 'power')   ||
-            (e.code === 'KeyR' && t === 'ability')) {
+            (e.code === 'KeyE' && t === 'power')) {
             // Release closes without changing; the left-click commits the
             // hovered slice (handled in the mousedown handler below).
             this.radialMenu.cancel();

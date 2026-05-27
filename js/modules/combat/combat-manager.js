@@ -905,29 +905,18 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     // TRIAGE (HEALTH_DROP_FREQUENCY) still shortens the global cooldown.
     const wave = Math.max(1, (this.game?.currentWave | 0) || 1);
     const waveDropRateBonus = (wave - 1) * 0.015;
-    const waveQuantityBonus = Math.floor((wave - 1) / 5);
 
-    // RUN-03 — Reward Dial. ×1.0 for the default 10×3 run (no behavior
-    // change); > 1.0 for richer runs. Applied below to money-orb drop
-    // chance + budget, gear-drop chance, and the rarity bias.
+    // RUN-03 — Reward Dial. ×1.0 for the default 10×3 run; >1.0 for richer
+    // runs. 6.x — GOLD no longer reads this (the gold economy is flat +
+    // decoupled from level/gear/wave); it still scales the GEAR-drop chance +
+    // rarity bias below.
     const runRewardMult = rewardMultiplier(this.game, wave);
-
-    const hitStreakMultiplier = this.player.getHitStreakMultiplier();
 
     const isEnemy = entity && entity.type && typeof entity.type === 'string';
     const enemyDropRateBonus = isEnemy ? 0.15 : 0;
-    const enemyQuantityMultiplier = isEnemy ? 1.3 : 1;
-
-    // 6.18.0 — Per-enemy drop profile. Grunts drop pixel showers,
-    //   tanky enemies guarantee shapes, bosses jackpot. Asteroids
-    //   and non-enemy drops fall through to 'standard' defaults.
-    const profile = isEnemy ? getEnemyDropProfile(entity) : null;
-    const profileBudgetMult = profile ? profile.budgetMult : 1.0;
-    const profileRateMult   = profile ? profile.rateMult   : 1.0;
 
     const entityLevel = entity?.level || 1;
     const levelDropRateBonus = (entityLevel - 1) * 0.05;
-    const levelQuantityMultiplier = 1 + (entityLevel - 1) * 0.1;
 
     // ── Desperation curve (new in 6.0.0) ──
     // Quadratic ramp on (1 - hp%). At full HP, mult = 1. At 25% HP
@@ -951,18 +940,7 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const baseHealthDropRate = (GAME_CONFIG.HEALTH_ORB_BASE_DROP_RATE
         + waveDropRateBonus + levelDropRateBonus + enemyDropRateBonus
         + luckyAdd) * desperationMult;
-    const baseMoneyDropRate = GAME_CONFIG.MONEY_ORB_BASE_DROP_RATE
-        + waveDropRateBonus + levelDropRateBonus + enemyDropRateBonus;
-
-    const goldFindMult = player.getGoldFindMultiplier?.() || 1;
-    const streakCount = this.killStreakCount || 0;
-    // 6.18.0 — Tier-keyed streak gold curve (was linear 0.025/kill).
-    //   Pre-tier ramp 1.00 → 1.05 across kills 1-9; then steps up
-    //   per STREAK_TIER. Cap at 1.50 at the RAINBOIDS GOD tier.
-    const streakGoldMult = getStreakGoldMult(streakCount);
     const healthDropRate = Math.min(1.0, baseHealthDropRate);
-    // RUN-03 — Reward Dial scales the money-orb drop CHANCE (clamped ≤ 0.95).
-    const moneyDropRate = Math.min(0.95, baseMoneyDropRate * goldFindMult * streakGoldMult * profileRateMult * runRewardMult);
 
     // ── Health orbs ──
     // Global cooldown gate. Triage stacks shorten the cooldown; when
@@ -1033,26 +1011,30 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         tryRoll('nanites', trinkRate);
     }
 
-    // ── Money orbs ── no cooldown.
-    if (Math.random() < moneyDropRate) {
-        const maxMoneyOrbs = GAME_CONFIG.MONEY_ORB_BASE_DROP_COUNT_MAX + waveQuantityBonus;
-        const baseCount = Math.floor(Math.random() * maxMoneyOrbs) + 1;
-        const totalLegacyCount = Math.max(1,
-            Math.floor(baseCount * levelQuantityMultiplier * enemyQuantityMultiplier * hitStreakMultiplier));
-
-        const minMoney = GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MIN + (wave - 1) * 3;
-        const maxMoney = Math.max(minMoney,
-            GAME_CONFIG.MONEY_ORB_MONEY_AMOUNT_MAX + (wave - 1) * 5);
-        const avgMoney = (minMoney + maxMoney) / 2;
-        // RUN-03 — Reward Dial scales the gold budget (×1.0 default run).
-        const moneyBudget = Math.max(1,
-            Math.round(totalLegacyCount * avgMoney * goldFindMult * streakGoldMult * profileBudgetMult * runRewardMult));
-
-        // 6.18.0 — _splitMoneyDrop reads profile for boss budget cap
-        //   + bonus pixel pieces.
-        const { shapes, pixels } = _splitMoneyDrop(moneyBudget, profile);
-        for (const v of shapes) this.createMoneyOrb(x, y, v, false);
-        for (const v of pixels) this.createMoneyOrb(x, y, v, true);
+    // ── Money orbs (6.x — FLAT + RANDOMIZED) ──
+    // Per-drop gold is a roll within a FIXED range × the killstreak multiplier
+    // (getStreakGoldMult, 1.0–1.5) — the ONLY modifier, and a SKILL one (kill
+    // fast, don't get hit). No wave / level / gear / profile / reward-dial
+    // scaling: a wave-30 kill pays the same as a wave-1 kill, so flat 10k
+    // prices never feel cheap late. The range gives loot variance with zero
+    // power creep. Targets: ~3k by wave 5, ~22–32k over a full 30-wave run.
+    const streakGold = getStreakGoldMult(this.killStreakCount || 0);
+    const rollGold = (lo, hi) => Math.max(1, Math.round((lo + Math.random() * (hi - lo)) * streakGold));
+    if (isEnemy) {
+        if (entity.isBoss) {
+            // Flat per-tier boss bounty (tiers 1-4) — milestone-sized, still flat.
+            const tier = Math.max(1, Math.min(4, (entity.bossTier | 0) || 1));
+            const BOSS_GOLD = { 1: [250, 400], 2: [400, 600], 3: [550, 850], 4: [700, 1100] };
+            const [lo, hi] = BOSS_GOLD[tier];
+            this.createMoneyOrb(x, y, rollGold(lo, hi), false);
+        } else {
+            // Every enemy drops a flat-range nugget.
+            this.createMoneyOrb(x, y, rollGold(25, 55), false);
+        }
+    } else if (Math.random() < 0.55) {
+        // Asteroids: usually a small payout; ~10% of those a bigger nugget.
+        const big = Math.random() < 0.10;
+        this.createMoneyOrb(x, y, big ? rollGold(30, 50) : rollGold(5, 20), false);
     }
 }
 

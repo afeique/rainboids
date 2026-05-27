@@ -78,9 +78,10 @@ describe('CD-04 — REGENERATOR raises the regen cap (getEffectiveRegen)', () =>
     });
 
     test('BOOSTED but below the new cap → not clamped (returns the raw regen)', () => {
-        // 4 HP/s of regen, powerup raises the cap to 5 → 4 passes through.
+        // 4 HP/s item regen + 0.5 baseline = 4.5; REGENERATOR raises the cap to
+        // 5 → 4.5 passes through un-clamped.
         const p = makePlayer({ hasRegenerator: true, itemRegen: 4 });
-        expect(progression.getEffectiveRegen.call(p)).toBe(4.0);
+        expect(progression.getEffectiveRegen.call(p)).toBe(4.5);
     });
 
     test('DEFAULT-SAFE: 4 HP/s without the powerup still clamps to 3.0', () => {

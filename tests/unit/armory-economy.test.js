@@ -1,15 +1,21 @@
 // Phase R2 — Armory economy unit tests (pure functions, no DOM).
 import {
     BASE_LOADOUT, UNLOCK_CATEGORIES, unlockCost, getUnlockedSet, isUnlocked,
-    getLockedIds, canUnlock, applyUnlock, bankRunGold, resolveAccountGold,
+    getLockedIds, canUnlock, applyUnlock, applyResell, bankRunGold, resolveAccountGold,
     STARTER_ACCOUNT_GOLD, STARTER_UNLOCKS, newAccountSeed,
 } from '../../js/modules/shop/armory.js';
 
 describe('Armory economy — unlock sets', () => {
     test('base loadout is always unlocked even with empty meta', () => {
+        // 6.x — base kit is Pulse + Charge ONLY; abilities are now all locked.
         expect(isUnlocked('primaries', 'PULSE_CANNON', {})).toBe(true);
         expect(isUnlocked('powers', 'CHARGE_SHOT', null)).toBe(true);
-        expect(isUnlocked('abilities', 'BULWARK', {})).toBe(true);
+    });
+
+    test('abilities have no free base kit — all start locked', () => {
+        expect(BASE_LOADOUT.abilities).toEqual([]);
+        expect(isUnlocked('abilities', 'BULWARK', {})).toBe(false);
+        expect(isUnlocked('abilities', 'FIELD_MEDIC', {})).toBe(false);
     });
 
     test('non-base items start locked', () => {
@@ -29,9 +35,11 @@ describe('Armory economy — unlock sets', () => {
         expect(getLockedIds('primaries', all, meta)).toEqual(['SCATTER_GUN']);
     });
 
-    test('abilities cost more than weapons', () => {
-        expect(unlockCost('abilities')).toBeGreaterThan(unlockCost('powers'));
-        expect(unlockCost('powers')).toBeGreaterThan(unlockCost('primaries'));
+    test('weapons + abilities are flat 10k; attunements are cheaper', () => {
+        expect(unlockCost('primaries')).toBe(10000);
+        expect(unlockCost('powers')).toBe(10000);
+        expect(unlockCost('abilities')).toBe(10000);
+        expect(unlockCost('attunements')).toBeLessThan(unlockCost('primaries'));
     });
 });
 
@@ -82,6 +90,39 @@ describe('Armory economy — purchasing', () => {
     });
 });
 
+describe('Armory economy — resell (100% refund)', () => {
+    test('reselling a purchased weapon refunds the full cost and removes it', () => {
+        const meta = { unlockedPrimaries: ['STORM_NEEDLES'] };
+        const out = applyResell('primaries', 'STORM_NEEDLES', meta, 0);
+        expect(out.ok).toBe(true);
+        expect(out.refund).toBe(unlockCost('primaries'));
+        expect(out.accountGold).toBe(unlockCost('primaries'));
+        expect(out.meta.unlockedPrimaries).not.toContain('STORM_NEEDLES');
+        // buy → sell is gold-neutral
+        expect(out.accountGold).toBe(applyUnlock('primaries', 'STORM_NEEDLES', {}, unlockCost('primaries')).accountGold + unlockCost('primaries'));
+    });
+
+    test('cannot resell the base kit', () => {
+        const out = applyResell('primaries', 'PULSE_CANNON', {}, 500);
+        expect(out.ok).toBe(false);
+        expect(out.reason).toBe('base');
+        expect(out.accountGold).toBe(500);
+    });
+
+    test('reselling a not-owned id is a no-op', () => {
+        const out = applyResell('powers', 'NOVA_BLAST', {}, 500);
+        expect(out.ok).toBe(false);
+        expect(out.reason).toBe('not-owned');
+        expect(out.accountGold).toBe(500);
+    });
+
+    test('does not mutate the input meta', () => {
+        const meta = { unlockedPowers: ['NOVA_BLAST'] };
+        applyResell('powers', 'NOVA_BLAST', meta, 0);
+        expect(meta.unlockedPowers).toEqual(['NOVA_BLAST']);
+    });
+});
+
 describe('Armory economy — banking + migration', () => {
     test('bankRunGold adds run-gold to the wallet', () => {
         expect(bankRunGold(1000, 350)).toBe(1350);
@@ -112,40 +153,23 @@ describe('Armory economy — banking + migration', () => {
     });
 });
 
-describe('Armory economy — new-account starter seed (early-engagement)', () => {
-    test('starter gold sits below the cheapest unlock so it cannot be spent directly', () => {
-        const cheapestUnlock = Math.min(...Object.values(UNLOCK_CATEGORIES).map((c) => c.cost));
-        expect(STARTER_ACCOUNT_GOLD).toBeGreaterThan(0);
-        expect(STARTER_ACCOUNT_GOLD).toBeLessThan(cheapestUnlock);
-    });
-
-    test('newAccountSeed bundles the starter gold + the starter unlocks', () => {
+describe('Armory economy — new-account seed (locked-down)', () => {
+    test('a brand-new account starts with zero gold and no extra unlocks', () => {
+        // 6.x — the early-engagement starter grant was removed: run 1 is
+        // Pulse + Charge only, everything else earned + purchased.
+        expect(STARTER_ACCOUNT_GOLD).toBe(0);
+        expect(STARTER_UNLOCKS).toEqual({});
         const seed = newAccountSeed();
-        expect(seed.accountGold).toBe(STARTER_ACCOUNT_GOLD);
-        expect(seed.unlockedPrimaries).toEqual(STARTER_UNLOCKS.unlockedPrimaries);
-        expect(seed.unlockedPowers).toEqual(STARTER_UNLOCKS.unlockedPowers);
-        expect(seed.unlockedAbilities).toEqual(STARTER_UNLOCKS.unlockedAbilities);
+        expect(seed.accountGold).toBe(0);
+        expect(seed.unlockedPrimaries).toBeUndefined();
+        expect(seed.unlockedPowers).toBeUndefined();
+        expect(seed.unlockedAbilities).toBeUndefined();
     });
 
-    test('seeded unlocks are NOT base — they only widen a fresh account', () => {
-        // The always-free floor is unchanged; the seed adds purchasable items on top.
-        for (const id of STARTER_UNLOCKS.unlockedPrimaries) {
-            expect(BASE_LOADOUT.primaries).not.toContain(id);
-            expect(isUnlocked('primaries', id, {})).toBe(false);          // locked with empty meta
-            expect(isUnlocked('primaries', id, newAccountSeed())).toBe(true); // unlocked once seeded
-        }
-        expect(isUnlocked('powers', 'MINE_LAYER', {})).toBe(false);
-        expect(isUnlocked('powers', 'MINE_LAYER', newAccountSeed())).toBe(true);
-        expect(isUnlocked('abilities', 'DEFLECTOR_ORBS', {})).toBe(false);
-        expect(isUnlocked('abilities', 'DEFLECTOR_ORBS', newAccountSeed())).toBe(true);
-    });
-
-    test('a seeded account can choose from a real opening fork (base ∪ seeded)', () => {
+    test('a fresh account can only equip the base kit', () => {
         const meta = newAccountSeed();
-        const primaries = getUnlockedSet('primaries', meta);
-        expect(primaries.has('PULSE_CANNON')).toBe(true); // base
-        expect(primaries.has('SCATTER_GUN')).toBe(true);  // seeded
-        expect(primaries.has('RAIL_DRIVER')).toBe(true);  // seeded
-        expect(primaries.size).toBeGreaterThanOrEqual(3);
+        expect([...getUnlockedSet('primaries', meta)]).toEqual(['PULSE_CANNON']);
+        expect([...getUnlockedSet('powers', meta)]).toEqual(['CHARGE_SHOT']);
+        expect([...getUnlockedSet('abilities', meta)]).toEqual([]);
     });
 });
