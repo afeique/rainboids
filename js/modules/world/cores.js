@@ -122,6 +122,8 @@ export function partitionBulkSalvage(stash, equippedBySlot, scoreFn) {
     const keep = [];
     const salvage = [];
     for (const it of (stash || [])) {
+        // T44 — LOCKED items are never bulk-salvaged (always kept).
+        if (it && it.locked) { keep.push(it); continue; }
         const eq = equippedBySlot ? equippedBySlot[it.slot] : null;
         const below = eq && scoreFn(it) < scoreFn(eq);
         if (below) salvage.push(it); else keep.push(it);

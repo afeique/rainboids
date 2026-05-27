@@ -6,9 +6,42 @@
 // is unit-testable without the DOM. An item lives in exactly ONE place:
 // the stash OR an equipped slot (equipping swaps, unequipping returns it).
 
-import { SLOT_ORDER } from './item-names.js';
+import { SLOT_ORDER, RARITY_ORDER } from './item-names.js';
 
 const EMPTY_EQUIP = () => ({ cockpit: null, hull: null, shielding: null, chassis: null, nanites: null });
+
+// T44 — rarity rank for sorting (higher index = rarer).
+const _RARITY_RANK = Object.fromEntries(RARITY_ORDER.map((r, i) => [r, i]));
+
+/**
+ * T44 — pure stash sort. Returns a NEW sorted array (never mutates `items`).
+ * Modes: 'recent' (newest first, default), 'rarity' (rarest first), 'score'
+ * (best first — pass `{ scoreFn }`), 'slot' (grouped by SLOT_ORDER then rarity).
+ * LOCKED items are pinned to the top regardless of mode.
+ */
+export function sortStash(items, mode = 'recent', { scoreFn = null } = {}) {
+    const arr = Array.isArray(items) ? items.slice() : [];
+    const rank = (it) => (it && _RARITY_RANK[it.rarity] != null ? _RARITY_RANK[it.rarity] : -1);
+    const slotIdx = (it) => { const i = SLOT_ORDER.indexOf(it && it.slot); return i < 0 ? SLOT_ORDER.length : i; };
+    const orig = new Map(arr.map((it, i) => [it, i])); // original order: later = newer
+    const byRecent = (a, b) => orig.get(b) - orig.get(a);
+    let cmp;
+    if (mode === 'rarity') {
+        cmp = (a, b) => (rank(b) - rank(a)) || byRecent(a, b);
+    } else if (mode === 'score' && typeof scoreFn === 'function') {
+        cmp = (a, b) => (scoreFn(b) - scoreFn(a)) || (rank(b) - rank(a)) || byRecent(a, b);
+    } else if (mode === 'slot') {
+        cmp = (a, b) => (slotIdx(a) - slotIdx(b)) || (rank(b) - rank(a)) || byRecent(a, b);
+    } else {
+        cmp = byRecent;
+    }
+    return arr.sort((a, b) => {
+        const la = (a && a.locked) ? 1 : 0;
+        const lb = (b && b.locked) ? 1 : 0;
+        if (la !== lb) return lb - la; // locked pinned to top
+        return cmp(a, b);
+    });
+}
 
 /** Normalize meta.equippedItems to a full 5-slot map. */
 export function getEquipped(meta) {

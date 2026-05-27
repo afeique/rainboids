@@ -41,7 +41,8 @@ import { applyClass, clearClass } from './player/class-system.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed, setDebugUnlockResolvers, setAllUnlocked, applyResell, UNLOCK_CATEGORIES } from './shop/armory.js';
 // T31 — Fabricate weapons: the crafting engine rolls, item-system decorates.
 import { fabricate } from './shop/crafting.js';
-import { decorateWeaponItem, decorateGearItem, createWeaponItem, createItem } from './world/item-system.js';
+import { decorateWeaponItem, decorateGearItem, createWeaponItem, createItem, scoreItem } from './world/item-system.js';
+import { salvageValue } from './world/cores.js'; // T44 — auto-salvage on commit
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
 import { isDebugMode, debugUnlockAllFor } from './core/debug-config.js';
 import { DebugMenu, installDebugConsoleApi } from './ui/debug-menu.js';
@@ -1842,6 +1843,15 @@ export class GameEngine {
         return (m && typeof m.selectedClass === 'string' && CLASSES[m.selectedClass]) ? m.selectedClass : null;
     }
 
+    // T44 — toggle auto-salvage-on-commit (persisted in meta). Returns the new
+    // state. Read by commitRunLootToStash.
+    setAutoSalvage(on) {
+        const v = !!on;
+        try { saveMeta({ autoSalvage: v }); } catch (_e) { /* best-effort */ }
+        return v;
+    }
+    getAutoSalvage() { const m = loadMeta(); return !!(m && m.autoSalvage); }
+
     // ── T45 — Bounty board ───────────────────────────────────────────────────
     // The persistent board lives in meta.bountyBoard; rolled lazily on first
     // access. Returns the board object (mutated in place by recordEvent/claim).
@@ -1899,10 +1909,28 @@ export class GameEngine {
         try {
             const meta = loadMeta() || {};
             const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
-            for (const it of collected) if (it && it.slot) stash.push(it);
+            // T44 — auto-salvage (opt-in): GEAR drops scoring below the equipped
+            // item in their slot (and not locked / not weapons) are salvaged to
+            // R$ on commit instead of cluttering the stash.
+            const autoSalvage = !!meta.autoSalvage;
+            const equipped = (meta.equippedItems && typeof meta.equippedItems === 'object') ? meta.equippedItems : {};
+            let salvaged = 0;
+            for (const it of collected) {
+                if (!it || !it.slot) continue;
+                if (autoSalvage && it.kind !== 'weapon' && !it.locked) {
+                    const eq = equipped[it.slot];
+                    if (eq && scoreItem(it) < scoreItem(eq)) { salvaged += salvageValue(it); continue; }
+                }
+                stash.push(it);
+            }
             const STASH_CAP = 200; // keep the highest-value tail if it overflows
             if (stash.length > STASH_CAP) stash.splice(0, stash.length - STASH_CAP);
-            saveMeta({ stash });
+            const patch = { stash };
+            if (salvaged > 0) {
+                patch.accountGold = resolveAccountGold(meta) + salvaged;
+                if (this.game) this.game.accountGold = patch.accountGold;
+            }
+            saveMeta(patch);
             if (p) p.runCollected = [];
         } catch {}
     }
