@@ -31,6 +31,7 @@ export function createShip(playerId, x, y) {
     hp: SHIP_MAX_HP,
     maxHp: SHIP_MAX_HP,
     alive: true,
+    downed: false, // set when hp hits 0; awaits a revive (co-op systems phase)
     // Ticks until this ship can fire again (counts down in tick()).
     fireCooldown: 0,
     // Last input tick the sim has applied for this ship — echoed in snapshots

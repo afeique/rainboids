@@ -47,7 +47,10 @@ async function main() {
   let lastSnapshotTick = 0;
   let lastRemote = new Map();
   let lastAsteroids = new Map();
+  let lastEnemies = new Map();
   let latestBullets = [];
+  let localHp = null;
+  let localDowned = false;
   const effects = []; // ephemeral client-side juice: { x, y, r, born }
 
   // Debug/test hook: lets QA specs (and the console) inspect live client state
@@ -60,7 +63,9 @@ async function main() {
     localShip: () => (predictor ? { x: predictor.ship.x, y: predictor.ship.y, angle: predictor.ship.angle } : null),
     remoteShips: () => [...lastRemote.entries()].map(([id, s]) => ({ id, x: s.x, y: s.y })),
     asteroidCount: () => lastAsteroids.size,
+    enemyCount: () => lastEnemies.size,
     bulletCount: () => latestBullets.length,
+    localHp: () => localHp,
   };
 
   transport.onMessage((msg) => {
@@ -78,6 +83,8 @@ async function main() {
         if (predictor) {
           const me = msg.ships.find((s) => s.id === playerId);
           if (me) {
+            localHp = me.hp;
+            localDowned = !!me.dn;
             predictor.reconcile(
               { x: me.x, y: me.y, vx: me.vx, vy: me.vy, angle: me.a },
               me.li,
@@ -88,8 +95,8 @@ async function main() {
       }
       case S2C.EVENT:
         for (const p of msg.payloads || []) {
-          if (p.type === EV.ASTEROID_DESTROYED) {
-            effects.push({ x: p.x, y: p.y, r: p.r || 30, born: performance.now() });
+          if (p.type === EV.ASTEROID_DESTROYED || p.type === EV.ENEMY_DEATH) {
+            effects.push({ x: p.x, y: p.y, r: p.r || 24, born: performance.now() });
           }
         }
         break;
@@ -135,16 +142,19 @@ async function main() {
 
     const remote = interp.sample(now, playerId);
     const asteroids = interp.sampleAsteroids(now);
+    const enemies = interp.sampleEnemies(now);
     lastRemote = remote;
     lastAsteroids = asteroids;
+    lastEnemies = enemies;
     // Age out finished destruction rings (~500 ms lifetime).
     for (let i = effects.length - 1; i >= 0; i--) {
       if (now - effects[i].born > 500) effects.splice(i, 1);
     }
     render(ctx, canvas, {
-      localShip: predictor ? predictor.ship : null,
+      localShip: predictor && !localDowned ? predictor.ship : null,
       remoteShips: remote,
       asteroids,
+      enemies,
       bullets: latestBullets,
       effects,
       now,
@@ -153,7 +163,10 @@ async function main() {
 
     // Lightweight HUD line.
     const hud = document.getElementById('hud');
-    if (hud) hud.textContent = `tick ${lastSnapshotTick} · players ${roster.length} [${roster.join(',')}]`;
+    if (hud) {
+      const hp = localHp != null ? `· hp ${Math.ceil(localHp)}${localDowned ? ' DOWNED' : ''} ` : '';
+      hud.textContent = `tick ${lastSnapshotTick} · players ${roster.length} ${hp}· enemies ${enemies.size}`;
+    }
 
     requestAnimationFrame(frame);
   }

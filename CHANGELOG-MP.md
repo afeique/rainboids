@@ -7,6 +7,28 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.5.0] - 2026-05-27
+
+### Added
+- **Enemies (first type: chaser)** in the shared sim:
+  - `enemy.js` — homing "chaser" AI (`nearestShip` + steer), `createEnemy`,
+    per-tick `stepEnemy` with a contact-damage cooldown.
+  - `world.js` — `enemies` map, `spawnEnemy()`, and `tickEnemySpawner()` (spawns
+    chasers from arena edges on an interval while players are present, capped).
+  - `collision.js` — bullet↔enemy (damage/kill + `ENEMY_HIT`/`ENEMY_DEATH`) and
+    enemy↔ship contact (cooldown-gated damage; downs the ship + `SHIP_DOWNED`).
+  - `ship.js` — `downed` flag; `tick.js` steps enemies + runs the spawner.
+  - `server/src/room.js` — snapshots carry an `enemies` array + ship `dn` flag.
+- **Client**: enemies interpolated (`sampleEnemies`) and drawn (arrowheads with
+  damage HP bars); `ENEMY_DEATH` joins `ASTEROID_DESTROYED` in spawning
+  destruction rings; HUD shows local HP / DOWNED + live enemy count; downed
+  local ship stops rendering. `window.__mp` exposes `enemyCount()` / `localHp()`.
+
+### Tests
+- `tests/unit/sim-enemy.test.js` — chaser targeting/steering, bullet kills,
+  contact damage + downing, spawner gating/cap, and a tick() integration.
+- `tests/qa/12-mp2-ws.spec.js` — asserts enemies spawn once a player is present.
+
 ## [0.4.0] - 2026-05-27
 
 ### Added

@@ -81,6 +81,9 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     await expect.poll(() => a.evaluate(() => window.__mp.asteroidCount())).toBeGreaterThan(0);
     await expect.poll(() => b.evaluate(() => window.__mp.asteroidCount())).toBeGreaterThan(0);
 
+    // Enemies spawn once players are present (first spawn ~1.5s).
+    await expect.poll(() => a.evaluate(() => window.__mp.enemyCount()), { timeout: 8000 }).toBeGreaterThan(0);
+
     const aId = await a.evaluate(() => window.__mp.playerId());
 
     // Record A's ship x as seen by B, then drive A to the right.

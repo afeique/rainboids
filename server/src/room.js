@@ -39,7 +39,19 @@ function buildSnapshot(world) {
       a: round(s.angle, 3),
       hp: s.hp, mhp: s.maxHp,
       al: s.alive,
+      dn: s.downed,
       li: s.lastInputTick, // per-ship acked input tick (owning client reconciles)
+    });
+  }
+  const enemies = [];
+  for (const [, e] of world.enemies) {
+    enemies.push({
+      id: e.id,
+      x: round(e.x), y: round(e.y),
+      a: round(e.angle, 3),
+      r: e.radius,
+      hp: e.hp, mhp: e.maxHp,
+      ty: e.type,
     });
   }
   const asteroids = [];
@@ -55,7 +67,7 @@ function buildSnapshot(world) {
   for (const [, b] of world.bullets) {
     bullets.push({ id: b.id, x: round(b.x), y: round(b.y), o: b.ownerId });
   }
-  return { t: S2C.SNAPSHOT, tick: world.tick, ships, asteroids, bullets };
+  return { t: S2C.SNAPSHOT, tick: world.tick, ships, asteroids, bullets, enemies };
 }
 
 export class Room {

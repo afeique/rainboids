@@ -8,7 +8,8 @@
 import { stepShip, EMPTY_INPUT } from './ship.js';
 import { stepAsteroid } from './asteroid.js';
 import { stepBullet } from './bullet.js';
-import { spawnBullet } from './world.js';
+import { stepEnemy } from './enemy.js';
+import { spawnBullet, tickEnemySpawner } from './world.js';
 import { resolveCollisions } from './collision.js';
 import { EV, emit } from './events.js';
 import { BULLET_SPEED, FIRE_COOLDOWN_TICKS } from './constants.js';
@@ -40,6 +41,9 @@ export function tick(world, inputsByPlayer) {
     }
   }
 
+  for (const [, enemy] of world.enemies) {
+    stepEnemy(enemy, world);
+  }
   for (const [, ast] of world.asteroids) {
     stepAsteroid(ast, world.width, world.height);
   }
@@ -47,12 +51,16 @@ export function tick(world, inputsByPlayer) {
     stepBullet(b, world.width, world.height);
   }
 
-  // Authoritative collisions (bullets vs asteroids), then remove the dead.
+  // Authoritative collisions (bullets↔enemies/asteroids, enemies↔ships), then
+  // remove the dead.
   resolveCollisions(world);
   for (const [id, b] of world.bullets) if (!b.alive) world.bullets.delete(id);
   for (const [id, a] of world.asteroids) if (!a.alive) world.asteroids.delete(id);
+  for (const [id, e] of world.enemies) if (!e.alive) world.enemies.delete(id);
 
-  // Future systems (enemies, waves, drops) tick here in dependency order.
+  tickEnemySpawner(world);
+
+  // Future systems (waves, drops) tick here in dependency order.
 
   return world.events;
 }

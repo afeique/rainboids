@@ -43,3 +43,12 @@ export const BULLET_DAMAGE = 1;
 export const BULLET_TTL = 120; // ticks (~2 s at 60 Hz)
 export const FIRE_COOLDOWN_TICKS = 8; // ~7.5 shots/sec
 export const BULLET_OOB_MARGIN = 50; // despawn this far outside the arena
+
+// Enemies — v1 ships a single "chaser" type that homes on the nearest player.
+export const ENEMY_MAX_COUNT = 6; // concurrent cap
+export const ENEMY_SPAWN_INTERVAL = 90; // ticks between spawns (~1.5 s)
+export const ENEMY_CHASER_HP = 3;
+export const ENEMY_CHASER_RADIUS = 16;
+export const ENEMY_CHASER_SPEED = 1.6; // px/tick
+export const ENEMY_CONTACT_DAMAGE = 10;
+export const ENEMY_CONTACT_COOLDOWN = 30; // ticks between contact hits (~0.5 s)

@@ -34,6 +34,7 @@ export class Interpolator {
       tick: snapshot.tick,
       ships: toMap(snapshot.ships),
       asteroids: toMap(snapshot.asteroids),
+      enemies: toMap(snapshot.enemies),
     });
     if (this.buf.length > BUFFER_CAP) this.buf.shift();
   }
@@ -96,6 +97,30 @@ export class Interpolator {
         y: lerp(sa.y, sb.y, f),
         angle: lerpAngle(sa.a, sb.a, f),
         r: sb.r,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Sample interpolated enemy render states at `now`.
+   * @returns {Map<number, {x,y,angle,r,hp,mhp,type}>}
+   */
+  sampleEnemies(now) {
+    const out = new Map();
+    const br = this._bracket(now);
+    if (!br) return out;
+    const { a, b, f } = br;
+    for (const [id, sb] of b.enemies) {
+      const sa = a.enemies.get(id) || sb;
+      out.set(id, {
+        x: lerp(sa.x, sb.x, f),
+        y: lerp(sa.y, sb.y, f),
+        angle: lerpAngle(sa.a, sb.a, f),
+        r: sb.r,
+        hp: sb.hp,
+        mhp: sb.mhp,
+        type: sb.ty,
       });
     }
     return out;

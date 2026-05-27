@@ -12,7 +12,11 @@ import {
 import { createShip } from './ship.js';
 import { createAsteroid } from './asteroid.js';
 import { createBullet } from './bullet.js';
-import { BULLET_RADIUS, BULLET_DAMAGE, BULLET_TTL } from './constants.js';
+import { createEnemy } from './enemy.js';
+import {
+  BULLET_RADIUS, BULLET_DAMAGE, BULLET_TTL,
+  ENEMY_MAX_COUNT, ENEMY_SPAWN_INTERVAL,
+} from './constants.js';
 import { EV, emit } from './events.js';
 
 export function createWorld({ seed = 1, width = FIELD_WIDTH, height = FIELD_HEIGHT } = {}) {
@@ -25,6 +29,8 @@ export function createWorld({ seed = 1, width = FIELD_WIDTH, height = FIELD_HEIG
     ships: new Map(), // playerId -> ship
     asteroids: new Map(), // entityId -> asteroid
     bullets: new Map(), // entityId -> bullet
+    enemies: new Map(), // entityId -> enemy
+    enemySpawnTimer: ENEMY_SPAWN_INTERVAL,
     nextEntityId: 1, // id space for non-player entities (asteroids, bullets, …)
     events: [], // cleared + repopulated each tick
   };
@@ -35,6 +41,35 @@ export function spawnBullet(world, x, y, vx, vy, ownerId) {
   const b = createBullet(world.nextEntityId++, x, y, vx, vy, ownerId, BULLET_RADIUS, BULLET_DAMAGE, BULLET_TTL);
   world.bullets.set(b.id, b);
   return b;
+}
+
+/** Spawn an enemy at (x, y); emits ENEMY_SPAWN. */
+export function spawnEnemy(world, x, y, type = 'chaser') {
+  const e = createEnemy(world.nextEntityId++, x, y, type);
+  world.enemies.set(e.id, e);
+  emit(world, EV.ENEMY_SPAWN, { id: e.id, x, y, type });
+  return e;
+}
+
+/**
+ * Periodic enemy spawner: while players are present and the field is below the
+ * cap, spawn a chaser at a random arena-edge point on an interval. (A full
+ * wave system with pacing/scaling lands in a later iteration.)
+ */
+export function tickEnemySpawner(world) {
+  if (world.ships.size === 0) return;
+  if (world.enemies.size >= ENEMY_MAX_COUNT) return;
+  if (--world.enemySpawnTimer > 0) return;
+  world.enemySpawnTimer = ENEMY_SPAWN_INTERVAL;
+
+  // Random point on the perimeter.
+  const edge = world.rng.int(0, 3);
+  let x; let y;
+  if (edge === 0) { x = world.rng.range(0, world.width); y = 0; }
+  else if (edge === 1) { x = world.rng.range(0, world.width); y = world.height; }
+  else if (edge === 2) { x = 0; y = world.rng.range(0, world.height); }
+  else { x = world.width; y = world.rng.range(0, world.height); }
+  spawnEnemy(world, x, y, 'chaser');
 }
 
 /** Populate the asteroid field. Deterministic for a fixed world seed. */

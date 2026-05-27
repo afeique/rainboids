@@ -56,7 +56,36 @@ function drawAsteroid(ctx, x, y, angle, r) {
   ctx.restore();
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, bullets, effects, now, localId }) {
+function drawEnemy(ctx, e) {
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.rotate(e.angle);
+  ctx.beginPath();
+  const r = e.r;
+  // Arrowhead pointing at its heading.
+  ctx.moveTo(r, 0);
+  ctx.lineTo(-r * 0.8, r * 0.9);
+  ctx.lineTo(-r * 0.3, 0);
+  ctx.lineTo(-r * 0.8, -r * 0.9);
+  ctx.closePath();
+  ctx.fillStyle = '#ff5d7a';
+  ctx.fill();
+  ctx.strokeStyle = '#ffd0db';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  // HP pip bar when damaged.
+  if (e.hp < e.mhp) {
+    const w = e.r * 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(e.x - w / 2, e.y - e.r - 10, w, 4);
+    ctx.fillStyle = '#9ece6a';
+    ctx.fillRect(e.x - w / 2, e.y - e.r - 10, w * (e.hp / e.mhp), 4);
+  }
+}
+
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, bullets, effects, now, localId }) {
   // Background.
   ctx.fillStyle = '#070710';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -69,6 +98,11 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, bullets
   // Asteroids (interpolated).
   if (asteroids) {
     for (const [, ast] of asteroids) drawAsteroid(ctx, ast.x, ast.y, ast.angle, ast.r);
+  }
+
+  // Enemies (interpolated).
+  if (enemies) {
+    for (const [, e] of enemies) drawEnemy(ctx, e);
   }
 
   // Bullets (latest snapshot positions).

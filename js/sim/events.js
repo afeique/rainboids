@@ -12,8 +12,10 @@ export const EV = Object.freeze({
   BULLET_SPAWN: 'bullet_spawn',
   ASTEROID_HIT: 'asteroid_hit',
   ASTEROID_DESTROYED: 'asteroid_destroyed',
-  // Grows additively as systems are ported: ENEMY_DEATH, DROP, WAVE_START,
-  // REVIVE, ...
+  ENEMY_SPAWN: 'enemy_spawn',
+  ENEMY_HIT: 'enemy_hit',
+  ENEMY_DEATH: 'enemy_death',
+  // Grows additively as systems are ported: DROP, WAVE_START, REVIVE, ...
 });
 
 /** Push an event onto the world's per-tick event list. */
