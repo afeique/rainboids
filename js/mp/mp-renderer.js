@@ -191,20 +191,49 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     for (const [, d] of drops) drawDrop(ctx, d);
   }
 
-  // Bullets (latest snapshot positions).
-  if (bullets) {
-    ctx.fillStyle = '#ffe08a';
+  // Bullets — additive glow (bright core + warm halo), SP-style.
+  if (bullets && bullets.length) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
     for (const b of bullets) {
+      const R = 9;
+      const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, R);
+      g.addColorStop(0, 'rgba(255,240,170,0.95)');
+      g.addColorStop(0.35, 'rgba(255,200,90,0.55)');
+      g.addColorStop(1, 'rgba(255,160,40,0)');
+      ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+      ctx.arc(b.x, b.y, R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 2.2, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
   }
 
-  // Destruction rings (event-driven juice).
+  // Destruction effects (event-driven juice): expanding ring + an early
+  // additive flash so deaths read like SP explosions.
   if (effects && now != null) {
     for (const e of effects) {
       const age = (now - e.born) / 500; // 0 → 1 over lifetime
+      // Additive flash for the first ~40% of life.
+      if (age < 0.4) {
+        const fa = 1 - age / 0.4;
+        const fr = e.r * 0.9;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, fr);
+        g.addColorStop(0, `rgba(255,230,160,${0.9 * fa})`);
+        g.addColorStop(1, 'rgba(255,120,40,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, fr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      // Expanding ring.
       const rr = e.r * (1 + age * 1.6);
       ctx.globalAlpha = Math.max(0, 1 - age);
       ctx.strokeStyle = '#ff9e64';

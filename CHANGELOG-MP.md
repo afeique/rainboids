@@ -7,6 +7,20 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.18.0] - 2026-05-27
+
+### Changed
+- **SP-style bullet glow + explosion flashes** (Path A, Group G3 — Canvas2D).
+  Bullets render as additive bright-core + warm-halo radial glows (replacing flat
+  dots); destruction events get an early additive flash before the expanding
+  ring, so deaths read like SP explosions. Single-canvas Canvas2D (no GPU-canvas
+  alignment risk) — chosen over the WebGL bullet renderer because the two-canvas
+  overlay can't be visually verified headlessly.
+
+### Tests
+- `tests/qa/12-mp2-ws.spec.js` page-error guard green (4/4) — bullet glow + flash
+  paths exercised in-browser (client A fires + destroys entities).
+
 ## [0.17.0] - 2026-05-27
 
 ### Changed
