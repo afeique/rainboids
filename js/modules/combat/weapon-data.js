@@ -1817,6 +1817,14 @@ export function weaponLevelScale(level) {
     return 1 + Math.min(L - 1, 24) * 0.04;
 }
 
+// T31 — the archetype ids that DROP as weapon loot: one per distinct primary
+// firing pattern (each maps through ARCHETYPE_TO_WEAPON to a real PRIMARY_WEAPONS
+// entry). Drops roll a random archetype from this pool.
+export const PRIMARY_ARCHETYPES = Object.freeze([
+    'PULSE', 'STORM', 'SCATTER', 'RAIL', 'CLUSTER',
+    'SPLITTER', 'RICOCHET', 'BOOMERANG', 'SPIN', 'FLAK', 'GRAVITY',
+]);
+
 /**
  * Get all stat boons (the wave-clear stat pool). Optional `{ includeHidden }`
  * flag controls whether legacy/retired entries (LONG_RANGE, SPEED_BOOST,

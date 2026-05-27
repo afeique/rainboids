@@ -294,11 +294,15 @@ export class ArmoryOverlay {
     salvageAllBelowEquipped() {
         const meta = loadMeta() || {};
         const stash = Array.isArray(meta.stash) ? meta.stash : [];
-        const { keep, salvage } = partitionBulkSalvage(stash, this._equippedBySlot(), scoreItem);
+        // T31 — weapons aren't gear: never bulk-salvage them here. Partition only
+        // the gear items and preserve the weapons in `keep`.
+        const weapons = stash.filter((it) => it && it.kind === 'weapon');
+        const gear = stash.filter((it) => !it || it.kind !== 'weapon');
+        const { keep, salvage } = partitionBulkSalvage(gear, this._equippedBySlot(), scoreItem);
         if (salvage.length === 0) return 0;
         const gained = salvage.reduce((s, it) => s + salvageValue(it), 0);
         const cores = this._cores() + gained;
-        saveMeta({ stash: keep, accountGold: cores });
+        saveMeta({ stash: [...keep, ...weapons], accountGold: cores });
         if (this.gameEngine && this.gameEngine.game) this.gameEngine.game.accountGold = cores;
         this.render();
         return gained;
@@ -464,15 +468,19 @@ export class ArmoryOverlay {
     // salvageable for Cores, plus a bulk "salvage all below equipped".
     _renderStash(body, meta) {
         const stash = Array.isArray(meta.stash) ? meta.stash : [];
+        // T31 — this is the GEAR stash panel; weapon-loot items (kind:'weapon')
+        // live in the same stash but are equipped in the weapon inventory (T42/
+        // T43), so they're excluded from the gear rows + bulk-salvage here.
+        const gearCount = stash.filter((it) => it && it.kind !== 'weapon').length;
         const section = document.createElement('div');
         section.className = 'armory-section';
 
         const secTitle = document.createElement('div');
         secTitle.className = 'armory-section-title';
-        secTitle.textContent = `STASH  ·  ${stash.length} item${stash.length === 1 ? '' : 's'}`;
+        secTitle.textContent = `STASH  ·  ${gearCount} item${gearCount === 1 ? '' : 's'}`;
         section.appendChild(secTitle);
 
-        if (stash.length === 0) {
+        if (gearCount === 0) {
             const empty = document.createElement('div');
             empty.className = 'armory-sub';
             empty.textContent = 'Loot you collect on a run is committed here when the run ends. Salvage it for Rainshards (R$).';
@@ -489,8 +497,11 @@ export class ArmoryOverlay {
 
         const list = document.createElement('div');
         list.className = 'armory-list';
-        // Show the most recent first; cap the rendered rows for sanity.
-        const view = stash.map((it, i) => ({ it, i })).reverse().slice(0, 60);
+        // Show the most recent first; cap the rendered rows for sanity. Filter
+        // AFTER mapping so each row keeps its full-stash index for salvage(index).
+        const view = stash.map((it, i) => ({ it, i }))
+            .filter(({ it }) => it && it.kind !== 'weapon')
+            .reverse().slice(0, 60);
         const cores = this._cores();
         for (const { it, i } of view) {
             const row = document.createElement('div');

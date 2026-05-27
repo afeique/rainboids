@@ -36,6 +36,12 @@ import { getItemPassives } from '../combat/passive-data.js';
 // tierUpItem below delegate to this and decorate the pure roll with the
 // display + persistence fields the UI and save schema expect.
 import { rollGear } from './gear-gen.js';
+// T31 — weapon loot. Weapons roll via weapon-gen (archetype + traits) and are
+// decorated here into stash-ready ITEMs (a synthetic `slot:'weapon'` so they
+// flow through the same collection/stash machinery as gear; `kind:'weapon'`
+// lets the gear UIs branch). Shared by drops (combat-manager) + Fabricate.
+import { rollWeapon, describeWeapon } from '../combat/weapon-gen.js';
+import { PRIMARY_WEAPONS, PRIMARY_ARCHETYPES, archetypeToWeaponId } from '../combat/weapon-data.js';
 
 // P7 — passive-affix delivery on gear. Top-tier gear can carry a rule-modifier
 // PASSIVE (a discrete `item.passive` id, not a numeric affix). Modular passives
@@ -266,6 +272,43 @@ export function createItem(slot, level, rarityKey = null) {
     const passive = rollItemPassive(rarity);
     if (passive) item.passive = passive;
     return item;
+}
+
+// ── T31 — Weapon loot factory ────────────────────────────────────────────────
+// A display name for a weapon archetype = its mapped firing pattern's name.
+function _weaponArchetypeName(archetype) {
+    const cfg = PRIMARY_WEAPONS[archetypeToWeaponId(archetype)];
+    return (cfg && cfg.name) || `${archetype} Weapon`;
+}
+
+// Decorate a pure rollWeapon item ({archetype, rarity, traits, element}) into a
+// stash-ready weapon ITEM: synthetic `slot:'weapon'` + `kind:'weapon'` so it
+// rides the existing collection/stash, plus name/level/rarity styling + a
+// `bonusLabel` trait summary for the inventory cards.
+export function decorateWeaponItem(weapon, level) {
+    const rarity = RARITY_TIERS[weapon.rarity] ? weapon.rarity : 'common';
+    const tier = RARITY_TIERS[rarity];
+    const L = Math.max(1, level | 0);
+    const adj = tier.rarityAdjective ? `${tier.rarityAdjective} ` : '';
+    return {
+        ...weapon,
+        slot: 'weapon',
+        kind: 'weapon',
+        rarity,
+        level: L,
+        name: `${adj}${_weaponArchetypeName(weapon.archetype)}`,
+        bonusLabel: describeWeapon(weapon),
+        rarityColor: tier.color, rarityLabel: tier.label, rarityGlow: tier.glow,
+    };
+}
+
+// Roll a complete weapon loot ITEM. `archetype` defaults to a random droppable
+// primary archetype; `rarityKey` to a weighted rollRarity().
+export function createWeaponItem(level, rarityKey = null, archetype = null) {
+    let rarity = rarityKey || rollRarity();
+    if (!RARITY_TIERS[rarity]) rarity = 'common';
+    const arch = archetype || PRIMARY_ARCHETYPES[(Math.random() * PRIMARY_ARCHETYPES.length) | 0];
+    return decorateWeaponItem(rollWeapon({ archetype: arch, rarity, rng: Math.random }), level);
 }
 
 // The next rarity up the 8-tier ladder, or null if already at the top.

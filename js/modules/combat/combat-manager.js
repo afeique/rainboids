@@ -5,7 +5,7 @@ import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, ABILITIES } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
-import { createItem } from '../world/item-system.js';
+import { createItem, createWeaponItem } from '../world/item-system.js';
 import { rollRarity } from '../world/item-names.js';
 // T29 — Rainshard income faucet (§2.4): per-kill R$ ramps with wave depth,
 // the difficulty mode lens, the killstreak multiplier, and the gear/Matrix
@@ -1013,6 +1013,16 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         tryRoll(Math.random() < 0.5 ? 'cockpit' : 'hull', hpRate);
         tryRoll(Math.random() < 0.5 ? 'shielding' : 'chassis', toughRate);
         tryRoll('nanites', trinkRate);
+
+        // T31 — Weapon loot (jackpot). A RARE weapon-as-loot drop, rarer than
+        // gear; boss/elite kills are much likelier and biased to higher rarity.
+        // The rolled weapon ITEM rides the same loot feed / stash as gear via a
+        // synthetic slot (item-system.createWeaponItem) and equips in the ARMORY.
+        const weaponRate = (boss ? 0.05 : (entity && entity.isElite) ? 0.02 : 0.006) * dropMult * runRewardMult;
+        if (Math.random() < Math.min(1.0, weaponRate)) {
+            const rarity = rollRarity(bonusRare + (boss ? 0.12 : 0.03), bonusEpic);
+            player.registerItemDrop(createWeaponItem(wave, rarity));
+        }
     }
 
     // ── Rainshard income (T29 — wave/difficulty/streak/find faucet, §2.4) ──

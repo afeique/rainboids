@@ -36,6 +36,9 @@ import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed, setDebugUnlockResolvers, setAllUnlocked, applyResell, UNLOCK_CATEGORIES } from './shop/armory.js';
+// T31 — Fabricate weapons: the crafting engine rolls, item-system decorates.
+import { fabricate } from './shop/crafting.js';
+import { decorateWeaponItem } from './world/item-system.js';
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
 import { isDebugMode, debugUnlockAllFor } from './core/debug-config.js';
 import { DebugMenu, installDebugConsoleApi } from './ui/debug-menu.js';
@@ -1712,6 +1715,24 @@ export class GameEngine {
     flushMeta() {
         this.commitRunLootToStash();  // drains player.runCollected → meta.stash
         this.savePersistentProfile(); // accountGold / level / gear / powerups …
+    }
+
+    // T31 — Fabricate a weapon from Rainshards: roll via the crafting engine
+    // (cost-checked), decorate into a stash-ready ITEM, commit it to the
+    // persistent stash, and deduct R$. Returns { ok, item?, reason?, rainshards }.
+    // The Fabricate UI (T42) surfaces this; it's an engine capability today.
+    fabricateWeapon({ archetype = 'PULSE', rarity = 'common', lean = 'None', focus = 'None' } = {}) {
+        const meta = loadMeta() || {};
+        const before = resolveAccountGold(meta);
+        const res = fabricate({ kind: 'weapon', params: { archetype, rarity, lean, focus } }, before);
+        if (!res.ok) return { ok: false, reason: res.reason, rainshards: before };
+        const level = (this.player && this.player.level) || (this.game && this.game.currentWave) || 1;
+        const item = decorateWeaponItem(res.item, level);
+        const stash = Array.isArray(meta.stash) ? meta.stash.slice() : [];
+        stash.push(item);
+        saveMeta({ stash, accountGold: res.rainshards });
+        this.game.accountGold = res.rainshards;
+        return { ok: true, item, rainshards: res.rainshards };
     }
 
     // Phase R8.1/R8.4 — append this run's collected items to the persistent
