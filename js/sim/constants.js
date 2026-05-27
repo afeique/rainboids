@@ -35,3 +35,11 @@ export const ASTEROID_MAX_R = 50;
 export const ASTEROID_MIN_SPD = 0.3; // px/tick
 export const ASTEROID_MAX_SPD = 1.2;
 export const ASTEROID_MAX_SPIN = 0.03; // rad/tick
+
+// Player primary fire (simple straight-shot, server-authoritative).
+export const BULLET_SPEED = 12; // px/tick
+export const BULLET_RADIUS = 4;
+export const BULLET_DAMAGE = 1;
+export const BULLET_TTL = 120; // ticks (~2 s at 60 Hz)
+export const FIRE_COOLDOWN_TICKS = 8; // ~7.5 shots/sec
+export const BULLET_OOB_MARGIN = 50; // despawn this far outside the arena

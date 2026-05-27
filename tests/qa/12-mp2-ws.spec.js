@@ -90,11 +90,13 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     }, aId);
     expect(beforeX).not.toBeNull();
 
-    // Hold "D" on client A for ~1s of real time.
+    // Hold "D" (move right) and "Space" (fire) on client A for ~1s real time.
     await a.bringToFront();
+    await a.keyboard.down('Space');
     await a.keyboard.down('KeyD');
     await a.waitForTimeout(1000);
     await a.keyboard.up('KeyD');
+    await a.keyboard.up('Space');
 
     // B's interpolated view of A's ship should have moved right.
     await expect
@@ -103,6 +105,10 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
         return r ? r.x : -1;
       }, aId), { timeout: 4000 })
       .toBeGreaterThan(beforeX + 20);
+
+    // A's fire should produce server-authoritative bullets visible to B.
+    await expect.poll(() => b.evaluate(() => window.__mp.bulletCount()), { timeout: 4000 })
+      .toBeGreaterThan(0);
 
     await ctxA.close();
     await ctxB.close();

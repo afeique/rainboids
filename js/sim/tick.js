@@ -7,6 +7,11 @@
 
 import { stepShip, EMPTY_INPUT } from './ship.js';
 import { stepAsteroid } from './asteroid.js';
+import { stepBullet } from './bullet.js';
+import { spawnBullet } from './world.js';
+import { resolveCollisions } from './collision.js';
+import { EV, emit } from './events.js';
+import { BULLET_SPEED, FIRE_COOLDOWN_TICKS } from './constants.js';
 
 /**
  * @param {object} world  - from createWorld()
@@ -23,14 +28,31 @@ export function tick(world, inputsByPlayer) {
     if (typeof input.clientTick === 'number' && input.clientTick > ship.lastInputTick) {
       ship.lastInputTick = input.clientTick;
     }
+
+    // Primary fire: spawn a forward bullet when held and off cooldown.
+    if (ship.fireCooldown > 0) ship.fireCooldown -= 1;
+    if (ship.alive && input.fire && ship.fireCooldown <= 0) {
+      const bx = ship.x + Math.cos(ship.angle) * ship.radius;
+      const by = ship.y + Math.sin(ship.angle) * ship.radius;
+      spawnBullet(world, bx, by, Math.cos(ship.angle) * BULLET_SPEED, Math.sin(ship.angle) * BULLET_SPEED, playerId);
+      ship.fireCooldown = FIRE_COOLDOWN_TICKS;
+      emit(world, EV.BULLET_SPAWN, { x: bx, y: by, ownerId: playerId });
+    }
   }
 
   for (const [, ast] of world.asteroids) {
     stepAsteroid(ast, world.width, world.height);
   }
+  for (const [, b] of world.bullets) {
+    stepBullet(b, world.width, world.height);
+  }
 
-  // Future systems (enemies, bullets, collisions, waves, drops) tick here in
-  // dependency order, each emitting events as needed.
+  // Authoritative collisions (bullets vs asteroids), then remove the dead.
+  resolveCollisions(world);
+  for (const [id, b] of world.bullets) if (!b.alive) world.bullets.delete(id);
+  for (const [id, a] of world.asteroids) if (!a.alive) world.asteroids.delete(id);
+
+  // Future systems (enemies, waves, drops) tick here in dependency order.
 
   return world.events;
 }

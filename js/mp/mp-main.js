@@ -12,6 +12,7 @@ import { MpInput } from './mp-input.js';
 import { render } from './mp-renderer.js';
 import { WIRE_VERSION, C2S, S2C, WS_PATH, DEFAULT_PORT } from '../sim/protocol.js';
 import { TICK_MS, FIELD_WIDTH, FIELD_HEIGHT } from '../sim/constants.js';
+import { EV } from '../sim/events.js';
 
 function resolveServerUrl() {
   const q = new URLSearchParams(location.search);
@@ -46,6 +47,8 @@ async function main() {
   let lastSnapshotTick = 0;
   let lastRemote = new Map();
   let lastAsteroids = new Map();
+  let latestBullets = [];
+  const effects = []; // ephemeral client-side juice: { x, y, r, born }
 
   // Debug/test hook: lets QA specs (and the console) inspect live client state
   // without coupling tests to internal module structure.
@@ -57,6 +60,7 @@ async function main() {
     localShip: () => (predictor ? { x: predictor.ship.x, y: predictor.ship.y, angle: predictor.ship.angle } : null),
     remoteShips: () => [...lastRemote.entries()].map(([id, s]) => ({ id, x: s.x, y: s.y })),
     asteroidCount: () => lastAsteroids.size,
+    bulletCount: () => latestBullets.length,
   };
 
   transport.onMessage((msg) => {
@@ -69,6 +73,7 @@ async function main() {
         break;
       case S2C.SNAPSHOT: {
         lastSnapshotTick = msg.tick;
+        latestBullets = msg.bullets || [];
         interp.add(msg);
         if (predictor) {
           const me = msg.ships.find((s) => s.id === playerId);
@@ -81,6 +86,13 @@ async function main() {
         }
         break;
       }
+      case S2C.EVENT:
+        for (const p of msg.payloads || []) {
+          if (p.type === EV.ASTEROID_DESTROYED) {
+            effects.push({ x: p.x, y: p.y, r: p.r || 30, born: performance.now() });
+          }
+        }
+        break;
       case S2C.PEER_JOINED:
       case S2C.PEER_LEFT:
         roster = msg.roster || roster;
@@ -125,7 +137,19 @@ async function main() {
     const asteroids = interp.sampleAsteroids(now);
     lastRemote = remote;
     lastAsteroids = asteroids;
-    render(ctx, canvas, { localShip: predictor ? predictor.ship : null, remoteShips: remote, asteroids, localId: playerId });
+    // Age out finished destruction rings (~500 ms lifetime).
+    for (let i = effects.length - 1; i >= 0; i--) {
+      if (now - effects[i].born > 500) effects.splice(i, 1);
+    }
+    render(ctx, canvas, {
+      localShip: predictor ? predictor.ship : null,
+      remoteShips: remote,
+      asteroids,
+      bullets: latestBullets,
+      effects,
+      now,
+      localId: playerId,
+    });
 
     // Lightweight HUD line.
     const hud = document.getElementById('hud');

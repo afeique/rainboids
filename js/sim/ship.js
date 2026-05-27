@@ -31,6 +31,8 @@ export function createShip(playerId, x, y) {
     hp: SHIP_MAX_HP,
     maxHp: SHIP_MAX_HP,
     alive: true,
+    // Ticks until this ship can fire again (counts down in tick()).
+    fireCooldown: 0,
     // Last input tick the sim has applied for this ship — echoed in snapshots
     // so the owning client can reconcile its prediction (replay unconfirmed
     // inputs from lastInputTick + 1).

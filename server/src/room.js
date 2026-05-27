@@ -51,7 +51,11 @@ function buildSnapshot(world) {
       r: round(a.radius, 1),
     });
   }
-  return { t: S2C.SNAPSHOT, tick: world.tick, ships, asteroids };
+  const bullets = [];
+  for (const [, b] of world.bullets) {
+    bullets.push({ id: b.id, x: round(b.x), y: round(b.y), o: b.ownerId });
+  }
+  return { t: S2C.SNAPSHOT, tick: world.tick, ships, asteroids, bullets };
 }
 
 export class Room {

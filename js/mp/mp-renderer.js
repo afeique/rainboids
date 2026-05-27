@@ -56,7 +56,7 @@ function drawAsteroid(ctx, x, y, angle, r) {
   ctx.restore();
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, localId }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, bullets, effects, now, localId }) {
   // Background.
   ctx.fillStyle = '#070710';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -69,6 +69,31 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, localId
   // Asteroids (interpolated).
   if (asteroids) {
     for (const [, ast] of asteroids) drawAsteroid(ctx, ast.x, ast.y, ast.angle, ast.r);
+  }
+
+  // Bullets (latest snapshot positions).
+  if (bullets) {
+    ctx.fillStyle = '#ffe08a';
+    for (const b of bullets) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Destruction rings (event-driven juice).
+  if (effects && now != null) {
+    for (const e of effects) {
+      const age = (now - e.born) / 500; // 0 → 1 over lifetime
+      const rr = e.r * (1 + age * 1.6);
+      ctx.globalAlpha = Math.max(0, 1 - age);
+      ctx.strokeStyle = '#ff9e64';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, rr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // Remote ships (interpolated).

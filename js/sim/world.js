@@ -11,6 +11,8 @@ import {
 } from './constants.js';
 import { createShip } from './ship.js';
 import { createAsteroid } from './asteroid.js';
+import { createBullet } from './bullet.js';
+import { BULLET_RADIUS, BULLET_DAMAGE, BULLET_TTL } from './constants.js';
 import { EV, emit } from './events.js';
 
 export function createWorld({ seed = 1, width = FIELD_WIDTH, height = FIELD_HEIGHT } = {}) {
@@ -22,9 +24,17 @@ export function createWorld({ seed = 1, width = FIELD_WIDTH, height = FIELD_HEIG
     rng: makeRng(seed),
     ships: new Map(), // playerId -> ship
     asteroids: new Map(), // entityId -> asteroid
+    bullets: new Map(), // entityId -> bullet
     nextEntityId: 1, // id space for non-player entities (asteroids, bullets, …)
     events: [], // cleared + repopulated each tick
   };
+}
+
+/** Spawn a player bullet; returns it. */
+export function spawnBullet(world, x, y, vx, vy, ownerId) {
+  const b = createBullet(world.nextEntityId++, x, y, vx, vy, ownerId, BULLET_RADIUS, BULLET_DAMAGE, BULLET_TTL);
+  world.bullets.set(b.id, b);
+  return b;
 }
 
 /** Populate the asteroid field. Deterministic for a fixed world seed. */

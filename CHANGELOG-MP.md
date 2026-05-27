@@ -7,6 +7,31 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.4.0] - 2026-05-27
+
+### Added
+- **Combat in the shared sim** — the arena is now an actual co-op shooter:
+  - `bullet.js` — straight-line player bullets (integrate, age, despawn on
+    TTL / out-of-bounds).
+  - `collision.js` — authoritative circle-vs-circle `resolveCollisions()` for
+    bullets vs asteroids; damages/destroys rocks and emits `ASTEROID_HIT` /
+    `ASTEROID_DESTROYED` events.
+  - `ship.js` — per-ship fire cooldown.
+  - `tick.js` — ships fire forward on the `fire` input (cooldown-gated), bullets
+    step, collisions resolve, dead entities are reaped.
+  - `world.js` — `bullets` map + `spawnBullet()`.
+  - `server/src/room.js` — snapshots now carry a `bullets` array.
+- **Client combat rendering + event juice**: bullets drawn from the latest
+  snapshot; `ASTEROID_DESTROYED` events spawn expanding destruction rings
+  (proves the event → presentation path). `window.__mp.bulletCount()` exposed.
+
+### Tests
+- `tests/unit/sim-combat.test.js` — firing/cooldown, bullet motion/despawn,
+  bullet↔asteroid collision + destruction, and a full fire-until-destroyed
+  integration via `tick()`.
+- `tests/qa/12-mp2-ws.spec.js` — client A now also fires; asserts the resulting
+  server-authoritative bullets are visible to client B.
+
 ## [0.3.0] - 2026-05-27
 
 ### Added
