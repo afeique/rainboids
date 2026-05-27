@@ -7,7 +7,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
     applyWeaponTraits, equipWeaponItem, getEquippedWeapon,
     hasWeaponTrait, weaponTraitValue, getEffectivePrimaryDamage,
-    getEffectivePrimaryFireRate,
+    getEffectivePrimaryFireRate, firePrimary,
 } from '../../js/modules/player/weapons.js';
 import { getEffectiveCritChance } from '../../js/modules/player/progression.js';
 import { weaponLevelScale, archetypeToWeaponId } from '../../js/modules/combat/weapon-data.js';
@@ -147,5 +147,46 @@ describe('T30 — fire rate / crit / per-bullet POWERUP+STAT traits (sub-step B)
         expect(b.baseRadius).toBeCloseTo(7, 6);
         expect(b.rangeMultiplier).toBeCloseTo(1.4, 6);
         expect(b.vel.x).toBeCloseTo(15, 6);     // 10 × 1.5
+    });
+});
+
+describe('T30 — MULTISHOT / VOLLEY re-fire the weapon at angle offsets', () => {
+    function fireStub(traits) {
+        const calls = [];
+        const stub = {
+            activePrimary: 'PULSE_CANNON',
+            angle: 0, x: 0, y: 0,
+            equippedWeapon: traits.length ? weapon('PULSE', traits) : null,
+            getActivePrimaryConfig: () => ({ range: 1 }),
+            firePulseCannon() { calls.push(this.angle); },
+        };
+        return { stub, calls };
+    }
+    const bulletPool = { activeObjects: [], softCapAndEvict: () => true };
+    const audio = { playShoot() {} };
+
+    test('MULTISHOT 2 → 1 base + 2 extra volleys at ± offsets, angle restored', () => {
+        const { stub, calls } = fireStub([{ id: 'MULTISHOT', class: 'POWERUP', value: 2 }]);
+        firePrimary.call(stub, bulletPool, audio, null);
+        expect(calls.length).toBe(3);          // base + 2 extra
+        expect(calls[0]).toBe(0);              // base shot at aim
+        expect(calls[1]).toBeGreaterThan(0);   // first extra offset +
+        expect(calls[2]).toBeLessThan(0);      // second extra offset −
+        expect(stub.angle).toBe(0);            // angle restored
+    });
+
+    test('VOLLEY stacks with MULTISHOT for extra-volley count', () => {
+        const { stub, calls } = fireStub([
+            { id: 'MULTISHOT', class: 'POWERUP', value: 1 },
+            { id: 'VOLLEY', class: 'POWERUP', value: 1 },
+        ]);
+        firePrimary.call(stub, bulletPool, audio, null);
+        expect(calls.length).toBe(3);          // base + (1+1) extra
+    });
+
+    test('no MULTISHOT/VOLLEY → single shot', () => {
+        const { stub, calls } = fireStub([]);
+        firePrimary.call(stub, bulletPool, audio, null);
+        expect(calls.length).toBe(1);
     });
 });

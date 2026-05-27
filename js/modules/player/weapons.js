@@ -467,6 +467,30 @@ export function updateClusterCharge(input, bulletPool, audioManager, particlePoo
 
 // ── Primary weapon dispatch ────────────────────────────────────────────────
 
+// T30 — MULTISHOT / VOLLEY weapon-loot traits re-fire the active weapon at
+// small alternating angle offsets. Map each firing-pattern weapon id to its
+// fire method so the extra volleys re-dispatch the SAME shot shape.
+const _PRIMARY_FIRE_METHOD = {
+    PULSE_CANNON: 'firePulseCannon', STORM_NEEDLES: 'fireStormNeedles',
+    SCATTER_GUN: 'fireScatterGun', RAIL_DRIVER: 'fireRailDriver',
+    CLUSTER_LAUNCHER: 'fireCluster', SPLITTER: 'fireSplitter',
+    RICOCHET: 'fireRicochet', BOOMERANG: 'fireBoomerang',
+    SPIN_CANNON: 'fireSpinCannon', FLAK_CANNON: 'fireFlak',
+    GRAVITY_LANCE: 'fireGravityLance',
+};
+
+// A no-op audio stand-in (any method → no-op) so the extra volleys don't stack
+// N gunshot SFX. Mirrors the silent-refire intent of the TWIN_CANNON capstone.
+const _SILENT_AUDIO = new Proxy({}, { get: () => () => {} });
+
+// Extra projectile-volley count from the equipped weapon's MULTISHOT + VOLLEY
+// traits (0 without a weapon item / those traits).
+function _weaponMultishotExtra(player) {
+    const w = player && player.equippedWeapon;
+    if (!w) return 0;
+    return _weaponTraitVal(w, 'MULTISHOT') + _weaponTraitVal(w, 'VOLLEY');
+}
+
 export function firePrimary(bulletPool, audioManager, particlePool) {
     // 5.76.2 — soft-cap with eviction (was: refuse spawn). When the
     // pool is at the 300 cap (which Twin Cannon + Multi-Shot 4 +
@@ -530,6 +554,24 @@ export function firePrimary(bulletPool, audioManager, particlePool) {
         default:
             this.firePulseCannon(bulletPool, audioManager, config);
             spawnMuzzleFlare.call(this, particlePool, 'medium', '#ffdd88');
+    }
+
+    // T30 — MULTISHOT / VOLLEY: fire `extra` additional volleys of the SAME
+    // weapon at alternating ±angle offsets (silent — no stacked SFX/flare).
+    // Patches this.angle then restores it, exactly like the TWIN_CANNON capstone.
+    const extra = _weaponMultishotExtra(this);
+    if (extra > 0) {
+        const fn = this[_PRIMARY_FIRE_METHOD[this.activePrimary]];
+        if (typeof fn === 'function') {
+            const base = this.angle;
+            const STEP = 7 * Math.PI / 180; // 7° between volley lines
+            for (let i = 1; i <= extra; i++) {
+                const dir = (i % 2 === 1) ? 1 : -1;
+                this.angle = base + dir * Math.ceil(i / 2) * STEP;
+                fn.call(this, bulletPool, _SILENT_AUDIO, config);
+            }
+            this.angle = base;
+        }
     }
 }
 
