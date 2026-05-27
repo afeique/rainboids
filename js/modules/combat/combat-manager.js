@@ -7,6 +7,10 @@ import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { createItem } from '../world/item-system.js';
 import { rollRarity } from '../world/item-names.js';
+// T29 — Rainshard income faucet (§2.4): per-kill R$ ramps with wave depth,
+// the difficulty mode lens, the killstreak multiplier, and the gear/Matrix
+// R$-find stat. Replaces the 6.x flat-gold model.
+import { perKillRainshards, INCOME } from '../shop/income.js';
 import { rewardMultiplier } from '../world/reward-dial.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
@@ -1011,30 +1015,39 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         tryRoll('nanites', trinkRate);
     }
 
-    // ── Money orbs (6.x — FLAT + RANDOMIZED) ──
-    // Per-drop gold is a roll within a FIXED range × the killstreak multiplier
-    // (getStreakGoldMult, 1.0–1.5) — the ONLY modifier, and a SKILL one (kill
-    // fast, don't get hit). No wave / level / gear / profile / reward-dial
-    // scaling: a wave-30 kill pays the same as a wave-1 kill, so flat 10k
-    // prices never feel cheap late. The range gives loot variance with zero
-    // power creep. Targets: ~3k by wave 5, ~22–32k over a full 30-wave run.
-    const streakGold = getStreakGoldMult(this.killStreakCount || 0);
-    const rollGold = (lo, hi) => Math.max(1, Math.round((lo + Math.random() * (hi - lo)) * streakGold));
+    // ── Rainshard income (T29 — wave/difficulty/streak/find faucet, §2.4) ──
+    // per-kill R$ = BASE × waveScale(wave) × difficultyMult × killstreakMult ×
+    // findMult. This REPLACES the 6.x flat model: late kills now pay MORE (so
+    // deep runs fund crafting) and harder modes pay MORE, while the killstreak
+    // multiplier keeps a skill axis and the gear/Matrix R$-find stat a build
+    // axis. Boss/elite kills layer a milestone multiple ON TOP.
+    const mode = (this.game.runConfig && this.game.runConfig.mode) || 'NORMAL';
+    const difficultyMult = INCOME.difficultyMult[mode] || 1;
+    const killstreakMult = getStreakGoldMult(this.killStreakCount || 0);
+    const findMult = (player && typeof player.getGoldFindMultiplier === 'function')
+        ? player.getGoldFindMultiplier() : 1;
+    const perKill = perKillRainshards({ wave, difficultyMult, killstreakMult, findMult });
+    // Small ±15% variance so drops aren't identical (loot texture, no creep).
+    const vary = (v) => Math.max(1, Math.round(v * (0.85 + Math.random() * 0.30)));
     if (isEnemy) {
         if (entity.isBoss) {
-            // Flat per-tier boss bounty (tiers 1-4) — milestone-sized, still flat.
+            // Boss bounty = a milestone multiple of a normal kill (tiers 1-4),
+            // so it scales with the same wave/difficulty curve instead of going
+            // cheap late.
             const tier = Math.max(1, Math.min(4, (entity.bossTier | 0) || 1));
-            const BOSS_GOLD = { 1: [250, 400], 2: [400, 600], 3: [550, 850], 4: [700, 1100] };
-            const [lo, hi] = BOSS_GOLD[tier];
-            this.createMoneyOrb(x, y, rollGold(lo, hi), false);
+            const BOSS_MULT = { 1: 6, 2: 9, 3: 13, 4: 18 };
+            this.createMoneyOrb(x, y, vary(perKill * BOSS_MULT[tier]), false);
         } else {
-            // Every enemy drops a flat-range nugget.
-            this.createMoneyOrb(x, y, rollGold(25, 55), false);
+            // Elite kills (when an enemy is flagged isElite — wired in T32/T34)
+            // pay a small multiple; ordinary kills pay 1×.
+            const eliteMult = entity.isElite ? 3 : 1;
+            this.createMoneyOrb(x, y, vary(perKill * eliteMult), false);
         }
     } else if (Math.random() < 0.55) {
-        // Asteroids: usually a small payout; ~10% of those a bigger nugget.
+        // Asteroids: a minor fraction of a kill (still scales with depth so it
+        // never goes trivial late); ~10% pay a bigger chunk.
         const big = Math.random() < 0.10;
-        this.createMoneyOrb(x, y, big ? rollGold(30, 50) : rollGold(5, 20), false);
+        this.createMoneyOrb(x, y, vary(perKill * (big ? 0.30 : 0.12)), false);
     }
 }
 

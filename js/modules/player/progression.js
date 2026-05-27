@@ -438,10 +438,11 @@ export function getMovementSpeedMultiplier() {
     return (1 + speedBoostStacks * 0.65 + speedPct) * playerChillSpeedMult(this, frameClock.now);
 }
 
-// 6.x — Gold-find is RETIRED. The gold economy is intentionally flat +
-// decoupled from level/gear/wave (per-kill drops roll a fixed range × the
-// killstreak multiplier, and nothing else). This stays a stable 1.0 so any
-// legacy reader keeps working; there is deliberately NO way to boost gold-find.
+// T29 — R$-find is the looter pivot's build axis on the income faucet (§2.4):
+// combat-manager feeds this as `findMult` into perKillRainshards (capped near
+// ×3 by INCOME.findMult). Gear R$-find affixes + a Hoarder's Greed passive +
+// the economy Matrix line will stack here. No such source exists yet (content
+// TBD), so this returns the ×1 floor — the hook is wired ahead of the content.
 export function getGoldFindMultiplier() {
     return 1;
 }
