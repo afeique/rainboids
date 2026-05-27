@@ -140,7 +140,7 @@ export class UIManager {
     
     updateScore(money) {
         if (this.elements.score) {
-            this.elements.score.textContent = `${Math.floor(money)}`;
+            this.elements.score.textContent = `R$ ${Math.floor(money)}`;
         }
     }
     
@@ -1196,7 +1196,7 @@ export class UIManager {
         banner.appendChild(bannerCount);
         const bannerLabel = document.createElement('span');
         bannerLabel.className = 'powerups-pick-label';
-        bannerLabel.textContent = 'GOLD AVAILABLE';
+        bannerLabel.textContent = 'RAINSHARDS AVAILABLE';
         banner.appendChild(bannerLabel);
         list.appendChild(banner);
 

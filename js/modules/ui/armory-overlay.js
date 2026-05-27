@@ -76,7 +76,7 @@ export class ArmoryOverlay {
 
         const sub = document.createElement('div');
         sub.className = 'armory-sub';
-        sub.textContent = 'Spend account-gold on permanent unlocks. Run-gold you earn each run banks here on death or victory.';
+        sub.textContent = 'Spend account Rainshards (R$) on permanent unlocks. Run-Rainshards you earn each run bank here on death or victory.';
         panel.appendChild(sub);
 
         const body = document.createElement('div');

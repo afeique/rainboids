@@ -1300,7 +1300,7 @@ function _renderRulePassiveCluster(container) {
     const sub = document.createElement('div');
     sub.className = 'shop-prerun-hint';
     sub.style.display = '';
-    sub.textContent = 'Rule-changing relics — click to equip (★ = build-defining keystone, max 2; the rest stack safely). More slots open as you clear stages. Locked = unlock with account-gold.';
+    sub.textContent = 'Rule-changing relics — click to equip (★ = build-defining keystone, max 2; the rest stack safely). More slots open as you clear stages. Locked = unlock with account Rainshards (R$).';
     container.appendChild(sub);
 
     const grid = document.createElement('div');

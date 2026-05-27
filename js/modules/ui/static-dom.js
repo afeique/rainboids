@@ -784,7 +784,7 @@ function _buildShopSuggestOverlay() {
             el('h2', { className: 'wave-pick-title', text: 'QUICK BUY' }),
             el('p',  { className: 'wave-pick-subtitle', text: 'WEAPON UPGRADES FOR YOUR LOADOUT' }),
             el('div', { id: 'shop-suggest-gold-row', children: [
-                el('span', { id: 'shop-suggest-gold', text: '0 G' }),
+                el('span', { id: 'shop-suggest-gold', text: 'R$ 0' }),
             ]}),
             el('div', { id: 'shop-suggest-cards' }),
             el('button', {

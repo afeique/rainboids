@@ -619,7 +619,7 @@ export function drawMoneyPickupDisplay() {
 
         // Calculate width of coins text to position pickup display after it
         ctx.font = "14px 'Press Start 2P', monospace";
-        const coinsText = `${Math.floor(this.game.money)}`;
+        const coinsText = `R$ ${Math.floor(this.game.money)}`;
         const coinsTextWidth = ctx.measureText(coinsText).width;
 
         const x = coinsTextX + coinsTextWidth + 15; // 15px margin after coins text

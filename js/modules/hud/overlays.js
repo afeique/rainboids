@@ -1669,7 +1669,7 @@ export function drawStreakIndicator() {
             ctx.fillStyle = '#ffd700';
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 2;
-            const goldText = `+${pct}% GOLD`;
+            const goldText = `+${pct}% R$`;
             ctx.strokeText(goldText, x, y + 46);
             ctx.fillText(goldText, x, y + 46);
             // Restore stroke for downstream draws.

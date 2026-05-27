@@ -319,7 +319,7 @@ export class StatsOverlay {
                 { label: 'XP', value: xpLabel },
                 { label: 'STAGE', value: stageLabelFor(wave) },
                 {
-                    label: 'GOLD', value: `${ge.game?.money ?? 0}`, icon: 'coin',
+                    label: 'RAINSHARDS', value: `R$ ${ge.game?.money ?? 0}`, icon: 'coin',
                 },
             ];
             for (const c of cells) {

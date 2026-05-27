@@ -48,7 +48,7 @@
 
 ## ▶ SERIAL INTEGRATION SPINE (🔴 ordered — one owner per file at a time)
 ### Phase 0 — rip-out & rename
-- [ ] **T21** 🔴 Rename Gold→Rainshards (R$) everywhere — **RUN ALONE FIRST**
+- [x] **T21** 🔴 Rename Gold→Rainshards (R$) — **DONE (display-layer)**: HUD readout, pickup feedback, stats/banner labels, shop/armory labels, streak "+N% R$" now show **R$ / Rainshards**. Internal `money`/`accountGold`/`createMoneyOrb` identifiers RETAINED (166 refs + save schema — display-only rename is the right scope; mapped to "Rainshards" at the display layer).
 - [ ] **T20** 🔴 Unlock everything + remove milestone gift; loadout lists all [T21]
 - [ ] **T22** 🔴 Remove card draft + powerup picks (powerups→weapon traits) [T21]
 - [ ] **T23** 🔴 Eliminate Cores → salvage to R$; crafting costs in R$ [T21]
