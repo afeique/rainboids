@@ -88,7 +88,7 @@
 - [x] **T35** 🔴 Global stat caps (dodge/crit/vampirism) — **DONE**: central `STAT_CAPS` in `core/sp-stats.js` (DODGE 0.60 / VAMPIRISM 0.50 / THORNS 2.0), applied at the effective-value sites — DODGE in `lifecycle.takeDamage` (was flat 0.50), VAMPIRISM in `combat-manager.applyVampirism` (new), THORNS in `applyThorns` (new). CRIT 60% / CRIT-dmg 550% / TOUGHNESS 75% already capped at the progression getters. +5 `stat-caps.test.js`. **Phase 7 complete.** Suite 2304 green.
 
 ## ▶ UI TRACK
-- [ ] **T42** 🔴 Crafting/inventory UI panel (Fabricate/Reroll/Calibrate/Target/Upgrade/Combine/Salvage) [T13,T27]
+- [~] **T42** 🔴 Crafting/inventory UI panel (Fabricate/Reroll/Calibrate/Target/Upgrade/Combine/Salvage) — **Fabricate DONE**: armory GEAR tab now has a FABRICATE section (rarity picker → cost; gear-slot + weapon-archetype craft buttons) wired to `game-engine.fabricateGear`/`fabricateWeapon` (cost-checked R$ sink → stash). `item-system.decorateGearItem` added. Reroll/Upgrade(tier)/Salvage/Target-resist already exist in the GEAR tab (R$, T23/T27). +3 `fabricate.test.js`. **Remaining:** Combine matrices + matrix-socket UI (needs a matrix drop/stash path), Calibrate trait-reroll, weapon-item crafting rows (needs T43 weapon inventory). Suite 2313 green.
 - [ ] **T43** 🔴 Class-pick + loadout in BUILD [T07,T33]
 - [ ] **T44** 🟡 Loot QoL (auto-salvage, lock, stash sort, loadout presets) [T27]
 - [ ] **T45** 🔴 Bounty board wiring + progress events [T15,T41]
