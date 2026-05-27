@@ -15,16 +15,21 @@
 
 ---
 
-## ▶ WAVE 1 — data & pure-math modules (🟢 all parallel, no deps)
-- [ ] **T01** 🟢 `shop/income.js` (+test) — Rainshard per-kill + run-income formula (§2.4)
-- [ ] **T02** 🟢 `shop/crafting-costs.js` (+test) — fab/reroll/upgrade/combine/salvage cost fns (§2.5)
-- [ ] **T03** 🟢 `core/gear-scaling.js` (+test) — `levelRamp` + `amplifySP` (§2.1)
-- [ ] **T04** 🟢 `combat/weapon-traits.js` (+test) — Element/Behavior/Powerup/Stat trait pools (§3.1)
-- [ ] **T05** 🟢 `world/matrix-data.js` (+test) — 8-Matrix per-slot catalog, tiers, resonance (§2.2)
-- [ ] **T06** 🟢 `world/item-templates.js` (+test) — 10 gear templates, affix pools, sets, rarity ladder (§2.3)
-- [ ] **T07** 🟢 `player/classes.js` (+test) — ~7 class defs: favored stats + mechanic hook + signature (§Phase 6)
-- [ ] **T08** 🟢 `world/bounty-data.js` (+test) — bounty templates + reward tables (§Phase 5)
-- [ ] **T09** 🟢 `wave/run-templates.js` (+test) — themes/modifiers/challenges/elite combos/boss frame/role profiles/budget (§4.3–4.4)
+## ▶ WAVE 1 — data & pure-math modules (🟢 all parallel, no deps) ✅ DONE (2026-05-27, +142 unit tests)
+- [x] **T01** 🟢 `shop/income.js` (+test) — Rainshard per-kill + run-income formula (§2.4)
+- [x] **T02** 🟢 `shop/crafting-costs.js` (+test) — fab/reroll/upgrade/combine/salvage cost fns (§2.5)
+- [x] **T03** 🟢 `core/gear-scaling.js` (+test) — `levelRamp` + `amplifySP` (§2.1)
+- [x] **T04** 🟢 `combat/weapon-traits.js` (+test) — Element/Behavior/Powerup/Stat trait pools (§3.1)
+- [x] **T05** 🟢 `world/matrix-data.js` (+test) — 8-Matrix per-slot catalog, tiers, resonance (§2.2)
+- [x] **T06** 🟢 `world/item-templates.js` (+test) — 10 gear templates, affix pools, sets, rarity ladder (§2.3)
+- [x] **T07** 🟢 `player/classes.js` (+test) — ~7 class defs: favored stats + mechanic hook + signature (§Phase 6)
+- [x] **T08** 🟢 `world/bounty-data.js` (+test) — bounty templates + reward tables (§Phase 5)
+- [x] **T09** 🟢 `wave/run-templates.js` (+test) — themes/modifiers/challenges/elite combos/boss frame/role profiles/budget (§4.3–4.4)
+
+> **⚠ Integration notes (from Wave 1 — resolve during Phase 2/3 wiring):**
+> (a) the new `RARITY_LADDER` (item-templates) + `traitCountForRarity` (weapon-traits) use **1–8 affixes** per §2.3; the EXISTING `world/item-names.js RARITY_TIERS` uses a compressed **1–5** — reconcile (the pivot's 1–8 is canonical) in T27/T30.
+> (b) doc "REGEN" → real SP id `REGENERATION` (matrix-data + item-templates already map it).
+> (c) 6 new class signature-ability ids (OVERDRIVE_BURST, FORTRESS, HARVEST, SLIPSTREAM, ELEMENTAL_NOVA, JACKPOT) need registering in the ability system in **T16/T33**; ENGINEER reuses existing `SENTRY_DRONE`.
 
 ## ▶ WAVE 2 — logic modules + new UI (🟢 parallel; deps on Wave 1)
 - [ ] **T10** 🟢 `combat/weapon-gen.js` (+test) — roll a weapon item [T04,T02]
