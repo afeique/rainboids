@@ -2,6 +2,9 @@
 import { createItem, rerollItemAffixes, tierUpItem, nextRarity, rollAffixSet } from '../../js/modules/world/item-system.js';
 import { rerollCost, tierUpCost, canAffordReroll, canAffordTierUp } from '../../js/modules/world/cores.js';
 import { RARITY_TIERS } from '../../js/modules/world/item-names.js';
+// T27 — reroll/tier-up now use gear-gen's canonical RARITY_LADDER affix counts
+// and produce {stat,pct} amplifier affixes (matched by `.stat`, not `.type`).
+import { rarityRow } from '../../js/modules/world/gear-gen.js';
 
 describe('item-system — rollAffixSet', () => {
     test('rolls the requested count, excluding given types', () => {
@@ -25,7 +28,7 @@ describe('Cores — reroll (R8.6)', () => {
         expect(re.slot).toBe('hull');
         expect(re.level).toBe(12);
         expect(re.rarity).toBe('legendary');
-        expect(re.affixes).toHaveLength(RARITY_TIERS.legendary.affixCount);
+        expect(re.affixes).toHaveLength(rarityRow('legendary').affixCount);
     });
 
     test('reroll preserves traits', () => {
@@ -50,13 +53,13 @@ describe('Cores — tier-up (R8.8)', () => {
     });
 
     test('tier-up raises rarity and adds the new tier’s affix slot(s), keeping old affixes', () => {
-        const it = createItem('shielding', 10, 'common'); // 1 affix
-        const oldTypes = it.affixes.map((a) => a.type);
+        const it = createItem('shielding', 10, 'common'); // 1 amp affix
+        const oldStats = it.affixes.map((a) => a.stat);
         const up = tierUpItem(it);
         expect(up.rarity).toBe('rare');
-        expect(up.affixes.length).toBe(RARITY_TIERS.rare.affixCount); // 2
-        // original affixes preserved (by type)
-        for (const t of oldTypes) expect(up.affixes.map((a) => a.type)).toContain(t);
+        expect(up.affixes.length).toBe(rarityRow('rare').affixCount); // 2
+        // original amp affixes preserved (by stat)
+        for (const s of oldStats) expect(up.affixes.map((a) => a.stat)).toContain(s);
     });
 
     test('tier-up at max tier is a no-op and unaffordable', () => {

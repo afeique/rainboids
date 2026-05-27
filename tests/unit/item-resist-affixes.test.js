@@ -45,6 +45,10 @@ import {
     maxResistAffixes, isResistAffix, rollAffixSet, createItem,
     applyResistTarget, eligibleItemPassives, rerollItemPassive,
 } from '../../js/modules/world/item-system.js';
+// T27 — createItem rolls via gear-gen: pure {stat,pct} amplifier affixes, the
+// canonical RARITY_LADDER affix count, and NO resists on drop (resists are now
+// added exclusively via TARGET-RESIST crafting / applyResistTarget below).
+import { rarityRow } from '../../js/modules/world/gear-gen.js';
 import {
     resistTargetCost, canAffordResistTarget, rerollCost,
     passiveRerollCost, canAffordPassiveReroll,
@@ -228,9 +232,9 @@ describe('ITEM-01 — tier-gated resist counts in the roll', () => {
         }
     });
 
-    test('TOTAL affix count per tier is exactly affixCount (type mix constrained, not count)', () => {
+    test('TOTAL affix count per tier is exactly the gear-gen ladder affixCount', () => {
         for (const rarity of RARITY_ORDER) {
-            const expected = RARITY_TIERS[rarity].affixCount;
+            const expected = rarityRow(rarity).affixCount;
             for (let i = 0; i < 500; i++) {
                 const item = createItem('nanites', 8, rarity);
                 expect(item.affixes.length).toBe(expected);
@@ -238,15 +242,21 @@ describe('ITEM-01 — tier-gated resist counts in the roll', () => {
         }
     });
 
-    test('rare CAN roll exactly 1 resist (cap is reachable, not just an upper wall)', () => {
-        // Over many rolls a rare (affixCount 2) should sometimes land on a
-        // resist, proving the gate permits up to the cap rather than blocking
-        // resists entirely on non-common tiers.
-        let sawResist = false;
-        for (let i = 0; i < ROLLS && !sawResist; i++) {
-            if (countResists(createItem('hull', 12, 'rare').affixes) === 1) sawResist = true;
+    test('T27 — dropped gear rolls NO resist affixes on ANY tier (resists are craft-only)', () => {
+        // The pivot removed resist rolls from drops: gear-gen emits pure
+        // {stat,pct} amplifiers. Resists are added exclusively via TARGET-RESIST
+        // crafting (applyResistTarget, tier-capped by maxResistAffixes).
+        for (const rarity of RARITY_ORDER) {
+            for (let i = 0; i < 500; i++) {
+                const item = createItem('hull', 12, rarity);
+                expect(countResists(item.affixes)).toBe(0);
+                // every rolled affix is a {stat,pct} amplifier
+                for (const a of item.affixes) {
+                    expect(typeof a.stat).toBe('string');
+                    expect(typeof a.pct).toBe('number');
+                }
+            }
         }
-        expect(sawResist).toBe(true);
     });
 });
 

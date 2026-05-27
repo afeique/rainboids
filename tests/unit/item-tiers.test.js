@@ -37,6 +37,11 @@ if (typeof globalThis.navigator === 'undefined') {
 import { describe, expect, test } from '@jest/globals';
 import { RARITY_TIERS, RARITY_ORDER, rollRarity } from '../../js/modules/world/item-names.js';
 import { createItem } from '../../js/modules/world/item-system.js';
+// T27 — gear now rolls via gear-gen, whose canonical RARITY_LADDER affix counts
+// (1→8) supersede the legacy RARITY_TIERS counts (1→5). createItem produces
+// pure {stat,pct} amplifier affixes (no resists rolled on drop), so its affix
+// count equals the ladder row's affixCount.
+import { rarityRow } from '../../js/modules/world/gear-gen.js';
 
 describe('Phase C.I1 — rarity ladder structure', () => {
     test('RARITY_ORDER lists all 8 tiers low → high', () => {
@@ -118,27 +123,32 @@ describe('Phase C.I1 — rollRarity()', () => {
     });
 });
 
-describe('Phase C.I1 — createItem affix counts honor the tier', () => {
-    test('transcendental item rolls 5 affixes and stamps rarityColor', () => {
+describe('Phase C.I1 / T27 — createItem affix counts honor the gear-gen ladder', () => {
+    test('transcendental item rolls its ladder affix count and stamps rarityColor', () => {
         const item = createItem('cockpit', 10, 'transcendental');
-        expect(item.affixes.length).toBe(5);
+        expect(item.affixes.length).toBe(rarityRow('transcendental').affixCount);
         expect(item.rarity).toBe('transcendental');
         expect(item.rarityColor).toBe(RARITY_TIERS.transcendental.color);
         expect(item.rarityLabel).toBe('TRANSCENDENTAL');
         expect(item.rarityGlow).toBe(RARITY_TIERS.transcendental.glow);
+        // Pivot model: every rolled affix is a {stat,pct} amplifier (no resists).
+        for (const a of item.affixes) {
+            expect(typeof a.stat).toBe('string');
+            expect(typeof a.pct).toBe('number');
+        }
     });
 
     test('common item rolls exactly 1 affix', () => {
         const item = createItem('cockpit', 10, 'common');
-        expect(item.affixes.length).toBe(1);
+        expect(item.affixes.length).toBe(rarityRow('common').affixCount);
         expect(item.rarity).toBe('common');
         expect(item.rarityColor).toBe(RARITY_TIERS.common.color);
     });
 
-    test('every tier produces an item whose affix count matches affixCount', () => {
+    test('every tier produces an item whose affix count matches the ladder row', () => {
         for (const key of RARITY_ORDER) {
             const item = createItem('hull', 5, key);
-            expect(item.affixes.length).toBe(RARITY_TIERS[key].affixCount);
+            expect(item.affixes.length).toBe(rarityRow(key).affixCount);
         }
     });
 });

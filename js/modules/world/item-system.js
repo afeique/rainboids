@@ -30,6 +30,12 @@ import {
     ITEM_AFFIX_POOL, AFFIX_SCORE_WEIGHT,
 } from './item-names.js';
 import { getItemPassives } from '../combat/passive-data.js';
+// T27 — gear now rolls through the looter-pivot generator: affixes are
+// `{ stat, pct }` % AMPLIFIERS of an SP stat (§2.1), consumed by the
+// gear-amplified effective-stat getters (T26). createItem / rerollItemAffixes /
+// tierUpItem below delegate to this and decorate the pure roll with the
+// display + persistence fields the UI and save schema expect.
+import { rollGear } from './gear-gen.js';
 
 // P7 — passive-affix delivery on gear. Top-tier gear can carry a rule-modifier
 // PASSIVE (a discrete `item.passive` id, not a numeric affix). Modular passives
@@ -205,12 +211,57 @@ function _finalizeItem(slot, level, rarity, affixes) {
     };
 }
 
+// T27 — map an SP-stat id to one of the cosmetic ITEM_PREFIXES buckets so the
+// generated item name reflects its headline amplifier.
+const _STAT_PREFIX = {
+    HEALTH: 'hp', CRIT_CHANCE: 'hp', CRIT_DAMAGE: 'hp',
+    TOUGHNESS: 'toughness', THORNS: 'toughness', DODGE: 'toughness',
+    VAMPIRISM: 'regen', REGENERATION: 'regen', SPEED: 'regen',
+    CAPACITOR: 'regen', REACTOR: 'regen', EFFICIENCY: 'regen',
+};
+
+// Display label for a `{ stat, pct }` amplifier affix (e.g. "+12% CRIT CHANCE").
+function _ampLabel(a) {
+    return `+${a.pct}% ${String(a.stat || '').replace(/_/g, ' ')}`;
+}
+
+// Decorate a pure gear-gen roll (slot/rarity/template/affixes/sockets/signature)
+// with the display + persistence fields the UI and save schema read: a
+// generated name, item level, rarity styling, per-affix labels, and the legacy
+// `bonus`/`bonusType`/`bonusLabel` summary fields. Any legacy resist affixes
+// ({type,value}) passed through on `rolled.affixes` keep their own labels.
+function _decorateGear(rolled, level) {
+    const slot = ITEM_BASES[rolled.slot] ? rolled.slot : 'cockpit';
+    const rarity = RARITY_TIERS[rolled.rarity] ? rolled.rarity : 'common';
+    const tier = RARITY_TIERS[rarity];
+    const L = Math.max(1, level | 0);
+    const affixes = (rolled.affixes || []).map((a) =>
+        (a && a.stat) ? { ...a, label: a.label || _ampLabel(a) } : a);
+    const primaryAmp = affixes.find((a) => a && a.stat) || null;
+    const primaryStat = primaryAmp ? primaryAmp.stat : 'HEALTH';
+    const prefix = _pick(ITEM_PREFIXES[_STAT_PREFIX[primaryStat] || 'hp'] || ITEM_PREFIXES.hp);
+    const base = _pick(ITEM_BASES[slot]);
+    const adj = tier.rarityAdjective ? `${tier.rarityAdjective} ` : '';
+    return {
+        ...rolled,
+        slot, rarity, level: L,
+        affixes,
+        name: `${adj}${prefix} ${base}`,
+        bonusLabel: affixes.map((a) => a && a.label).filter(Boolean).join(' · '),
+        bonus: primaryAmp ? primaryAmp.pct : 0,
+        bonusType: primaryStat,
+        regenBonus: affixes.filter((a) => a && a.type === 'regen').reduce((s, a) => s + (a.value || 0), 0),
+        rarityColor: tier.color, rarityLabel: tier.label, rarityGlow: tier.glow,
+        accentColor: SLOT_ACCENT[slot] || '#33ddff',
+    };
+}
+
 export function createItem(slot, level, rarityKey = null) {
     if (!ITEM_BASES[slot]) slot = 'cockpit';
-    const rarity = rarityKey || rollRarity();
-    const tier = RARITY_TIERS[rarity] || RARITY_TIERS.common;
-    const affixes = rollAffixSet(level, rarity, tier.affixCount || 1);
-    const item = _finalizeItem(slot, level, rarity, affixes);
+    let rarity = rarityKey || rollRarity();
+    if (!RARITY_TIERS[rarity]) rarity = 'common';
+    // T27 — roll the §2.1 {stat,pct} amplifier gear, then decorate for display.
+    const item = _decorateGear(rollGear({ slot, rarity, rng: Math.random }), level);
     // P7 — top-tier gear may carry a rule-modifier passive.
     const passive = rollItemPassive(rarity);
     if (passive) item.passive = passive;
@@ -224,30 +275,49 @@ export function nextRarity(rarity) {
     return RARITY_ORDER[i + 1];
 }
 
-// R8.6 — reroll an item's affixes within its tier bounds (same slot/level/
-// rarity → same affix count). Returns a NEW item; preserves traits.
+// R8.6 / T27 — reroll an item's {stat,pct} amplifier affixes within its tier
+// (same slot/rarity → same affix count) via gear-gen. Legacy resist affixes
+// ({type,value}), the item's passive, sockets/signature/matrix, traits, and
+// level are PRESERVED — only the amp affixes re-roll. Returns a NEW item.
 export function rerollItemAffixes(item) {
     if (!item || !item.slot) return item;
-    const tier = RARITY_TIERS[item.rarity] || RARITY_TIERS.common;
-    const count = tier.affixCount || (Array.isArray(item.affixes) ? item.affixes.length : 1);
-    const affixes = rollAffixSet(item.level, item.rarity, count);
-    const out = _finalizeItem(item.slot, item.level, item.rarity, affixes);
+    const resists = (item.affixes || []).filter((a) => a && a.type); // legacy resist affixes
+    const rolled = rollGear({ slot: item.slot, rarity: item.rarity, template: item.template, rng: Math.random });
+    const out = _decorateGear(
+        { ...rolled, sockets: item.sockets, signature: item.signature, matrix: item.matrix },
+        item.level,
+    );
+    out.affixes = [...out.affixes, ...resists];
+    out.bonusLabel = out.affixes.map((a) => a && a.label).filter(Boolean).join(' · ');
+    if (item.passive) out.passive = item.passive;
     if (item.traits) out.traits = item.traits;
     return out;
 }
 
-// R8.8 — raise an item one rarity tier, KEEPING its existing affixes and
-// rolling the added slot(s) the higher tier grants. Returns the same item
-// (unchanged) if already at the top tier.
+// R8.8 / T27 — raise an item one rarity tier, KEEPING its existing amp affixes
+// and adding the extra amp affixes the higher tier grants (rolled in the higher
+// pct band via gear-gen). Legacy resists / passive / matrix / level preserved.
+// Returns the same item (unchanged) if already at the top tier.
 export function tierUpItem(item) {
     if (!item || !item.slot) return item;
     const next = nextRarity(item.rarity);
     if (!next) return item;
-    const oldAffixes = Array.isArray(item.affixes) ? item.affixes.slice() : [];
-    const targetCount = (RARITY_TIERS[next].affixCount) || oldAffixes.length;
-    const add = Math.max(0, targetCount - oldAffixes.length);
-    const extra = rollAffixSet(item.level, next, add, oldAffixes.map((a) => a.type));
-    const out = _finalizeItem(item.slot, item.level, next, [...oldAffixes, ...extra]);
+    const ampOld = (item.affixes || []).filter((a) => a && a.stat);
+    const resists = (item.affixes || []).filter((a) => a && a.type);
+    const rolled = rollGear({ slot: item.slot, rarity: next, template: item.template, rng: Math.random });
+    // gear-gen's affix count at `next` is the target; keep the player's existing
+    // amp affixes and append only the additional slots the higher tier opens.
+    const add = Math.max(0, (rolled.affixes || []).length - ampOld.length);
+    const extra = (rolled.affixes || []).slice(0, add);
+    const merged = [...ampOld, ...extra];
+    const out = _decorateGear(
+        { slot: item.slot, rarity: next, template: item.template, affixes: merged,
+          sockets: rolled.sockets, signature: rolled.signature, matrix: item.matrix },
+        item.level,
+    );
+    out.affixes = [...out.affixes, ...resists];
+    out.bonusLabel = out.affixes.map((a) => a && a.label).filter(Boolean).join(' · ');
+    if (item.passive) out.passive = item.passive;
     if (item.traits) out.traits = item.traits;
     return out;
 }
@@ -255,13 +325,15 @@ export function tierUpItem(item) {
 // META-03 — recompute the affix-derived display/score fields after the
 // affix list is mutated in place (without re-randomizing the item's name).
 function _refreshDerivedFromAffixes(item) {
-    const list = Array.isArray(item.affixes) && item.affixes.length
-        ? item.affixes : [{ type: 'hp', value: 1, label: '+1 HP' }];
+    const list = Array.isArray(item.affixes) ? item.affixes : [];
     item.affixes = list;
-    item.bonusLabel = list.map((a) => a.label).join(' · ');
-    item.bonus = list[0].value;
-    item.bonusType = list[0].type;
-    item.regenBonus = list.filter((a) => a.type === 'regen').reduce((s, a) => s + a.value, 0);
+    item.bonusLabel = list.map((a) => a && a.label).filter(Boolean).join(' · ');
+    // Headline = the first {stat,pct} amplifier affix (T27 model), else the
+    // first affix (legacy {type,value}); tolerate an empty list.
+    const primary = list.find((a) => a && a.stat) || list[0] || {};
+    item.bonus = primary.pct != null ? primary.pct : (primary.value || 0);
+    item.bonusType = primary.stat || primary.type || null;
+    item.regenBonus = list.filter((a) => a && a.type === 'regen').reduce((s, a) => s + (a.value || 0), 0);
     return item;
 }
 
@@ -373,7 +445,14 @@ export function scoreItem(item) {
     if (Array.isArray(item.affixes)) {
         let s = 0;
         for (const a of item.affixes) {
-            s += (a.value || 0) * (AFFIX_SCORE_WEIGHT[a.type] || 1);
+            if (a && a.stat) {
+                // T27 — {stat,pct} amplifier: score by rolled % (higher rarity /
+                // better roll → higher total pct, matching gear-gen's gearScore),
+                // so auto-equip-if-better ranks the new gear model sensibly.
+                s += (a.pct || 0);
+            } else {
+                s += (a.value || 0) * (AFFIX_SCORE_WEIGHT[a.type] || 1);
+            }
         }
         return s;
     }
