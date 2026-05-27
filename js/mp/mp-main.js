@@ -15,6 +15,7 @@ import { RenderBridge } from './render-bridge.js';
 import { WIRE_VERSION, C2S, S2C, WS_PATH, DEFAULT_PORT } from '../sim/protocol.js';
 import { TICK_MS, FIELD_WIDTH, FIELD_HEIGHT } from '../sim/constants.js';
 import { EV } from '../sim/events.js';
+import { AudioManager } from '../modules/audio/audio-manager.js';
 
 function resolveServerUrl() {
   const q = new URLSearchParams(location.search);
@@ -50,6 +51,20 @@ async function main() {
   // Seams: snapshot reconstruction + render backend (see their modules).
   const snapStream = new SnapshotStream();
   const bridge = new RenderBridge(canvas);
+
+  // SP audio (shared audio-manager). init() loads SFX asynchronously; playSound
+  // is a guarded no-op until loaded, so calling it on events is always safe.
+  // The AudioContext starts suspended — resume on the first user gesture per
+  // browser autoplay policy.
+  const audio = new AudioManager();
+  audio.init().catch(() => {});
+  const warmAudio = () => {
+    try { audio.initializeAudio(); } catch { /* ignore */ }
+    window.removeEventListener('pointerdown', warmAudio);
+    window.removeEventListener('keydown', warmAudio);
+  };
+  window.addEventListener('pointerdown', warmAudio);
+  window.addEventListener('keydown', warmAudio);
 
   // Room-code field: pre-fill from ?room=, and on Enter reload into that room
   // (a full reload is the simplest, reliable "switch rooms" — no reconnect
@@ -139,16 +154,43 @@ async function main() {
       }
       case S2C.EVENT:
         for (const p of msg.payloads || []) {
-          if (p.type === EV.ASTEROID_DESTROYED || p.type === EV.ENEMY_DEATH) {
-            effects.push({ x: p.x, y: p.y, r: p.r || 24, born: performance.now() });
-          } else if (p.type === EV.WAVE_START) {
-            banner = { text: `WAVE ${p.wave}`, born: performance.now() };
-          } else if (p.type === EV.WAVE_CLEAR) {
-            banner = { text: `WAVE ${p.wave} CLEAR`, born: performance.now() };
-          } else if (p.type === EV.GAME_OVER) {
-            banner = { text: 'GAME OVER', born: performance.now() };
-          } else if (p.type === EV.RUN_RESTART) {
-            banner = { text: 'NEW RUN', born: performance.now() };
+          switch (p.type) {
+            case EV.ASTEROID_DESTROYED:
+            case EV.ENEMY_DEATH:
+              effects.push({ x: p.x, y: p.y, r: p.r || 24, born: performance.now() });
+              audio.playExplosion();
+              break;
+            case EV.ASTEROID_HIT:
+            case EV.ENEMY_HIT:
+            case EV.SHIP_HIT:
+              audio.playHit();
+              break;
+            case EV.BULLET_SPAWN:
+              audio.playShoot();
+              break;
+            case EV.SHIP_DOWNED:
+              audio.playPlayerExplosion();
+              break;
+            case EV.SHIP_REVIVED:
+              audio.playPowerup();
+              break;
+            case EV.DROP_COLLECTED:
+              if (p.kind === 'gold') audio.playCoin(); else audio.playPowerup();
+              break;
+            case EV.WAVE_START:
+              banner = { text: `WAVE ${p.wave}`, born: performance.now() };
+              break;
+            case EV.WAVE_CLEAR:
+              banner = { text: `WAVE ${p.wave} CLEAR`, born: performance.now() };
+              break;
+            case EV.GAME_OVER:
+              banner = { text: 'GAME OVER', born: performance.now() };
+              break;
+            case EV.RUN_RESTART:
+              banner = { text: 'NEW RUN', born: performance.now() };
+              break;
+            default:
+              break;
           }
         }
         break;

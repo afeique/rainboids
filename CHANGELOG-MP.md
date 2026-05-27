@@ -7,6 +7,22 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.19.0] - 2026-05-27
+
+### Added
+- **MP plays SP sounds on events** (Path A, Group G4 — audio). The MP client
+  wires the shared `audio/audio-manager.js`: `init()` loads SFX (async; the
+  guarded `playSound` no-ops until loaded, so it's always safe), and the
+  AudioContext resumes on the first user gesture (autoplay policy). The event
+  handler now plays SP sounds — shoot (BULLET_SPAWN), hit (ASTEROID/ENEMY/SHIP
+  HIT), explosion (ASTEROID/ENEMY death), player-explosion (SHIP_DOWNED), coin
+  (gold pickup), powerup (health pickup / revive). "Sounds like SP."
+
+### Tests
+- `tests/qa/12-mp2-ws.spec.js` page-error guard green (4/4) — audio import +
+  init + per-event playSound run in-browser without throwing (the firing/kill
+  flow exercises shoot/hit/explosion).
+
 ## [0.18.0] - 2026-05-27
 
 ### Changed
