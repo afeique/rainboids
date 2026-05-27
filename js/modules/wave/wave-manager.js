@@ -303,25 +303,43 @@ export function updateWaveSystem() {
                     this._pausedFromWaveClear = false;
                     if (typeof this.startNextWave === 'function') this.startNextWave();
                 };
-                // R7.3 — on a non-card STAGE clear where the player leveled up,
-                // interpose the STATS screen so freshly-earned SP is spent
-                // before the next wave (restores the pre-R3 every-stage-clear
-                // prompt; the card stages still prompt via closeWavePickOverlay).
-                // Pause first so the deferred STATS mode holds gameplay. Mid-
-                // stage waves bank the SP silently (spend it next stage clear).
-                if (stageClear && this.player && this.player._leveledUpPending
-                    && typeof this.openStatsForLevelUp === 'function') {
-                    this.player._leveledUpPending = false;
+                // R7.3 — on a STAGE clear where the player leveled up, interpose
+                // the STATS screen so freshly-earned SP is spent before the next
+                // stage. Pause first so the deferred STATS mode holds gameplay.
+                // Mid-stage waves bank the SP silently (spend it next stage clear).
+                const statsThenProceed = () => {
+                    if (stageClear && this.player && this.player._leveledUpPending
+                        && typeof this.openStatsForLevelUp === 'function') {
+                        this.player._leveledUpPending = false;
+                        this.game.state = GAME_STATES.PAUSED;
+                        if (this.player.pauseChargeShot) this.player.pauseChargeShot();
+                        const opened = this.openStatsForLevelUp(() => {
+                            if (this.player && this.player.resumeChargeShot) this.player.resumeChargeShot();
+                            proceed();
+                        });
+                        if (opened) return;            // proceed() fires on close
+                        this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → undo pause
+                    }
+                    proceed();
+                };
+                // T32 — a STAGE clear opens the run DRAFT first (choose the next
+                // stage: theme/modifiers/risk-reward, PWR vs threat), THEN the
+                // STATS interpose, THEN proceed. This is the per-stage choose-
+                // moment that replaced the removed card draft (T22). Mid-stage
+                // waves skip straight through. Falls through if the draft can't
+                // open so progression never soft-locks.
+                if (stageClear && typeof this.openStageDraft === 'function') {
                     this.game.state = GAME_STATES.PAUSED;
-                    if (this.player.pauseChargeShot) this.player.pauseChargeShot();
-                    const opened = this.openStatsForLevelUp(() => {
+                    if (this.player && this.player.pauseChargeShot) this.player.pauseChargeShot();
+                    const opened = this.openStageDraft(() => {
                         if (this.player && this.player.resumeChargeShot) this.player.resumeChargeShot();
-                        proceed();
+                        this.game.state = GAME_STATES.WAVE_TRANSITION;
+                        statsThenProceed();
                     });
-                    if (opened) return;            // proceed() fires on close
-                    this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → undo pause
+                    if (opened) return;            // draft → chain fires on pick
+                    this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → fall through
                 }
-                proceed();
+                statsThenProceed();
             }
         }, 2700);
     }

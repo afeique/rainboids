@@ -1036,7 +1036,10 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const killstreakMult = getStreakGoldMult(this.killStreakCount || 0);
     const findMult = (player && typeof player.getGoldFindMultiplier === 'function')
         ? player.getGoldFindMultiplier() : 1;
-    const perKill = perKillRainshards({ wave, difficultyMult, killstreakMult, findMult });
+    // T32 — the drafted stage's reward multiplier (richer/riskier stage pays
+    // more R$); 1× until the first stage is drafted.
+    const stageMult = (this.game.runStage && this.game.runStage.reward && this.game.runStage.reward.rainshardMult) || 1;
+    const perKill = perKillRainshards({ wave, difficultyMult, killstreakMult, findMult }) * stageMult;
     // Small ±15% variance so drops aren't identical (loot texture, no creep).
     const vary = (v) => Math.max(1, Math.round(v * (0.85 + Math.random() * 0.30)));
     if (isEnemy) {
