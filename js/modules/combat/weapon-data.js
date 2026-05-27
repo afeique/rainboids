@@ -1606,6 +1606,54 @@ export const ABILITIES = {
         radius: 190, tickMs: 400, burnDmg: 6,
         cost: 4, unlockWave: 0, upgrades: [],
     },
+    // ── T33 — Class SIGNATURE abilities ──────────────────────────────────────
+    // Granted FREE by the chosen class at run start (class-system.applyClass →
+    // game-engine). v1: each ALIASES a thematically-matched base ability's
+    // tested effect (see SIGNATURE_ABILITY_ALIAS in player/abilities.js) —
+    // distinct bespoke effects are a later content pass. cost 0 (free signature),
+    // `signatureOf` tags the owning class. Cooldown matches the aliased base.
+    OVERDRIVE_BURST: {
+        id: 'OVERDRIVE_BURST', name: 'Overdrive Burst',
+        description: 'MARK nearby enemies — shots home + crit them (Striker signature)',
+        icon: 'target', color: '#ff5566',
+        cooldown: 16000, duration: 200, radius: 360, markMs: 6000,
+        cost: 0, unlockWave: 0, signatureOf: 'STRIKER', upgrades: [],
+    },
+    FORTRESS: {
+        id: 'FORTRESS', name: 'Fortress',
+        description: '60% damage resistance for 5s (Bulwark signature)',
+        icon: 'shield', color: '#ffcc00',
+        cooldown: 20000, duration: 5000, damageReduction: 0.6,
+        cost: 0, unlockWave: 0, signatureOf: 'BULWARK', upgrades: [],
+    },
+    HARVEST: {
+        id: 'HARVEST', name: 'Harvest',
+        description: 'Burst-heal 45% max HP + cleanse all statuses (Reaper signature)',
+        icon: 'skull', color: '#aa66ff',
+        cooldown: 22000, duration: 400, healPct: 0.45, cleanse: true,
+        cost: 0, unlockWave: 0, signatureOf: 'REAPER', upgrades: [],
+    },
+    SLIPSTREAM: {
+        id: 'SLIPSTREAM', name: 'Slipstream',
+        description: 'Blink forward with i-frames (Tempest signature)',
+        icon: 'wind', color: '#66ffcc',
+        cooldown: 9000, duration: 200, blinkDist: 240, iFrameMs: 400,
+        cost: 0, unlockWave: 0, signatureOf: 'TEMPEST', upgrades: [],
+    },
+    ELEMENTAL_NOVA: {
+        id: 'ELEMENTAL_NOVA', name: 'Elemental Nova',
+        description: 'Stun + element-blast all nearby enemies (Elementalist signature)',
+        icon: 'satellite', color: '#ff66dd',
+        cooldown: 20000, duration: 2000, radius: 240,
+        cost: 0, unlockWave: 0, signatureOf: 'ELEMENTALIST', upgrades: [],
+    },
+    JACKPOT: {
+        id: 'JACKPOT', name: 'Jackpot',
+        description: 'MARK nearby enemies for bonus loot + crit (Wildcard signature)',
+        icon: 'target', color: '#ffdd44',
+        cooldown: 18000, duration: 200, radius: 360, markMs: 6000,
+        cost: 0, unlockWave: 0, signatureOf: 'WILDCARD', upgrades: [],
+    },
 };
 
 const AUTO_CAST_BY_ABILITY = {

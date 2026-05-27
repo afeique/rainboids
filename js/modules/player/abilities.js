@@ -512,10 +512,23 @@ const ABILITY_ACTIVATE_SOUND = {
     EMP_PULSE:      'empPulse',
 };
 
+// T33 — class SIGNATURE abilities run a base ability's tested effect (v1 alias).
+// The slot still shows the signature's own metadata (name/icon); only the
+// ACTIVATION effect + cooldown resolve to the base. Distinct bespoke signature
+// effects are a later content pass.
+const SIGNATURE_ABILITY_ALIAS = {
+    OVERDRIVE_BURST: 'DESIGNATOR',
+    FORTRESS:        'BULWARK',
+    HARVEST:         'FIELD_MEDIC',
+    SLIPSTREAM:      'BLINK',
+    ELEMENTAL_NOVA:  'EMP_PULSE',
+    JACKPOT:         'DESIGNATOR',
+};
+
 export function activateAbility(slot = 0) {
     // §6c no-downsides rework — Gunslinger no longer blocks abilities (it's a
     // pure +primary-damage/fire-rate anchor; the "no abilities" restriction is gone).
-    const abilityId = this.equippedAbilities[slot];
+    let abilityId = this.equippedAbilities[slot];
     if (!abilityId) return false;
     if (this.abilityCooldowns[slot] > 0) return false;
     // SYS-9 / ENMY-10 — NULL_DRONE suppression can hard-lock activation
@@ -525,6 +538,11 @@ export function activateAbility(slot = 0) {
     // blocksActivation:false — slow-the-recharge only — so this stays dormant
     // until a future hard-lock support type sets the flag.)
     if (isActivationBlocked(this, Date.now())) return false;
+
+    // T33 — resolve a signature ability to its base behavior before dispatch, so
+    // the tested effect + its id-keyed consumers (e.g. BULWARK damage-reduction)
+    // all fire. The slot keeps showing the signature's own icon/name.
+    if (SIGNATURE_ABILITY_ALIAS[abilityId]) abilityId = SIGNATURE_ABILITY_ALIAS[abilityId];
 
     const config = ABILITIES[abilityId];
     if (!config) return false;

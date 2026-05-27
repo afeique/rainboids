@@ -35,6 +35,9 @@ import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
 import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
+// T33 — class pick: apply the chosen class (lens + mechanic + signature) at run start.
+import { CLASSES } from './player/classes.js';
+import { applyClass, clearClass } from './player/class-system.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed, setDebugUnlockResolvers, setAllUnlocked, applyResell, UNLOCK_CATEGORIES } from './shop/armory.js';
 // T31 — Fabricate weapons: the crafting engine rolls, item-system decorates.
 import { fabricate } from './shop/crafting.js';
@@ -1124,6 +1127,33 @@ export class GameEngine {
                 this.player.activeAbility = loadout.ability;
                 this.player.ownedAbilities = new Set([loadout.ability]);
             }
+        }
+        // T33 — apply the chosen CLASS (per-run soft SP lens + unique-mechanic
+        // hook + a FREE class-exclusive signature ability). `_pendingClass` is
+        // set by the BUILD class picker (T43); absent → clearClass (no class this
+        // run). The signature ability is granted into the owned pool and equipped
+        // into the first free ability slot (without clobbering chosen ones).
+        const pendingClass = this._pendingClass;
+        this._pendingClass = null;
+        if (pendingClass && CLASSES[pendingClass]) {
+            applyClass(this.player, pendingClass);
+            const sig = this.player.signatureAbility;
+            if (sig && ABILITIES[sig]) {
+                if (!(this.player.ownedAbilities instanceof Set)) {
+                    this.player.ownedAbilities = new Set(this.player.ownedAbilities || []);
+                }
+                this.player.ownedAbilities.add(sig);
+                if (!Array.isArray(this.player.equippedAbilities)) {
+                    this.player.equippedAbilities = [null, null, null, null];
+                }
+                if (!this.player.equippedAbilities.includes(sig)) {
+                    const free = this.player.equippedAbilities.indexOf(null);
+                    if (free >= 0) this.player.equippedAbilities[free] = sig;
+                }
+                if (!this.player.activeAbility) this.player.activeAbility = sig;
+            }
+        } else {
+            clearClass(this.player);
         }
         // W5 — apply the chosen per-weapon attunements (validated against the
         // known table) so bullets carry their elements this run.

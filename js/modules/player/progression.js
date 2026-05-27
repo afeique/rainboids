@@ -34,6 +34,9 @@ import { amplifySP } from '../core/gear-scaling.js';
 // T28 — socketed Matrices amplify the same SP stats as gear affixes (§2.2):
 // aggregateMatrixAmp folds the per-slot Matrix line (×tier) + per-type resonance.
 import { aggregateMatrixAmp } from '../world/matrix-system.js';
+// T33 — the chosen class's favored-stat soft lens (+CLASS_STAT_LEAN_PCT amp on
+// favored SP stats), folded into the same level-ramped amplification as gear.
+import { classStatBonus } from './class-system.js';
 import { frameClock } from '../core/frame-clock.js';
 import { playerChillSpeedMult } from './player-status.js';
 // SYS-8 / ENMY-05 — buff-strip suppression convention. After a Leech strips a
@@ -187,7 +190,11 @@ function _gearAmpPct(player, statId) {
 // Default-safe: no invested SP → 0; no gear OR level 1 → just the raw SP value
 // (so the starter + un-geared early waves read exactly as before T26).
 function _ampSp(player, statId) {
-    return amplifySP(_spVal(player, statId), _gearAmpPct(player, statId), (player && player.level) || 1);
+    // T33 — the class favored-stat lens adds to the amplifier alongside gear +
+    // Matrices (0 for a non-favored stat / no class), so a class softly leans the
+    // build toward its stats, level-ramped like the rest of the amp model.
+    const ampPct = _gearAmpPct(player, statId) + classStatBonus(player, statId);
+    return amplifySP(_spVal(player, statId), ampPct, (player && player.level) || 1);
 }
 
 // P2 — additive contribution of the active rule-modifier passives for a stat
