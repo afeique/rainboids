@@ -31,16 +31,20 @@
 > (b) doc "REGEN" → real SP id `REGENERATION` (matrix-data + item-templates already map it).
 > (c) 6 new class signature-ability ids (OVERDRIVE_BURST, FORTRESS, HARVEST, SLIPSTREAM, ELEMENTAL_NOVA, JACKPOT) need registering in the ability system in **T16/T33**; ENGINEER reuses existing `SENTRY_DRONE`.
 
-## ▶ WAVE 2 — logic modules + new UI (🟢 parallel; deps on Wave 1)
-- [ ] **T10** 🟢 `combat/weapon-gen.js` (+test) — roll a weapon item [T04,T02]
-- [ ] **T11** 🟢 `world/gear-gen.js` (+test) — roll a gear item [T06,T03]
-- [ ] **T12** 🟢 `world/matrix-system.js` (+test) — socket/combine/resonance/agg [T05]
-- [ ] **T13** 🟢 `shop/crafting.js` (+test) — fabricate/reroll/calibrate/target/upgrade/salvage (narrow-types-never-values) [T02,T10,T11,T12]
-- [ ] **T14** 🟢 `wave/run-randomizer.js` (+test) — drafted run builder + difficulty budget [T09,T01]
-- [ ] **T15** 🟢 `world/bounty-engine.js` (+test) — roll board / track / grant [T08]
-- [ ] **T16** 🟢 `player/class-system.js` (+test) — apply class lens/mechanic/signature [T07]
-- [ ] **T40** 🟢 `ui/draft-overlay.js` — 2–3 stage draft screen (PWR vs threat) [T14]
-- [ ] **T41** 🟢 `ui/bounty-overlay.js` — bounty board UI [T15]
+## ▶ WAVE 2 — logic modules + new UI (🟢 parallel; deps on Wave 1) ✅ DONE (2026-05-27, +152 unit tests; suite 2233)
+- [x] **T10** 🟢 `combat/weapon-gen.js` (+test) — roll a weapon item [T04,T02]
+- [x] **T11** 🟢 `world/gear-gen.js` (+test) — roll a gear item [T06,T03]
+- [x] **T12** 🟢 `world/matrix-system.js` (+test) — socket/combine/resonance/agg [T05]
+- [x] **T13** 🟢 `shop/crafting.js` (+test) — fabricate/reroll/calibrate/target/upgrade/salvage (narrow-types-never-values) [T02,T10,T11,T12]
+- [x] **T14** 🟢 `wave/run-randomizer.js` (+test) — drafted run builder + difficulty budget [T09,T01]
+- [x] **T15** 🟢 `world/bounty-engine.js` (+test) — roll board / track / grant [T08]
+- [x] **T16** 🟢 `player/class-system.js` (+test) — apply class lens/mechanic/signature [T07]
+- [x] **T40** 🟢 `ui/draft-overlay.js` — 2–3 stage draft screen (PWR vs threat) [T14]
+- [x] **T41** 🟢 `ui/bounty-overlay.js` — bounty board UI [T15]
+
+> **Wave 2 note:** `crafting-costs.js` keys rarities capitalized (`Common`…); the
+> gen/ladder modules use lowercase ids / tier numbers — `crafting.js` normalizes.
+> Keep this in mind when wiring (T27/T42).
 
 ## ▶ SERIAL INTEGRATION SPINE (🔴 ordered — one owner per file at a time)
 ### Phase 0 — rip-out & rename
