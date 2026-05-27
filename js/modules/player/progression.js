@@ -16,13 +16,17 @@
 export function gainExperience(/* amount */) { /* no-op since 6.0.0 */ }
 export function levelUp() { return false; }
 
-// ── Meta progression (6.35.0) ───────────────────────────────────────────
-// Persistent level / XP / SP across playthroughs. `level`, `xp`, `sp`,
-// and `spStats` live on the player but are saved to localStorage so they
-// carry between runs.
+// ── Per-run progression (8.x looter pivot, T24) ──────────────────────────
+// Level / XP / SP are PER-RUN: every run starts at level 1 / 0 SP and climbs
+// from kills, then RESETS next run — so allocated points can be strong without
+// permanent account-wide power-creep. (6.35.0 made these persist across runs;
+// that banked level/SP is converted to Rainshards ONCE on load — see
+// game-engine._migrateBankedProgression — and the account meta no longer
+// carries level/XP/SP.) `level`, `xp`, `sp`, and `spStats` live on the player
+// for the duration of a run and are captured by the wave-start run snapshot
+// (serializeRunState) so CONTINUE resumes the in-run climb.
 import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-stats.js';
 import { EFFICIENCY_CAP, FLUX_PER_STACK, CAPACITOR_BANK_OVERCHARGE_MULT, CAPACITOR_BANK_DECAY_PER_SEC } from '../core/constants.js';
-import { loadMeta, saveMeta } from '../core/storage.js';
 import { frameClock } from '../core/frame-clock.js';
 import { playerChillSpeedMult } from './player-status.js';
 // SYS-8 / ENMY-05 — buff-strip suppression convention. After a Leech strips a
@@ -32,22 +36,23 @@ import { playerChillSpeedMult } from './player-status.js';
 // isBuffSuppressed returns false and addPowerup behaves byte-for-byte as before.
 import { isBuffSuppressed } from '../enemy/abilities/buff-strip.js';
 
-// Initialize the player's meta fields from storage (called in ctor).
+// Initialize the player's per-run progression to the level-1 baseline (called
+// in the Player ctor — i.e. at every run-start build). T24: no longer reads
+// persistent account level/SP; each run starts fresh at level 1 / 0 SP.
 export function initMeta() {
-    const m = loadMeta() || {};
-    this.level = Math.max(1, Math.min(MAX_LEVEL, m.level | 0 || 1));
-    this.xp = Math.max(0, m.xp | 0);
-    this.sp = Math.max(0, m.sp | 0);
+    this.level = 1;
+    this.xp = 0;
+    this.sp = 0;
     this.spStats = {};
-    for (const s of SP_STATS) {
-        const v = (m.spStats && m.spStats[s.id]) | 0;
-        this.spStats[s.id] = Math.max(0, Math.min(SP_STAT_MAX_POINTS, v));
-    }
+    for (const s of SP_STATS) this.spStats[s.id] = 0;
 }
 
-export function saveMetaState() {
-    saveMeta({ level: this.level, xp: this.xp, sp: this.sp, spStats: this.spStats });
-}
+// T24 — per-run level/SP no longer persists to the account meta. The in-run
+// values live on the player and are captured by the wave-start run snapshot
+// (serializeRunState) for CONTINUE; they intentionally do NOT carry into the
+// next run. Kept as a no-op so existing callers (addXp / allocateSp /
+// deallocateSp / debug grants) don't break.
+export function saveMetaState() { /* no-op — level/SP are per-run (T24) */ }
 
 // Award XP toward the next level. Rolls over multiple levels if needed;
 // each level grants +1 SP. Sets `_leveledUpPending` so the wave-clear

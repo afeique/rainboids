@@ -1459,10 +1459,14 @@ export class GameEngine {
             stats: this.game.stats ? { ...this.game.stats, weaponShots: { ...(this.game.stats.weaponShots || {}) } } : null,
             // Player snapshot
             player: {
+                // T24 — per-run progression: snapshot the LIVE level/XP/SP/SP-
+                // allocations so CONTINUE resumes the in-run climb (these no
+                // longer live in the account meta). Field names match the
+                // meta-progression module (level / xp / sp / spStats).
                 level: p.level | 0,
-                experience: p.experience | 0,
-                experienceToNextLevel: p.experienceToNextLevel | 0,
-                skillPoints: p.skillPoints | 0,
+                xp: p.xp | 0,
+                sp: p.sp | 0,
+                spStats: { ...(p.spStats || {}) },
                 health: p.health,
                 maxHealth: p.maxHealth,
                 shield: p.shield,
@@ -1540,12 +1544,18 @@ export class GameEngine {
         }
         // Player-side
         const ps = snap.player || {};
-        if (typeof ps.level === 'number') p.level = Math.max(1, ps.level);
-        if (typeof ps.experience === 'number') p.experience = Math.max(0, ps.experience);
-        if (typeof ps.experienceToNextLevel === 'number' && ps.experienceToNextLevel > 0) {
-            p.experienceToNextLevel = ps.experienceToNextLevel;
+        // T24 — per-run progression restore. initMeta() reset the fresh player
+        // to L1/0-SP; overlay the snapshot's in-run climb so CONTINUE resumes
+        // mid-run level/SP. (applyPersistentProfile, which runs afterward, no
+        // longer touches level/SP, so this snapshot is the sole source.)
+        if (typeof ps.level === 'number') p.level = Math.max(1, ps.level | 0);
+        if (typeof ps.xp === 'number') p.xp = Math.max(0, ps.xp | 0);
+        if (typeof ps.sp === 'number') p.sp = Math.max(0, ps.sp | 0);
+        if (ps.spStats && typeof ps.spStats === 'object' && p.spStats) {
+            for (const k of Object.keys(p.spStats)) {
+                if (typeof ps.spStats[k] === 'number') p.spStats[k] = Math.max(0, ps.spStats[k] | 0);
+            }
         }
-        if (typeof ps.skillPoints === 'number') p.skillPoints = Math.max(0, ps.skillPoints);
         if (typeof ps.maxHealth === 'number') p.maxHealth = ps.maxHealth;
         if (typeof ps.health === 'number') p.health = Math.min(ps.health, p.maxHealth);
         if (typeof ps.shield === 'number') p.shield = ps.shield;
@@ -1624,9 +1634,10 @@ export class GameEngine {
             // Phase R2 — persist the ACCOUNT wallet (account-gold), not the
             // run-gold (game.money). Run-gold lives only in the wave-start
             // run snapshot (serializeRunState) for CONTINUE.
+            // T24 — level/XP/SP are PER-RUN and intentionally NOT persisted to
+            // the account meta (they reset each run; CONTINUE resumes them from
+            // the wave-start run snapshot, not from here).
             saveMeta({
-                level: p.level | 0, xp: p.xp | 0, sp: p.sp | 0,
-                spStats: p.spStats || {},
                 accountGold: this.game.accountGold | 0,
                 cores: this.game.cores | 0,
                 powerups,
@@ -1721,6 +1732,32 @@ export class GameEngine {
         } catch {}
     }
 
+    // T24 — one-time migration of pre-pivot persistent progression. Older
+    // accounts banked level/XP/SP into the meta (6.35.0). With per-run level/SP
+    // those fields are retired; the lifetime SP earned (= level − 1, one SP per
+    // level) is paid out as Rainshards once, the level/XP/SP/spStats keys are
+    // cleared, and a `levelMigrated` flag stamps the account so this never runs
+    // twice. Returns the (possibly rewritten) meta. No-op for null meta or an
+    // already-migrated account.
+    _migrateBankedProgression(meta) {
+        if (!meta || meta.levelMigrated) return meta;
+        const PER_LEVEL_RS = 1500; // tunable — revisited in the T71 balance pass
+        const bankedLevel = Math.max(0, (meta.level | 0) - 1);
+        const grant = bankedLevel * PER_LEVEL_RS;
+        const accountGold = resolveAccountGold(meta) + grant;
+        // Setting keys to undefined drops them from the serialized blob
+        // (saveMeta merges, and JSON.stringify omits undefined-valued keys).
+        saveMeta({
+            accountGold,
+            level: undefined, xp: undefined, sp: undefined, spStats: undefined,
+            levelMigrated: true,
+        });
+        if (grant > 0) {
+            try { console.log(`[T24 migrate] banked level ${meta.level | 0} → +${grant} R$`); } catch {}
+        }
+        return loadMeta();
+    }
+
     // Apply the persistent profile onto a freshly-initialized run. Called
     // from init() AFTER the player + loadout are set up, so it overrides
     // the wave-1 baseline (gold 0 / no upgrades) with carried-over
@@ -1729,7 +1766,9 @@ export class GameEngine {
     applyPersistentProfile() {
         const p = this.player;
         if (!p) return;
-        const meta = loadMeta();
+        // T24 — convert any banked account level/SP (pre-pivot persistent
+        // progression) into Rainshards ONCE, then retire those meta fields.
+        let meta = this._migrateBankedProgression(loadMeta());
         // Phase R2 — these apply even with no meta (new account): account
         // wallet defaults to 0 and the owned pool defaults to the base kit.
         // Run-gold (game.money) is NOT carried over — it starts at 0 and is
