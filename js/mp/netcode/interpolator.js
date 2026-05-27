@@ -24,20 +24,23 @@ export class Interpolator {
   }
 
   add(snapshot, recvTime = performance.now()) {
-    const ships = new Map();
-    for (const s of snapshot.ships) ships.set(s.id, s);
-    this.buf.push({ recv: recvTime, tick: snapshot.tick, ships });
+    const toMap = (arr) => {
+      const m = new Map();
+      for (const e of arr || []) m.set(e.id, e);
+      return m;
+    };
+    this.buf.push({
+      recv: recvTime,
+      tick: snapshot.tick,
+      ships: toMap(snapshot.ships),
+      asteroids: toMap(snapshot.asteroids),
+    });
     if (this.buf.length > BUFFER_CAP) this.buf.shift();
   }
 
-  /**
-   * Sample interpolated remote-ship render states at `now`, excluding `localId`.
-   * @returns {Map<number, {x,y,angle,hp,mhp}>}
-   */
-  sample(now, localId) {
-    const out = new Map();
-    if (this.buf.length === 0) return out;
-
+  /** Find the two buffered snapshots bracketing render time `t` + the blend f. */
+  _bracket(now) {
+    if (this.buf.length === 0) return null;
     const t = now - INTERP_DELAY_MS;
     let a = null;
     let b = null;
@@ -49,10 +52,20 @@ export class Interpolator {
       }
     }
     if (!a) { a = b = this.buf[this.buf.length - 1]; } // not enough history: snap to latest
-
     const span = (b.recv - a.recv) || 1;
     const f = Math.max(0, Math.min(1, (t - a.recv) / span));
+    return { a, b, f };
+  }
 
+  /**
+   * Sample interpolated remote-ship render states at `now`, excluding `localId`.
+   * @returns {Map<number, {x,y,angle,hp,mhp}>}
+   */
+  sample(now, localId) {
+    const out = new Map();
+    const br = this._bracket(now);
+    if (!br) return out;
+    const { a, b, f } = br;
     for (const [id, sb] of b.ships) {
       if (id === localId) continue;
       const sa = a.ships.get(id) || sb;
@@ -62,6 +75,27 @@ export class Interpolator {
         angle: lerpAngle(sa.a, sb.a, f),
         hp: sb.hp,
         mhp: sb.mhp,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Sample interpolated asteroid render states at `now`.
+   * @returns {Map<number, {x,y,angle,r}>}
+   */
+  sampleAsteroids(now) {
+    const out = new Map();
+    const br = this._bracket(now);
+    if (!br) return out;
+    const { a, b, f } = br;
+    for (const [id, sb] of b.asteroids) {
+      const sa = a.asteroids.get(id) || sb;
+      out.set(id, {
+        x: lerp(sa.x, sb.x, f),
+        y: lerp(sa.y, sb.y, f),
+        angle: lerpAngle(sa.a, sb.a, f),
+        r: sb.r,
       });
     }
     return out;

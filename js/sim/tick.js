@@ -6,6 +6,7 @@
 // same step the client predictor runs locally for the owned ship.
 
 import { stepShip, EMPTY_INPUT } from './ship.js';
+import { stepAsteroid } from './asteroid.js';
 
 /**
  * @param {object} world  - from createWorld()
@@ -24,8 +25,12 @@ export function tick(world, inputsByPlayer) {
     }
   }
 
-  // Future systems (asteroids, enemies, bullets, collisions, waves, drops) tick
-  // here in dependency order, each emitting events as needed.
+  for (const [, ast] of world.asteroids) {
+    stepAsteroid(ast, world.width, world.height);
+  }
+
+  // Future systems (enemies, bullets, collisions, waves, drops) tick here in
+  // dependency order, each emitting events as needed.
 
   return world.events;
 }

@@ -45,6 +45,7 @@ async function main() {
   let roster = [];
   let lastSnapshotTick = 0;
   let lastRemote = new Map();
+  let lastAsteroids = new Map();
 
   // Debug/test hook: lets QA specs (and the console) inspect live client state
   // without coupling tests to internal module structure.
@@ -55,6 +56,7 @@ async function main() {
     connected: () => predictor != null,
     localShip: () => (predictor ? { x: predictor.ship.x, y: predictor.ship.y, angle: predictor.ship.angle } : null),
     remoteShips: () => [...lastRemote.entries()].map(([id, s]) => ({ id, x: s.x, y: s.y })),
+    asteroidCount: () => lastAsteroids.size,
   };
 
   transport.onMessage((msg) => {
@@ -120,8 +122,10 @@ async function main() {
     }
 
     const remote = interp.sample(now, playerId);
+    const asteroids = interp.sampleAsteroids(now);
     lastRemote = remote;
-    render(ctx, canvas, { localShip: predictor ? predictor.ship : null, remoteShips: remote, localId: playerId });
+    lastAsteroids = asteroids;
+    render(ctx, canvas, { localShip: predictor ? predictor.ship : null, remoteShips: remote, asteroids, localId: playerId });
 
     // Lightweight HUD line.
     const hud = document.getElementById('hud');

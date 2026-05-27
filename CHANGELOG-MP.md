@@ -7,6 +7,27 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.3.0] - 2026-05-27
+
+### Added
+- **Asteroids in the shared sim** (`js/sim/asteroid.js`): drifting, rotating
+  field hazards that wrap around the arena edges; HP scales with size.
+  - `world.js` — `asteroids` map + `nextEntityId` id space for non-player
+    entities; `spawnAsteroids(world, count)` (deterministic per seed).
+  - `tick.js` — asteroids step each tick alongside ships.
+  - `server/src/room.js` — spawns the asteroid field on room creation; snapshots
+    now carry an `asteroids` array.
+- **Client renders + interpolates asteroids**: the snapshot interpolator is
+  generalized (shared `_bracket()` + a new `sampleAsteroids()`), the Canvas2D
+  renderer draws rotating rocks, and `window.__mp.asteroidCount()` is exposed.
+  This proves the snapshot/interpolation pipeline for non-ship entity types.
+
+### Tests
+- `tests/unit/sim-asteroid.test.js` — asteroid step (drift/wrap/rotate) +
+  deterministic spawn.
+- `tests/unit/mp-netcode.test.js` — asteroid interpolation case added.
+- `tests/qa/12-mp2-ws.spec.js` — asserts the asteroid field reaches both clients.
+
 ## [0.2.0] - 2026-05-27
 
 ### Added

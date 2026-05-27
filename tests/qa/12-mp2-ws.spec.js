@@ -77,6 +77,10 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     // Client B should render exactly one remote ship (client A).
     await expect.poll(() => b.evaluate(() => window.__mp.remoteShips().length)).toBe(1);
 
+    // Both clients should receive the authoritative asteroid field.
+    await expect.poll(() => a.evaluate(() => window.__mp.asteroidCount())).toBeGreaterThan(0);
+    await expect.poll(() => b.evaluate(() => window.__mp.asteroidCount())).toBeGreaterThan(0);
+
     const aId = await a.evaluate(() => window.__mp.playerId());
 
     // Record A's ship x as seen by B, then drive A to the right.

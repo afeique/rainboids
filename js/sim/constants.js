@@ -27,3 +27,11 @@ export const SHIP_VEL_EPSILON = 0.05; // snap-to-zero threshold
 export const SHIP_BOUNCE_DAMP = 0.8;
 export const SHIP_RADIUS = 15; // SP SHIP_SIZE (30) / 2
 export const SHIP_MAX_HP = 100;
+
+// Asteroids — drifting, rotating field hazards. Wrap around the arena edges.
+export const ASTEROID_COUNT = 8; // initial field population
+export const ASTEROID_MIN_R = 20;
+export const ASTEROID_MAX_R = 50;
+export const ASTEROID_MIN_SPD = 0.3; // px/tick
+export const ASTEROID_MAX_SPD = 1.2;
+export const ASTEROID_MAX_SPIN = 0.03; // rad/tick

@@ -33,7 +33,30 @@ function drawShip(ctx, x, y, angle, color, label, isLocal) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, localId }) {
+function drawAsteroid(ctx, x, y, angle, r) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  // Lumpy octagon so rotation is visible.
+  const sides = 8;
+  for (let i = 0; i < sides; i++) {
+    const a = (i / sides) * Math.PI * 2;
+    const rr = r * (0.78 + 0.22 * ((i % 2) ? 1 : 0.6));
+    const px = Math.cos(a) * rr;
+    const py = Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#2a3350';
+  ctx.fill();
+  ctx.strokeStyle = '#586a9c';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, localId }) {
   // Background.
   ctx.fillStyle = '#070710';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -42,6 +65,11 @@ export function render(ctx, canvas, { localShip, remoteShips, localId }) {
   ctx.strokeStyle = '#1d2440';
   ctx.lineWidth = 4;
   ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+
+  // Asteroids (interpolated).
+  if (asteroids) {
+    for (const [, ast] of asteroids) drawAsteroid(ctx, ast.x, ast.y, ast.angle, ast.r);
+  }
 
   // Remote ships (interpolated).
   for (const [id, s] of remoteShips) {

@@ -5,8 +5,12 @@
 // World seeded from Welcome, used to predict only the local ship).
 
 import { makeRng } from './rng.js';
-import { FIELD_WIDTH, FIELD_HEIGHT } from './constants.js';
+import {
+  FIELD_WIDTH, FIELD_HEIGHT,
+  ASTEROID_MIN_R, ASTEROID_MAX_R, ASTEROID_MIN_SPD, ASTEROID_MAX_SPD, ASTEROID_MAX_SPIN,
+} from './constants.js';
 import { createShip } from './ship.js';
+import { createAsteroid } from './asteroid.js';
 import { EV, emit } from './events.js';
 
 export function createWorld({ seed = 1, width = FIELD_WIDTH, height = FIELD_HEIGHT } = {}) {
@@ -17,8 +21,28 @@ export function createWorld({ seed = 1, width = FIELD_WIDTH, height = FIELD_HEIG
     height,
     rng: makeRng(seed),
     ships: new Map(), // playerId -> ship
+    asteroids: new Map(), // entityId -> asteroid
+    nextEntityId: 1, // id space for non-player entities (asteroids, bullets, …)
     events: [], // cleared + repopulated each tick
   };
+}
+
+/** Populate the asteroid field. Deterministic for a fixed world seed. */
+export function spawnAsteroids(world, count) {
+  for (let i = 0; i < count; i++) {
+    const radius = world.rng.range(ASTEROID_MIN_R, ASTEROID_MAX_R);
+    const x = world.rng.range(0, world.width);
+    const y = world.rng.range(0, world.height);
+    const dir = world.rng.range(0, Math.PI * 2);
+    const spd = world.rng.range(ASTEROID_MIN_SPD, ASTEROID_MAX_SPD);
+    const spin = world.rng.range(-ASTEROID_MAX_SPIN, ASTEROID_MAX_SPIN);
+    const ast = createAsteroid(
+      world.nextEntityId++, x, y,
+      Math.cos(dir) * spd, Math.sin(dir) * spd,
+      radius, spin,
+    );
+    world.asteroids.set(ast.id, ast);
+  }
 }
 
 /** Add a ship for a player at a spawn point and emit SHIP_SPAWN. */

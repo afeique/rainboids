@@ -75,4 +75,16 @@ describe('Interpolator', () => {
     const out = interp.sample(1200, 1);
     expect(out.get(2).x).toBe(42);
   });
+
+  it('interpolates asteroids independently of ships', () => {
+    const interp = new Interpolator();
+    const s1 = { t: 'snapshot', tick: 1, ships: [], asteroids: [{ id: 5, x: 0, y: 0, a: 0, r: 30 }] };
+    const s2 = { t: 'snapshot', tick: 2, ships: [], asteroids: [{ id: 5, x: 100, y: 40, a: 0, r: 30 }] };
+    interp.add(s1, 1000);
+    interp.add(s2, 1100);
+    const out = interp.sampleAsteroids(1150); // t = 1050, halfway
+    expect(out.get(5).x).toBeCloseTo(50, 3);
+    expect(out.get(5).y).toBeCloseTo(20, 3);
+    expect(out.get(5).r).toBe(30);
+  });
 });

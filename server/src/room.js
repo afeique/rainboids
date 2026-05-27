@@ -4,10 +4,10 @@
 // Each tick: gather latest inputs → sim.tick() → broadcast a Snapshot (+ an
 // Event frame if anything happened this tick).
 
-import { createWorld, addShip, removeShip, spawnPointFor } from '../../js/sim/world.js';
+import { createWorld, addShip, removeShip, spawnPointFor, spawnAsteroids } from '../../js/sim/world.js';
 import { tick } from '../../js/sim/tick.js';
 import { EMPTY_INPUT } from '../../js/sim/ship.js';
-import { TICK_MS } from '../../js/sim/constants.js';
+import { TICK_MS, ASTEROID_COUNT } from '../../js/sim/constants.js';
 import { S2C } from '../../js/sim/protocol.js';
 import { encode } from '../../js/sim/codec.js';
 
@@ -42,13 +42,23 @@ function buildSnapshot(world) {
       li: s.lastInputTick, // per-ship acked input tick (owning client reconciles)
     });
   }
-  return { t: S2C.SNAPSHOT, tick: world.tick, ships };
+  const asteroids = [];
+  for (const [, a] of world.asteroids) {
+    asteroids.push({
+      id: a.id,
+      x: round(a.x), y: round(a.y),
+      a: round(a.angle, 3),
+      r: round(a.radius, 1),
+    });
+  }
+  return { t: S2C.SNAPSHOT, tick: world.tick, ships, asteroids };
 }
 
 export class Room {
   constructor({ id, seed }) {
     this.id = id;
     this.world = createWorld({ seed });
+    spawnAsteroids(this.world, ASTEROID_COUNT);
     this.players = new Map(); // playerId -> { conn, input, name }
     this.nextPlayerId = 1;
     this._timer = null;
