@@ -164,6 +164,10 @@ export class Player {
         // Empty = element-agnostic (KINETIC). Populated from the loadout (W5);
         // bullets read it in applyGlobalBulletUpgrades to stamp bullet.elements.
         this.activeAttunements = {};
+        // T30 — Weapon-as-loot: the equipped weapon ITEM ({archetype, rarity,
+        // traits, element}) or null. When set, its archetype drives activePrimary's
+        // firing pattern and its traits stamp bullets / scale damage (weapons.js).
+        this.equippedWeapon = null;
         this.ownedPrimaries = new Set(['PULSE_CANNON']);
         this.ownedPowers = new Set(['CHARGE_SHOT']);
         // 6.x — Base kit is Pulse + Charge ONLY. Abilities are purchase-locked
@@ -1527,6 +1531,12 @@ export class Player {
     equipPrimary(weaponId) {
         return weapons.equipPrimary.call(this, weaponId);
     }
+
+    // T30 — Weapon-as-loot: equip/query a rolled weapon ITEM.
+    equipWeaponItem(weapon) { return weapons.equipWeaponItem.call(this, weapon); }
+    getEquippedWeapon() { return weapons.getEquippedWeapon.call(this); }
+    hasWeaponTrait(id) { return weapons.hasWeaponTrait.call(this, id); }
+    weaponTraitValue(id) { return weapons.weaponTraitValue.call(this, id); }
 
     equipPower(weaponId) {
         return weapons.equipPower.call(this, weaponId);

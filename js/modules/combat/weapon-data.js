@@ -1780,6 +1780,43 @@ export function getAbilityUpgrades(abilityId) {
     return Object.values(ABILITY_UPGRADES).filter(u => u.ability === abilityId);
 }
 
+// ── T30 — Weapon-as-loot: archetype → firing pattern + level scaling ──────────
+// A rolled weapon ITEM (weapon-gen.js) carries an `archetype` id (its firing
+// pattern). This maps each archetype to the concrete PRIMARY_WEAPONS entry that
+// drives the actual shot dispatch, so equipping a weapon-loot item just points
+// `activePrimary` at the right pattern and layers the rolled traits on top.
+// Unknown archetypes fall back to PULSE_CANNON. (Power-flavored archetypes map
+// to their nearest primary pattern for now; power-weapon-as-loot is a later
+// extension.)
+export const ARCHETYPE_TO_WEAPON = Object.freeze({
+    PULSE: 'PULSE_CANNON',
+    NEEDLE: 'STORM_NEEDLES', STORM: 'STORM_NEEDLES',
+    SCATTER: 'SCATTER_GUN', BUCKSHOT: 'SCATTER_GUN',
+    RAIL: 'RAIL_DRIVER',
+    CLUSTER: 'CLUSTER_LAUNCHER',
+    SPLITTER: 'SPLITTER',
+    RICOCHET: 'RICOCHET',
+    BOOMERANG: 'BOOMERANG',
+    SPIN: 'SPIN_CANNON',
+    FLAK: 'FLAK_CANNON',
+    GRAVITY: 'GRAVITY_LANCE', LANCE: 'GRAVITY_LANCE', SINGULARITY: 'GRAVITY_LANCE',
+    // Power-flavored archetypes → nearest primary firing pattern (placeholder).
+    NOVA: 'FLAK_CANNON', MINE: 'GRAVITY_LANCE', LIGHTNING: 'STORM_NEEDLES', CRYO_BURST: 'FLAK_CANNON',
+});
+
+/** Resolve a weapon archetype id to its firing-pattern weapon id (PULSE_CANNON fallback). */
+export function archetypeToWeaponId(archetype) {
+    return ARCHETYPE_TO_WEAPON[archetype] || 'PULSE_CANNON';
+}
+
+// T30 — weapon base damage scales with the per-run level so a weapon found early
+// stays relevant as the run climbs: +4%/level, clamped at level 25 (≈ ×1.96).
+// Pure; L1 → ×1.0. (Tuned at T71 alongside the income/gear curves.)
+export function weaponLevelScale(level) {
+    const L = Math.max(1, level | 0);
+    return 1 + Math.min(L - 1, 24) * 0.04;
+}
+
 /**
  * Get all stat boons (the wave-clear stat pool). Optional `{ includeHidden }`
  * flag controls whether legacy/retired entries (LONG_RANGE, SPEED_BOOST,

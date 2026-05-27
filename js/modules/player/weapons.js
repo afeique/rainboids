@@ -4,7 +4,7 @@
 import { GAME_CONFIG, FLUX_MAX_STACKS, CAPACITOR_BANK_DMG_BONUS, OVERCLOCK_COOLDOWN_MS, OVERCLOCK_EFFECT_MULT,
     HEAT_SINK_MAX, HEAT_SINK_RAMP, HEAT_SINK_FIRE_FLOOR_MS, HEAT_SINK_VENT_RADIUS, HEAT_SINK_VENT_DAMAGE } from '../core/constants.js';
 import { frameClock } from '../core/frame-clock.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity, attunementElements } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_UPGRADES, clusterLaunchDistance, clusterLaunchVelocity, attunementElements, archetypeToWeaponId, weaponLevelScale } from '../combat/weapon-data.js';
 import { resolveBulletElements } from '../combat/elements.js';
 import { prismaticElement } from '../combat/passive-data.js';
 import { autofireDiag } from '../autofire-diag.js';
@@ -1260,6 +1260,91 @@ export function applyGlobalBulletUpgrades(bullet) {
             bullet.color = '#ffeb44';
         }
     }
+
+    // T30 — stamp the equipped WEAPON-LOOT item's traits LAST so a weapon's
+    // ELEMENT trait wins over the attunement baseline and its BEHAVIOR traits
+    // layer on top. No-op when no weapon-loot item is equipped (legacy
+    // attunement/mod paths above stay authoritative during the transition).
+    applyWeaponTraits.call(this, bullet);
+}
+
+// ── T30 — Weapon-as-loot: equipped weapon item + trait → bullet stamping ─────
+
+// Sum the rolled `value` of every trait with `id` on a weapon item (0 if none).
+function _weaponTraitVal(weapon, id) {
+    if (!weapon || !Array.isArray(weapon.traits)) return 0;
+    let total = 0;
+    for (const t of weapon.traits) {
+        if (t && t.id === id) total += Number.isFinite(t.value) ? t.value : 1;
+    }
+    return total;
+}
+
+// Apply a single BEHAVIOR trait's effect to a freshly-fired bullet. Behaviors
+// materialize into the SAME bullet fields the legacy mechanic-mods used, so the
+// existing update/collision consumers handle them with no further change.
+function _applyBehaviorTrait(bullet, t) {
+    const v = Number.isFinite(t.value) ? t.value : 1;
+    switch (t.id) {
+        case 'PIERCE':    bullet.piercing = (bullet.piercing || 0) + Math.max(1, v); break;
+        case 'EXPLOSIVE': bullet.explosive = true; bullet.explosionRadius = Math.max(bullet.explosionRadius || 0, 40); break;
+        case 'HOMING':    bullet.homing = true; bullet.homingStrength = Math.max(bullet.homingStrength || 0, 0.22); break;
+        case 'SPLIT':     bullet.splitOnImpact = true; bullet.splitCount = (bullet.splitCount || 0) + Math.max(1, v); break;
+        case 'RICOCHET':  bullet.bounces = (bullet.bounces || 0) + Math.max(1, v); bullet.bounceSeekRadius = bullet.bounceSeekRadius || 260; break;
+        case 'KNOCKBACK': bullet.knockbackChance = Math.max(bullet.knockbackChance || 0, v / 100); break;
+        case 'STUN':      bullet.stunChance = Math.max(bullet.stunChance || 0, v / 100); break;
+        // CHAIN has no dedicated primary-bullet consumer yet — stamp a forward
+        // hook (harmless if unread) so a future VOLT/chain handler can use it.
+        case 'CHAIN':     bullet.chainCount = (bullet.chainCount || 0) + Math.max(1, v); break;
+        default: break;
+    }
+}
+
+// Stamp the equipped weapon item's ELEMENT + BEHAVIOR traits onto a bullet.
+// (POWERUP/STAT traits are folded into the fire dispatch + effective getters,
+// not per-bullet.) Called from the applyGlobalBulletUpgrades chokepoint.
+export function applyWeaponTraits(bullet) {
+    const w = this.equippedWeapon;
+    if (!w || !Array.isArray(w.traits)) return;
+    for (const t of w.traits) {
+        if (!t) continue;
+        if (t.class === 'ELEMENT') {
+            // The weapon's single element trait sets the bullet element,
+            // overriding the KINETIC/attunement baseline resolved above.
+            bullet.elements = [t.id];
+            bullet.element = t.id;
+        } else if (t.class === 'BEHAVIOR') {
+            _applyBehaviorTrait(bullet, t);
+        }
+    }
+}
+
+// ── T30 — equip / query the weapon-loot item ─────────────────────────────────
+
+// Equip a rolled weapon ITEM ({archetype, rarity, traits, element}). Points
+// activePrimary at the archetype's firing pattern (so the existing dispatch
+// fires the right shot shape) and stores the item so traits + level-scaling
+// apply. Pass null to clear back to the base activePrimary firing pattern.
+export function equipWeaponItem(weapon) {
+    this.equippedWeapon = weapon || null;
+    if (weapon && weapon.archetype) {
+        this.activePrimary = archetypeToWeaponId(weapon.archetype);
+    }
+    this.gameEngine?.markMetaDirty?.();
+    return this.equippedWeapon;
+}
+
+export function getEquippedWeapon() { return this.equippedWeapon || null; }
+
+/** True when the equipped weapon item carries trait `id`. */
+export function hasWeaponTrait(id) {
+    const w = this.equippedWeapon;
+    return !!(w && Array.isArray(w.traits) && w.traits.some((t) => t && t.id === id));
+}
+
+/** Summed rolled value of trait `id` on the equipped weapon (0 if absent). */
+export function weaponTraitValue(id) {
+    return _weaponTraitVal(this.equippedWeapon, id);
 }
 
 // ── Power weapon dispatch ──────────────────────────────────────────────────
@@ -2439,6 +2524,17 @@ export function getEffectivePrimaryDamage() {
     // power weapons + abilities; see firePower / activateAbility gates).
     if (typeof this.hasPassive === 'function' && this.hasPassive('GUNSLINGER')) {
         damage *= 1.5;
+    }
+
+    // T30 — equipped weapon-loot: base damage scales with the per-run level
+    // (so a weapon found early stays relevant), then weapon-local STAT/POWERUP
+    // damage traits (+% Damage, Overcharge) add on top. No-op without a weapon
+    // item equipped.
+    const w = this.equippedWeapon;
+    if (w) {
+        damage *= weaponLevelScale((this.level | 0) || 1);
+        const dmgPct = _weaponTraitVal(w, 'DAMAGE_PCT') + _weaponTraitVal(w, 'OVERCHARGE');
+        if (dmgPct > 0) damage *= 1 + dmgPct / 100;
     }
 
     return damage;
