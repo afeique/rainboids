@@ -146,7 +146,7 @@ export class SpHost {
     const [
       { Player }, { PoolManager }, { Bullet }, { Enemy }, { EnemyBullet },
       { Asteroid }, { ColorStar }, { GoldCoin }, { GoldShape }, { Powerup },
-      { SpatialGrid }, { createDefaultGameState },
+      { SpatialGrid }, { createDefaultGameState }, bosses,
     ] = await Promise.all([
       import('../../../js/modules/player/player.js'),
       import('../../../js/modules/core/pool-manager.js'),
@@ -160,7 +160,10 @@ export class SpHost {
       import('../../../js/modules/world/powerup.js'),
       import('../../../js/modules/performance/spatial-grid.js'),
       import('../../../js/sim/engine-context.js'),
+      import('../../../js/modules/enemy/bosses/index.js'),
     ]);
+    this._getBossForStage = bosses.getBossForStage;
+    this._getBossById = bosses.getBossById;
     this._PlayerClass = Player; // for addPlayer() (co-op N slots)
     this.player = new Player();
     this.player.x = this.gameField.width / 2;
@@ -360,6 +363,47 @@ export class SpHost {
     if (enemy.config && typeof enemy.config.speed === 'number') enemy.config.speed *= tier.speedMul;
     if (typeof enemy.radius === 'number') enemy.radius *= tier.sizeMul;
     enemy.bossSizeMul = tier.sizeMul;
+  }
+
+  /**
+   * Spawn a modular multi-phase boss (the real SP descriptor — phases, orbiting
+   * parts, intro, death script) bound to SpHost as its engine context. The
+   * descriptor's per-frame driver runs automatically via enemy.update's BOSS-04
+   * wiring (`this._bossDriver`), so the boss fights headless. Mirrors the SP
+   * spawnModularBoss minus the camera/warp-in presentation.
+   * @param {number|string|object} which - stage number, boss id, or descriptor
+   */
+  spawnModularBoss(which, opts = {}) {
+    let desc = which;
+    if (typeof which === 'number') desc = this._getBossForStage(which);
+    else if (typeof which === 'string') desc = this._getBossById(which);
+    if (!desc || typeof desc !== 'object') return null;
+    const boss = this.enemyPool.get();
+    if (!boss) return null;
+    const level = (opts.level != null) ? opts.level : (this.game.enemyLevel || 1);
+    boss.reset(0, 0, 'TITAN', level, this); // heaviest base chassis; desc overlays HP/size
+    boss.x = opts.x ?? this.gameField.width / 2;
+    boss.y = opts.y ?? this.gameField.height * 0.28;
+    boss.angle = 0;
+    try {
+      if (typeof desc.initBoss === 'function') desc.initBoss(boss, this, frameClock.now);
+    } catch (err) {
+      console.error('SpHost.spawnModularBoss: initBoss failed', err);
+      this.enemyPool.release(boss);
+      return null;
+    }
+    boss.isBoss = true;
+    boss.bossId = desc.id;
+    boss.name = desc.name;
+    boss.element = desc.element;
+    if (desc.size) { boss.size = desc.size; boss.radius = desc.size / 2; boss.baseRadius = boss.radius; }
+    boss.phaseCount = desc.phaseCount || boss.phaseCount;
+    boss.isFinalBoss = !!desc.isFinalBoss;
+    boss._bossDriver = desc.updateBoss;      // ticked by enemy.update (BOSS-04)
+    boss._buildBossDeathScript = desc.buildDeathScript;
+    boss.bossTier = boss.bossTier || 4;      // snapshot `b` → client boss UI
+    if (typeof boss.radius === 'number') boss.mass = Math.PI * boss.radius * boss.radius * 0.8;
+    return boss;
   }
 
   /** Advance the wave driver: start wave 1, then the next when fully cleared. */

@@ -204,6 +204,24 @@ describe('SpHost — headless wave driver', () => {
     expect(snapBoss).toBeTruthy();
     expect(snapBoss.b).toBe(1);
   });
+
+  it('runs a real MODULAR boss (harbinger) headless — phases/parts/intro tick', async () => {
+    const host = new SpHost({ seed: 2 });
+    await host.init();
+    const boss = host.spawnModularBoss(1); // stage 1 = Harbinger descriptor
+    expect(boss).toBeTruthy();
+    expect(boss.isBoss).toBe(true);
+    expect(typeof boss.bossId).toBe('string'); // a real descriptor id
+    expect(boss.maxHealth).toBeGreaterThan(0);
+    // The descriptor's per-frame driver (intro → parts → phases) runs via
+    // enemy.update each tick; it must not throw headless, and the boss persists
+    // (an idle player can't kill its big HP pool).
+    expect(() => { for (let i = 0; i < 240; i++) host.tick(); }).not.toThrow();
+    expect(host.enemyPool.activeObjects.some((e) => e.isBoss && e.bossId === boss.bossId)).toBe(true);
+    // It serializes as a boss for the client's boss UI.
+    const snapBoss = host.buildSnapshot().enemies.find((e) => e.b > 0);
+    expect(snapBoss).toBeTruthy();
+  });
 });
 
 describe('SpHost — snapshot + protocol events (MP wire)', () => {

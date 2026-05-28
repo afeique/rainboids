@@ -7,6 +7,25 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.31.0] - 2026-05-28
+
+### Added
+- **Headless modular-boss capability** (Path A, P7 — de-risking the last big item).
+  `SpHost.spawnModularBoss(stageOrId)` spawns a REAL SP boss descriptor (Harbinger
+  et al. — multi-phase + orbiting parts + intro + death script) bound to SpHost as
+  its engine context; the descriptor's per-frame driver runs automatically via
+  `enemy.update`'s BOSS-04 wiring, so the boss FIGHTS headless (intro → parts →
+  phases → firing) with no browser/engine deps. Proven by a 240-tick unit test
+  (no throw, boss persists, serializes as a boss).
+- NOT yet wired into live wave spawns: a modular boss's core is shielded by
+  orbiting part bolt-heads, so it needs **parts serialization + client rendering**
+  to be playable — the next step. Boss waves still spawn the tier boss (0.29.0)
+  in the meantime.
+
+### Tests
+- `tests/unit/sp-host.test.js` (+1): the Harbinger descriptor runs headless across
+  240 ticks without throwing. 26/26 SpHost + 5/5 SpRoom green.
+
 ## [0.30.1] - 2026-05-28
 
 ### Added
