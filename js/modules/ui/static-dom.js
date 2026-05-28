@@ -39,6 +39,7 @@ export function buildStaticDom() {
     _buildShopOverlay();
     _buildStatsOverlay();
     _buildInventoryOverlay();
+    _buildFabricateOverlay();
     _buildHintOverlay();
     _buildTutorialOverlay();
 }
@@ -1182,6 +1183,48 @@ function _buildInventoryOverlay() {
     hint.appendChild(document.createTextNode(' or '));
     hint.appendChild(el('kbd', { text: 'Esc' }));
     hint.appendChild(document.createTextNode(' to close'));
+    footer.appendChild(hint);
+    panel.appendChild(footer);
+
+    overlay.appendChild(panel);
+}
+
+// FABRICATE overlay — its own screen for crafting gear/weapons for R$ (the
+// controls were previously embedded in the GEAR tab). Populated by
+// armory-overlay.openFabricate(); the close button (and Esc, wired there) hides it.
+function _buildFabricateOverlay() {
+    const overlay = document.getElementById('fabricate-overlay');
+    if (!overlay || !markBuilt(overlay, 'fabricate-v1')) return;
+    overlay.replaceChildren();
+    overlay.className = 'ui-element';
+    Object.assign(overlay.style, {
+        display: 'none',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+        height: '100%',
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        zIndex: '9100', // above the BUILD/shop overlay (9000)
+        pointerEvents: 'auto',
+    });
+
+    const panel = el('div', { id: 'fabricate-panel' });
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'Fabricate');
+
+    const header = el('div', { id: 'fabricate-header' });
+    header.appendChild(el('h2', { id: 'fabricate-title', text: 'FABRICATE' }));
+    const close = el('button', { id: 'fabricate-close', text: '×' });
+    close.setAttribute('aria-label', 'Close fabricate');
+    header.appendChild(close);
+    panel.appendChild(header);
+
+    panel.appendChild(el('div', { id: 'fabricate-body' }));
+
+    const footer = el('div', { id: 'fabricate-footer' });
+    const hint = el('span', { className: 'stats-hint', text: 'Craft new loot for Rainshards (R$). Esc to close.' });
     footer.appendChild(hint);
     panel.appendChild(footer);
 

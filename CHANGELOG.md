@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.4.0] - 2026-05-28
+
+### Changed
+- **Fabricate is now its own full-screen overlay.** The crafting controls
+  (rarity selector, fabricate-gear, fabricate-weapon) moved out of the
+  cramped pre-run GEAR tab into a dedicated `#fabricate-overlay`. The GEAR
+  tab now shows a single "⚒ OPEN FABRICATOR" button; the overlay closes via
+  its × button, a backdrop click, or Esc. Crafting a piece re-renders both
+  the fabricator and the underlying GEAR tab so balances and new stash items
+  stay in sync.
+
+---
+
 ## [8.3.0] - 2026-05-28
 
 ### Added

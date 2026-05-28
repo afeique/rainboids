@@ -368,7 +368,7 @@ export class ArmoryOverlay {
             c.appendChild(head);
             this._renderWeapon(c, meta);
             this._renderPower(c, meta);
-            this._renderFabricate(c, meta);
+            this._renderFabricateButton(c);
             this._renderEquipment(c, meta);
             this._renderStash(c, meta);
             return;
@@ -641,6 +641,58 @@ export class ArmoryOverlay {
         return fabricateCost(cap, {});
     }
 
+    // The GEAR tab shows a button that opens the standalone FABRICATE overlay
+    // (the controls live there now, not embedded in the gear panel).
+    _renderFabricateButton(c) {
+        const section = document.createElement('div');
+        section.className = 'armory-section';
+        const title = document.createElement('div');
+        title.className = 'armory-section-title';
+        title.textContent = 'FABRICATE  ·  craft loot for R$';
+        section.appendChild(title);
+        const btn = document.createElement('button');
+        btn.className = 'armory-buy armory-fab-open';
+        btn.textContent = '⚒  OPEN FABRICATOR';
+        btn.addEventListener('click', () => this.openFabricate());
+        section.appendChild(btn);
+        c.appendChild(section);
+    }
+
+    /** Open the standalone FABRICATE overlay (renders the controls into it). */
+    openFabricate() {
+        const overlay = document.getElementById('fabricate-overlay');
+        if (!overlay) return;
+        this._rerenderFabricate();
+        const close = document.getElementById('fabricate-close');
+        if (close && !close._fabWired) {
+            close._fabWired = true;
+            close.addEventListener('click', () => this.closeFabricate());
+        }
+        if (!overlay._fabWired) {
+            overlay._fabWired = true;
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) this.closeFabricate(); });
+        }
+        if (!this._fabKeyHandler) {
+            this._fabKeyHandler = (e) => { if (e.key === 'Escape') { e.stopPropagation(); this.closeFabricate(); } };
+        }
+        document.addEventListener('keydown', this._fabKeyHandler, true);
+        overlay.style.display = 'flex';
+    }
+
+    /** Close the FABRICATE overlay. */
+    closeFabricate() {
+        const overlay = document.getElementById('fabricate-overlay');
+        if (overlay) overlay.style.display = 'none';
+        if (this._fabKeyHandler) document.removeEventListener('keydown', this._fabKeyHandler, true);
+    }
+
+    /** Re-render the fabricate controls into the overlay + refresh the GEAR tab. */
+    _rerenderFabricate() {
+        const body = document.getElementById('fabricate-body');
+        if (body) { body.replaceChildren(); this._renderFabricate(body, loadMeta() || {}); }
+        if (this._gearContainer) this.render(); // refresh wallet/stash underneath
+    }
+
     // T42 — FABRICATE: spend Rainshards to roll a fresh gear/weapon ITEM into
     // the stash (the R$ sink). A shared rarity picker drives the cost; gear
     // picks a slot, weapon picks an archetype. A successful craft re-renders.
@@ -679,7 +731,7 @@ export class ArmoryOverlay {
         rLabel.className = 'armory-row-name';
         rLabel.textContent = `Rarity (R$ ${cost})`;
         rarityRow.append(rLabel, mkSelect(RARITY_ORDER, rarity,
-            (v) => { this._fabRarity = v; this.render(); }, (r) => r.toUpperCase()));
+            (v) => { this._fabRarity = v; this._rerenderFabricate(); }, (r) => r.toUpperCase()));
         section.appendChild(rarityRow);
 
         // Gear fabricate row.
@@ -687,14 +739,14 @@ export class ArmoryOverlay {
         const gearRow = document.createElement('div');
         gearRow.className = 'armory-row';
         gearRow.appendChild(mkSelect(SLOT_ORDER, slot,
-            (v) => { this._fabSlot = v; this.render(); }, (s) => (SLOT_LABEL[s] || s).toUpperCase()));
+            (v) => { this._fabSlot = v; this._rerenderFabricate(); }, (s) => (SLOT_LABEL[s] || s).toUpperCase()));
         const gearBtn = document.createElement('button');
         gearBtn.className = 'armory-buy';
         gearBtn.textContent = `FABRICATE GEAR · R$ ${cost}`;
         gearBtn.disabled = wallet < cost;
         gearBtn.addEventListener('click', () => {
             const r = ge.fabricateGear({ slot, rarity });
-            if (r && r.ok) this.render();
+            if (r && r.ok) this._rerenderFabricate();
         });
         gearRow.appendChild(gearBtn);
         section.appendChild(gearRow);
@@ -704,14 +756,14 @@ export class ArmoryOverlay {
         const wepRow = document.createElement('div');
         wepRow.className = 'armory-row';
         wepRow.appendChild(mkSelect(PRIMARY_ARCHETYPES, arch,
-            (v) => { this._fabArchetype = v; this.render(); }));
+            (v) => { this._fabArchetype = v; this._rerenderFabricate(); }));
         const wepBtn = document.createElement('button');
         wepBtn.className = 'armory-buy';
         wepBtn.textContent = `FABRICATE WEAPON · R$ ${cost}`;
         wepBtn.disabled = wallet < cost;
         wepBtn.addEventListener('click', () => {
             const r = ge.fabricateWeapon({ archetype: arch, rarity });
-            if (r && r.ok) this.render();
+            if (r && r.ok) this._rerenderFabricate();
         });
         wepRow.appendChild(wepBtn);
         section.appendChild(wepRow);
