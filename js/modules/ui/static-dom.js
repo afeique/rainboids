@@ -266,6 +266,8 @@ function _buildPauseMenu() {
         // into the 4 slots (keys 1-4). Mirrors the PASSIVES tab.
         { key: 'abilities', label: 'ABILITIES' },
         { key: 'passives', label: 'PASSIVES' },
+        // 8.24.0 — build-defining KEYSTONE TRAITS, picked at L10/L20.
+        { key: 'keystones', label: 'KEYSTONES' },
         { key: 'assists',  label: 'ASSISTS' },
         { key: 'display',  label: 'DISPLAY' },
         { key: 'music',    label: 'MUSIC' },
@@ -298,8 +300,11 @@ function _buildPauseMenu() {
     // abilities as circle-icon rows, equip into the 4 slots (8.23.0).
     menu.appendChild(el('div', { id: 'abilities-tab', className: 'pause-tab-content' }));
     // PASSIVES tab — populated by ui-manager.updatePassivesTab(): the in-run
-    // swap panel (assign owned passives to unlocked slots; P5b).
+    // swap panel (assign owned MODULAR passives to unlocked slots; P5b).
     menu.appendChild(el('div', { id: 'passives-tab', className: 'pause-tab-content' }));
+    // KEYSTONES tab — populated by ui-manager.updateKeystoneTab(): the keystone
+    // TRAITS catalog; pick one at L10/L20, equip/unequip (budget 2). 8.24.0.
+    menu.appendChild(el('div', { id: 'keystones-tab', className: 'pause-tab-content' }));
     // Assists tab content is always built (the toggles are needed for the
     // mobile-with-gamepad case); the tab button's visibility is what gates
     // access on mobile.

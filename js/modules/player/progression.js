@@ -25,7 +25,7 @@ export function levelUp() { return false; }
 // carries level/XP/SP.) `level`, `xp`, `sp`, and `spStats` live on the player
 // for the duration of a run and are captured by the wave-start run snapshot
 // (serializeRunState) so CONTINUE resumes the in-run climb.
-import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS, LEVEL_UNLOCKS } from '../core/sp-stats.js';
+import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS, LEVEL_UNLOCKS, KEYSTONE_PICK_LEVELS } from '../core/sp-stats.js';
 import { ABILITIES } from '../combat/weapon-data.js';
 import { PASSIVES } from '../combat/passive-data.js';
 import { EFFICIENCY_CAP, FLUX_PER_STACK, CAPACITOR_BANK_OVERCHARGE_MULT, CAPACITOR_BANK_DECAY_PER_SEC } from '../core/constants.js';
@@ -57,6 +57,10 @@ export function initMeta() {
     this.sp = 0;
     this.spStats = {};
     for (const s of SP_STATS) this.spStats[s.id] = 0;
+    // 8.24.0 — Keystone TRAIT picks: earned at level milestones (L10/L20), spent
+    // by choosing a keystone on the Keystone Traits screen. Per-run.
+    this.keystonePicksAvailable = 0;
+    this._keystonePicksGranted = new Set();
 }
 
 // T24 — per-run level/SP no longer persists to the account meta. The in-run
@@ -135,6 +139,18 @@ export function grantLevelUnlocks() {
             }
             if (typeof this._rebuildActivePassives === 'function') this._rebuildActivePassives();
             _announceUnlock.call(this, 'PASSIVE UNLOCKED', (PASSIVES[u.id] && PASSIVES[u.id].name) || u.id);
+        }
+    }
+    // 8.24.0 — Keystone TRAIT picks at L10/L20. Grant one pick per milestone
+    // reached (idempotent via _keystonePicksGranted); the player CHOOSES which
+    // keystone to claim on the Keystone Traits screen.
+    if (typeof this.keystonePicksAvailable !== 'number') this.keystonePicksAvailable = 0;
+    if (!(this._keystonePicksGranted instanceof Set)) this._keystonePicksGranted = new Set();
+    for (const lv of KEYSTONE_PICK_LEVELS) {
+        if (this.level >= lv && !this._keystonePicksGranted.has(lv)) {
+            this._keystonePicksGranted.add(lv);
+            this.keystonePicksAvailable += 1;
+            _announceUnlock.call(this, 'KEYSTONE TRAIT', 'Choose one on the Keystone Traits screen');
         }
     }
 }

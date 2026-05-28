@@ -8,7 +8,7 @@ import { renderIconHTML, detectControllerFamily, bindingGlyph } from './icons.js
 import { isMobile } from '../platform/platform-detect.js';
 import { setRumbleEnabled, isRumbleEnabled } from '../platform/rumble.js';
 import { renderSpAllocation } from './sp-allocation.js';
-import { getPassive, getSlotPassives } from '../combat/passive-data.js';
+import { getPassive, getSlotPassives, getModularSlotPassives, getKeystonePassives } from '../combat/passive-data.js';
 import { debugState } from '../core/debug-config.js';
 
 // 5.79.3 — Beam-aware powerup description swap. When the equipped
@@ -987,15 +987,13 @@ export class UIManager {
         const unlocked = Math.max(0, player.passiveSlotsUnlocked | 0);
         const owned = (player.ownedPassives instanceof Set) ? player.ownedPassives : new Set();
         const equippedCount = slots.slice(0, unlocked).filter(Boolean).length;
-        const keystoneCount = slots.slice(0, unlocked)
-            .filter((id) => id && getPassive(id) && (getPassive(id).tags || []).includes('keystone')).length;
 
         const h2 = document.createElement('h2');
         h2.textContent = 'PASSIVES';
         tab.appendChild(h2);
         const subtitle = document.createElement('div');
         subtitle.className = 'pause-tab-subtitle';
-        subtitle.textContent = `${equippedCount}/${unlocked} slot${unlocked === 1 ? '' : 's'} filled · ${keystoneCount}/2 keystones · click to equip / unequip · swap freely`;
+        subtitle.textContent = `${equippedCount}/${unlocked} slot${unlocked === 1 ? '' : 's'} filled · click to equip / unequip · swap freely`;
         tab.appendChild(subtitle);
 
         const list = document.createElement('div');
@@ -1003,12 +1001,13 @@ export class UIManager {
         list.className = 'pause-tab-list';
         tab.appendChild(list);
 
-        // Owned, slot-deliverable passives (the run's pool ∩ slot channel).
-        const pool = getSlotPassives().filter((p) => owned.has(p.id));
+        // 8.24.0 — MODULAR (non-keystone) owned passives only; keystones live on
+        // the dedicated Keystone Traits screen.
+        const pool = getModularSlotPassives().filter((p) => owned.has(p.id));
         if (pool.length === 0) {
             const empty = document.createElement('div');
             empty.style.color = '#888';
-            empty.textContent = 'No passives owned for this run. Unlock + pick them on the BUILD screen.';
+            empty.textContent = 'No passives owned yet — they unlock as you level up during a run.';
             list.appendChild(empty);
             return;
         }
@@ -1127,6 +1126,88 @@ export class UIManager {
         const status = document.createElement('span');
         status.className = 'pause-equip-status';
         status.textContent = equipped ? `KEY ${slotIdx + 1}` : '';
+        row.append(icon, name, desc, status);
+        row.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+        return row;
+    }
+
+    // 8.24.0 — dedicated KEYSTONE TRAITS screen. Shows the keystone catalog; the
+    // player PICKS one at L10 and L20 (a pick token, banked then spent here).
+    // Owned keystones equip/unequip (budget 2); unowned ones are pickable while
+    // a token is banked, otherwise locked.
+    updateKeystoneTab() {
+        const tab = document.getElementById('keystones-tab');
+        if (!tab) return;
+        const player = this.gameEngine && this.gameEngine.player;
+        tab.replaceChildren();
+        if (!player) return;
+
+        const slots = Array.isArray(player.equippedPassives) ? player.equippedPassives : [];
+        const owned = (player.ownedPassives instanceof Set) ? player.ownedPassives : new Set();
+        const picks = player.keystonePicksAvailable | 0;
+        const isKey = (id) => id && getPassive(id) && (getPassive(id).tags || []).includes('keystone');
+        const equippedKeystones = slots.filter(isKey).length;
+
+        const h2 = document.createElement('h2');
+        h2.textContent = 'KEYSTONE TRAITS';
+        tab.appendChild(h2);
+        const subtitle = document.createElement('div');
+        subtitle.className = 'pause-tab-subtitle';
+        subtitle.textContent = picks > 0
+            ? `★ ${picks} keystone pick${picks === 1 ? '' : 's'} available — choose below · ${equippedKeystones}/2 equipped`
+            : `Build-defining traits — pick one at level 10 & 20 · ${equippedKeystones}/2 equipped`;
+        tab.appendChild(subtitle);
+
+        const list = document.createElement('div');
+        list.id = 'keystones-list';
+        list.className = 'pause-tab-list';
+        tab.appendChild(list);
+
+        const unlockedSlots = player.passiveSlotsUnlocked | 0;
+        for (const def of getKeystonePassives()) {
+            const id = def.id;
+            const ownedIt = owned.has(id);
+            const slotIdx = slots.indexOf(id);
+            const equipped = slotIdx !== -1;
+            const pickable = !ownedIt && picks > 0;
+            const row = this._buildKeystoneRow(def, { ownedIt, equipped, slotIdx, pickable }, () => {
+                if (ownedIt) {
+                    if (equipped) {
+                        player.equippedPassives[slotIdx] = null;
+                        if (typeof player._rebuildActivePassives === 'function') player._rebuildActivePassives();
+                    } else {
+                        let free = -1;
+                        for (let i = 0; i < unlockedSlots; i++) { if (!slots[i]) { free = i; break; } }
+                        if (free !== -1) player.equipPassive(free, id);
+                    }
+                } else if (pickable) {
+                    player.claimKeystone(id);
+                }
+                this.updateKeystoneTab();
+            });
+            list.appendChild(row);
+        }
+    }
+
+    _buildKeystoneRow(def, state, onClick) {
+        const { ownedIt, equipped, slotIdx, pickable } = state;
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'pause-equip-row' + (equipped ? ' equipped' : '');
+        if (!ownedIt && !pickable) row.classList.add('pause-equip-row--locked');
+        const icon = document.createElement('span');
+        icon.className = 'pause-equip-icon pause-equip-icon--keystone';
+        icon.innerHTML = renderIconHTML(def.icon || 'star', { size: 22, fallback: '★' });
+        const name = document.createElement('span');
+        name.className = 'pause-equip-name';
+        name.textContent = '★ ' + (def.name || def.id);
+        const desc = document.createElement('span');
+        desc.className = 'pause-equip-desc';
+        desc.textContent = (def.desc || '') + (def.downside ? `  ↯ ${def.downside}` : '');
+        const status = document.createElement('span');
+        status.className = 'pause-equip-status';
+        status.textContent = equipped ? `SLOT ${slotIdx + 1}`
+            : (ownedIt ? 'OWNED' : (pickable ? 'PICK ★' : 'L10 / L20'));
         row.append(icon, name, desc, status);
         row.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
         return row;
@@ -2102,6 +2183,7 @@ export class UIManager {
         if (tabName === 'loadout') this.updateLoadoutTab();
         if (tabName === 'abilities') this.updateAbilitiesTab();
         if (tabName === 'passives') this.updatePassivesTab();
+        if (tabName === 'keystones') this.updateKeystoneTab();
         if (tabName === 'stats') this.updateStatsTab();
         if (tabName === 'assists') this.syncAssistsTab();
         if (tabName === 'gamepad' && this.gameEngine) {

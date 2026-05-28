@@ -156,6 +156,24 @@ export function equipPassive(slot, id) {
     return true;
 }
 
+// 8.24.0 — Spend a keystone pick (earned at L10/L20) to claim a keystone TRAIT:
+// own it + auto-equip into a free unlocked slot (equipPassive enforces the
+// keystone budget). Returns true on success, false if no pick / not a keystone
+// / already owned.
+export function claimKeystone(id) {
+    if ((this.keystonePicksAvailable | 0) <= 0) return false;
+    if (!isKeystonePassive(id)) return false;
+    if (!(this.ownedPassives instanceof Set)) this.ownedPassives = new Set(this.ownedPassives || []);
+    if (this.ownedPassives.has(id)) return false;
+    this.ownedPassives.add(id);
+    const unlocked = this.passiveSlotsUnlocked | 0;
+    for (let i = 0; i < unlocked; i++) {
+        if (!this.equippedPassives[i] && equipPassive.call(this, i, id)) break;
+    }
+    this.keystonePicksAvailable = Math.max(0, (this.keystonePicksAvailable | 0) - 1);
+    return true;
+}
+
 /** Replace the owned-passive pool (seeded from meta unlocks at run init). */
 export function setOwnedPassives(ids) {
     this.ownedPassives = new Set(

@@ -36,17 +36,22 @@ test.describe('QA-14: in-run PASSIVES swap (Phase P5b)', () => {
             const rows = [...document.querySelectorAll('#passives-tab .pause-equip-row')];
             // 8.22.0 — each row carries a circular icon bubble.
             const iconCount = document.querySelectorAll('#passives-tab .pause-equip-icon svg, #passives-tab .pause-equip-icon .icon-fallback').length;
+            const names = rows.map((row) => row.textContent).join(' ');
             const opp = rows.find((row) => row.textContent.includes('Opportunist'));
             opp.click(); // equip into slot 0
             return {
                 rowCount: rows.length,
                 iconCount,
+                names,
                 equipped0: ge.player.equippedPassives[0],
                 active: [...ge.player.activePassives],
             };
         });
-        expect(r.rowCount).toBe(3);            // all 3 owned, slot-deliverable
-        expect(r.iconCount).toBe(3);           // a circle icon per row (8.22.0)
+        // 8.24.0 — only MODULAR passives here; the keystone GLASS_CANNON is on
+        // the dedicated Keystone Traits screen, not this tab.
+        expect(r.rowCount).toBe(2);            // OPPORTUNIST + LAST_BASTION (modular)
+        expect(r.iconCount).toBe(2);           // a circle icon per row (8.22.0)
+        expect(r.names).not.toContain('Glass'); // GLASS_CANNON filtered out
         expect(r.equipped0).toBe('OPPORTUNIST');
         expect(r.active).toContain('OPPORTUNIST');
     });
@@ -68,23 +73,22 @@ test.describe('QA-14: in-run PASSIVES swap (Phase P5b)', () => {
         expect(r.active).not.toContain('OPPORTUNIST');
     });
 
-    test('the keystone budget (2) is enforced from the swap panel', async ({ page }) => {
+    test('keystones do NOT appear in the PASSIVES tab (they have their own screen)', async ({ page }) => {
+        // 8.24.0 — keystone TRAITS moved to the dedicated Keystone Traits screen;
+        // the PASSIVES tab lists only modular passives.
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.startNewRun({ primaries: ['PULSE_CANNON'], passives: [] });
             ge.player.setPassiveSlotsUnlocked(3);
-            // 3 slot-only keystones owned.
-            ge.player.setOwnedPassives(['GLASS_CANNON', 'PURIST', 'PRISMATIC_SOUL']);
-            ge.player.equipPassive(0, 'GLASS_CANNON');
-            ge.player.equipPassive(1, 'PURIST');
+            ge.player.setOwnedPassives(['OPPORTUNIST', 'GLASS_CANNON', 'PURIST']);
             ge.uiManager.updatePassivesTab();
-            const row = [...document.querySelectorAll('#passives-tab .pause-equip-row')]
-                .find((r2) => r2.textContent.includes('Prismatic Soul'));
-            row.click(); // 3rd keystone — should be rejected by the budget
-            return { active: [...ge.player.activePassives] };
+            const rows = [...document.querySelectorAll('#passives-tab .pause-equip-row')];
+            return { names: rows.map((r2) => r2.textContent).join(' '), count: rows.length };
         });
-        expect(r.active).not.toContain('PRISMATIC_SOUL');
-        expect(r.active.length).toBe(2);
+        expect(r.count).toBe(1);                 // only OPPORTUNIST (modular)
+        expect(r.names).toContain('Opportunist');
+        expect(r.names).not.toContain('Glass');  // GLASS_CANNON keystone excluded
+        expect(r.names).not.toContain('Purist'); // PURIST keystone excluded
     });
 
     test('no fatal JS errors through the passives swap flow', async ({ page }) => {

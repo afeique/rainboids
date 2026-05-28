@@ -352,6 +352,17 @@ export function getAllPassives() { return Object.values(PASSIVES); }
 /** Passives that can be equipped in a passive slot (gold-bought channel). */
 export function getSlotPassives() { return Object.values(PASSIVES).filter((p) => p.slot); }
 
+/** Slot-equippable KEYSTONE traits (the build-defining ones). 8.24.0 — these
+ *  live on their own Keystone Traits screen, picked at level milestones. */
+export function getKeystonePassives() {
+    return Object.values(PASSIVES).filter((p) => p.slot && Array.isArray(p.tags) && p.tags.includes('keystone'));
+}
+
+/** Slot-equippable MODULAR (non-keystone) passives — the regular PASSIVES screen. */
+export function getModularSlotPassives() {
+    return Object.values(PASSIVES).filter((p) => p.slot && !(Array.isArray(p.tags) && p.tags.includes('keystone')));
+}
+
 /** Passives that can roll as a gear affix (optionally gated to a rarity). */
 export function getItemPassives() { return Object.values(PASSIVES).filter((p) => p.item); }
 

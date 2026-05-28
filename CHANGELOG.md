@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.24.0] - 2026-05-28
+
+### Added
+- **Keystone Traits** — build-defining keystones are now their own thing. A
+  dedicated pause-menu **KEYSTONES** screen shows the keystone catalog as
+  gold circle-icon rows, and you **pick one at level 10 and another at level
+  20** (a real choice — `KEYSTONE_PICK_LEVELS`; each milestone banks a pick you
+  spend by clicking a keystone, which owns + auto-equips it within the budget of
+  2). `getKeystonePassives()` / `getModularSlotPassives()` split the catalog;
+  `player.claimKeystone(id)` spends a pick; `keystonePicksAvailable` is per-run.
+
+### Changed
+- **Keystones removed from the PASSIVES screen.** The in-run PASSIVES tab now
+  lists only **modular** passives (keystones live on the new Keystone Traits
+  screen), and its subtitle drops the keystone counter.
+
 ## [8.23.0] - 2026-05-28
 
 ### Added

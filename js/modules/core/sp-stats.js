@@ -95,3 +95,9 @@ export const LEVEL_UNLOCKS = Object.freeze([
     { level: 19, kind: 'passive', id: 'RICOCHET' },
     { level: 21, kind: 'passive', id: 'BLOODLUST' },
 ]);
+
+// 8.24.0 — Keystone TRAIT pick milestones. Reaching each level grants ONE
+// keystone pick (a CHOICE the player spends on the Keystone Traits screen —
+// distinct from the auto-granted modular passives above). Two picks total
+// matches KEYSTONE_BUDGET (2). Per-run, like everything else here.
+export const KEYSTONE_PICK_LEVELS = Object.freeze([10, 20]);

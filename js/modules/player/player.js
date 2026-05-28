@@ -1330,6 +1330,7 @@ export class Player {
     getPassiveDamageMult() { return passives.getPassiveDamageMult.call(this); }
     getPassiveMaxHpMult() { return passives.getPassiveMaxHpMult.call(this); }
     equipPassive(slot, id) { return passives.equipPassive.call(this, slot, id); }
+    claimKeystone(id) { return passives.claimKeystone.call(this, id); }
     setOwnedPassives(ids) { return passives.setOwnedPassives.call(this, ids); }
     setPassiveSlotsUnlocked(n) { return passives.setPassiveSlotsUnlocked.call(this, n); }
 
