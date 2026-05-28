@@ -1,9 +1,12 @@
 # Rainboids — Multiplayer Server (Node.js)
 
-Authoritative, headless co-op multiplayer server. It runs the **same JavaScript
-simulation** the browser game uses (`../js/sim/`), so there's no second codebase
-to keep in sync. WebSocket transport today; a WebTransport seam is stubbed for
-later (see `src/transport/` and `js/mp/net/`).
+Authoritative, headless co-op multiplayer server. By **default** it runs the
+**actual single-player simulation headless** (`src/sim/sp-host.js`, Path A) — the
+real SP weapons, enemies, collisions, waves, tier bosses, drops, and co-op
+downed+revive — so multiplayer plays and looks like single-player (one codebase,
+no parity drift). The original lightweight toy sim (`../js/sim/`) is kept as a
+selectable fallback via `MP_SIM=toy`. WebSocket transport today; a WebTransport
+seam is stubbed for later (see `src/transport/` and `js/mp/net/`).
 
 > This is the experimental MP product. It versions independently via the
 > repo-root `VERSION-MP` / `CHANGELOG-MP.md`. The shelved Rust/WASM attempt under
@@ -32,25 +35,35 @@ Env:
 | Var | Default | Meaning |
 |-----|---------|---------|
 | `MP_PORT` | `8091` | port for WebSocket + `GET /healthz` |
+| `MP_SIM` | `sphost` | sim backend: `sphost` (real SP sim, default) or `toy`/`legacy` |
 
 ## Architecture
 
 ```
 src/
   index.js              Hello → join → Input loop → leave; closes empty rooms
-  room.js               one Room: 60 Hz tick loop → Snapshot (+ Event) broadcast
-  room-manager.js       rooms keyed by join code (matchmaking)
+  room-manager.js       rooms keyed by join code (matchmaking); roomClassFor()
+                        picks SpRoom (default) or the toy Room (MP_SIM=toy)
+  sim/
+    sp-host.js          DEFAULT: headless host for the REAL SP sim — N co-op
+                        player slots, real entities/collisions/waves/bosses,
+                        downed+revive, snapshot + EV.* event derivation
+    browser-shim.js     minimal window/document/localStorage shim for Node
+  sp-room.js            one SpRoom: 60 Hz tick → SpHost.frame() → Snapshot+Event
+  room.js               LEGACY toy-sim Room (MP_SIM=toy fallback)
   transport/
     transport.js        the Transport seam (transport-agnostic above it)
     websocket.js        ws implementation + /healthz + ping heartbeat
     (webtransport.js)   DEFERRED Phase 8 — client stub lives in js/mp/net/
-../js/sim/              shared headless sim (world/tick/ship/asteroid/bullet/
-                        enemy/drop/collision/coop/wave + protocol/codec)
+../js/modules/          the real SP game code SpHost binds + runs headless
+../js/sim/              wire layer (protocol/codec/snapshot-delta) + the toy sim
 ```
 
 Netcode: authoritative server; client predicts its own ship + interpolates
 everything else from snapshots, reconciling against `lastInputTick`. Bullets are
-snapshotted for now (a later pass can switch to spawn-event + client sim).
+snapshotted for now (a later pass can switch to spawn-event + client sim). The
+client re-derives cosmetics (particles, sounds, banners) from the per-tick `EV.*`
+event stream, so the wire stays lean while MP renders SP-identically.
 
 ## Deploy
 

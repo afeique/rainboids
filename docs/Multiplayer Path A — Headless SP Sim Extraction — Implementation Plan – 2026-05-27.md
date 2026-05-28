@@ -2,7 +2,21 @@
 
 > **Goal:** make the multiplayer game **look and play exactly like single-player, with N ships** — by running the **actual SP simulation** authoritatively and headless on the Node server, and rendering MP with the **actual SP renderer**. One codebase, no second sim, no parity drift.
 >
-> **Status:** plan only. This is the large, high-risk refactor (Path A) that earlier work deliberately deferred. It touches the whole game and **must keep single-player playing byte-identically at every step** — that's the gate. It should be done with the looter-pivot agent paused (it actively edits these files), and validated with human playtests, not just automated tests.
+> **Status:** IMPLEMENTED through P7 (MP `0.20.0`–`0.30.1`, see `CHANGELOG-MP.md`).
+> The real SP sim runs headless on the server as the **default** MP (`MP_SIM=sphost`;
+> the toy sim is the `MP_SIM=toy` fallback): N co-op players, real
+> weapons/enemies/collisions/waves, tier bosses, drops, downed+revive, spawn
+> protection, served to the SP-shape client with full visual parity (ships +
+> engine trails, all enemy silhouettes, asteroids, bullets, explosions +
+> particles, nebula + starfield, audio, HUD), browser-verified in
+> `tests/qa/13-mp-sphost.spec.js`. The approach: bind the real `js/modules/*` SIM
+> code to the `SpHost` engine context (`server/src/sim/sp-host.js`) — NOT editing
+> the SP files, so single-player is untouched. **Remaining/deferred:** the modular
+> multi-phase boss path (descriptors/parts/intro/death scripts — tier bosses are
+> the current stand-in) and power-weapon-effect rendering (moot until co-op
+> loadouts grant power weapons).
+>
+> *(Original status: plan only — the large, high-risk refactor Path A deferred, to keep single-player byte-identical and be validated with human playtests.)*
 >
 > Grounded in a full codebase review (game-engine loop, entity classes, determinism hazards, render stack, systems/state).
 
