@@ -37,7 +37,7 @@ test.describe('QA-21: inventory resist readout', () => {
             const readouts = document.querySelectorAll('#inventory-body .inv-item-resists');
             const chips = document.querySelectorAll('#inventory-body .inv-item-resists .inv-resist-chip');
             const tag = document.querySelector('#inventory-body .inv-resist-tag');
-            const affixText = [...document.querySelectorAll('#inventory-body .inv-item-affix')]
+            const affixText = [...document.querySelectorAll('#inventory-body .item-card__affix')]
                 .map((n) => n.textContent).join(' | ');
             return {
                 readoutCount: readouts.length,

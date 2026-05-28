@@ -11,6 +11,7 @@ import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
 import { ELEMENTS, isElement } from '../combat/elements.js';
 import { createItemCard, createStatPanel, compareItemStats } from './item-card.js';
 import { GamepadFocusController } from './gamepad-focus.js';
+import { loadMeta } from '../core/storage.js';
 
 // ITEM-01 — map a `<element>Resist` affix type back to its ELEMENTS entry, so a
 // resist readout can show the element's themed name + color. e.g.
@@ -81,16 +82,11 @@ export class InventoryOverlay {
 
     toggle() { return this._isOpen ? (this.close(), false) : (this.open(), true); }
 
-    _affixLine(item) {
-        const affixes = (item && Array.isArray(item.affixes)) ? item.affixes : [];
-        return affixes.map((a) => a.label).join('  ·  ') || (item && item.bonusLabel) || '';
-    }
-
     // ITEM-01 — a compact grouped readout of an item's elemental resists, so a
     // player can read defensive coverage at a glance instead of hunting the
     // raw affix list. Returns a DOM node (RESIST  PYRO+8%  CRYO+5%) with each
     // element tinted its taxonomy color, or null if the item carries no
-    // resist affixes. Display-only; the raw labels still show in _affixLine.
+    // resist affixes. Display-only; the raw affix labels still show on the card.
     _resistReadout(item) {
         const affixes = (item && Array.isArray(item.affixes)) ? item.affixes : [];
         const resists = [];
@@ -127,6 +123,7 @@ export class InventoryOverlay {
         const body = this.elements.body;
         if (!ge?.player || !body) return;
         const player = ge.player;
+        const equipped = player.equippedItems || {};
         body.replaceChildren();
 
         const shell = document.createElement('div');
@@ -141,37 +138,76 @@ export class InventoryOverlay {
         right.className = 'inv-armory-side';
         shell.appendChild(right);
 
-        // ── WEAPONS ── (8.x — read-only; equipped pre-run, view-only mid-run)
-        left.appendChild(this._buildWeaponSection(player));
+        // Right-hand "paper doll" stat sheet. Hovering/focusing any card on the
+        // left previews that item swapped into its slot (the compare tooltip).
+        const showStats = (previewItem) =>
+            right.replaceChildren(createStatPanel(equipped, previewItem || null));
+        showStats(null);
 
-        // ── EQUIPPED ──
+        // ── EQUIPPED (paper doll) ──
+        // Weapons are gear now (8.x), so the equipped grid leads with the
+        // primary + power weapon cards, then the five gear slots. All read-only:
+        // gear/weapons are equipped PRE-RUN in the Armory and locked for the run.
         const eqTitle = document.createElement('div');
         eqTitle.className = 'inv-section-title';
-        eqTitle.textContent = 'EQUIPPED';
+        eqTitle.textContent = 'EQUIPPED — set in the Armory · locked for the run';
         left.appendChild(eqTitle);
 
         const grid = document.createElement('div');
         grid.className = 'inv-equipped-grid';
-        for (const slot of SLOT_ORDER) {
-            const it = player.equippedItems ? player.equippedItems[slot] : null;
+        // [slot id used for the empty-glyph, live item] in display order.
+        const equippedCells = [
+            ['weapon', player.equippedWeapon || null],
+            ['power', player.equippedPowerWeapon || null],
+            ...SLOT_ORDER.map((slot) => [slot, equipped[slot] || null]),
+        ];
+        for (const [slot, it] of equippedCells) {
             // Empty slots: null item + emptySlot keeps the slot glyph/label and
             // renders an italic "Empty" (no more "— empty —" filler text).
             const cell = it
                 ? createItemCard(it, { variant: 'standard', focusable: true })
                 : createItemCard(null, { variant: 'standard', focusable: true, emptySlot: slot });
+            // ITEM-01 — append the grouped elemental-resist readout to equipped
+            // items so defensive coverage reads at a glance (RESIST Pyro+8% …).
+            if (it) {
+                const ro = this._resistReadout(it);
+                if (ro) (cell.querySelector('.item-card__body') || cell).appendChild(ro);
+            }
             grid.appendChild(cell);
         }
         left.appendChild(grid);
 
-        right.appendChild(createStatPanel(player.equippedItems || {}));
+        // ── STASH (Diablo-style rarity-colored grid) ──
+        // The persistent banked items between runs (meta.stash). Read-only here —
+        // equip from the Armory before the next run. Each card is rarity-colored
+        // and previews its compare delta against what's equipped on hover/focus.
+        const meta = loadMeta() || {};
+        const stash = Array.isArray(meta.stash) ? meta.stash : [];
+        const stashTitle = document.createElement('div');
+        stashTitle.className = 'inv-section-title';
+        stashTitle.textContent = `STASH (${stash.length}) — banked between runs · equip in the Armory`;
+        left.appendChild(stashTitle);
 
-        // ── RECENT DROPS ──
-        // Phase R8.2/R8.3 — gear is locked during a run; drops just accrue
-        // and bank to the persistent stash at run end. Equip from the ARMORY
-        // before the next run. This list is informational only.
+        const stashGrid = document.createElement('div');
+        stashGrid.className = 'inv-stash-grid';
+        if (stash.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'inv-drop-empty';
+            empty.textContent = 'Stash is empty — clear runs to bank loot.';
+            stashGrid.appendChild(empty);
+        }
+        for (const it of stash) {
+            if (!it) continue;
+            stashGrid.appendChild(this._stashCard(it, equipped, showStats));
+        }
+        left.appendChild(stashGrid);
+
+        // ── RECENT DROPS (this run) ──
+        // Phase R8.2/R8.3 — gear is locked during a run; drops just accrue and
+        // bank to the persistent stash at run end. Informational only.
         const dropTitle = document.createElement('div');
         dropTitle.className = 'inv-section-title';
-        dropTitle.textContent = 'RECENT DROPS — banked to stash at run end · equip in the Armory';
+        dropTitle.textContent = 'RECENT DROPS — banked to stash at run end';
         left.appendChild(dropTitle);
 
         const list = document.createElement('div');
@@ -186,58 +222,39 @@ export class InventoryOverlay {
         for (const entry of feed) {
             const it = entry.item;
             if (!it) continue;
-            const equipped = player.equippedItems ? player.equippedItems[it.slot] : null;
-            const deltas = compareItemStats(it, equipped);
+            const slotEquipped = equipped[it.slot] || null;
+            const deltas = compareItemStats(it, slotEquipped);
             const upgrade = deltas.some((d) => d.delta > 0) && !deltas.some((d) => d.delta < 0 && Math.abs(d.delta) > 8);
             const row = createItemCard(it, {
                 variant: 'compact',
                 focusable: true,
-                compareWith: equipped,
+                compareWith: slotEquipped,
                 badge: upgrade ? 'UPGRADE' : `L${it.level || 1}`,
             });
-            row.addEventListener('focus', () => {
-                right.replaceChildren(createStatPanel(player.equippedItems || {}, it));
-            });
-            row.addEventListener('mouseenter', () => {
-                right.replaceChildren(createStatPanel(player.equippedItems || {}, it));
-            });
-            row.addEventListener('mouseleave', () => {
-                right.replaceChildren(createStatPanel(player.equippedItems || {}));
-            });
-
+            row.addEventListener('focus', () => showStats(it));
+            row.addEventListener('mouseenter', () => showStats(it));
+            row.addEventListener('mouseleave', () => showStats(null));
             list.appendChild(row);
         }
         left.appendChild(list);
     }
 
-    // 8.x — WEAPONS section: READ-ONLY view of the equipped primary + power
-    // weapons (their ids/traits drive what you fire this run). Like gear, weapons
-    // are equipped PRE-RUN in the GEAR tab and locked for the run — this screen
-    // only shows what you're carrying. Reads the live player state.
-    _buildWeaponSection(player) {
-        const wrap = document.createElement('div');
-
-        const title = document.createElement('div');
-        title.className = 'inv-section-title';
-        title.textContent = 'WEAPONS — equipped pre-run · view-only mid-run';
-        wrap.appendChild(title);
-
-        const primary = (player && player.equippedWeapon) || null;
-        const power = (player && player.equippedPowerWeapon) || null;
-
-        const rowFor = (label, item, fallback) => {
-            const row = document.createElement('div');
-            row.className = 'inv-weapon-equipped';
-            row.style.margin = '2px 0';
-            row.textContent = item
-                ? `${label}: ${item.name || label} (L${item.level || 1})`
-                : `${label}: ${fallback}`;
-            if (item && item.rarityColor) row.style.color = item.rarityColor;
-            return row;
-        };
-
-        wrap.appendChild(rowFor('PRIMARY', primary, 'default Pulse Cannon'));
-        wrap.appendChild(rowFor('POWER', power, 'default Charge Shot'));
-        return wrap;
+    // A single rarity-colored stash card with a compare tooltip: hovering or
+    // focusing it shows an "UPGRADE" badge when it beats the equipped piece in
+    // its slot and drives the right-hand stat sheet to preview the swap.
+    _stashCard(it, equipped, showStats) {
+        const slotEquipped = equipped[it.slot] || null;
+        const deltas = compareItemStats(it, slotEquipped);
+        const upgrade = deltas.some((d) => d.delta > 0) && !deltas.some((d) => d.delta < 0 && Math.abs(d.delta) > 8);
+        const card = createItemCard(it, {
+            variant: 'compact',
+            focusable: true,
+            compareWith: slotEquipped,
+            badge: upgrade ? 'UPGRADE' : (it.rarityLabel || `L${it.level || 1}`),
+        });
+        card.addEventListener('focus', () => showStats(it));
+        card.addEventListener('mouseenter', () => showStats(it));
+        card.addEventListener('mouseleave', () => showStats(null));
+        return card;
     }
 }

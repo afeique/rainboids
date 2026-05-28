@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.5.0] - 2026-05-28
+
+### Changed
+- **The `I` inventory is now a Diablo-style screen.** The EQUIPPED grid is a
+  paper-doll that leads with the equipped **primary + power weapon** cards (now
+  that weapons are gear) followed by the five gear slots, and a new
+  **rarity-colored STASH grid** shows every banked item (`meta.stash`) instead
+  of just the recent-drops feed. Hovering or focusing a stash/drop card drives
+  the right-hand stat sheet to preview the swap and flags an `UPGRADE` badge
+  when it beats the equipped piece in its slot.
+
+### Fixed
+- Restored the **grouped elemental-resist readout** (RESIST · Pyro+8% · Cryo+5%)
+  on equipped item cards — it had silently dropped out when the inventory moved
+  to the card-based armory-shell layout.
+
+---
+
 ## [8.4.0] - 2026-05-28
 
 ### Changed

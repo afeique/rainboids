@@ -642,6 +642,13 @@ button:not([disabled]),
 .inv-slot-label { font-size: calc(12px * var(--font-body-scale, 1)); color: #7e93b4; letter-spacing: 1px; }
 .inv-item-name { font-size: calc(12px * var(--font-body-scale, 1)); font-weight: bold; }
 .inv-item-affix { font-size: calc(11px * var(--font-body-scale, 1)); color: #aab6ce; line-height: 1.5; }
+/* Diablo-style stash: a dense rarity-colored grid of banked items. Each cell
+   is a compact item card; rarity drives its border via --item-rarity. */
+.inv-stash-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 8px;
+}
 .inv-drop-list { display: flex; flex-direction: column; gap: 6px; }
 .inv-drop-empty { font-size: calc(12px * var(--font-body-scale, 1)); color: #5e7290; padding: 8px 4px; }
 .inv-drop-row {
