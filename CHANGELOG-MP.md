@@ -7,6 +7,40 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.35.0] - 2026-05-28
+
+### Added
+- **SP-style following camera (look-like-SP step).** The client canvas now fills
+  the viewport (`window.innerWidth × innerHeight`) and the renderer draws the
+  world through SP's camera transform — zoom-around-canvas-center then a
+  camera translate — so the **local player stays centered** and the arena
+  scrolls past, exactly like single-player. The camera is clamped to the field
+  (and centers the field on any axis smaller than the window), eases toward the
+  ship (snaps on the first frame), and applies a modest zoom (`≤2.2×`, capping
+  the visible world at ~1366 px) so the action reads "zoomed in on the player"
+  on large monitors. Was: the whole 1920×1080 arena letterboxed into the window
+  (the zoomed-out look).
+- **Parallax scrolling starfield.** Three depth layers (0.25 / 0.5 / 0.85)
+  scattered across the arena + a 360 px margin, each sliding at `depth × camera`
+  so deep stars barely move and near stars track the world. Keeps SP's star
+  colour mix (~55% blue-white, 25% white, 12% warm, 8% orange-red) and per-star
+  twinkle. Replaces the old static screen-space field.
+- **Canvas2D nebula backdrop.** SP's visible nebula is a WebGL layer and the
+  shared Canvas2D `nebulaRenderer` is a disabled no-op, so MP now bakes its own
+  soft additive cloud field (seeded, cool space palette) into an offscreen
+  canvas once per viewport size and draws it with a gentle parallax behind the
+  stars — real "nebulae" without the WebGL port.
+
+### Changed
+- **Aim mapping is camera-aware.** `MpInput` maps the cursor through the inverse
+  of the zoom-around-center + camera transform, so aiming stays correct under
+  the following, zoomed camera (was: canvas-pixel == arena coords).
+- **HUD + center banner now draw in screen space** (after the world transform is
+  restored), so they stay fixed regardless of camera position/zoom.
+- `mp.html`: the canvas is a fullscreen fixed layer; the room/status bar overlays
+  it. Removed the letterbox `#wrap`, `aspect-ratio`, and `image-rendering:
+  pixelated` (we now render at native viewport resolution).
+
 ## [0.34.0] - 2026-05-28
 
 ### Removed

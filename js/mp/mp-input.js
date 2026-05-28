@@ -6,8 +6,12 @@
 // the canvas's on-screen scale so aiming is correct regardless of window size.
 
 export class MpInput {
-  constructor(canvas) {
+  constructor(canvas, camera = null) {
     this.canvas = canvas;
+    // Camera ref (owned by mp-main). When present, the cursor is mapped through
+    // the inverse of the renderer's zoom-around-center + camera-translate
+    // transform so aim stays correct under a following, zoomed camera.
+    this.camera = camera;
     this.state = { up: false, down: false, left: false, right: false, fire: false, aimX: null, aimY: null };
     this._bind();
   }
@@ -31,10 +35,21 @@ export class MpInput {
 
     const updateAim = (clientX, clientY) => {
       const r = this.canvas.getBoundingClientRect();
-      const sx = this.canvas.width / r.width;
-      const sy = this.canvas.height / r.height;
-      this.state.aimX = (clientX - r.left) * sx;
-      this.state.aimY = (clientY - r.top) * sy;
+      const cw = this.canvas.width, ch = this.canvas.height;
+      // CSS-displayed size → canvas pixels.
+      const px = (clientX - r.left) * (cw / r.width);
+      const py = (clientY - r.top) * (ch / r.height);
+      const cam = this.camera;
+      if (cam) {
+        // Inverse of: zoom-around-center, then translate(-cam).
+        //   world = (screen - center) / zoom + center + cam
+        const zoom = cam.zoom || 1;
+        this.state.aimX = (px - cw / 2) / zoom + cw / 2 + cam.x;
+        this.state.aimY = (py - ch / 2) / zoom + ch / 2 + cam.y;
+      } else {
+        this.state.aimX = px;
+        this.state.aimY = py;
+      }
     };
     this.canvas.addEventListener('mousemove', (e) => updateAim(e.clientX, e.clientY));
     this.canvas.addEventListener('mousedown', (e) => { updateAim(e.clientX, e.clientY); this.state.fire = true; });

@@ -45,9 +45,39 @@ function setStatus(text) {
 
 async function main() {
   const canvas = document.getElementById('game');
-  canvas.width = FIELD_WIDTH;
-  canvas.height = FIELD_HEIGHT;
-  const input = new MpInput(canvas);
+
+  // Camera follows the local ship (SP framing: the arena is larger than the
+  // viewport, the player stays centered, the camera is clamped to the field).
+  // zoom>1 keeps the framing tight on large monitors so the action reads
+  // "zoomed in on the player" the way SP does on a smaller window.
+  const camera = { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, zoom: 1 };
+  let cameraInit = false; // first valid follow target snaps; afterwards it eases
+  const VIEW_TARGET_W = 1366;  // cap visible world width → guaranteed zoom-in
+  const MAX_ZOOM = 2.2;
+  function resize() {
+    canvas.width = Math.max(640, window.innerWidth);
+    canvas.height = Math.max(360, window.innerHeight);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  function updateCamera(tx, ty) {
+    const cw = canvas.width, ch = canvas.height;
+    const zoom = Math.max(1, Math.min(MAX_ZOOM, cw / VIEW_TARGET_W));
+    camera.zoom = zoom;
+    const visW = cw / zoom, visH = ch / zoom;
+    // Center the player; clamp so the visible window stays inside the field
+    // (and center the field on any axis where it's smaller than the window).
+    let cx = tx - cw / 2;
+    let cy = ty - ch / 2;
+    const minX = (visW - cw) / 2, maxX = FIELD_WIDTH - (cw + visW) / 2;
+    const minY = (visH - ch) / 2, maxY = FIELD_HEIGHT - (ch + visH) / 2;
+    cx = maxX < minX ? (FIELD_WIDTH - cw) / 2 : Math.max(minX, Math.min(maxX, cx));
+    cy = maxY < minY ? (FIELD_HEIGHT - ch) / 2 : Math.max(minY, Math.min(maxY, cy));
+    if (!cameraInit) { camera.x = cx; camera.y = cy; cameraInit = true; }
+    else { camera.x += (cx - camera.x) * 0.18; camera.y += (cy - camera.y) * 0.18; }
+  }
+
+  const input = new MpInput(canvas, camera);
   // Seams: snapshot reconstruction + render backend (see their modules).
   const snapStream = new SnapshotStream();
   const bridge = new RenderBridge(canvas);
@@ -375,6 +405,10 @@ async function main() {
     // Banner fades after ~2.5 s.
     if (banner && now - banner.born > 2500) banner = null;
 
+    // Camera tracks the local predicted ship (falls back to arena center until
+    // we have a ship — e.g. while connecting or fully downed).
+    if (predictor) updateCamera(predictor.ship.x, predictor.ship.y);
+
     bridge.present({
       localShip: predictor ? predictor.ship : null,
       remoteShips: remote,
@@ -394,6 +428,7 @@ async function main() {
       gold: localGold,
       players: roster.length,
       banner,
+      camera,
     });
 
     // Lightweight HUD line.

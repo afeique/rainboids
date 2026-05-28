@@ -13,55 +13,111 @@ import {
   ASTEROID_EDGES, ASTEROID_FOV,
 } from '../modules/render/shapes.js';
 import { makeRng } from '../sim/rng.js';
-import { nebulaRenderer } from '../modules/performance/nebula-renderer.js';
+import { FIELD_WIDTH, FIELD_HEIGHT } from '../sim/constants.js';
 
 // Legacy toy-sim enemy key → SP shape registry type. The real SP sim already
 // sends SP type strings (HUNTER/WASP/GUARDIAN/…), which drawEnemyShapeByType
 // renders directly; only the toy sim's generic 'chaser' needs remapping.
 const SP_ENEMY_SHAPE = { chaser: 'HUNTER' };
 
-// SP nebula background (shared Canvas2D renderer, self-contained). Generated
-// once for the arena, then drawn stationary behind everything each frame.
-let _nebulaReady = false;
-
-// Client-authored background starfield (SP's space backdrop is nebula + a dense
-// parallax star field; the co-op arena is fixed, so a static twinkling field is
-// the right analogue). Generated once, seeded, with SP's star-colour mix
-// (~55% blue-white, 25% white, 12% warm, 8% orange-red).
-let _stars = null;
-function ensureStars(w, h) {
-  if (_stars) return _stars;
-  const rng = makeRng(0x5747); // fixed seed → stable field
-  const n = Math.round((w * h) / 9000); // ~230 on a 1920×1080 arena
-  _stars = [];
-  for (let i = 0; i < n; i++) {
-    const r = rng();
-    let color;
-    if (r < 0.55) color = `hsl(${208 + rng() * 22}, 65%, ${78 + rng() * 18}%)`;      // blue-white
-    else if (r < 0.80) color = `hsl(0, 0%, ${82 + rng() * 16}%)`;                     // white
-    else if (r < 0.92) color = `hsl(${38 + rng() * 16}, 70%, 76%)`;                   // warm
-    else color = `hsl(${12 + rng() * 16}, 82%, 66%)`;                                 // orange-red
-    _stars.push({
-      x: rng() * w, y: rng() * h,
-      size: 0.4 + rng() * 1.5,
-      color,
-      twPhase: rng() * Math.PI * 2,
-      twSpeed: 0.4 + rng() * 1.6,
-      base: 0.45 + rng() * 0.35,
-    });
+// ── Nebula backdrop ────────────────────────────────────────────────────────
+// SP's visible nebula is a WebGL layer; the shared Canvas2D nebulaRenderer is a
+// disabled no-op now. So MP bakes its own soft cloud field once into an
+// offscreen canvas (a few large additive radial blobs in a cool space palette)
+// and draws it with a gentle parallax behind the stars — "nebulae" without the
+// WebGL port. Regenerated only when the viewport size changes.
+let _nebCanvas = null, _nebW = 0, _nebH = 0;
+const NEB_MARGIN = 240; // so the parallax slide never reveals a hard edge
+const NEB_COLORS = [
+  [80, 60, 180], [40, 90, 175], [120, 40, 160],
+  [30, 120, 150], [90, 50, 140], [50, 70, 200],
+];
+function ensureNebula(w, h) {
+  if (_nebCanvas && _nebW === w && _nebH === h) return _nebCanvas;
+  const W = w + NEB_MARGIN, H = h + NEB_MARGIN;
+  const c = (typeof OffscreenCanvas !== 'undefined')
+    ? new OffscreenCanvas(W, H) : document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const rng = makeRng(0x9e3b);
+  g.globalCompositeOperation = 'lighter';
+  const blobs = 11 + Math.floor(rng() * 7);
+  for (let i = 0; i < blobs; i++) {
+    const bx = rng() * W, by = rng() * H;
+    const rad = 200 + rng() * 380;
+    const col = NEB_COLORS[Math.floor(rng() * NEB_COLORS.length)];
+    const a = 0.05 + rng() * 0.07;
+    const grd = g.createRadialGradient(bx, by, 0, bx, by, rad);
+    grd.addColorStop(0, `rgba(${col[0]},${col[1]},${col[2]},${a})`);
+    grd.addColorStop(0.45, `rgba(${col[0]},${col[1]},${col[2]},${a * 0.4})`);
+    grd.addColorStop(1, `rgba(${col[0]},${col[1]},${col[2]},0)`);
+    g.fillStyle = grd;
+    g.beginPath();
+    g.arc(bx, by, rad, 0, Math.PI * 2);
+    g.fill();
   }
-  return _stars;
+  _nebCanvas = c; _nebW = w; _nebH = h;
+  return c;
 }
-function drawStarfield(ctx, w, h, now) {
-  const stars = ensureStars(w, h);
+
+// ── Parallax starfield ───────────────────────────────────────────────────────
+// SP's backdrop is a dense parallax star field. MP scatters stars across the
+// arena (plus a margin so parallax never empties the screen edges) in three
+// depth layers; each layer slides at `depth × camera`, so deep stars barely move
+// and near stars track the world — the classic scrolling-space look. Star colour
+// mix matches SP (~55% blue-white, 25% white, 12% warm, 8% orange-red).
+const STAR_DEPTHS = [0.25, 0.5, 0.85];
+const STAR_PAD = 360; // world margin beyond the field on every side
+let _starLayers = null;
+function ensureStarLayers() {
+  if (_starLayers) return _starLayers;
+  const rng = makeRng(0x5747); // fixed seed → stable field
+  const spanW = FIELD_WIDTH + STAR_PAD * 2;
+  const spanH = FIELD_HEIGHT + STAR_PAD * 2;
+  _starLayers = STAR_DEPTHS.map((depth) => {
+    const n = Math.round((spanW * spanH) / 16000); // ~150 per layer
+    const stars = [];
+    for (let i = 0; i < n; i++) {
+      const r = rng();
+      let color;
+      if (r < 0.55) color = `hsl(${208 + rng() * 22}, 65%, ${78 + rng() * 18}%)`;      // blue-white
+      else if (r < 0.80) color = `hsl(0, 0%, ${82 + rng() * 16}%)`;                     // white
+      else if (r < 0.92) color = `hsl(${38 + rng() * 16}, 70%, 76%)`;                   // warm
+      else color = `hsl(${12 + rng() * 16}, 82%, 66%)`;                                 // orange-red
+      stars.push({
+        x: -STAR_PAD + rng() * spanW,
+        y: -STAR_PAD + rng() * spanH,
+        size: (0.4 + rng() * 1.3) * (0.6 + depth * 0.7), // near layer = bigger
+        color,
+        twPhase: rng() * Math.PI * 2,
+        twSpeed: 0.4 + rng() * 1.6,
+        base: 0.4 + rng() * 0.35 + depth * 0.1,
+      });
+    }
+    return { depth, stars };
+  });
+  return _starLayers;
+}
+function drawBackdrop(ctx, w, h, cam, now) {
+  // Nebula first (cool clouds), then the parallax stars over it.
+  const neb = ensureNebula(w, h);
+  ctx.drawImage(neb, -NEB_MARGIN / 2 - cam.x * 0.06, -NEB_MARGIN / 2 - cam.y * 0.06);
+
   const t = (now || 0) / 1000;
-  for (const s of stars) {
-    const tw = 0.5 + 0.5 * Math.sin(t * s.twSpeed + s.twPhase);
-    ctx.globalAlpha = Math.max(0.12, s.base * (0.6 + 0.4 * tw));
-    ctx.fillStyle = s.color;
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-    ctx.fill();
+  for (const layer of ensureStarLayers()) {
+    const ox = cam.x * layer.depth;
+    const oy = cam.y * layer.depth;
+    for (const s of layer.stars) {
+      const sx = s.x - ox;
+      const sy = s.y - oy;
+      if (sx < -4 || sx > w + 4 || sy < -4 || sy > h + 4) continue;
+      const tw = 0.5 + 0.5 * Math.sin(t * s.twSpeed + s.twPhase);
+      ctx.globalAlpha = Math.max(0.12, s.base * (0.6 + 0.4 * tw));
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.globalAlpha = 1;
 }
@@ -261,24 +317,33 @@ function drawDrop(ctx, d) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, wave, gold, players, banner }) {
-  // Background.
-  ctx.fillStyle = '#070710';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, wave, gold, players, banner, camera }) {
+  const cam = camera || { x: 0, y: 0, zoom: 1 };
+  const W = canvas.width, H = canvas.height;
 
-  // SP nebula background (shared renderer; generated once for the arena).
-  try {
-    if (!_nebulaReady) { nebulaRenderer.generate(canvas.width, canvas.height); _nebulaReady = true; }
-    nebulaRenderer.draw(ctx, 0, 0, 0, 0, 0, canvas.width, canvas.height);
-  } catch { /* background is non-essential — never break the frame */ }
+  // Background fill (screen space).
+  ctx.fillStyle = '#04040a';
+  ctx.fillRect(0, 0, W, H);
 
-  // Twinkling starfield over the nebula (crisp points of light, SP-style).
-  try { drawStarfield(ctx, canvas.width, canvas.height, now); } catch { /* non-essential */ }
+  // Parallax nebula + starfield (screen space, slides with the camera).
+  try { drawBackdrop(ctx, W, H, cam, now); } catch { /* backdrop is non-essential — never break the frame */ }
 
-  // Arena border.
+  // ── World layer: everything below draws in arena/world coordinates through
+  //    the camera transform (zoom-around-canvas-center, then camera translate),
+  //    exactly like SP's draw() so the local player sits at the screen center. ──
+  ctx.save();
+  const zoom = cam.zoom || 1;
+  if (zoom !== 1) {
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-W / 2, -H / 2);
+  }
+  ctx.translate(-cam.x, -cam.y);
+
+  // Arena border (true field bounds in world space).
   ctx.strokeStyle = '#1d2440';
   ctx.lineWidth = 4;
-  ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+  ctx.strokeRect(2, 2, FIELD_WIDTH - 4, FIELD_HEIGHT - 4);
 
   // Asteroids (interpolated) — SP tumbling-wireframe style.
   if (asteroids) {
@@ -379,6 +444,9 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     drawShip(ctx, localShip.x, localShip.y, localShip.angle, `P${localId} (you)`, true, localDowned, localReviveProgress);
   }
 
+  // ── End world layer — HUD + banner draw in screen space. ──
+  ctx.restore();
+
   // Center banner (wave/game-over announcements).
   if (banner && now != null) {
     const age = (now - banner.born) / 2500;
@@ -388,7 +456,7 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     ctx.font = 'bold 64px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(banner.text, canvas.width / 2, canvas.height * 0.28);
+    ctx.fillText(banner.text, W / 2, H * 0.28);
     ctx.restore();
   }
 
