@@ -18,6 +18,10 @@ import { FIELD_WIDTH, FIELD_HEIGHT } from '../sim/constants.js';
 // MP HUD matches single-player rather than re-deriving them.
 import { drawCachedMoneyIcon, drawCachedHeartIcon } from '../modules/core/utils.js';
 import { xpForLevel, MAX_LEVEL } from '../modules/core/sp-stats.js';
+// Real SP ship-skin art (drawn by the same paint() the SP renderer uses) + the
+// chosen skin from settings, so the MP ship looks exactly like single-player.
+import { getSkin, SKIN_IDS } from '../modules/player/skins/index.js';
+import { loadSettings } from '../modules/core/storage.js';
 
 // Legacy toy-sim enemy key → SP shape registry type. The real SP sim already
 // sends SP type strings (HUNTER/WASP/GUARDIAN/…), which drawEnemyShapeByType
@@ -170,17 +174,50 @@ function asteroidCosmetics(ast) {
   return c;
 }
 
-function drawShip(ctx, x, y, angle, label, isLocal, downed = false, reviveProgress = 0) {
+// Chosen skin from settings (the SP Hangar selection), cached. Falls back to the
+// SP default. Used for the LOCAL ship; remotes get per-id variety for readability.
+let _localSkinId = null;
+function localSkinId() {
+  if (_localSkinId) return _localSkinId;
+  try { _localSkinId = loadSettings().selectedSkin || 'aurora'; } catch { _localSkinId = 'aurora'; }
+  return _localSkinId;
+}
+
+// Per-ship articulation + gradient-cache stub. `skin.paint` reads these off
+// `this` and caches gradients on it, so keeping one persistent stub per ship id
+// (a) animates the engine plume from movement and (b) avoids rebuilding gradients
+// every frame.
+const _shipStubs = new Map();
+function shipStub(id) {
+  let s = _shipStubs.get(id);
+  if (!s) {
+    s = {
+      radius: SHIP_RADIUS, thrustLevel: 0, bank: 0, wingSweep: 0, flapOpen: 0,
+      glidePhase: 0, engineStartup: 0, energy: 70, maxEnergy: 100, gameEngine: null,
+    };
+    _shipStubs.set(id, s);
+  }
+  return s;
+}
+
+function drawShip(ctx, x, y, angle, label, isLocal, downed = false, reviveProgress = 0, id = 0, speed = 0, now = 0) {
   const r = SHIP_RADIUS;
-  // SP ship hull (shared render/shapes.js) — drawShipShape owns its own
-  // translate/rotate. Downed ships dim via inherited globalAlpha.
+  // Real SP ship-skin hull (same paint() the SP renderer calls). Local ship uses
+  // the chosen skin; remotes get a deterministic per-id skin so co-op pilots read
+  // distinctly. The skin draws nose-up in local space, so rotate angle + PI/2.
+  const skin = getSkin(isLocal ? localSkinId() : SKIN_IDS[id % SKIN_IDS.length]);
+  const stub = shipStub(id);
+  const sp = Math.min(1, (speed || 0) / 3.2);
+  stub.thrustLevel += (sp - stub.thrustLevel) * 0.2;
+  stub.glidePhase = (now || 0) / 1000 * 2;
   ctx.save();
   ctx.globalAlpha = downed ? 0.35 : 1;
-  drawShipShape(ctx, x, y, angle, { radius: r, palette: SHIP_PALETTE_MAGENTA });
+  ctx.translate(x, y);
+  ctx.rotate(angle + Math.PI / 2);
+  try { skin.paint.call(stub, ctx, r, (now || 0) * 0.001); } catch { /* never break the frame */ }
   ctx.restore();
 
-  // Local-ship highlight ring for co-op readability (per-player tint is a
-  // follow-up; SP ships are all magenta).
+  // Local-ship highlight ring for co-op readability.
   if (isLocal && !downed) {
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
@@ -573,12 +610,12 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
 
   // Remote ships (interpolated).
   for (const [id, s] of remoteShips) {
-    drawShip(ctx, s.x, s.y, s.angle, `P${id}`, false, s.downed, s.reviveProgress);
+    drawShip(ctx, s.x, s.y, s.angle, `P${id}`, false, s.downed, s.reviveProgress, id, Math.hypot(s.vx || 0, s.vy || 0), now);
   }
 
   // Local ship (predicted).
   if (localShip) {
-    drawShip(ctx, localShip.x, localShip.y, localShip.angle, `P${localId} (you)`, true, localDowned, localReviveProgress);
+    drawShip(ctx, localShip.x, localShip.y, localShip.angle, `P${localId} (you)`, true, localDowned, localReviveProgress, localId || 0, Math.hypot(localShip.vx || 0, localShip.vy || 0), now);
   }
 
   // Floating feedback (damage numbers / gold popups) — world space so they track

@@ -7,6 +7,23 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.45.0] - 2026-05-28
+
+### Added
+- **Real single-player ship art + skins.** The MP ship is now drawn by the actual
+  SP skin `paint()` (reused from `js/modules/player/skins/`) instead of the generic
+  magenta winged-hull, so it looks exactly like single-player — articulated hull,
+  spectral gradients, engine plume that responds to thrust. The **local** ship uses
+  the player's chosen skin (`loadSettings().selectedSkin` from the SP Hangar);
+  **remote** co-op ships get a deterministic per-id skin from the registry so
+  pilots read distinctly. A per-ship stub feeds articulation (thrust eased from
+  speed, breathing glide phase) and persists each skin's gradient cache.
+
+### Notes
+- Player movement already matches single-player: the authoritative server runs the
+  real SP `Player.update` headless and the client predicts + reconciles against it,
+  so MP movement *is* SP physics (no change needed).
+
 ## [0.44.1] - 2026-05-28
 
 ### Fixed
