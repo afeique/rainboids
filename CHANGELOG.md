@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.17.0] - 2026-05-28
+
+### Changed
+- **LEVEL and POWER moved off the in-game HUD onto the STATS screen.** The
+  vitals cluster used to print `LV n` and `PWR n` to the right of the health/
+  energy orbs; both are gone from the HUD (they ate space without driving
+  moment-to-moment play). All that remains beside the orbs is the actionable
+  pulsing `+N SP` nudge. The bottom XP progress bar and the LEVEL UP banner
+  stay.
+- **STATS screen overhaul.** A new prominent **hero header** headlines the
+  screen with **LEVEL** (gold) and **POWER** (violet) as large numerals with a
+  shimmering gradient text effect; the level tile carries an XP progress bar
+  beneath it. PWR is recomputed on open, so a mid-run gear swap from the
+  inventory overlay is reflected immediately. The old equal-weight summary
+  chips drop the redundant LEVEL cell and keep SP / XP / WAVE / Rainshards.
+
+### Fixed
+- README + QA-11 corrected to match the **per-run** leveling model (T24):
+  level / XP / SP reset each run and no longer persist to the account meta
+  (`saveMetaState` has been a no-op since the looter pivot). Removed the
+  obsolete QA-29 PWR-HUD spec (the readout it tested no longer exists).
+
 ## [8.16.0] - 2026-05-28
 
 ### Added

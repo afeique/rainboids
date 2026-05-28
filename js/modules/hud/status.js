@@ -879,25 +879,20 @@ export function drawCanvasTriforce(ctx, spareTanks, triforceLeftX, centerY) {
 }
 
 export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
-        // 7.1.0 — Vitals cluster redesign. The health BAR is gone; HP and
-        // power-weapon energy are now twin glass spheres (red = health,
-        // weapon-tinted = energy) sitting where the bar used to be. To their
-        // right: the account LEVEL in gold with a pulsing "+N SP" badge
-        // stacked directly beneath it, then — after a little gap — the build's
-        // PWR readout (violet-gold). The two orbs, the level column, and the
-        // PWR readout all share ONE horizontal midline (the orb centers) so
-        // the whole row reads as an evenly-spaced, polished strip.
+        // 8.16.x — Vitals cluster. HP + power-weapon energy are twin glass
+        // spheres (red = health, weapon-tinted = energy). The account LEVEL
+        // and build PWR readouts that used to sit to their right were MOVED to
+        // the STATS screen (they ate HUD space without driving moment-to-moment
+        // play); all that remains beside the orbs is an actionable "+N SP"
+        // nudge — it tells you there are skill points waiting to be spent.
         const player = this.player;
         if (!player) return;
 
         const cy = barY + barHeight / 2;     // shared midline (= 35)
         const R = 20;                         // both orbs, identical size
-        // ORB_GAP is wide enough that the two captions (heart+HP / energy)
-        // never collide even at 3-digit values; the level column and PWR
-        // readout self-space off measureText, so the whole row stays even.
+        // ORB_GAP keeps the two orb captions (heart+HP / energy) from colliding.
         const ORB_GAP = 42;                   // edge-to-edge between the orbs
-        const COL_GAP = 28;                   // energy orb → level column
-        const PWR_GAP = 34;                   // level column → PWR readout
+        const COL_GAP = 28;                   // energy orb → SP nudge
 
         // ── Health sphere (red) — leftmost, anchored at the old bar's left edge.
         const healthCX = barX + R;            // barX = 70 → center 90
@@ -909,74 +904,36 @@ export function drawLevelAndCoinsDisplay(ctx, barX, barY, barHeight) {
 
         ctx.save();
 
-        // ── Level column: "LV n" on top, "+N SP" badge beneath, the two lines
-        // centered on the shared midline so they sit level with the orb cores.
-        const level = (player.level | 0) || 1;
-        const colX = energyCX + R + COL_GAP;
-        const lvY = cy - 8;                   // top line baseline
-        const spY = cy + 10;                  // bottom line center
-
-        ctx.font = "13px 'Press Start 2P', monospace";
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.fillStyle = '#ffd700';
-        const levelText = `LV ${level}`;
-        ctx.strokeText(levelText, colX, lvY);
-        ctx.fillText(levelText, colX, lvY);
-        const levelTextW = ctx.measureText(levelText).width;
-
-        // "+N SP" — pulsing green badge directly below the level reading. Stays
-        // visible after the LEVEL UP banner fades (SP spent on the STATS screen).
-        let spBlockW = 0;
+        // ── "+N SP" nudge — the only readout kept beside the orbs. Pulsing
+        // green pill, centered on the shared orb midline a little gap right of
+        // the energy orb. Stays visible after the LEVEL UP banner fades so the
+        // player remembers there are points to spend on the STATS screen. LEVEL
+        // and PWR themselves now live on STATS (8.16.x).
         const sp = (player.sp | 0) || 0;
         if (sp > 0) {
+            const badgeX = energyCX + R + COL_GAP;
             const pulse = 0.65 + 0.35 * Math.abs(Math.sin(Date.now() * 0.005));
             const spText = `+${sp} SP`;
             ctx.font = "10px 'Press Start 2P', monospace";
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
             const padX = 5;
             const tw = ctx.measureText(spText).width;
             const pillW = tw + padX * 2;
             const pillH = 16;
-            ctx.save();
             ctx.globalAlpha = pulse;
             ctx.fillStyle = 'rgba(0, 80, 30, 0.85)';
             ctx.strokeStyle = '#39ff88';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(colX, spY - pillH / 2, pillW, pillH, 4);
-            else ctx.rect(colX, spY - pillH / 2, pillW, pillH);
+            if (ctx.roundRect) ctx.roundRect(badgeX, cy - pillH / 2, pillW, pillH, 4);
+            else ctx.rect(badgeX, cy - pillH / 2, pillW, pillH);
             ctx.fill();
             ctx.stroke();
             ctx.globalAlpha = 1;
             ctx.fillStyle = '#aaffcc';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(spText, colX + padX, spY + 1);
-            ctx.restore();
-            spBlockW = pillW;
+            ctx.fillText(spText, badgeX + padX, cy + 1);
         }
-
-        // ── PWR readout — a little gap right of the level column, centered on
-        // the midline. DIR-05 caches `game.playerPWR` per wave; we only READ it.
-        // Defensive: undefined/NaN → neutral reference (≈100) so it never blanks.
-        const PWR_FALLBACK = 100;
-        const rawPwr = this.game ? this.game.playerPWR : undefined;
-        const pwrVal = Number.isFinite(rawPwr) ? Math.round(rawPwr) : PWR_FALLBACK;
-        this._pwrDrawn = pwrVal;              // queryable QA marker (mirrors _threatLevelDrawn)
-        const colW = Math.max(levelTextW, spBlockW);
-        const pwrX = colX + colW + PWR_GAP;
-        const pwrText = `PWR ${pwrVal}`;
-        ctx.font = "11px 'Press Start 2P', monospace";
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        // Warm violet-gold — reads as "your power", distinct from the THREAT
-        // meter's cool→hot pip ramp.
-        ctx.fillStyle = '#c9a6ff';
-        ctx.strokeText(pwrText, pwrX, cy);
-        ctx.fillText(pwrText, pwrX, cy);
 
         ctx.restore();
 }

@@ -1037,10 +1037,13 @@ function _buildStatsOverlay() {
     header.appendChild(close);
     panel.appendChild(header);
 
-    // Body
+    // Body — a prominent LEVEL + POWER hero, then the compact summary chips,
+    // then the detailed stat columns. (8.16.x — LEVEL/PWR were pulled off the
+    // in-game HUD and now headline this screen, large, with a shimmer effect.)
     panel.appendChild(el('div', {
         id: 'stats-panel-body',
         children: [
+            el('div', { id: 'stats-hero' }),
             el('div', { id: 'stats-summary' }),
             el('div', { id: 'stats-columns' }),
         ],

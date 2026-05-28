@@ -323,6 +323,87 @@ button:not([disabled]),
     flex: 1;
 }
 
+/* 8.16.x — LEVEL + POWER hero. Two big shimmering-gradient numbers that
+   headline the screen now that they no longer sit on the in-game HUD. */
+#stats-hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+.stats-hero-tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 12px 16px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(194, 153, 47, 0.3);
+}
+.stats-hero-tile--level {
+    border-color: rgba(255, 200, 64, 0.45);
+    box-shadow: inset 0 0 40px rgba(120, 80, 0, 0.4), 0 0 16px rgba(255, 200, 64, 0.12);
+}
+.stats-hero-tile--pwr {
+    border-color: rgba(173, 130, 255, 0.5);
+    box-shadow: inset 0 0 40px rgba(60, 30, 110, 0.45), 0 0 16px rgba(173, 130, 255, 0.14);
+}
+.stats-hero-label {
+    font-size: calc(13px * var(--font-body-scale, 1));
+    letter-spacing: 4px;
+    color: #b09464;
+}
+.stats-hero-tile--pwr .stats-hero-label { color: #b39ad8; }
+.stats-hero-value {
+    font-size: clamp(34px, 8vw, calc(56px * var(--font-header-scale, 1)));
+    line-height: 1.05;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    background-size: 220% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: stats-hero-shimmer 3.4s linear infinite;
+}
+.stats-hero-value--level {
+    background-image: linear-gradient(92deg, #fff6d0 0%, #ffd24a 28%, #b8801a 52%, #ffd24a 78%, #fff6d0 100%);
+    filter: drop-shadow(0 0 16px rgba(255, 200, 64, 0.55));
+}
+.stats-hero-value--pwr {
+    background-image: linear-gradient(92deg, #efe3ff 0%, #c9a6ff 28%, #7d4dd6 52%, #c9a6ff 78%, #efe3ff 100%);
+    filter: drop-shadow(0 0 16px rgba(173, 130, 255, 0.6));
+}
+@keyframes stats-hero-shimmer {
+    0%   { background-position: 0% center; }
+    100% { background-position: 200% center; }
+}
+.stats-hero-sub {
+    font-size: calc(11px * var(--font-body-scale, 1));
+    color: #8a7549;
+    letter-spacing: 1px;
+    width: 100%;
+    text-align: center;
+}
+.stats-hero-tile--pwr .stats-hero-sub { color: #8f7fb5; }
+.stats-hero-xpbar {
+    width: 100%;
+    height: 7px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(194, 153, 47, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+.stats-hero-xpfill {
+    height: 100%;
+    background: linear-gradient(90deg, #fffbe6, #daa520 60%, #8a6508);
+    box-shadow: 0 0 8px rgba(255, 200, 64, 0.5);
+    transition: width 0.4s ease;
+}
+
 #stats-summary {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));

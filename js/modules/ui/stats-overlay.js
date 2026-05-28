@@ -176,6 +176,7 @@ export class StatsOverlay {
             overlay: document.getElementById('stats-overlay'),
             title:   document.getElementById('stats-panel-title'),
             close:   document.getElementById('stats-panel-close'),
+            hero:    document.getElementById('stats-hero'),
             summary: document.getElementById('stats-summary'),
             columns: document.getElementById('stats-columns'),
             tooltip: document.getElementById('stats-tooltip'),
@@ -300,20 +301,26 @@ export class StatsOverlay {
         if (!ge?.player) return;
         const model = buildStatsModel(ge.player, ge);
 
-        // Header summary cells (Level, XP progress, Gold, Time).
+        const player = ge.player;
+        const lvl = player?.level | 0 || 1;
+        const xpNow = player?.xp | 0;
+        const xpNeed = lvl >= MAX_LEVEL ? 0 : xpForLevel(lvl);
+        const xpLabel = lvl >= MAX_LEVEL ? 'MAX' : `${xpNow} / ${xpNeed}`;
+        const atMax = lvl >= MAX_LEVEL;
+
+        // ── HERO — LEVEL + POWER, large, with a shimmering gradient. These two
+        // used to sit on the in-game HUD (8.16.x removed them there); they now
+        // headline the STATS screen so they read as the build's two big numbers.
+        this._renderHero(ge, lvl, { xpNow, xpNeed, atMax });
+
+        // Header summary chips — the secondary readouts (SP / XP / WAVE / gold).
         const summary = this.elements.summary;
         if (summary) {
             summary.replaceChildren();
             // 8.10.0 — flat WAVE readout ("N / max"); the stage grouping is gone.
             const wave = ge.game?.currentWave ?? 1;
-            const player = ge.player;
-            const lvl = player?.level | 0 || 1;
             const sp = player?.sp | 0;
-            const xpNow = player?.xp | 0;
-            const xpNeed = lvl >= MAX_LEVEL ? 0 : xpForLevel(lvl);
-            const xpLabel = lvl >= MAX_LEVEL ? 'MAX' : `${xpNow} / ${xpNeed}`;
             const cells = [
-                { label: 'LEVEL', value: `${lvl}` },
                 { label: `SP${sp > 0 ? ' ●' : ''}`, value: `${sp}`, hot: sp > 0 },
                 { label: 'XP', value: xpLabel },
                 { label: 'WAVE', value: `${wave} / ${runMaxWaves(ge.game)}` },
@@ -388,6 +395,65 @@ export class StatsOverlay {
                 cols.appendChild(card);
             }
         }
+    }
+
+    // 8.16.x — The LEVEL + POWER hero. Two large shimmering numbers (gold
+    // level with an XP progress bar beneath it, violet power) that headline
+    // the screen. PWR is recomputed on render so a mid-run gear swap from the
+    // inventory overlay is reflected immediately.
+    _renderHero(ge, lvl, xp) {
+        const hero = this.elements.hero || document.getElementById('stats-hero');
+        if (!hero) return;
+        if (typeof ge.recomputePlayerPWR === 'function') {
+            try { ge.recomputePlayerPWR(); } catch (_e) { /* keep cached value */ }
+        }
+        const rawPwr = ge.game ? ge.game.playerPWR : undefined;
+        const pwr = Number.isFinite(rawPwr) ? Math.round(rawPwr) : 100;
+        const frac = xp.atMax
+            ? 1
+            : Math.max(0, Math.min(1, xp.xpNeed ? xp.xpNow / xp.xpNeed : 0));
+
+        hero.replaceChildren();
+
+        // LEVEL tile (gold) — big number + an XP progress bar beneath.
+        const lvlTile = document.createElement('div');
+        lvlTile.className = 'stats-hero-tile stats-hero-tile--level';
+        const lvlLabel = document.createElement('div');
+        lvlLabel.className = 'stats-hero-label';
+        lvlLabel.textContent = 'LEVEL';
+        const lvlVal = document.createElement('div');
+        lvlVal.className = 'stats-hero-value stats-hero-value--level';
+        lvlVal.textContent = `${lvl}`;
+        const lvlSub = document.createElement('div');
+        lvlSub.className = 'stats-hero-sub';
+        const bar = document.createElement('div');
+        bar.className = 'stats-hero-xpbar';
+        const fill = document.createElement('div');
+        fill.className = 'stats-hero-xpfill';
+        fill.style.width = `${(frac * 100).toFixed(1)}%`;
+        bar.appendChild(fill);
+        const xptext = document.createElement('div');
+        xptext.className = 'stats-hero-xptext';
+        xptext.textContent = xp.atMax ? 'MAX LEVEL' : `${xp.xpNow} / ${xp.xpNeed} XP`;
+        lvlSub.appendChild(bar);
+        lvlSub.appendChild(xptext);
+        lvlTile.append(lvlLabel, lvlVal, lvlSub);
+
+        // POWER tile (violet) — the build-strength scoreboard.
+        const pwrTile = document.createElement('div');
+        pwrTile.className = 'stats-hero-tile stats-hero-tile--pwr';
+        const pwrLabel = document.createElement('div');
+        pwrLabel.className = 'stats-hero-label';
+        pwrLabel.textContent = 'POWER';
+        const pwrVal = document.createElement('div');
+        pwrVal.className = 'stats-hero-value stats-hero-value--pwr';
+        pwrVal.textContent = `${pwr}`;
+        const pwrSub = document.createElement('div');
+        pwrSub.className = 'stats-hero-sub';
+        pwrSub.textContent = 'BUILD STRENGTH';
+        pwrTile.append(pwrLabel, pwrVal, pwrSub);
+
+        hero.append(lvlTile, pwrTile);
     }
 
     // 6.36.0 — SP allocation card. One row per permanent stat with a
