@@ -226,9 +226,21 @@ export class AssistSystem {
         const ge = this.engine;
         const player = ge?.player;
         if (!player) return null;
+        // On-screen gate — the Co-Pilot only TARGETS enemies the player can
+        // actually see. We filter the enemy list to those overlapping the
+        // viewport (zoom-aware; buffer 0 = any visible part counts) so every
+        // downstream offensive decision — nearest / boss / cluster centroid,
+        // and therefore snipe / nuke / cluster-aimed powers + abilities — can
+        // never aim or fire at a threat that hasn't entered the frame yet.
+        // Bullets are left UNFILTERED so dodge/mitigate still react to
+        // incoming fire (defensive sensing, not aiming).
+        const allEnemies = ge.enemyPool?.activeObjects || [];
+        const onScreen = typeof ge.isEntityOnScreen === 'function'
+            ? allEnemies.filter((e) => ge.isEntityOnScreen(e, 0))
+            : allEnemies;
         return {
             player,
-            enemies: ge.enemyPool?.activeObjects || [],
+            enemies: onScreen,
             bullets: ge.enemyBulletPool?.activeObjects || [],
             threatLevel: ge.game?.difficultyDirector?.getThreatLevel?.() || ge.game?.threatLevel || 1,
             gameField: ge.gameField,

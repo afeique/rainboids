@@ -34,9 +34,9 @@ const DISMISS_BUTTON_ID = 'mobile-tutorial-dismiss';
 // The four instructional items shown on the overlay. Order matches the
 // priority of what a fresh mobile player needs to learn first.
 const TUTORIAL_ITEMS = [
-    { icon: '🕹️', text: 'Drag to steer — your ship follows your thumb' },
+    { icon: '🕹️', text: 'Use the analog stick to move your ship' },
     { icon: '👆', text: 'Tap anywhere to dash toward that spot' },
-    { icon: '🤖', text: 'Your Co-Pilot aims and fires — just focus on dodging' },
+    { icon: '🤖', text: 'Your Co-Pilot aims and fires for you' },
     { icon: '⚡', text: 'Abilities & power weapons auto-cast when ready' },
 ];
 

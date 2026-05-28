@@ -5638,6 +5638,14 @@ export class GameEngine {
             // ENMY-07 — auto-aim skips a vanished (mid-blink/underground) enemy
             // (no-op for blink-less objects; isVanished → false without config).
             if (isVanished(obj, frameClock.now)) return;
+            // On-screen gate — auto-aim / auto-fire / aim-assist only acquire a
+            // target the player can actually SEE. Off-screen enemies (and the
+            // mines / asteroids past the viewport edge) are ignored, so the
+            // ship can't lock onto threats that haven't entered the frame yet.
+            // buffer 0 = "any part of the object overlaps the screen rect"
+            // (the helper already adds the object's own radius + is zoom-aware,
+            // so a giant boss whose body fills the edge still counts).
+            if (!this.isEntityOnScreen(obj, 0)) return;
             const dx = obj.x - fromX;
             const dy = obj.y - fromY;
             const d2 = dx * dx + dy * dy;

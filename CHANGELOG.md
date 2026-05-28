@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.2.0] - 2026-05-28
+
+### Changed
+
+- **Auto-aim, auto-fire, and the mobile Co-Pilot only target on-screen enemies
+  now.** Targeting must see a threat before it locks on or fires — enemies (and
+  mines/asteroids) past the viewport edge are ignored until any part of them
+  enters the frame. This applies to desktop/gamepad auto-aim + auto-fire and the
+  forced touch-mode auto-aim/auto-fire, and the Co-Pilot's offensive casts
+  (snipe/nuke/cluster-aimed powers + abilities) inherit the same on-screen gate
+  via an on-screen-filtered situation snapshot. More realistic, and a slight
+  challenge bump even with full assists — you can no longer snipe what you can't
+  see. The visibility test is zoom-aware (honors the mobile zoom-out) and counts
+  a large boss as visible the moment its body reaches the edge. Defensive
+  dodge/mitigate sensing still reacts to incoming fire regardless of screen
+  position.
+
 ## [8.1.1] - 2026-05-28
 
 ### Changed
