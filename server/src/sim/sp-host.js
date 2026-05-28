@@ -47,6 +47,9 @@ const noopPool = {
 };
 const noopAudio = new Proxy({}, { get: () => () => {} });
 
+// Co-op spawn/join invulnerability window (ms of i-frames).
+const SPAWN_IFRAMES_MS = 2500;
+
 const NEUTRAL_INPUT = Object.freeze({
   up: false, down: false, left: false, right: false,
   fire: false, fireSecondary: false,
@@ -239,13 +242,20 @@ export class SpHost {
    */
   addPlayer(id, spawnX = this.gameField.width / 2, spawnY = this.gameField.height / 2) {
     const existing = this.players.find((s) => s.id === id);
-    if (existing) return existing;
+    if (existing) { this._grantSpawnProtection(existing.player); return existing; }
     const player = new this._PlayerClass();
     player.x = spawnX;
     player.y = spawnY;
+    this._grantSpawnProtection(player);
     const slot = { id, player, input: { ...NEUTRAL_INPUT }, lastInputTick: 0 };
     this.players.push(slot);
     return slot;
+  }
+
+  // Brief spawn/join invulnerability so a pilot dropping into a live wave isn't
+  // instantly downed before they can react (co-op spawn protection).
+  _grantSpawnProtection(player) {
+    if (player && typeof player.makeInvincible === 'function') player.makeInvincible(SPAWN_IFRAMES_MS);
   }
 
   /** Remove a co-op player slot. */

@@ -1,5 +1,8 @@
 /**
- * tests/qa/12-mp2-ws.spec.js — two-client WebSocket multiplayer smoke.
+ * tests/qa/12-mp2-ws.spec.js — two-client WebSocket multiplayer smoke (LEGACY
+ * toy sim). The server is spawned with MP_SIM=toy to exercise the lightweight
+ * fallback sim; the DEFAULT (real SP sim) co-op path is covered by
+ * 13-mp-sphost.spec.js.
  *
  * Spawns the Node MP server on a test port, opens two browser tabs at
  * /mp.html?server=localhost:<port>, and verifies:
@@ -45,7 +48,7 @@ let server;
 test.beforeAll(async () => {
   server = spawn('node', ['server/src/index.js'], {
     cwd: REPO_ROOT,
-    env: { ...process.env, MP_PORT: String(MP_PORT) },
+    env: { ...process.env, MP_PORT: String(MP_PORT), MP_SIM: 'toy' },
     stdio: 'ignore',
   });
   await waitForHealthz(MP_PORT);
@@ -187,7 +190,7 @@ test.describe('MULTIPLAYER — two-client WebSocket', () => {
     // Bring the server back on the same port → client should auto-reconnect.
     server = spawn('node', ['server/src/index.js'], {
       cwd: REPO_ROOT,
-      env: { ...process.env, MP_PORT: String(MP_PORT) },
+      env: { ...process.env, MP_PORT: String(MP_PORT), MP_SIM: 'toy' },
       stdio: 'ignore',
     });
     await waitForHealthz(MP_PORT);

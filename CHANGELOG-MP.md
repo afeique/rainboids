@@ -7,6 +7,28 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.27.0] - 2026-05-27
+
+### Changed
+- **The real SP sim is now the DEFAULT multiplayer.** `room-manager.js` serves
+  `SpRoom` (the headless actual single-player simulation — real weapons, enemies,
+  collisions, waves, downed+revive, graphical parity) unless `MP_SIM=toy`
+  (`legacy`) selects the original lightweight toy sim. So `npm run mp:server` /
+  production now play like single-player out of the box. Selection is via a
+  testable `roomClassFor(simMode)`.
+
+### Added
+- **Co-op spawn protection.** Joining a live wave grants brief invulnerability
+  (`SPAWN_IFRAMES_MS` = 2.5 s) so a pilot dropping into the swarm isn't instantly
+  downed before they can react.
+
+### Tests
+- `tests/unit/room-class-selection.test.js` (new): the default is `SpRoom`; only
+  `MP_SIM=toy`/`legacy` selects the toy `Room`.
+- `tests/qa/13-mp-sphost.spec.js` now spawns the server with NO override, so it
+  exercises exactly what production serves (the real-sim co-op). 5/5 MP QA green
+  (4 legacy toy pinned via `MP_SIM=toy` in `12-mp2-ws`, 1 default real-sim).
+
 ## [0.26.0] - 2026-05-27
 
 ### Added

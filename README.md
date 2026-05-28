@@ -150,9 +150,12 @@ screenshots/ · electron/ · docs/
 multiplayer/            # earlier Rust/WASM co-op attempt — SHELVED (see multiplayer/RESTORE.md)
 ```
 
-> **Multiplayer (experimental):** authoritative Node.js server running the same
-> `js/sim/` the browser uses (no parity problem). Run `npm run mp:install` once,
-> then `npm run mp:server`, serve the client with `npm run dev`, and open
+> **Multiplayer (experimental):** authoritative Node.js server that, by default,
+> runs the **actual single-player simulation headless** (`server/src/sim/sp-host.js`,
+> Path A) — co-op with the real SP weapons/enemies/collisions/waves and
+> downed+revive, graphically identical to single-player. (The original lightweight
+> `js/sim/` toy sim is still selectable via `MP_SIM=toy`.) Run `npm run mp:install`
+> once, then `npm run mp:server`, serve the client with `npm run dev`, and open
 > `/mp.html` (`?room=CODE` for a private game). Details in `server/README.md`.
 </details>
 

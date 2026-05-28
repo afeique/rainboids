@@ -1,13 +1,12 @@
 /**
- * tests/qa/13-mp-sphost.spec.js — two-client co-op smoke against the REAL SP sim.
+ * tests/qa/13-mp-sphost.spec.js — two-client co-op smoke against the DEFAULT MP
+ * sim, which is now the REAL single-player simulation (SpHost / SpRoom, Path A).
  *
- * Identical browser scenario to 12-mp2-ws, but the MP server runs with
- * MP_SIM=sphost so the authoritative world is the actual single-player
- * simulation (SpHost / SpRoom, Path A) instead of the toy sim. This proves the
- * user-facing goal end-to-end: the real SP weapons/enemies/asteroids/waves
- * stream over the wire and render with the SAME SP shapes.js path the
- * single-player game uses — graphical parity, in a real browser, with two
- * pilots in one shared arena.
+ * The server is spawned with NO MP_SIM override, so this exercises exactly what
+ * production serves. It proves the user-facing goal end-to-end: the real SP
+ * weapons/enemies/asteroids/waves stream over the wire and render with the SAME
+ * SP shapes.js path the single-player game uses — graphical parity, in a real
+ * browser, with two pilots in one shared arena.
  *
  * Static page served by the shared Playwright webServer (npm run dev, :8090);
  * only the MP game server is spawned here, on its own port.
@@ -47,7 +46,7 @@ let server;
 test.beforeAll(async () => {
   server = spawn('node', ['server/src/index.js'], {
     cwd: REPO_ROOT,
-    env: { ...process.env, MP_PORT: String(MP_PORT), MP_SIM: 'sphost' },
+    env: { ...process.env, MP_PORT: String(MP_PORT) }, // no MP_SIM → the default (real SP sim)
     stdio: 'ignore',
   });
   await waitForHealthz(MP_PORT);
@@ -57,7 +56,7 @@ test.afterAll(async () => {
   if (server) server.kill('SIGTERM');
 });
 
-test.describe('MULTIPLAYER — co-op on the real SP sim (MP_SIM=sphost)', () => {
+test.describe('MULTIPLAYER — co-op on the DEFAULT (real SP) sim', () => {
   test('two pilots share the real-sim arena; movement + fire render via SP shapes', async ({ browser }) => {
     const url = `/mp.html?server=localhost:${MP_PORT}&room=sphost-coop`;
     const ctxA = await browser.newContext();
