@@ -13,6 +13,7 @@ import { rollRarity } from '../world/item-names.js';
 // R$-find stat. Replaces the 6.x flat-gold model.
 import { perKillRainshards, INCOME } from '../shop/income.js';
 import { rewardMultiplier } from '../world/reward-dial.js';
+import { waveLootMult } from '../wave/difficulty-director.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { initBossDeath } from '../enemy/boss-intro.js';
@@ -911,11 +912,13 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const wave = Math.max(1, (this.game?.currentWave | 0) || 1);
     const waveDropRateBonus = (wave - 1) * 0.015;
 
-    // RUN-03 — Reward Dial. ×1.0 for the default 10×3 run; >1.0 for richer
-    // runs. 6.x — GOLD no longer reads this (the gold economy is flat +
-    // decoupled from level/gear/wave); it still scales the GEAR-drop chance +
-    // rarity bias below.
-    const runRewardMult = rewardMultiplier(this.game, wave);
+    // RUN-03 — Reward Dial (mode × performance). 8.11.0 — also fold the
+    // difficulty director's per-wave LOOT bonus: a punishing random spike wave
+    // pays out handsomely (more drop chance + rarity bias), so being forced
+    // through a hard gauntlet is rewarded. ×1.0 on a baseline wave.
+    const _dir = this.game && this.game.difficultyDirector;
+    const waveDiffLoot = (_dir && _dir.cfg) ? waveLootMult(_dir) : 1;
+    const runRewardMult = rewardMultiplier(this.game, wave) * waveDiffLoot;
 
     const isEnemy = entity && entity.type && typeof entity.type === 'string';
     const enemyDropRateBonus = isEnemy ? 0.15 : 0;

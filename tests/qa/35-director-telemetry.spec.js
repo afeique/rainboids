@@ -168,11 +168,11 @@ test.describe('QA-35: Director telemetry (CD-17)', () => {
         const snaps = await advanceWaves(page, 8);
         await page.waitForTimeout(300);
 
-        // Cold-start (waves 1–2) holds D=1; sustained fast/full-HP over-performance
-        // must push D_hp above 1 by the end — identical to QA-20's assertion. This
-        // proves the read-only telemetry capture didn't disturb the loop.
-        expect(snaps[1].D_hp).toBeCloseTo(1, 5);
-        expect(snaps[snaps.length - 1].D_hp).toBeGreaterThan(1);
+        // 8.11.0 — difficulty is CPU-governed RANDOM now: it varies wave-to-wave
+        // (not parked at a constant); the read-only telemetry capture must not
+        // disturb that. (Same contract as QA-20.)
+        const hps = snaps.map((s) => s.D_hp);
+        expect(new Set(hps.map((v) => v.toFixed(4))).size).toBeGreaterThan(1);
 
         // D stays inside the hard clamps every wave.
         for (const s of snaps) {

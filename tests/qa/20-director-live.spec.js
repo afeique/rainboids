@@ -107,25 +107,33 @@ test.describe('QA-20: Adaptive Difficulty Director — LIVE', () => {
         });
         expect(snap).not.toBeNull();
         expect(snap.hasCfg).toBe(true);
-        expect(snap.D_hp).toBeCloseTo(1, 5);
-        expect(snap.D_thr).toBeCloseTo(1, 5);
-        expect(snap.wave).toBe(0);
+        // 8.11.0 — wave 1 is the flat cold-start baseline (≈1 at NORMAL); the
+        // director starts AT wave 1 (it rolls each wave's random difficulty).
+        // Tolerance is loose: the live starter's PWR sits a hair above PWR_REF, so
+        // the preload nudges D ~1% off exactly 1 — still "neutral" at the opener.
+        expect(snap.D_hp).toBeCloseTo(1, 1);
+        expect(snap.D_thr).toBeCloseTo(1, 1);
+        expect(snap.wave).toBe(1);
     });
 
     // ------------------------------------------------------------------
     // (b) Clearing several waves advances the director's wave count.
     // ------------------------------------------------------------------
 
-    test('clearing several waves advances the director and lets D move past cold-start', async ({ page }) => {
-        const snaps = await advanceWaves(page, 6);
-        // Every iteration recorded a wave (wave count strictly increasing).
-        expect(snaps.length).toBe(6);
+    test('clearing several waves advances the director and rolls a varying difficulty', async ({ page }) => {
+        const snaps = await advanceWaves(page, 8);
+        // Every iteration advanced the director's wave counter.
+        expect(snaps.length).toBe(8);
         expect(snaps.every((s) => s.advanced)).toBe(true);
-        expect(snaps[snaps.length - 1].directorWave).toBeGreaterThanOrEqual(6);
-        // Cold-start (waves 1–2) holds D=1; by the end D_hp must have responded
-        // to the sustained fast / full-HP over-performance.
-        expect(snaps[1].D_hp).toBeCloseTo(1, 5);
-        expect(snaps[snaps.length - 1].D_hp).toBeGreaterThan(1);
+        expect(snaps[snaps.length - 1].directorWave).toBeGreaterThanOrEqual(8);
+        // 8.11.0 — difficulty is CPU-governed RANDOM (not skill-adaptive): D_hp
+        // varies wave-to-wave (not parked at a constant) and stays in its clamp.
+        const hps = snaps.map((s) => s.D_hp);
+        expect(new Set(hps.map((v) => v.toFixed(4))).size).toBeGreaterThan(1);
+        for (const hp of hps) {
+            expect(hp).toBeGreaterThanOrEqual(0.6);
+            expect(hp).toBeLessThanOrEqual(3.0);
+        }
     });
 
     // ------------------------------------------------------------------

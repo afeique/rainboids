@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.11.0] - 2026-05-28
+
+### Changed
+- **Difficulty is CPU-governed and RANDOM now — the skill-adaptive "budget"
+  director is gone.** Each wave's difficulty is a deterministic pseudo-random
+  roll from (run seed, wave): a base ramp that rises with depth + per-wave
+  variance + an occasional **punishing spike** (~1 in 5). It no longer rubber-
+  bands to how well you're playing, so the challenge is genuinely surprising and
+  can't be gamed; being deterministic-from-seed keeps it MP-safe + testable. The
+  run MODE biases the whole curve and a strong build (PWR) pre-faces a little more.
+- **Hard waves pay out more loot.** A wave that rolls above its baseline (a
+  spike) raises the gear drop chance + rarity bias (`waveLootMult`), so being
+  forced through a difficult gauntlet is handsomely rewarded.
+
+### Removed
+- Deleted `js/modules/wave/run-randomizer.js` (the stage-randomizer behind the
+  removed draft) and its tests; dropped the director's dead `getEnemyPower` +
+  the skill-adaptive EMA/deadband/mercy/escalation machinery.
+
+---
+
 ## [8.10.0] - 2026-05-28
 
 ### Changed

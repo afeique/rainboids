@@ -105,21 +105,24 @@ describe('RUN-05a — buildDirectorOutcome (pure outcome builder)', () => {
         expect(buggy.dpsOnTarget / buggy.expectedDps).toBeGreaterThan(1000);
     });
 
-    test('M2: a no-clock wave fed at the neutral default does NOT push D_hp up', () => {
-        const dir = createDirector();
+    test('8.11.0: feeding wave outcomes advances the counter; difficulty stays in bounds (no skill spike)', () => {
+        const dir = createDirector({ seed: 42 });
         const TARGET = 35000;
-        // Feed the exact outcome the M2 guard produces (full HP, neutral clear
-        // speed, no hits) for several waves past cold-start. A neutral signal
-        // must leave D_hp parked at 1.0 — proving the guard can't spike.
+        // The outcome no longer steers difficulty (the budget model is gone), so
+        // feeding any outcome just advances the wave + rolls the next wave's
+        // RANDOM difficulty. It must always stay inside the hard clamps.
         const neutral = () => buildDirectorOutcome({
-            actualClearTime: TARGET,
-            hpRetainedFrac: 1.0,
-            hitsSurvived: 4, // == expectedHits default → neutral Pd too
-            deaths: 0,
+            actualClearTime: TARGET, hpRetainedFrac: 1.0, hitsSurvived: 4, deaths: 0,
         });
-        for (let i = 0; i < 7; i++) tickWave(dir, neutral());
-        expect(dir.wave).toBe(7);
-        expect(getDifficulty(dir).D_hp).toBeCloseTo(1.0, 6);
+        for (let i = 0; i < 7; i++) {
+            tickWave(dir, neutral());
+            const D = getDifficulty(dir);
+            expect(D.D_hp).toBeGreaterThanOrEqual(0.6);
+            expect(D.D_hp).toBeLessThanOrEqual(3.0);
+            expect(D.D_thr).toBeGreaterThanOrEqual(0.6);
+            expect(D.D_thr).toBeLessThanOrEqual(1.8);
+        }
+        expect(dir.wave).toBe(8); // started at 1, +7 ticks
     });
 });
 
@@ -302,28 +305,43 @@ describe('DIR-05 — PWR + mode wired into the live director context', () => {
     });
 });
 
-describe('RUN-05a — sanity: live feed of fast-clear/high-HP outcomes raises D_hp', () => {
-    test('several fast, full-HP wave clears push D_hp above 1.0 (post cold-start)', () => {
-        const dir = createDirector();
-        // Build the outcome exactly as the live wave-clear feed does: a fast
-        // clear (10s vs 35s target) at full HP with no hits taken — an
-        // over-performing offense profile the director should answer with more
-        // HP to chew through.
-        const fastFullHp = () => buildDirectorOutcome({
-            actualClearTime: 10000,
-            hpRetainedFrac: 1.0,
-            hitsSurvived: 0,
-            deaths: 0,
-        });
-        // Cold-start holds D=1 for waves 1–2; adaptation begins at wave 3.
-        tickWave(dir, fastFullHp());
-        tickWave(dir, fastFullHp());
-        expect(getDifficulty(dir).D_hp).toBe(1);
-        // A few more waves and D_hp must climb.
-        for (let i = 0; i < 5; i++) tickWave(dir, fastFullHp());
-        expect(dir.wave).toBe(7);
-        expect(getDifficulty(dir).D_hp).toBeGreaterThan(1);
-        // …but still inside the hard clamp.
-        expect(getDifficulty(dir).D_hp).toBeLessThanOrEqual(3.0);
+describe('8.11.0 — difficulty is RANDOM (CPU-governed), not skill-adaptive', () => {
+    test('difficulty varies wave-to-wave and is independent of the outcome fed', () => {
+        // Two directors with the SAME seed but OPPOSITE outcomes (fast/full-HP vs
+        // slow/low-HP) must roll IDENTICAL difficulty — proving difficulty no
+        // longer tracks player skill, only the (seed, wave) roll.
+        const a = createDirector({ seed: 7 });
+        const b = createDirector({ seed: 7 });
+        const fast = () => buildDirectorOutcome({ actualClearTime: 5000, hpRetainedFrac: 1.0, hitsSurvived: 0 });
+        const slow = () => buildDirectorOutcome({ actualClearTime: 90000, hpRetainedFrac: 0.05, hitsSurvived: 20, deaths: 1 });
+        const seqA = [], seqB = [];
+        for (let i = 0; i < 12; i++) { tickWave(a, fast()); seqA.push(+getDifficulty(a).D_hp.toFixed(6)); }
+        for (let i = 0; i < 12; i++) { tickWave(b, slow()); seqB.push(+getDifficulty(b).D_hp.toFixed(6)); }
+        expect(seqA).toEqual(seqB);                       // outcome-independent
+        expect(new Set(seqA).size).toBeGreaterThan(1);    // it genuinely varies
+    });
+
+    test('a different seed produces a different difficulty sequence', () => {
+        const a = createDirector({ seed: 1 });
+        const b = createDirector({ seed: 2 });
+        const o = () => buildDirectorOutcome({ actualClearTime: 30000, hpRetainedFrac: 1 });
+        const seqA = [], seqB = [];
+        for (let i = 0; i < 12; i++) { tickWave(a, o()); seqA.push(+getDifficulty(a).D_hp.toFixed(6)); }
+        for (let i = 0; i < 12; i++) { tickWave(b, o()); seqB.push(+getDifficulty(b).D_hp.toFixed(6)); }
+        expect(seqA).not.toEqual(seqB);
+    });
+
+    test('over a long run, some waves spike hard (>1.5×) and difficulty stays bounded', () => {
+        const dir = createDirector({ seed: 99 });
+        const o = () => buildDirectorOutcome({ actualClearTime: 30000, hpRetainedFrac: 1 });
+        let sawSpike = false;
+        for (let i = 0; i < 100; i++) {
+            tickWave(dir, o());
+            const hp = getDifficulty(dir).D_hp;
+            if (hp > 1.5) sawSpike = true;
+            expect(hp).toBeGreaterThanOrEqual(0.6);
+            expect(hp).toBeLessThanOrEqual(3.0);
+        }
+        expect(sawSpike).toBe(true); // the ramp + spikes eventually exceed 1.5×
     });
 });
