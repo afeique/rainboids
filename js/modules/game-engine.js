@@ -49,11 +49,8 @@ import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
 import { isDebugMode, debugUnlockAllFor } from './core/debug-config.js';
 import { DebugMenu, installDebugConsoleApi } from './ui/debug-menu.js';
 import { MAX_STAGES, WAVES_PER_STAGE, DEFAULT_RUN_CONFIG, runMaxWaves, getRunMode, getStage, runWavesPerStage } from './core/constants.js';
-// T32 — run randomizer + stage draft. nextDraft builds the 2–3 stage options at
-// each stage clear; the DraftOverlay shows them (PWR vs threat); applyPick
-// normalizes the chosen option into the stage spec stored on game.runStage.
-import { nextDraft, applyPick } from './wave/run-randomizer.js';
-import { DraftOverlay } from './ui/draft-overlay.js';
+// 8.9.0 — the run stage DRAFT was removed (waves are CPU-governed now); the
+// run-randomizer + DraftOverlay imports are gone with it.
 // T45 — bounty board: persistent directed goals advanced by gameplay events.
 import { rollBoard, recordEvent as recordBountyProgress, claim as claimBountyReward, rerollBounty, activeBountyTags } from './world/bounty-engine.js';
 import { BountyOverlay } from './ui/bounty-overlay.js';
@@ -3155,54 +3152,11 @@ export class GameEngine {
         }
     }
 
-    // T32 — open the run DRAFT at a stage clear: the player chooses the NEXT
-    // stage from 2–3 risk/reward options (PWR vs threat). Gates the next-stage
-    // advance — `onDone` fires after a pick (or, if the overlay can't open,
-    // returns false so the caller proceeds without soft-locking). Returns
-    // whether the overlay opened.
-    openStageDraft(onDone) {
-        const cb = (typeof onDone === 'function') ? onDone : () => {};
-        try {
-            if (!this.draftOverlay) this.draftOverlay = new DraftOverlay();
-            if (!this.game.runState) this.game.runState = { lastModifier: null, activeBountyTags: [] };
-            // T45 — bias one draft option toward an active bounty (§4.2 rule 6):
-            // feed the live bounty tags into the randomizer's runState.
-            try { this.game.runState.activeBountyTags = activeBountyTags(this._bountyBoard()); } catch (_e) { /* board optional */ }
-            // depth = the stage ABOUT to start (just-cleared stage + 1).
-            const wavesPer = runWavesPerStage(this.game);
-            const depth = getStage(this.game.currentWave, wavesPer) + 1;
-            const options = nextDraft(depth, this.game.runState);
-            if (!Array.isArray(options) || options.length === 0) return false;
-            const opened = this.draftOverlay.open(options, {
-                pwr: this.game.playerPWR || PWR_REF,
-                onPick: (i) => {
-                    const opt = options[i] || options[0];
-                    try { this._applyStageSpec(applyPick(opt)); } catch (_e) { /* keep going */ }
-                    cb();
-                },
-            });
-            return !!opened;
-        } catch (_e) {
-            return false; // never block stage progression on a draft failure
-        }
-    }
-
-    // T32 — apply a chosen stage spec (from run-randomizer.applyPick): store it
-    // on game.runStage (read by the income faucet's per-stage R$ multiplier and,
-    // later, the director/spawn biasing), remember the last modifier so the next
-    // draft won't repeat it, and feed the stage threat to the difficulty director.
-    _applyStageSpec(spec) {
-        if (!spec) return;
-        this.game.runStage = spec;
-        this.game.stageThreat = spec.threat | 0;
-        if (!this.game.runState) this.game.runState = { lastModifier: null, activeBountyTags: [] };
-        const mods = Array.isArray(spec.modifierIds) ? spec.modifierIds : [];
-        this.game.runState.lastModifier = mods.length ? mods[mods.length - 1] : null;
-        const dir = this.game.difficultyDirector;
-        if (dir && dir.cfg) {
-            setDirectorContext(dir, { pwr: this.game.playerPWR || PWR_REF, mode: getRunMode(this.game), threat: spec.threat });
-        }
-    }
+    // 8.9.0 — the run stage DRAFT (the "choose your next stage" risk/reward
+    // picker) was removed: waves are purely CPU-governed now, so a stage clear
+    // advances straight through with no choice moment. (openStageDraft /
+    // _applyStageSpec / DraftOverlay are gone; the income faucet's per-stage R$
+    // multiplier reads a null game.runStage and falls back to ×1.)
 
     // CD-17 — serialize the per-run director telemetry buffer to a JSON string
     // (summary + per-wave records) for a console / playtest harness. Also logs it

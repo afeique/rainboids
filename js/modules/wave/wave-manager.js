@@ -301,21 +301,9 @@ export function updateWaveSystem() {
                 }
                 proceed();
             };
-            // T32 — a STAGE clear opens the run DRAFT first (choose the next
-            // stage), THEN the STATS interpose, THEN proceed. Mid-stage waves
-            // skip straight through. Falls through if the draft can't open so
-            // progression never soft-locks.
-            if (stageClear && typeof this.openStageDraft === 'function') {
-                this.game.state = GAME_STATES.PAUSED;
-                if (this.player && this.player.pauseChargeShot) this.player.pauseChargeShot();
-                const opened = this.openStageDraft(() => {
-                    if (this.player && this.player.resumeChargeShot) this.player.resumeChargeShot();
-                    this.game.state = GAME_STATES.WAVE_TRANSITION;
-                    statsThenProceed();
-                });
-                if (opened) return;            // draft → chain fires on pick
-                this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → fall through
-            }
+            // 8.9.0 — the run stage DRAFT was removed; waves are CPU-governed,
+            // so a stage clear advances straight through (just the STATS
+            // interpose when the player leveled up). No choice moment.
             statsThenProceed();
         }, 2700);
     }

@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.9.0] - 2026-05-28
+
+### Removed
+- **The stage DRAFT (next-stage risk/reward picker) is gone.** A stage clear no
+  longer pauses to let you choose the next stage's theme/modifiers/risk —
+  waves are purely CPU-governed now, so each clear advances straight through
+  (only the STATS interpose on level-up remains). Deleted the `DraftOverlay`
+  (`ui/draft-overlay.js`), the engine's `openStageDraft`/`_applyStageSpec` +
+  imports, the wave-manager trigger, and the stage-draft test. (The
+  `run-randomizer` module stays for now — the difficulty director still reads
+  its budget; it goes when the director is reworked.)
+
+---
+
 ## [8.8.0] - 2026-05-28
 
 ### Removed
