@@ -7,6 +7,18 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.29.1] - 2026-05-28
+
+### Added
+- **Wave-clear interlude** (P7 pacing parity). Clearing a wave now emits
+  `WAVE_CLEAR` (→ the client's "WAVE n CLEAR" banner) and holds a short breather
+  (~1.5 s) before the next wave spawns — instead of the instant respawn that
+  immediately overwrote the clear banner. Matches SP's between-wave beat.
+
+### Tests
+- `tests/unit/sp-host.test.js`: the advance test now asserts `WAVE_CLEAR` fires,
+  the wave holds during the breather, then advances with a fresh roster. 25/25.
+
 ## [0.29.0] - 2026-05-28
 
 ### Added

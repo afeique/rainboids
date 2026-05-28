@@ -50,6 +50,9 @@ const noopAudio = new Proxy({}, { get: () => () => {} });
 // Co-op spawn/join invulnerability window (ms of i-frames).
 const SPAWN_IFRAMES_MS = 2500;
 
+// Breather between waves (ticks) — the wave-clear interlude before the next wave.
+const INTER_WAVE_TICKS = 90; // ~1.5 s at 60 Hz
+
 const NEUTRAL_INPUT = Object.freeze({
   up: false, down: false, left: false, right: false,
   fire: false, fireSecondary: false,
@@ -112,6 +115,8 @@ export class SpHost {
     // When on, tick() self-drives enemy spawns from the REAL wave-data tables.
     this.autoWaves = false;
     this.waveStarted = false;
+    this._clearPending = false; // true during the wave-clear breather
+    this._interWave = 0;        // ticks left in the breather
     // ── Snapshot / network identity ──
     // The owning ship's network id (SpRoom assigns the real player id; default 1
     // for headless single-player tests). The client reconciles its ship by this.
@@ -364,9 +369,19 @@ export class SpHost {
     // Enemies in their death animation keep active=true and stay pooled;
     // cleanupInactive (run in tick) frees them only once fully dead — so an
     // empty pool is the true "wave cleared" signal.
-    if (this.enemyPool.activeObjects.length === 0 && this.game.currentWave < MAX_WAVES) {
-      this.startWave(this.game.currentWave + 1);
+    if (this.enemyPool.activeObjects.length > 0) { this._clearPending = false; return; }
+    if (this.game.currentWave >= MAX_WAVES) return; // campaign finished
+    if (!this._clearPending) {
+      // First tick the wave reads empty: announce the clear + open a short
+      // breather (SP shows a wave-clear interlude before the next wave).
+      this._clearPending = true;
+      this._interWave = INTER_WAVE_TICKS;
+      if (this.events?.emit) this.events.emit('wave:clear', { wave: this.game.currentWave });
+      return;
     }
+    if (this._interWave > 0) { this._interWave -= 1; return; }
+    this._clearPending = false;
+    this.startWave(this.game.currentWave + 1);
   }
 
   // ── Real SIM systems, bound exactly as game-engine.js delegates them ───────
@@ -727,6 +742,7 @@ export class SpHost {
         case 'ship:downed': out.push({ type: EV.SHIP_DOWNED, x: ev[1]?.x, y: ev[1]?.y }); break;
         case 'ship:revived': out.push({ type: EV.SHIP_REVIVED, x: ev[1]?.x, y: ev[1]?.y }); break;
         case 'wave:start': out.push({ type: EV.WAVE_START, wave: ev[1]?.wave | 0 }); break;
+        case 'wave:clear': out.push({ type: EV.WAVE_CLEAR, wave: ev[1]?.wave | 0 }); break;
         default: break; // enemy-destroy/asteroid-destroy/coin/powerup owned by the diff
       }
     }

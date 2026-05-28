@@ -151,18 +151,25 @@ describe('SpHost — headless wave driver', () => {
     expect(host.asteroidPool.activeObjects.length).toBeGreaterThan(0);
   });
 
-  it('advances to the next wave once every enemy is cleared', async () => {
+  it('clears a wave (WAVE_CLEAR), waits a breather, then starts the next', async () => {
     const host = new SpHost({ seed: 3 });
     await host.init();
     host.autoWaves = true;
-    host.tick();
+    host.frame();
     expect(host.game.currentWave).toBe(1);
-    // Force-clear the wave: deactivate every enemy, then tick so cleanup +
-    // the wave driver advance fire.
+    // Force-clear the wave; the next frame should announce WAVE_CLEAR but NOT yet
+    // advance (the inter-wave breather holds).
     for (const e of host.enemyPool.activeObjects) e.active = false;
-    host.tick();
-    host.tick();
-    expect(host.game.currentWave).toBeGreaterThanOrEqual(2);
+    const { events } = host.frame();
+    expect(events.some((ev) => ev.type === EV.WAVE_CLEAR && ev.wave === 1)).toBe(true);
+    expect(host.game.currentWave).toBe(1); // still wave 1 during the breather
+    // Tick through the breather → wave 2 starts with a fresh roster.
+    let advanced = false;
+    for (let i = 0; i < 120 && !advanced; i++) {
+      host.frame();
+      if (host.game.currentWave >= 2) advanced = true;
+    }
+    expect(advanced).toBe(true);
     expect(host.enemyPool.activeObjects.length).toBeGreaterThan(0); // wave 2 roster
   });
 
