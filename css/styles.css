@@ -595,7 +595,7 @@ button:not([disabled]),
 #fabricate-close:hover { background: rgba(64, 150, 255, 0.15); }
 #fabricate-body { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 4px; }
 #fabricate-footer { text-align: center; color: #5e7290; font-size: calc(12px * var(--font-body-scale, 1)); padding-top: 6px; border-top: 1px solid rgba(80, 140, 220, 0.25); }
-.armory-fab-open { width: 100%; }
+.armory-fab-open, .armory-inv-open { width: 100%; }
 .inv-section-title {
     font-size: calc(12px * var(--font-header-scale, 1));
     color: #9fd6ff;
@@ -649,6 +649,25 @@ button:not([disabled]),
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     gap: 8px;
 }
+/* 8.13.0 — EQUIP / UNEQUIP action button on inventory cards. Sits flush at the
+   card's edge; rarity-tinted border via the card's --item-rarity. */
+.inv-act-btn {
+    margin-left: auto;
+    align-self: center;
+    flex: 0 0 auto;
+    font-family: inherit;
+    font-size: calc(10px * var(--font-body-scale, 1));
+    letter-spacing: 1px;
+    color: #cfe6ff;
+    background: rgba(80, 140, 220, 0.18);
+    border: 1px solid var(--item-rarity, #4a5a78);
+    border-radius: 4px;
+    padding: 5px 9px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.inv-act-btn:hover { background: rgba(120, 180, 255, 0.32); color: #fff; }
+.inv-act-btn:active { transform: translateY(1px); }
 .inv-drop-list { display: flex; flex-direction: column; gap: 6px; }
 .inv-drop-empty { font-size: calc(12px * var(--font-body-scale, 1)); color: #5e7290; padding: 8px 4px; }
 .inv-drop-row {

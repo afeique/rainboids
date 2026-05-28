@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.13.0] - 2026-05-28
+
+### Added
+- **A full inventory-management system for equipping gear.** The `I` inventory
+  overlay is now an equip surface, not just a view: **tap a stash item to equip
+  it** (primary weapon, power weapon, or one of the 5 gear slots) and **tap an
+  equipped piece to unequip it**. It works **pre-run AND mid-run** — gear is no
+  longer locked once a run starts, and a mid-run equip applies to the live player
+  **instantly** (weapon/power swap + gear stats + PWR, no free heal). Opening
+  mid-run first flushes this-run drops into the stash so freshly-found loot is
+  equippable right away.
+
+### Changed
+- The pre-run BUILD **GEAR tab** no longer hosts inline equip lists — it now has
+  an **"Open Inventory"** button that launches the same overlay (alongside *Open
+  Fabricator* + the salvage/craft stash). One equip surface, reachable anywhere.
+
+---
+
 ## [8.12.0] - 2026-05-28
 
 ### Changed

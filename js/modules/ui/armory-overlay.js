@@ -379,10 +379,11 @@ export class ArmoryOverlay {
             wValue.textContent = `R$ ${this._cores()}`;
             wallet.append(wLabel, wValue);
             c.appendChild(wallet);
-            this._renderWeapon(c, meta);
-            this._renderPower(c, meta);
+            // 8.13.0 — equipping moved to the standalone INVENTORY overlay (open
+            // any time, mid-run too). The GEAR tab just launches it + the
+            // fabricator, and keeps the salvage/craft stash list.
+            this._renderInventoryButton(c);
             this._renderFabricateButton(c);
-            this._renderEquipment(c, meta);
             this._renderStash(c, meta);
             return;
         }
@@ -685,6 +686,24 @@ export class ArmoryOverlay {
         btn.className = 'armory-buy armory-fab-open';
         btn.textContent = '⚒  Open Fabricator';
         btn.addEventListener('click', () => this.openFabricate());
+        section.appendChild(btn);
+        c.appendChild(section);
+    }
+
+    // 8.13.0 — launch the standalone INVENTORY overlay (the equip surface for the
+    // primary weapon, power weapon, and the 5 gear slots). Opens any time, mid-run
+    // too; replaces the old inline pre-run equip lists.
+    _renderInventoryButton(c) {
+        const section = document.createElement('div');
+        section.className = 'armory-section';
+        this._sectionHead(section, 'Loadout', 'Equip your primary, power & gear');
+        const btn = document.createElement('button');
+        btn.className = 'armory-buy armory-inv-open';
+        btn.textContent = '⚙  Open Inventory';
+        btn.addEventListener('click', () => {
+            const ge = this.gameEngine || (typeof window !== 'undefined' ? window.gameEngine : null);
+            if (ge && typeof ge.toggleInventoryScreen === 'function') ge.toggleInventoryScreen();
+        });
         section.appendChild(btn);
         c.appendChild(section);
     }

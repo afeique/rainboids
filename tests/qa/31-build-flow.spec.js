@@ -114,10 +114,10 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
     // 2. The default BUILD selection reflects BASE_LOADOUT and the base
     //    parents render as selectable equip toggles.
     // ------------------------------------------------------------------
-    test('GEAR tab hosts the WEAPON panel; no PRIMARY/POWER pickers exist in BUILD', async ({ page }) => {
-        // 8.x — weapons are equipped gear: the GEAR tab carries a WEAPON panel
-        // (equipped readout + stash swaps), and the old PRIMARY/POWER equip
-        // toggles are gone from the pre-run BUILD entirely.
+    test('GEAR tab launches the INVENTORY overlay for equipping; no PRIMARY/POWER pickers exist in BUILD', async ({ page }) => {
+        // 8.13.0 — equipping moved to the standalone INVENTORY overlay: the GEAR
+        // tab carries an "Open Inventory" button (+ "Open Fabricator"), and the
+        // old inline equip lists / PRIMARY/POWER toggles are gone from BUILD.
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
             const gear = document.getElementById('shop-tree-gear');
@@ -130,9 +130,9 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
             };
         });
 
-        // The GEAR tab now hosts the weapon-equip UI (8.7.1 — Title-Case labels).
-        expect(r.gearText).toContain('Primary Weapon');
-        expect(r.gearText).toContain('Equipped');
+        // The GEAR tab now launches the equip overlay + the fabricator.
+        expect(r.gearText).toContain('Open Inventory');
+        expect(r.gearText).toContain('Open Fabricator');
         // No weapon/power equip toggles render in the pre-run BUILD anymore.
         expect(r.pulseParent).toBe(false);
         expect(r.chargeParent).toBe(false);
