@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.7.1] - 2026-05-28
+
+### Changed
+- **Armory / pre-run GEAR screen restyle.** Section headings are now Title-Case
+  instead of shouty all-caps and render in the cleaner body font; each section
+  is a quiet slate card with real breathing room between its heading (plus an
+  optional muted subtitle) and its rows. The palette is simplified to one cool
+  accent, with gold reserved for the Rainshard balance — now a distinct labeled
+  readout atop the GEAR tab. Swap-in candidate rows read as indented children
+  with colored ± score deltas, the equipped row carries an "Equipped" badge,
+  and rows/buttons gain rounded corners with subtle hover states. Softened the
+  remaining all-caps labels throughout (EQUIPPED → Equipped, SALVAGE/REROLL/
+  TIER-UP/UNLOCK button verbs, the PASSIVES heading).
+
+---
+
 ## [8.7.0] - 2026-05-28
 
 ### Removed

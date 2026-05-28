@@ -1315,7 +1315,7 @@ function _renderRulePassiveCluster(container) {
 
     const head = document.createElement('div');
     head.className = 'armory-section-title';
-    head.textContent = `PASSIVES · ${_preRunPassives.length}/${maxSlots} chosen · ${keystones}/2 keystones`;
+    head.textContent = `Passives · ${_preRunPassives.length}/${maxSlots} chosen · ${keystones}/2 keystones`;
     container.appendChild(head);
 
     const sub = document.createElement('div');

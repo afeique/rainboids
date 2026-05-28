@@ -3657,249 +3657,6 @@ body.mobile-portrait #controls-tab h2 {
     margin: 4px 0 4px;
 }
 
-/* ─── 5.98.0 — Wave-clear powerup pick overlay (mobile only) ─────────
-   Full-screen modal shown after a wave clear. Three cards stacked
-   vertically on portrait, side-by-side on landscape. Tap a card to
-   claim that powerup and resume into the next wave. */
-#wave-pick-overlay {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(0, 0, 0, 0.88);
-    z-index: 2000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 16px;
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: none;
-}
-
-#wave-pick-panel {
-    width: 100%;
-    max-width: 520px;
-    text-align: center;
-}
-
-.wave-pick-title {
-    font-family: var(--font-body);
-    font-size: calc(24px * var(--font-header-scale, 1));
-    color: #ffd700;
-    text-shadow: 0 0 8px rgba(255, 215, 0, 0.45);
-    margin: 0 0 6px 0;
-    letter-spacing: 2px;
-}
-
-.wave-pick-subtitle {
-    font-family: var(--font-body);
-    font-size: calc(13px * var(--font-body-scale, 1));
-    color: #cfeaff;
-    margin: 0 0 18px 0;
-    letter-spacing: 1.5px;
-}
-
-#wave-pick-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.wave-pick-card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
-    background: rgba(10, 20, 40, 0.7);
-    border: 2px solid rgba(140, 220, 255, 0.7);
-    border-radius: 10px;
-    color: #ffffff;
-    font-family: monospace;
-    cursor: pointer;
-    text-align: left;
-    transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease;
-}
-
-.wave-pick-card:active {
-    transform: scale(0.97);
-    background: rgba(0, 80, 130, 0.75);
-    border-color: #ffe5a0;
-}
-
-.wave-pick-card-icon {
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 36px;
-    color: var(--wp-color, #cccccc);
-}
-
-.wave-pick-card-icon svg {
-    width: 100%;
-    height: 100%;
-}
-
-.wave-pick-card-body {
-    flex: 1;
-    min-width: 0;
-}
-
-.wave-pick-card-name {
-    font-family: var(--font-body);
-    font-size: calc(13px * var(--font-body-scale, 1));
-    color: var(--wp-color, #ffffff);
-    margin-bottom: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.wave-pick-card-desc {
-    font-family: 'Silkscreen', monospace;
-    font-size: calc(13px * var(--font-body-scale, 1));
-    color: #b8c8e0;
-    line-height: 1.25;
-}
-
-.wave-pick-card-stacks {
-    flex: 0 0 auto;
-    font-family: var(--font-body);
-    font-size: calc(12px * var(--font-body-scale, 1));
-    color: #88a8d4;
-    white-space: nowrap;
-}
-
-/* R4 — in-run gold-sink actions (reroll / repair) under the cards. */
-#wave-pick-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    margin-top: 14px;
-}
-.wave-pick-action-btn {
-    font-family: var(--font-body);
-    font-size: calc(12px * var(--font-body-scale, 1));
-    padding: 9px 14px;
-    cursor: pointer;
-    color: #ffd75c;
-    background: transparent;
-    border: 1px solid rgba(255, 200, 60, 0.5);
-}
-.wave-pick-action-btn:hover:not(:disabled) { background: rgba(255, 200, 60, 0.15); }
-.wave-pick-action-btn:disabled { color: #5e6680; border-color: rgba(94, 102, 128, 0.4); cursor: not-allowed; }
-
-/* Portrait phone tightening — smaller card padding + icon so 3 cards
-   plus title fit in a 640-px-tall viewport. */
-body.mobile-portrait #wave-pick-panel {
-    max-width: 100%;
-}
-body.mobile-portrait .wave-pick-title {
-    font-size: calc(18px * var(--font-header-scale, 1));
-}
-body.mobile-portrait .wave-pick-subtitle {
-    font-size: calc(12px * var(--font-body-scale, 1));
-    margin-bottom: 12px;
-}
-body.mobile-portrait .wave-pick-card {
-    padding: 10px 12px;
-    gap: 10px;
-}
-body.mobile-portrait .wave-pick-card-icon {
-    width: 28px;
-    height: 28px;
-    flex-basis: 28px;
-}
-body.mobile-portrait .wave-pick-card-name {
-    font-size: calc(12px * var(--font-body-scale, 1));
-}
-body.mobile-portrait .wave-pick-card-desc {
-    font-size: calc(13px * var(--font-body-scale, 1));
-}
-body.mobile-portrait .wave-pick-card-stacks {
-    font-size: calc(12px * var(--font-body-scale, 1));
-}
-
-/* ─── 5.101.0 — Shop-suggest overlay ────────────────────────────────
-   Fires after the survivor card claim. Three weapon-relevant upgrade
-   buttons + a CONTINUE button to skip into the next wave. Visual
-   language matches the wave-pick overlay (same fonts + card chrome)
-   so the two screens read as a single ceremony. */
-#shop-suggest-overlay {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(0, 0, 0, 0.88);
-    z-index: 2001;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 16px;
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: none;
-}
-
-#shop-suggest-panel {
-    width: 100%;
-    max-width: 520px;
-    text-align: center;
-}
-
-#shop-suggest-gold-row {
-    margin: 0 0 14px 0;
-    font-family: var(--font-body);
-    font-size: calc(14px * var(--font-body-scale, 1));
-    color: #ffe27a;
-    letter-spacing: 1.5px;
-    text-shadow: 0 0 8px rgba(255, 226, 122, 0.55);
-}
-
-#shop-suggest-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 16px;
-}
-
-.shop-suggest-skip {
-    display: inline-block;
-    padding: 12px 28px;
-    background: rgba(10, 20, 40, 0.7);
-    border: 2px solid rgba(140, 220, 255, 0.7);
-    border-radius: 10px;
-    color: #ffffff;
-    font-family: var(--font-body);
-    font-size: calc(13px * var(--font-body-scale, 1));
-    letter-spacing: 2px;
-    cursor: pointer;
-    transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease;
-}
-.shop-suggest-skip:active {
-    transform: scale(0.97);
-    background: rgba(0, 80, 130, 0.75);
-    border-color: #ffe5a0;
-}
-.shop-suggest-skip:hover {
-    background: rgba(20, 50, 90, 0.85);
-    border-color: #ffe5a0;
-}
-
-body.mobile-portrait #shop-suggest-panel {
-    max-width: 100%;
-}
-body.mobile-portrait #shop-suggest-gold-row {
-    font-size: calc(13px * var(--font-body-scale, 1));
-    margin-bottom: 10px;
-}
-body.mobile-portrait .shop-suggest-skip {
-    font-size: calc(12px * var(--font-body-scale, 1));
-    padding: 10px 22px;
-}
-
 /* ─── 5.99.0 — Mobile shop text scaling ────────────────────────────────
    The 5.79.57 per-weapon tab strip (10 tabs at 18-px Press Start 2P)
    overflows narrow phone viewports. Shrink the tab font + padding on
@@ -4921,94 +4678,162 @@ body.mobile-portrait .shop-help-icon {
 }
 
 /* ─── ARMORY (Phase R2 — pre-run unlock store) ───────────────────────── */
+/* ── ARMORY / pre-run GEAR design system ──────────────────────────────────
+   Used by the legacy full-screen ArmoryOverlay AND — what's actually on screen
+   — the pre-run BUILD GEAR tab (ArmoryOverlay.renderGearInto). Intentionally
+   restrained: deep slate cards, one cool accent, gold kept for the Rainshard
+   balance only, and real breathing room between a heading and its rows. */
 .armory-overlay {
     position: fixed;
     inset: 0;
     display: none;            /* toggled to flex by ArmoryOverlay.open() */
     align-items: center;
     justify-content: center;
-    background: radial-gradient(circle at 50% 40%, rgba(10, 16, 28, 0.97) 0%, rgba(4, 6, 12, 0.99) 100%);
+    background: radial-gradient(circle at 50% 38%, rgba(12, 17, 28, 0.97) 0%, rgba(4, 6, 11, 0.99) 100%);
     z-index: 9500;
     font-family: var(--font-body);
-    color: #d6def0;
+    color: #d8dff0;
 }
 .armory-panel {
     width: min(820px, 94vw);
     max-height: 90vh;
-    background: linear-gradient(180deg, rgba(14, 20, 30, 0.98) 0%, rgba(8, 11, 18, 0.98) 100%);
-    border: 2px solid #2f6fc2;
-    box-shadow: 0 0 28px rgba(64, 150, 255, 0.28), inset 0 0 70px rgba(0, 30, 80, 0.4);
-    padding: 20px 24px 16px;
+    background: linear-gradient(180deg, rgba(17, 23, 34, 0.98) 0%, rgba(10, 13, 20, 0.98) 100%);
+    border: 1px solid rgba(125, 160, 215, 0.22);
+    border-radius: 16px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    padding: 26px 28px 20px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 18px;
 }
 .armory-header {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(80, 140, 220, 0.35);
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(125, 160, 215, 0.14);
 }
 .armory-title {
-    font-size: calc(24px * var(--font-header-scale, 1));
-    letter-spacing: 3px;
-    color: #8fd0ff;
-    text-shadow: 0 0 12px rgba(64, 150, 255, 0.5);
+    font-size: calc(20px * var(--font-header-scale, 1));
+    letter-spacing: 2px;
+    color: #eaf1ff;
 }
 .armory-header > .armory-cores { margin-left: auto; }
 .armory-gold {
-    font-size: calc(16px * var(--font-body-scale, 1));
-    color: #ffd75c;
-    text-shadow: 0 0 10px rgba(255, 200, 60, 0.5);
+    font-size: calc(15px * var(--font-body-scale, 1));
+    color: #f4c969;
     margin-left: 14px;
 }
-.armory-cores {
-    font-size: calc(16px * var(--font-body-scale, 1));
-    color: #7fe0ff;
-    text-shadow: 0 0 10px rgba(90, 200, 255, 0.5);
-}
-.armory-sub { font-size: calc(12px * var(--font-body-scale, 1)); line-height: 1.7; color: #7d8aa6; }
+.armory-cores { font-size: calc(15px * var(--font-body-scale, 1)); color: #8fd9ff; }
+.armory-sub { font-size: calc(12px * var(--font-body-scale, 1)); line-height: 1.7; color: #79839c; }
 .armory-body {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 18px;
     overflow-y: auto;
-    padding-right: 4px;
+    padding-right: 6px;
     flex: 1;
 }
-.armory-section-title {
-    font-size: calc(11px * var(--font-header-scale, 1));
-    color: #8fd0ff;
-    letter-spacing: 1px;
-    margin-bottom: 6px;
+
+/* Rainshard balance — the lone gold accent, pinned atop the GEAR tab. */
+.armory-wallet {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 0 2px 14px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(125, 160, 215, 0.14);
 }
-.armory-list { display: flex; flex-direction: column; gap: 5px; }
+.armory-wallet-label {
+    font-size: calc(11px * var(--font-body-scale, 1));
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #69748f;
+}
+.armory-wallet-value { font-size: calc(17px * var(--font-body-scale, 1)); color: #f4c969; }
+
+/* Each section is a quiet card so the eye can group its rows. */
+.armory-section {
+    margin-bottom: 18px;
+    padding: 16px 16px 14px;
+    background: rgba(130, 160, 210, 0.04);
+    border: 1px solid rgba(125, 160, 215, 0.1);
+    border-radius: 12px;
+}
+.armory-section:last-child { margin-bottom: 0; }
+.armory-section-head { margin-bottom: 14px; }
+.armory-section-sub {
+    margin-top: 6px;
+    font-size: calc(11px * var(--font-body-scale, 1));
+    line-height: 1.6;
+    color: #707b95;
+}
+.armory-section-title {
+    font-size: calc(14px * var(--font-body-scale, 1));
+    color: #e6ecf8;
+    letter-spacing: 0.02em;
+}
+.armory-list { display: flex; flex-direction: column; gap: 7px; }
 .armory-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    padding: 7px 10px;
-    background: rgba(20, 30, 48, 0.6);
-    border: 1px solid rgba(80, 140, 220, 0.25);
+    gap: 12px;
+    padding: 9px 12px;
+    background: rgba(8, 12, 20, 0.5);
+    border: 1px solid rgba(125, 160, 215, 0.12);
+    border-radius: 8px;
 }
-.armory-row--owned { opacity: 0.55; }
-.armory-row-name { font-size: calc(12px * var(--font-body-scale, 1)); color: #d6def0; }
-.armory-row-tag { font-size: calc(11px * var(--font-body-scale, 1)); color: #6fae6f; letter-spacing: 1px; }
+.armory-row--owned { opacity: 0.5; }
+.armory-row--equipped { border-color: rgba(120, 180, 255, 0.3); background: rgba(70, 120, 200, 0.12); }
+.armory-row--hint { background: transparent; border-style: dashed; border-color: rgba(125, 160, 215, 0.18); }
+/* Candidate (swap-in) rows read as indented children of the row above. */
+.armory-row--candidate {
+    margin-left: 18px;
+    background: rgba(8, 12, 20, 0.28);
+    border-color: rgba(125, 160, 215, 0.07);
+}
+.armory-row-lead { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.armory-row-name { font-size: calc(12px * var(--font-body-scale, 1)); color: #dbe3f3; }
+.armory-row-slot {
+    flex: 0 0 auto;
+    min-width: 72px;
+    font-size: calc(10px * var(--font-body-scale, 1));
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6b7791;
+}
+.armory-row-tag {
+    font-size: calc(10px * var(--font-body-scale, 1));
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #7fb0ff;
+}
+.armory-delta { font-size: calc(11px * var(--font-body-scale, 1)); }
+.armory-delta--up { color: #7fd6a0; }
+.armory-delta--down { color: #d68b8b; }
 .armory-buy {
-    background: transparent;
-    color: #ffd75c;
-    border: 1px solid rgba(255, 200, 60, 0.5);
-    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #d6def0;
+    border: 1px solid rgba(140, 170, 220, 0.28);
+    border-radius: 7px;
+    padding: 7px 13px;
     cursor: pointer;
-    font-size: calc(12px * var(--font-body-scale, 1));
+    font-size: calc(11px * var(--font-body-scale, 1));
     font-family: inherit;
+    letter-spacing: 0.02em;
     white-space: nowrap;
+    transition: background 0.13s ease, border-color 0.13s ease, color 0.13s ease;
 }
-.armory-buy:hover:not(:disabled) { background: rgba(255, 200, 60, 0.15); }
-.armory-buy:disabled { color: #5e6680; border-color: rgba(94, 102, 128, 0.4); cursor: not-allowed; }
-.armory-row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.armory-buy:hover:not(:disabled) {
+    background: rgba(120, 170, 235, 0.18);
+    border-color: rgba(140, 180, 255, 0.55);
+    color: #eaf1ff;
+}
+.armory-buy:disabled { color: #565f78; border-color: rgba(90, 100, 128, 0.3); background: transparent; cursor: not-allowed; }
+.armory-buy--wide { width: 100%; margin-bottom: 10px; }
+.armory-row-actions { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
 /* R5 — selected loadout pick (green like the START button). */
 .loadout-pick--on {
     color: #9affb0;
@@ -5020,26 +4845,28 @@ body.mobile-portrait .shop-help-icon {
     display: flex;
     justify-content: space-between;
     gap: 12px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(80, 140, 220, 0.3);
+    padding-top: 16px;
+    border-top: 1px solid rgba(125, 160, 215, 0.14);
 }
 .armory-btn {
-    padding: 10px 20px;
+    padding: 11px 22px;
     cursor: pointer;
-    font-size: calc(13px * var(--font-body-scale, 1));
+    font-size: calc(12px * var(--font-body-scale, 1));
     font-family: inherit;
-    letter-spacing: 1px;
-    border: 1px solid rgba(80, 140, 220, 0.55);
-    background: transparent;
-    color: #8fd0ff;
+    letter-spacing: 0.04em;
+    border: 1px solid rgba(140, 170, 220, 0.4);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: #cdd9ee;
+    transition: background 0.13s ease, border-color 0.13s ease;
 }
-.armory-btn--back:hover { background: rgba(64, 150, 255, 0.15); }
+.armory-btn--back:hover { background: rgba(120, 170, 235, 0.16); border-color: rgba(140, 180, 255, 0.5); }
 .armory-btn--start {
-    color: #9affb0;
-    border-color: rgba(120, 255, 150, 0.6);
-    text-shadow: 0 0 8px rgba(120, 255, 150, 0.4);
+    color: #a7ffbb;
+    border-color: rgba(120, 255, 150, 0.5);
+    background: rgba(120, 255, 150, 0.08);
 }
-.armory-btn--start:hover { background: rgba(120, 255, 150, 0.15); }
+.armory-btn--start:hover { background: rgba(120, 255, 150, 0.18); border-color: rgba(120, 255, 150, 0.7); }
 
 /* ── HANGAR — cosmetic ship-skin selector (6.157.0) ────────────────── */
 .hangar-overlay {
@@ -5170,8 +4997,8 @@ body.mobile-portrait .shop-help-icon {
 h1, h2, h3,
 .pause-tab, .shop-tab, .shop-tree-tab, .powerups-subtab,
 .controls-section-title,
-.shop-title, .wave-pick-title,
-.armory-title, .armory-section-title,
+.shop-title,
+.armory-title,
 .hangar-title,
 .settings-title, .settings-section-title {
     font-family: var(--font-header);

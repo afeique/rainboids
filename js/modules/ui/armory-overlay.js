@@ -35,10 +35,17 @@ import { getPassive } from '../combat/passive-data.js';
 const RESIST_TARGET_ELEMENTS = Object.keys(ELEMENTS).filter((id) => id !== 'KINETIC');
 
 const CATEGORY_DEFS = {
-    primaries: { label: 'PRIMARY WEAPONS', defs: () => PRIMARY_WEAPONS },
-    powers:    { label: 'POWER WEAPONS',   defs: () => POWER_WEAPONS },
-    abilities: { label: 'ABILITIES',       defs: () => ABILITIES },
+    primaries: { label: 'Primary Weapons', defs: () => PRIMARY_WEAPONS },
+    powers:    { label: 'Power Weapons',   defs: () => POWER_WEAPONS },
+    abilities: { label: 'Abilities',       defs: () => ABILITIES },
 };
+
+// Slot ids ship as ALL-CAPS labels (shared with the inventory paper-doll).
+// The armory wants a softer, sentence-cased heading — title-case for display
+// here only, leaving SLOT_LABEL untouched for the other UIs.
+function titleCase(s) {
+    return String(s || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export class ArmoryOverlay {
     constructor() {
@@ -362,10 +369,16 @@ export class ArmoryOverlay {
             const c = this._gearContainer;
             const meta = loadMeta() || {};
             c.replaceChildren();
-            const head = document.createElement('div');
-            head.className = 'armory-section-title';
-            head.textContent = `RAINSHARDS: R$ ${this._cores()}`;
-            c.appendChild(head);
+            const wallet = document.createElement('div');
+            wallet.className = 'armory-wallet';
+            const wLabel = document.createElement('span');
+            wLabel.className = 'armory-wallet-label';
+            wLabel.textContent = 'Rainshards';
+            const wValue = document.createElement('span');
+            wValue.className = 'armory-wallet-value';
+            wValue.textContent = `R$ ${this._cores()}`;
+            wallet.append(wLabel, wValue);
+            c.appendChild(wallet);
             this._renderWeapon(c, meta);
             this._renderPower(c, meta);
             this._renderFabricateButton(c);
@@ -388,11 +401,8 @@ export class ArmoryOverlay {
             const section = document.createElement('div');
             section.className = 'armory-section';
 
-            const secTitle = document.createElement('div');
-            secTitle.className = 'armory-section-title';
             const cost = unlockCost(category);
-            secTitle.textContent = `${cat.label}  ·  R$ ${cost} each`;
-            section.appendChild(secTitle);
+            this._sectionHead(section, cat.label, `R$ ${cost} each`);
 
             const owned = getUnlockedSet(category, meta);
             const locked = getLockedIds(category, Object.keys(defs), meta);
@@ -411,7 +421,7 @@ export class ArmoryOverlay {
                 name.textContent = def.name || id;
                 const tag = document.createElement('span');
                 tag.className = 'armory-row-tag';
-                tag.textContent = UNLOCK_CATEGORIES[category].base.includes(id) ? 'BASE' : 'OWNED';
+                tag.textContent = UNLOCK_CATEGORIES[category].base.includes(id) ? 'Base' : 'Owned';
                 row.append(name, tag);
                 list.appendChild(row);
             }
@@ -429,7 +439,7 @@ export class ArmoryOverlay {
                 btn.className = 'armory-buy';
                 const affordable = accountGold >= cost;
                 btn.disabled = !affordable;
-                btn.textContent = `UNLOCK · R$ ${cost}`;
+                btn.textContent = `Unlock · R$ ${cost}`;
                 btn.addEventListener('click', () => this.buy(category, id));
                 row.append(name, btn);
                 list.appendChild(row);
@@ -443,6 +453,26 @@ export class ArmoryOverlay {
         this._renderStash(body, meta);
     }
 
+    // Build a section heading: a Title-Case title with an optional muted
+    // subtitle beneath it. The CSS gives the heading→body breathing room, so
+    // callers no longer pad headings with " · descriptor" suffixes.
+    _sectionHead(section, title, subtitle) {
+        const head = document.createElement('div');
+        head.className = 'armory-section-head';
+        const t = document.createElement('div');
+        t.className = 'armory-section-title';
+        t.textContent = title;
+        head.appendChild(t);
+        if (subtitle) {
+            const s = document.createElement('div');
+            s.className = 'armory-section-sub';
+            s.textContent = subtitle;
+            head.appendChild(s);
+        }
+        section.appendChild(head);
+        return head;
+    }
+
     // Phase R8.3 — the 5 gear slots: equipped item + the best stash
     // candidates to swap in, with score deltas. Editable only here (pre-run);
     // gear is locked once a run begins.
@@ -453,39 +483,38 @@ export class ArmoryOverlay {
     _renderWeapon(body, meta) {
         const section = document.createElement('div');
         section.className = 'armory-section';
-        const secTitle = document.createElement('div');
-        secTitle.className = 'armory-section-title';
-        secTitle.textContent = 'WEAPON  ·  your primary is the weapon you equip';
-        section.appendChild(secTitle);
+        this._sectionHead(section, 'Primary Weapon');
 
         const list = document.createElement('div');
         list.className = 'armory-list';
 
         const equipped = getEquippedWeapon(meta);
         const eqRow = document.createElement('div');
-        eqRow.className = 'armory-row';
+        eqRow.className = 'armory-row armory-row--equipped';
         const eqName = document.createElement('span');
         eqName.className = 'armory-row-name';
+        const eqTag = document.createElement('span');
+        eqTag.className = 'armory-row-tag';
+        eqTag.textContent = 'Equipped';
         if (equipped) {
-            eqName.textContent = `EQUIPPED: ${equipped.name || 'Weapon'} (L${equipped.level || 1})`;
+            eqName.textContent = `${equipped.name || 'Weapon'} · L${equipped.level || 1}`;
             if (equipped.rarityColor) eqName.style.color = equipped.rarityColor;
         } else {
-            eqName.textContent = 'EQUIPPED: ';
             const em = document.createElement('em');
             em.className = 'slot-empty';
             em.textContent = 'Empty';
             eqName.appendChild(em);
         }
-        eqRow.appendChild(eqName);
+        eqRow.append(eqName, eqTag);
         list.appendChild(eqRow);
 
         const weapons = stashWeapons(meta);
         if (weapons.length === 0) {
             const hint = document.createElement('div');
-            hint.className = 'armory-row armory-row--candidate';
+            hint.className = 'armory-row armory-row--candidate armory-row--hint';
             const hn = document.createElement('span');
             hn.className = 'armory-row-name';
-            hn.textContent = '  ↳ no spare weapons — find loot or FABRICATE one';
+            hn.textContent = 'No spare weapons — find loot or fabricate one';
             hint.appendChild(hn);
             list.appendChild(hint);
         } else {
@@ -496,11 +525,11 @@ export class ArmoryOverlay {
                 cn.className = 'armory-row-name';
                 const tn = (Array.isArray(item.traits) && item.traits.length)
                     ? `  ·  ${item.traits.length} trait${item.traits.length === 1 ? '' : 's'}` : '';
-                cn.textContent = `  ↳ ${item.name || 'Weapon'} (L${item.level || 1})${tn}`;
+                cn.textContent = `${item.name || 'Weapon'} · L${item.level || 1}${tn}`;
                 if (item.rarityColor) cn.style.color = item.rarityColor;
                 const btn = document.createElement('button');
                 btn.className = 'armory-buy';
-                btn.textContent = 'EQUIP';
+                btn.textContent = 'Equip';
                 btn.addEventListener('click', () => this.equipWeapon(index));
                 crow.append(cn, btn);
                 list.appendChild(crow);
@@ -516,39 +545,38 @@ export class ArmoryOverlay {
     _renderPower(body, meta) {
         const section = document.createElement('div');
         section.className = 'armory-section';
-        const secTitle = document.createElement('div');
-        secTitle.className = 'armory-section-title';
-        secTitle.textContent = 'POWER WEAPON  ·  equip a power weapon you’ve found';
-        section.appendChild(secTitle);
+        this._sectionHead(section, 'Power Weapon');
 
         const list = document.createElement('div');
         list.className = 'armory-list';
 
         const equipped = getEquippedPowerWeapon(meta);
         const eqRow = document.createElement('div');
-        eqRow.className = 'armory-row';
+        eqRow.className = 'armory-row armory-row--equipped';
         const eqName = document.createElement('span');
         eqName.className = 'armory-row-name';
+        const eqTag = document.createElement('span');
+        eqTag.className = 'armory-row-tag';
+        eqTag.textContent = 'Equipped';
         if (equipped) {
-            eqName.textContent = `EQUIPPED: ${equipped.name || 'Power'} (L${equipped.level || 1})`;
+            eqName.textContent = `${equipped.name || 'Power'} · L${equipped.level || 1}`;
             if (equipped.rarityColor) eqName.style.color = equipped.rarityColor;
         } else {
-            eqName.textContent = 'EQUIPPED: ';
             const em = document.createElement('em');
             em.className = 'slot-empty';
             em.textContent = 'Empty';
             eqName.appendChild(em);
         }
-        eqRow.appendChild(eqName);
+        eqRow.append(eqName, eqTag);
         list.appendChild(eqRow);
 
         const powers = stashPowerWeapons(meta);
         if (powers.length === 0) {
             const hint = document.createElement('div');
-            hint.className = 'armory-row armory-row--candidate';
+            hint.className = 'armory-row armory-row--candidate armory-row--hint';
             const hn = document.createElement('span');
             hn.className = 'armory-row-name';
-            hn.textContent = '  ↳ no power weapons — find loot or FABRICATE one';
+            hn.textContent = 'No power weapons — find loot or fabricate one';
             hint.appendChild(hn);
             list.appendChild(hint);
         } else {
@@ -557,11 +585,11 @@ export class ArmoryOverlay {
                 crow.className = 'armory-row armory-row--candidate';
                 const cn = document.createElement('span');
                 cn.className = 'armory-row-name';
-                cn.textContent = `  ↳ ${item.name || 'Power'} (L${item.level || 1})`;
+                cn.textContent = `${item.name || 'Power'} · L${item.level || 1}`;
                 if (item.rarityColor) cn.style.color = item.rarityColor;
                 const btn = document.createElement('button');
                 btn.className = 'armory-buy';
-                btn.textContent = 'EQUIP';
+                btn.textContent = 'Equip';
                 btn.addEventListener('click', () => this.equipPowerWeapon(index));
                 crow.append(cn, btn);
                 list.appendChild(crow);
@@ -575,10 +603,7 @@ export class ArmoryOverlay {
         const equipped = getEquipped(meta);
         const section = document.createElement('div');
         section.className = 'armory-section';
-        const secTitle = document.createElement('div');
-        secTitle.className = 'armory-section-title';
-        secTitle.textContent = 'EQUIPMENT  ·  5 gear slots (locked once a run starts)';
-        section.appendChild(secTitle);
+        this._sectionHead(section, 'Equipment', '5 gear slots · locked once a run starts');
 
         const list = document.createElement('div');
         list.className = 'armory-list';
@@ -588,22 +613,26 @@ export class ArmoryOverlay {
             row.className = 'armory-row';
             const name = document.createElement('span');
             name.className = 'armory-row-name';
-            const label = SLOT_LABEL[slot] || slot.toUpperCase();
+            const slotTag = document.createElement('span');
+            slotTag.className = 'armory-row-slot';
+            slotTag.textContent = titleCase(SLOT_LABEL[slot] || slot);
             if (cur) {
-                name.textContent = `${label}: ${cur.name || slot} (L${cur.level || 1})`;
+                name.textContent = `${cur.name || slot} · L${cur.level || 1}`;
                 if (cur.rarityColor) name.style.color = cur.rarityColor;
             } else {
-                name.textContent = `${label}: `;
                 const em = document.createElement('em');
                 em.className = 'slot-empty';
                 em.textContent = 'Empty';
                 name.appendChild(em);
             }
-            row.appendChild(name);
+            const left = document.createElement('span');
+            left.className = 'armory-row-lead';
+            left.append(slotTag, name);
+            row.appendChild(left);
             if (cur) {
                 const un = document.createElement('button');
                 un.className = 'armory-buy';
-                un.textContent = 'UNEQUIP';
+                un.textContent = 'Unequip';
                 un.addEventListener('click', () => this.unequip(slot));
                 row.appendChild(un);
             }
@@ -619,14 +648,19 @@ export class ArmoryOverlay {
                 crow.className = 'armory-row armory-row--candidate';
                 const cn = document.createElement('span');
                 cn.className = 'armory-row-name';
-                const sign = c.delta >= 0 ? '+' : '';
-                cn.textContent = `  ↳ ${c.item.name || slot} (L${c.item.level || 1})  ${sign}${c.delta}`;
+                cn.textContent = `${c.item.name || slot} · L${c.item.level || 1}`;
                 if (c.item.rarityColor) cn.style.color = c.item.rarityColor;
+                const delta = document.createElement('span');
+                delta.className = c.delta >= 0 ? 'armory-delta armory-delta--up' : 'armory-delta armory-delta--down';
+                delta.textContent = `${c.delta >= 0 ? '+' : ''}${c.delta}`;
+                const lead = document.createElement('span');
+                lead.className = 'armory-row-lead';
+                lead.append(cn, delta);
                 const btn = document.createElement('button');
                 btn.className = 'armory-buy';
-                btn.textContent = 'EQUIP';
+                btn.textContent = 'Equip';
                 btn.addEventListener('click', () => this.equip(c.index));
-                crow.append(cn, btn);
+                crow.append(lead, btn);
                 list.appendChild(crow);
             }
         }
@@ -646,13 +680,10 @@ export class ArmoryOverlay {
     _renderFabricateButton(c) {
         const section = document.createElement('div');
         section.className = 'armory-section';
-        const title = document.createElement('div');
-        title.className = 'armory-section-title';
-        title.textContent = 'FABRICATE  ·  craft loot for R$';
-        section.appendChild(title);
+        this._sectionHead(section, 'Fabricate', 'Spend Rainshards to craft fresh loot');
         const btn = document.createElement('button');
         btn.className = 'armory-buy armory-fab-open';
-        btn.textContent = '⚒  OPEN FABRICATOR';
+        btn.textContent = '⚒  Open Fabricator';
         btn.addEventListener('click', () => this.openFabricate());
         section.appendChild(btn);
         c.appendChild(section);
@@ -705,10 +736,7 @@ export class ArmoryOverlay {
 
         const section = document.createElement('div');
         section.className = 'armory-section';
-        const title = document.createElement('div');
-        title.className = 'armory-section-title';
-        title.textContent = 'FABRICATE  ·  craft new loot for R$';
-        section.appendChild(title);
+        this._sectionHead(section, 'Fabricate', 'Craft new loot for Rainshards');
 
         const mkSelect = (options, value, onChange, fmt) => {
             const sel = document.createElement('select');
@@ -742,7 +770,7 @@ export class ArmoryOverlay {
             (v) => { this._fabSlot = v; this._rerenderFabricate(); }, (s) => (SLOT_LABEL[s] || s).toUpperCase()));
         const gearBtn = document.createElement('button');
         gearBtn.className = 'armory-buy';
-        gearBtn.textContent = `FABRICATE GEAR · R$ ${cost}`;
+        gearBtn.textContent = `Fabricate Gear · R$ ${cost}`;
         gearBtn.disabled = wallet < cost;
         gearBtn.addEventListener('click', () => {
             const r = ge.fabricateGear({ slot, rarity });
@@ -759,7 +787,7 @@ export class ArmoryOverlay {
             (v) => { this._fabArchetype = v; this._rerenderFabricate(); }));
         const wepBtn = document.createElement('button');
         wepBtn.className = 'armory-buy';
-        wepBtn.textContent = `FABRICATE WEAPON · R$ ${cost}`;
+        wepBtn.textContent = `Fabricate Weapon · R$ ${cost}`;
         wepBtn.disabled = wallet < cost;
         wepBtn.addEventListener('click', () => {
             const r = ge.fabricateWeapon({ archetype: arch, rarity });
@@ -782,23 +810,20 @@ export class ArmoryOverlay {
         const section = document.createElement('div');
         section.className = 'armory-section';
 
-        const secTitle = document.createElement('div');
-        secTitle.className = 'armory-section-title';
-        secTitle.textContent = `STASH  ·  ${gearCount} item${gearCount === 1 ? '' : 's'}`;
-        section.appendChild(secTitle);
+        this._sectionHead(section, 'Stash', `${gearCount} item${gearCount === 1 ? '' : 's'}`);
 
         if (gearCount === 0) {
             const empty = document.createElement('div');
             empty.className = 'armory-sub';
-            empty.textContent = 'Loot you collect on a run is committed here when the run ends. Salvage it for Rainshards (R$).';
+            empty.textContent = 'Loot you collect on a run is committed here when the run ends. Salvage it for Rainshards.';
             section.appendChild(empty);
             body.appendChild(section);
             return;
         }
 
         const bulk = document.createElement('button');
-        bulk.className = 'armory-buy';
-        bulk.textContent = 'SALVAGE ALL BELOW EQUIPPED';
+        bulk.className = 'armory-buy armory-buy--wide';
+        bulk.textContent = 'Salvage all below equipped';
         bulk.addEventListener('click', () => this.salvageAllBelowEquipped());
         section.appendChild(bulk);
 
@@ -826,7 +851,7 @@ export class ArmoryOverlay {
             const reBtn = document.createElement('button');
             reBtn.className = 'armory-buy';
             reBtn.disabled = !canAffordReroll(it, cores);
-            reBtn.textContent = `REROLL · R$ ${reCost}`;
+            reBtn.textContent = `Reroll · R$ ${reCost}`;
             reBtn.addEventListener('click', () => this.reroll(i));
             actions.appendChild(reBtn);
 
@@ -836,7 +861,7 @@ export class ArmoryOverlay {
                 const tuBtn = document.createElement('button');
                 tuBtn.className = 'armory-buy';
                 tuBtn.disabled = !canAffordTierUp(it, cores);
-                tuBtn.textContent = `TIER-UP · R$ ${tuCost}`;
+                tuBtn.textContent = `Tier up · R$ ${tuCost}`;
                 tuBtn.addEventListener('click', () => this.tierUp(i));
                 actions.appendChild(tuBtn);
             }
@@ -844,7 +869,7 @@ export class ArmoryOverlay {
             // Salvage (R8.5).
             const btn = document.createElement('button');
             btn.className = 'armory-buy';
-            btn.textContent = `SALVAGE · R$ ${salvageValue(it)}`;
+            btn.textContent = `Salvage · R$ ${salvageValue(it)}`;
             btn.addEventListener('click', () => this.salvage(i));
             actions.appendChild(btn);
 
@@ -881,8 +906,8 @@ export class ArmoryOverlay {
         const lbl = document.createElement('span');
         lbl.className = 'armory-row-name';
         lbl.textContent = locked
-            ? `  ↳ TARGET RESIST — tier-locked (${item.rarityLabel || item.rarity})`
-            : `  ↳ TARGET RESIST · R$ ${cost}  (RESIST ${current}/${cap})`;
+            ? `Target resist — tier-locked (${titleCase(item.rarityLabel || item.rarity)})`
+            : `Target resist · R$ ${cost}  ·  ${current}/${cap} resists`;
         if (locked) lbl.style.opacity = '0.5';
         sub.appendChild(lbl);
 
@@ -936,14 +961,14 @@ export class ArmoryOverlay {
         const lbl = document.createElement('span');
         lbl.className = 'armory-row-name';
         if (locked) {
-            lbl.textContent = `  ↳ PASSIVE — tier-locked (${item.rarityLabel || item.rarity})`;
+            lbl.textContent = `Passive — tier-locked (${titleCase(item.rarityLabel || item.rarity)})`;
             lbl.style.opacity = '0.5';
             sub.appendChild(lbl);
             return sub;
         }
         lbl.textContent = currentName
-            ? `  ↳ PASSIVE: ${currentName} · R$ ${cost}`
-            : `  ↳ PASSIVE: — none — · R$ ${cost}`;
+            ? `Passive: ${currentName} · R$ ${cost}`
+            : `Passive: none · R$ ${cost}`;
         sub.appendChild(lbl);
 
         const actions = document.createElement('span');
@@ -954,7 +979,7 @@ export class ArmoryOverlay {
         // when the lone eligible passive is already on the item (no-alternatives).
         const onlyOption = pool.length === 1 && item.passive === pool[0].id;
         btn.disabled = !affordable || onlyOption;
-        btn.textContent = currentName ? `REROLL PASSIVE · R$ ${cost}` : `ROLL PASSIVE · R$ ${cost}`;
+        btn.textContent = currentName ? `Reroll passive · R$ ${cost}` : `Roll passive · R$ ${cost}`;
         btn.addEventListener('click', () => this.rerollPassive(index));
         actions.appendChild(btn);
         sub.appendChild(actions);
