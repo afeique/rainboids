@@ -7,6 +7,36 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.20.0] - 2026-05-27
+
+### Added
+- **Real SP collisions run headless** (Path A, P4 — `SpHost` is now a full
+  combat engine context). The server host binds the actual SP
+  `collision-system.js`, `combat-manager.js`, and player `lifecycle.js` modules
+  via `fn.call(this)` — exactly as `game-engine.js` delegates them — so the
+  authoritative damage/kill/pickup core is the *same code* SP runs, not a
+  reimplementation. Player bullets damage + kill enemies (with crits, statuses,
+  splits, vampirism, kill-streak/XP rewards, gear/gold drops), enemy bullets and
+  bodies damage the player through the real `takeDamage` resist pipeline, and
+  asteroids/orbs/gold/powerups collide + collect.
+- **Collectible + VFX pools on the host.** Added the sim pools (`colorStarPool`,
+  `goldCoinPool`, `goldShapePool`, `powerupPool`) + a `SpatialGrid` broad-phase;
+  the cosmetic VFX pools (`particlePool`/debris/shards) are the no-op stub so the
+  many direct `this.particlePool.get(...)` sites no-op server-side.
+- **Per-tick semantic event stream.** `SpHost.events.emit` is wrapped to buffer
+  every event the SP sim raises (`audio:*`, `enemy:killed`, …); `tick()` drains
+  it and returns the stream so clients re-derive particles/sounds/shake.
+- **Headless death/tank flow** (`handlePlayerDeath` / `_consumeTank`): the SIM
+  essentials (drop the ship from collisions, flip to `GAME_OVER`) minus the SP
+  FX/overlay. Cosmetic engine hooks (screen shake, hitstop, debris, damage
+  numbers, notifications, missions, bounties) are no-op stubs on the host.
+
+### Tests
+- `tests/unit/sp-host.test.js` (+4): player bullets kill a real enemy via the
+  collision-system; the per-tick event stream drains audio/semantic events on a
+  hit; an enemy body damages the player through the real lifecycle; a 200-tick
+  mixed run (enemies + asteroids) never throws. 9/9 green.
+
 ## [0.19.0] - 2026-05-27
 
 ### Added

@@ -78,3 +78,60 @@ describe('SpHost — real SP Player headless', () => {
     expect(await run()).toEqual(await run());
   });
 });
+
+describe('SpHost — real SP collisions headless', () => {
+  it('player bullets kill an enemy via the real collision-system', async () => {
+    const host = new SpHost({ seed: 7 });
+    await host.init();
+    host.cheats.onePunchMan = true; // first hit lands the kill
+    const e = host.spawnEnemy(host.player.x + 120, host.player.y, 'HUNTER', 1);
+    const fireInput = {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimX: e.x, aimY: e.y,
+      stickInput: { x: 0, y: 0, magnitude: 0 }, aimStick: { x: 0, y: 0, magnitude: 0 },
+    };
+    let killSeen = false;
+    for (let i = 0; i < 240; i++) {
+      const events = host.tick(fireInput);
+      if (events.some((ev) => ev[0] === 'audio:enemy-destroy')) killSeen = true;
+    }
+    expect(killSeen).toBe(true);                          // the HUNTER took its lethal hit
+    expect(host.enemyPool.activeObjects.length).toBe(0);  // death animation finished + reclaimed
+  });
+
+  it('drains a per-tick event stream (audio/semantic events) on a hit', async () => {
+    const host = new SpHost({ seed: 7 });
+    await host.init();
+    host.cheats.onePunchMan = true;
+    const e = host.spawnEnemy(host.player.x + 100, host.player.y, 'HUNTER', 1);
+    const fireInput = {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimX: e.x, aimY: e.y,
+      stickInput: { x: 0, y: 0, magnitude: 0 }, aimStick: { x: 0, y: 0, magnitude: 0 },
+    };
+    const collected = [];
+    for (let i = 0; i < 90; i++) collected.push(...host.tick(fireInput));
+    expect(Array.isArray(collected)).toBe(true);
+    expect(collected.some((ev) => typeof ev[0] === 'string' && ev[0].startsWith('audio:'))).toBe(true);
+  });
+
+  it('an enemy body colliding with the player deals damage (real lifecycle)', async () => {
+    const host = new SpHost({ seed: 7 });
+    await host.init();
+    const hp0 = host.player.health;
+    // Spawn a TANGERINE right on top of the player; its body contact damages.
+    host.spawnEnemy(host.player.x, host.player.y, 'HUNTER', 1);
+    for (let i = 0; i < 120; i++) host.tick(); // neutral; let bodies overlap
+    expect(host.player.health).toBeLessThan(hp0);
+  });
+
+  it('runs a long mixed tick (enemies + asteroids) without throwing', async () => {
+    const host = new SpHost({ seed: 7 });
+    await host.init();
+    for (let i = 0; i < 4; i++) host.spawnEnemy(host.player.x + 200 + i * 60, host.player.y + i * 30, 'HUNTER', 1);
+    expect(() => {
+      for (let i = 0; i < 200; i++) host.tick(rightInput);
+    }).not.toThrow();
+    expect(Number.isFinite(host.player.x)).toBe(true);
+  });
+});
