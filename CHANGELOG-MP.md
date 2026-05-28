@@ -7,6 +7,17 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.40.0] - 2026-05-28
+
+### Added
+- **Boss name-card + enemy hit-flash (look-like-SP step).**
+  - **Boss name-card.** When a boss first appears in the snapshot (an enemy with
+    a boss tier), a cinematic WARNING banner + the boss type name fades in, holds,
+    and fades out across the upper screen.
+  - **Enemy hit-flash.** An enemy whose HP dropped this snapshot gets a brief
+    additive white bloom over its silhouette, so hits register visually like SP
+    (the render loop now keys enemies by id to look up a per-enemy flash timer).
+
 ## [0.39.0] - 2026-05-28
 
 ### Added

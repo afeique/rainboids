@@ -220,7 +220,7 @@ function drawAsteroid(ctx, ast, now) {
   ctx.restore();
 }
 
-function drawEnemy(ctx, e, now) {
+function drawEnemy(ctx, e, now, hit = 0) {
   // SP enemy silhouette (shared render/shapes.js). Enemy shapes draw at the
   // origin, so pre-translate + rotate to the enemy's facing; `now` drives idle
   // animation. Real-sim types pass straight through to the SP shape registry;
@@ -229,6 +229,19 @@ function drawEnemy(ctx, e, now) {
   ctx.save();
   ctx.translate(e.x, e.y);
   ctx.rotate(e.angle);
+  // Hit flash: a quick additive white bloom over the silhouette when struck.
+  if (hit > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, e.r * 1.1);
+    g.addColorStop(0, `rgba(255,255,255,${0.75 * hit})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, e.r * 1.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   // A boss gets a menacing crimson aura behind its (already-inflated) silhouette.
   if (e.boss) {
     ctx.save();
@@ -317,7 +330,7 @@ function drawDrop(ctx, d) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera, fx, worldFloaters, levelText }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera, fx, worldFloaters, levelText, bossCard, enemyHitFlash }) {
   const cam = camera || { x: 0, y: 0, zoom: 1 };
   const feel = fx || { shakeX: 0, shakeY: 0, flashWhite: 0, flashRed: 0 };
   const W = canvas.width, H = canvas.height;
@@ -355,9 +368,13 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     }
   }
 
-  // Enemies (interpolated).
+  // Enemies (interpolated). A recent hit tints the enemy white briefly.
   if (enemies) {
-    for (const [, e] of enemies) drawEnemy(ctx, e, now);
+    for (const [id, e] of enemies) {
+      const exp = enemyHitFlash && enemyHitFlash.get(id);
+      const hit = exp && exp > (now || 0) ? Math.min(1, (exp - now) / 100) : 0;
+      drawEnemy(ctx, e, now, hit);
+    }
   }
 
   // Drops (interpolated).
@@ -541,6 +558,39 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
       ctx.font = `14px ${HUD_FONT}`;
       ctx.fillStyle = 'rgba(255,245,200,0.95)';
       ctx.fillText(levelText.text, W / 2, H * 0.34 + 30);
+      ctx.restore();
+    }
+  }
+
+  // Boss name-card (screen space, upper-mid) — a dramatic WARNING + boss type
+  // that fades in, holds, then fades out when a boss first appears.
+  if (bossCard && now != null) {
+    const p = (now - bossCard.born) / 2800; // 0 → 1
+    if (p < 1) {
+      const a = p < 0.15 ? p / 0.15 : (p > 0.75 ? (1 - p) / 0.25 : 1);
+      const cy = H * 0.22;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, a));
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // Red banner strip behind the text.
+      const stripH = 56;
+      ctx.fillStyle = 'rgba(40,0,6,0.55)';
+      ctx.fillRect(0, cy - stripH / 2, W, stripH);
+      ctx.fillStyle = 'rgba(255,40,60,0.7)';
+      ctx.fillRect(0, cy - stripH / 2, W, 2);
+      ctx.fillRect(0, cy + stripH / 2 - 2, W, 2);
+      // WARNING.
+      ctx.font = `13px ${HUD_FONT}`;
+      ctx.fillStyle = 'rgba(255,120,130,0.95)';
+      ctx.fillText('⚠  W A R N I N G  ⚠', W / 2, cy - 14);
+      // Boss type name.
+      ctx.font = `24px ${HUD_FONT}`;
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.strokeText(String(bossCard.name), W / 2, cy + 12);
+      ctx.fillStyle = '#ff5c6c';
+      ctx.fillText(String(bossCard.name), W / 2, cy + 12);
       ctx.restore();
     }
   }

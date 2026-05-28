@@ -210,6 +210,8 @@ async function main() {
   // from snapshot diffs (the event stream carries no amounts).
   const worldFloaters = []; // { x, y, vx, vy, text, color, size, born, life }
   let levelText = null;     // { text, born }
+  let bossCard = null;      // { name, born } — cinematic name-card when a boss appears
+  const enemyHitFlash = new Map(); // enemy id → expire time (white hit flash)
 
   function addShake(mag) { if (mag > shakeMag) shakeMag = Math.min(34, mag); }
   // Blast feedback scaled by radius + proximity to the local ship (distant
@@ -343,15 +345,19 @@ async function main() {
         if (full.enemies) {
           for (const e of full.enemies) {
             const prev = prevEnemyHp.get(e.id);
+            // A boss appearing for the first time → cinematic name-card.
+            if (prev == null && e.b > 0) bossCard = { name: e.ty || 'BOSS', born: performance.now() };
             if (prev != null && e.hp < prev - 0.01) {
               spawnSpark(e.x, e.y);
               spawnDamageNumber(e.x, e.y, prev - e.hp);
+              enemyHitFlash.set(e.id, performance.now() + 100); // brief white flash
             }
             prevEnemyHp.set(e.id, e.hp);
           }
           if (prevEnemyHp.size > full.enemies.length + 64) {
             const live = new Set(full.enemies.map((e) => e.id));
             for (const id of prevEnemyHp.keys()) if (!live.has(id)) prevEnemyHp.delete(id);
+            for (const id of enemyHitFlash.keys()) if (!live.has(id)) enemyHitFlash.delete(id);
           }
         }
         if (predictor) {
@@ -563,6 +569,8 @@ async function main() {
     if (banner && now - banner.born > 2500) banner = null;
     // Level-up announce fades after ~1.8 s.
     if (levelText && now - levelText.born > 1800) levelText = null;
+    // Boss name-card fades after ~2.8 s.
+    if (bossCard && now - bossCard.born > 2800) bossCard = null;
     // Advance + cull floating feedback (damage numbers / gold popups).
     for (let i = worldFloaters.length - 1; i >= 0; i--) {
       const fl = worldFloaters[i];
@@ -621,6 +629,8 @@ async function main() {
       fx,
       worldFloaters,
       levelText,
+      bossCard,
+      enemyHitFlash,
     });
 
     // Lightweight HUD line.
