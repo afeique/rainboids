@@ -54,28 +54,67 @@ export class SpHost {
     this.tickCount = 0;
   }
 
-  /** Construct the real SP Player + bullet pool (dynamic import, shim-first). */
+  /**
+   * Construct the real SP entities + pools (dynamic import, shim-first). SpHost
+   * itself is the engine context: the SP entity code binds to it via the
+   * `gameEngine` argument AND via `window.gameEngine`, reading the pools/game/
+   * stubs below.
+   */
   async init() {
-    const [{ Player }, { PoolManager }, { Bullet }] = await Promise.all([
+    const [{ Player }, { PoolManager }, { Bullet }, { Enemy }, { EnemyBullet }, { Asteroid }, { createDefaultGameState }] = await Promise.all([
       import('../../../js/modules/player/player.js'),
       import('../../../js/modules/core/pool-manager.js'),
       import('../../../js/modules/player/bullet.js'),
+      import('../../../js/modules/enemy/enemy.js'),
+      import('../../../js/modules/enemy/enemy-bullet.js'),
+      import('../../../js/modules/world/asteroid.js'),
+      import('../../../js/sim/engine-context.js'),
     ]);
     this.player = new Player();
     this.player.x = this.gameField.width / 2;
     this.player.y = this.gameField.height / 2;
-    // Real SP player-bullet pool (Bullet's ctor reads window — shimmed).
+    // Real SP pools (entity ctors read window — shimmed).
     this.bulletPool = new PoolManager(Bullet, 64);
-    // Minimal engine stand-in bullet.update() reads (cluster detonation etc.);
-    // unused by the starter Pulse Cannon but present so any weapon is safe.
-    this._engineStub = {
-      detonateSubBomblet() {},
-      particlePool: noopPool,
-      enemyPool: noopPool,
-      asteroidPool: noopPool,
-      gameField: this.gameField,
-    };
+    this.enemyPool = new PoolManager(Enemy, 32);
+    this.enemyBulletPool = new PoolManager(EnemyBullet, 128);
+    this.asteroidPool = new PoolManager(Asteroid, 16); // empty for now; spawned next step
+    this.game = createDefaultGameState();
+    // EngineContext fields the SP entity code reads off the engine.
+    this.targetedEntity = null;
+    this.uiManager = { musicPlayer: null };
+    this._activeShotPattern = null;
+    this._activeShotElement = null;
+    // The SP code reads window.gameEngine in a few places — point it here.
+    if (globalThis.window) globalThis.window.gameEngine = this;
     return this;
+  }
+
+  // ── EngineContext methods the SP entity code calls on the engine ──────────
+  // Cosmetic / not-yet-wired hooks no-op; spawning routes to the real pools.
+  spawnHazard() {}
+  triggerEnemyDebrisBurst() {}
+  triggerEnemyFinalExplosion() {}
+  detonateSubBomblet() {}
+  applyDamageToEnemy() {} // real damage arrives via collision wiring (next step)
+  requestEnemySpawn(x, y, type = 'HUNTER', level = 1) { return this.spawnEnemy(x, y, type, level); }
+  findNearestTarget(x, y, range = Infinity) {
+    let best = null;
+    let bd = range * range;
+    for (const e of this.enemyPool.activeObjects) {
+      if (e.active === false) continue;
+      const dx = e.x - x;
+      const dy = e.y - y;
+      const d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+
+  /** Spawn a real SP enemy at (x, y). */
+  spawnEnemy(x, y, type = 'HUNTER', level = 1) {
+    const e = this.enemyPool.get();
+    e.reset(x, y, type, level, this);
+    return e;
   }
 
   /** Advance one fixed (LOGIC_TICK_MS) sim tick with the given input frame. */
@@ -85,11 +124,15 @@ export class SpHost {
     const inp = { ...NEUTRAL_INPUT, ...input };
     // Real SP player movement + firing (spawns real Bullets into bulletPool).
     this.player.update(inp, noopPool, this.bulletPool, noopAudio, noopPool, false, this.gameField);
-    // Real SP bullet motion/lifetime.
     for (const b of this.bulletPool.activeObjects) {
-      b.update(noopPool, noopPool, noopPool, this._engineStub, this.gameField);
+      b.update(noopPool, this.asteroidPool, this.enemyPool, this, this.gameField);
     }
     this.bulletPool.cleanupInactive();
+    // Real SP enemies (AI / movement / firing → enemy bullets).
+    for (const e of this.enemyPool.activeObjects) e.update(this.player, this, this.gameField);
+    this.enemyPool.cleanupInactive();
+    for (const eb of this.enemyBulletPool.activeObjects) eb.update();
+    this.enemyBulletPool.cleanupInactive();
   }
 
   /** Serialize the player to the snapshot wire shape. */
@@ -104,5 +147,16 @@ export class SpHost {
   /** Serialize active bullets (rendered at latest position; no interp needed). */
   snapshotBullets() {
     return this.bulletPool.activeObjects.map((b) => ({ x: b.x, y: b.y }));
+  }
+
+  /** Serialize active enemies to the snapshot wire shape. */
+  snapshotEnemies() {
+    return this.enemyPool.activeObjects.map((e) => ({
+      x: e.x, y: e.y,
+      a: e.faceAngle ?? e.angle ?? 0,
+      r: e.radius,
+      hp: e.health, mhp: e.maxHealth,
+      ty: e.type,
+    }));
   }
 }

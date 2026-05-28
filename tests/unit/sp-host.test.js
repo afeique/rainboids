@@ -53,6 +53,19 @@ describe('SpHost — real SP Player headless', () => {
     expect(Number.isFinite(bullets[0].y)).toBe(true);
   });
 
+  it('spawns a real SP enemy that chases the player', async () => {
+    const host = new SpHost({ seed: 1 });
+    await host.init();
+    // Player at center; spawn a HUNTER to the right — it should home in (move left).
+    const e = host.spawnEnemy(host.player.x + 400, host.player.y, 'HUNTER', 1);
+    const x0 = e.x;
+    for (let i = 0; i < 60; i++) host.tick(); // neutral input; player stays put
+    const enemies = host.snapshotEnemies();
+    expect(enemies.length).toBeGreaterThanOrEqual(1);
+    expect(e.x).toBeLessThan(x0); // moved toward the player
+    expect(Number.isFinite(e.x) && Number.isFinite(e.y)).toBe(true);
+  });
+
   it('is deterministic: identical input + seed → identical player state', async () => {
     const run = async () => {
       const host = new SpHost({ seed: 42 });
