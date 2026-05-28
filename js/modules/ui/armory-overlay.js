@@ -26,7 +26,7 @@ import {
     applyResistTarget, maxResistAffixes, isResistAffix,
     eligibleItemPassives, rerollItemPassive, createPowerWeaponItem,
 } from '../world/item-system.js';
-import { getEquipped, stashForSlot, equipFromStash, unequipSlot, equipDelta, getEquippedWeapon, getEquippedPowerWeapon, stashWeapons, equipWeaponFromStash } from '../world/inventory.js';
+import { getEquipped, stashForSlot, equipFromStash, unequipSlot, equipDelta, getEquippedWeapon, getEquippedPowerWeapon, stashWeapons, equipWeaponFromStash, stashPowerWeapons, equipPowerWeaponFromStash } from '../world/inventory.js';
 import { SLOT_ORDER, SLOT_LABEL, RARITY_ORDER } from '../world/item-names.js';
 import { ELEMENTS } from '../combat/elements.js';
 import { getPassive } from '../combat/passive-data.js';
@@ -310,16 +310,17 @@ export class ArmoryOverlay {
         return true;
     }
 
-    // 8.x — equip a POWER weapon (one of the unlocked powers). Powers aren't
-    // rolled loot; the GEAR tab is the "inventory" surface where you pick which
-    // power you carry, persisted as meta.equippedPowerWeapon and read at run init.
-    equipPower(powerId) {
-        if (!POWER_WEAPONS[powerId]) return false;
-        const item = createPowerWeaponItem(powerId);
-        saveMeta({ equippedPowerWeapon: item });
+    // 8.x — equip a POWER weapon you FOUND (a power-weapon loot item in the
+    // stash), mirroring equipWeapon. Persisted as meta.equippedPowerWeapon and
+    // read at run init; a live player picks it up immediately (drives activePower).
+    equipPowerWeapon(index) {
+        const meta = loadMeta() || {};
+        const { ok, meta: next } = equipPowerWeaponFromStash(meta, index);
+        if (!ok) return false;
+        saveMeta({ stash: next.stash, equippedPowerWeapon: next.equippedPowerWeapon });
         const p = this.gameEngine && this.gameEngine.player;
         if (p && typeof p.equipPowerWeaponItem === 'function') {
-            p.equipPowerWeaponItem(item);
+            p.equipPowerWeaponItem(next.equippedPowerWeapon);
             if (p.activePower) p.ownedPowers = new Set([p.activePower]);
         }
         this.render();
@@ -509,42 +510,62 @@ export class ArmoryOverlay {
         body.appendChild(section);
     }
 
-    // 8.x — POWER weapon picker: your power is equipped gear too (drives
-    // activePower). Powers aren't rolled loot — pick one of your unlocked powers
-    // here, pre-run. Equipped is persisted as meta.equippedPowerWeapon.
+    // 8.x — POWER weapon is found-as-gear (a second loot category): equip a
+    // power-weapon item from your stash (drives activePower). Mirrors _renderWeapon;
+    // equipped is persisted as meta.equippedPowerWeapon and read at run init.
     _renderPower(body, meta) {
         const section = document.createElement('div');
         section.className = 'armory-section';
         const secTitle = document.createElement('div');
         secTitle.className = 'armory-section-title';
-        secTitle.textContent = 'POWER WEAPON  ·  pick the power you carry';
+        secTitle.textContent = 'POWER WEAPON  ·  equip a power weapon you’ve found';
         section.appendChild(secTitle);
 
         const list = document.createElement('div');
         list.className = 'armory-list';
 
         const equipped = getEquippedPowerWeapon(meta);
-        const equippedId = (equipped && equipped.powerId) || 'CHARGE_SHOT';
-        const owned = getUnlockedSet('powers', meta);
-        const ids = (owned && owned.size) ? [...owned] : Object.keys(POWER_WEAPONS);
-        for (const id of ids) {
-            const cfg = POWER_WEAPONS[id];
-            if (!cfg) continue;
-            const isEq = id === equippedId;
-            const row = document.createElement('div');
-            row.className = 'armory-row' + (isEq ? '' : ' armory-row--candidate');
-            const name = document.createElement('span');
-            name.className = 'armory-row-name';
-            name.textContent = `${isEq ? '' : '  ↳ '}${cfg.name || id}`;
-            if (cfg.color) name.style.color = cfg.color;
-            row.appendChild(name);
-            const btn = document.createElement('button');
-            btn.className = 'armory-buy';
-            btn.textContent = isEq ? '✓ EQUIPPED' : 'EQUIP';
-            btn.disabled = isEq;
-            if (!isEq) btn.addEventListener('click', () => this.equipPower(id));
-            row.appendChild(btn);
-            list.appendChild(row);
+        const eqRow = document.createElement('div');
+        eqRow.className = 'armory-row';
+        const eqName = document.createElement('span');
+        eqName.className = 'armory-row-name';
+        if (equipped) {
+            eqName.textContent = `EQUIPPED: ${equipped.name || 'Power'} (L${equipped.level || 1})`;
+            if (equipped.rarityColor) eqName.style.color = equipped.rarityColor;
+        } else {
+            eqName.textContent = 'EQUIPPED: ';
+            const em = document.createElement('em');
+            em.className = 'slot-empty';
+            em.textContent = 'Empty';
+            eqName.appendChild(em);
+        }
+        eqRow.appendChild(eqName);
+        list.appendChild(eqRow);
+
+        const powers = stashPowerWeapons(meta);
+        if (powers.length === 0) {
+            const hint = document.createElement('div');
+            hint.className = 'armory-row armory-row--candidate';
+            const hn = document.createElement('span');
+            hn.className = 'armory-row-name';
+            hn.textContent = '  ↳ no power weapons — find loot or FABRICATE one';
+            hint.appendChild(hn);
+            list.appendChild(hint);
+        } else {
+            for (const { item, index } of powers) {
+                const crow = document.createElement('div');
+                crow.className = 'armory-row armory-row--candidate';
+                const cn = document.createElement('span');
+                cn.className = 'armory-row-name';
+                cn.textContent = `  ↳ ${item.name || 'Power'} (L${item.level || 1})`;
+                if (item.rarityColor) cn.style.color = item.rarityColor;
+                const btn = document.createElement('button');
+                btn.className = 'armory-buy';
+                btn.textContent = 'EQUIP';
+                btn.addEventListener('click', () => this.equipPowerWeapon(index));
+                crow.append(cn, btn);
+                list.appendChild(crow);
+            }
         }
         section.appendChild(list);
         body.appendChild(section);

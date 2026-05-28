@@ -730,12 +730,12 @@ export class GameEngine {
                 // (everything else is unlocked, T20). Item rolls are best-effort
                 // — a roll failure still grants the wallet seed.
                 try {
-                    // 8.x — weapons are gear: the starter primary + power weapons
-                    // are EQUIPPED (not just stashed) so run one fires them
-                    // immediately, and the player swaps weapons by equipping loot
-                    // in their inventory (pre-run).
+                    // 8.x — weapons are gear: a fresh account starts with ONLY the
+                    // common Pulse Cannon equipped (no power weapon, no abilities).
+                    // Power weapons + other primaries are FOUND as loot and equipped
+                    // from the stash (pre-run GEAR tab); abilities unlock with gold.
                     seed.equippedWeapon = createWeaponItem(1, 'common', 'PULSE');
-                    seed.equippedPowerWeapon = createPowerWeaponItem('CHARGE_SHOT');
+                    seed.equippedPowerWeapon = null;
                     seed.stash = [
                         createItem('hull', 1, 'common'),
                     ];

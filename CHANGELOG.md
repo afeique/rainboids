@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.3.0] - 2026-05-28
+
+### Added
+- **Power weapons are a second found-as-gear category.** Power weapons now drop as
+  loot (rarer than primary weapons; boss/elite kills likelier + higher rarity),
+  bank to the persistent stash, and are **equipped from the stash in the GEAR tab**
+  (mirroring the primary-weapon flow) — no more picking a power from a full list.
+
+### Changed
+- **Fresh accounts start with only a common Pulse Cannon** — no power weapon (and
+  no abilities) equipped. Power weapons + other primaries are found as loot;
+  abilities unlock with gold. (Removes the starter Charge Shot.)
+
 ## [8.2.0] - 2026-05-28
 
 ### Changed
