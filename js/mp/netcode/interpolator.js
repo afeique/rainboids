@@ -126,6 +126,7 @@ export class Interpolator {
         hp: sb.hp,
         mhp: sb.mhp,
         type: sb.ty,
+        boss: sb.b || 0,
       });
     }
     return out;

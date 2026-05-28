@@ -10,6 +10,7 @@ import { setRandomSource } from '../../js/modules/core/utils.js';
 import { EV } from '../../js/sim/events.js';
 import { REVIVE_TICKS } from '../../js/sim/constants.js';
 import { GAME_STATES } from '../../js/modules/core/constants.js';
+import { getEnemyLevel } from '../../js/modules/wave/wave-data.js';
 
 afterEach(() => { frameClock.reset(); setRandomSource(null); });
 
@@ -171,6 +172,30 @@ describe('SpHost — headless wave driver', () => {
     for (let i = 0; i < 5; i++) host.tick();
     expect(host.waveStarted).toBe(false);
     expect(host.enemyPool.activeObjects.length).toBe(0);
+  });
+
+  it('spawns a tier-scaled BOSS on a boss wave (wave 3)', async () => {
+    const host = new SpHost({ seed: 3 });
+    await host.init();
+    const lvl = getEnemyLevel(3, 1); // startWave uses playerLevel=1 by default
+    // A plain TITAN at the same level, for an HP/size baseline.
+    const plain = host.spawnEnemy(0, 0, 'TITAN', lvl);
+    const plainHp = plain.maxHealth;
+    const plainR = plain.radius;
+    plain.active = false;
+    host.enemyPool.cleanupInactive();
+
+    host.startWave(3); // wave 3 = stage-1 boss (TITAN, tier 1)
+    const boss = host.enemyPool.activeObjects.find((e) => e.isBoss);
+    expect(boss).toBeTruthy();
+    expect(boss.type).toBe('TITAN');
+    expect(boss.bossTier).toBe(1);
+    expect(boss.maxHealth).toBeGreaterThan(plainHp * 3);  // tier-1 hpMul = ×4
+    expect(boss.radius).toBeGreaterThan(plainR * 1.3);    // tier-1 sizeMul = ×1.35
+    // The boss tier surfaces on the wire for the client's boss health bar.
+    const snapBoss = host.buildSnapshot().enemies.find((e) => e.b > 0);
+    expect(snapBoss).toBeTruthy();
+    expect(snapBoss.b).toBe(1);
   });
 });
 

@@ -131,11 +131,38 @@ function drawEnemy(ctx, e, now) {
   ctx.save();
   ctx.translate(e.x, e.y);
   ctx.rotate(e.angle);
+  // A boss gets a menacing crimson aura behind its (already-inflated) silhouette.
+  if (e.boss) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(0, 0, e.r * 0.4, 0, 0, e.r * 1.5);
+    g.addColorStop(0, 'rgba(255,60,80,0.30)');
+    g.addColorStop(1, 'rgba(255,60,80,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, e.r * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   drawEnemyShapeByType(ctx, type, { radius: e.r, now: now || 0 });
   ctx.restore();
 
-  // HP pip bar when damaged.
-  if (e.hp < e.mhp) {
+  if (e.boss) {
+    // Boss health bar — wide, always-on, with a label (SP shows a top banner;
+    // this above-boss bar reads clearly in the shared arena).
+    const w = Math.max(80, e.r * 2.2);
+    const bx = e.x - w / 2;
+    const by = e.y - e.r - 16;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(bx - 1, by - 1, w + 2, 7);
+    ctx.fillStyle = '#ff3b5c';
+    ctx.fillRect(bx, by, w * Math.max(0, e.hp / e.mhp), 5);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`◆ BOSS ${e.type} ◆`, e.x, by - 4);
+  } else if (e.hp < e.mhp) {
+    // HP pip bar when damaged.
     const w = e.r * 2;
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(e.x - w / 2, e.y - e.r - 10, w, 4);

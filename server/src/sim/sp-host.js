@@ -24,7 +24,7 @@
 import { installBrowserShim } from './browser-shim.js';
 import { frameClock } from '../../../js/modules/core/frame-clock.js';
 import { setRandomSource, random } from '../../../js/modules/core/utils.js';
-import { getWaveConfig, getEnemyLevel, getAsteroidLevel } from '../../../js/modules/wave/wave-data.js';
+import { getWaveConfig, getEnemyLevel, getAsteroidLevel, BOSS_TIER_STATS } from '../../../js/modules/wave/wave-data.js';
 import { REVIVE_RADIUS, REVIVE_TICKS, REVIVE_DECAY } from '../../../js/sim/constants.js';
 import { GAME_CONFIG, GAME_STATES, MAX_WAVES } from '../../../js/modules/core/constants.js';
 import { makeRng } from '../../../js/sim/rng.js';
@@ -322,19 +322,39 @@ export class SpHost {
       const p = this._edgeSpawnPoint();
       this.asteroidPool.get(p.x, p.y, random(30, 60), astLevel);
     }
-    // NOTE: boss groups (group.isBoss / bossTier) currently spawn as ordinary
-    // enemies of that type — the modular boss-spawn path (boss descriptors,
-    // intro/phases) is a later P7 parity step.
+    // Boss groups spawn as tier-scaled bosses (BOSS_TIER_STATS: inflated HP +
+    // size + the isBoss/bossTier flags the client reads for the boss health bar).
+    // The heavier modular boss path (descriptors / phases / parts / intro) is a
+    // later P7 step; this gives boss waves a real, hulking, high-HP boss now.
     for (const sub of (cfg.subWaves || [])) {
       for (const group of sub) {
+        const isBoss = !!group.isBoss;
         for (let i = 0; i < (group.count | 0); i++) {
-          const p = this._edgeSpawnPoint();
-          this.spawnEnemy(p.x, p.y, group.type, this.game.enemyLevel);
+          const p = isBoss
+            ? { x: this.gameField.width / 2, y: this.gameField.height * 0.28 } // dramatic entrance, top-center
+            : this._edgeSpawnPoint();
+          const e = this.spawnEnemy(p.x, p.y, group.type, this.game.enemyLevel);
+          if (isBoss && e) this._applyBossTier(e, group.bossTier || 1);
         }
       }
     }
     this.waveStarted = true;
     if (this.events?.emit) this.events.emit('wave:start', { wave: n });
+  }
+
+  /**
+   * Promote a freshly-spawned enemy to a tier boss (mirrors the SP forceSpawnEnemy
+   * bossTier overlay): inflate HP + size + speed and stamp the boss flags.
+   */
+  _applyBossTier(enemy, tierNum) {
+    const tier = BOSS_TIER_STATS[tierNum] || BOSS_TIER_STATS[1];
+    enemy.isBoss = true;
+    enemy.bossTier = tierNum;
+    enemy.health *= tier.hpMul;
+    enemy.maxHealth *= tier.hpMul;
+    if (enemy.config && typeof enemy.config.speed === 'number') enemy.config.speed *= tier.speedMul;
+    if (typeof enemy.radius === 'number') enemy.radius *= tier.sizeMul;
+    enemy.bossSizeMul = tier.sizeMul;
   }
 
   /** Advance the wave driver: start wave 1, then the next when fully cleared. */
@@ -654,6 +674,7 @@ export class SpHost {
     const enemies = this.enemyPool.activeObjects.map((e) => ({
       id: e._netId, x: round(e.x), y: round(e.y), a: round(e.faceAngle ?? e.angle ?? 0, 3),
       r: e.radius, hp: Math.ceil(e.health), mhp: e.maxHealth, ty: e.type,
+      b: e.isBoss ? (e.bossTier || 1) : 0, // boss tier (0 = ordinary enemy)
     }));
     const asteroids = this.asteroidPool.activeObjects.map((a) => ({
       id: a._netId, x: round(a.x), y: round(a.y),

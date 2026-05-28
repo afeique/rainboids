@@ -7,6 +7,24 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.29.0] - 2026-05-28
+
+### Added
+- **Boss waves spawn real bosses** (Path A, P7). Boss-wave groups (`isBoss` +
+  `bossTier`) now spawn a tier-scaled boss via the SP `BOSS_TIER_STATS` overlay —
+  inflated HP (×4–×8), size (×1.35–×1.75), and speed, with the `isBoss`/`bossTier`
+  flags — entering top-center for a dramatic arrival, instead of a plain enemy.
+  The tier is serialized (`b`) and the client renders a crimson boss aura behind
+  the (already-enlarged) silhouette plus an always-on labelled boss health bar.
+- (The heavier modular-boss path — descriptors / multi-phase / parts / intro warp
+  / death scripts + `boss-render.js` — remains a later parity step; this delivers
+  hulking, high-HP stage bosses now.)
+
+### Tests
+- `tests/unit/sp-host.test.js` (+1): wave 3 spawns a TITAN boss with `bossTier=1`,
+  >3× a plain TITAN's HP and >1.3× its radius, and serializes `b=1`. 25/25 SpHost
+  green; the default-sim co-op QA stays green (no render regressions).
+
 ## [0.28.1] - 2026-05-27
 
 ### Added
