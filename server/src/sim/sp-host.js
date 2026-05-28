@@ -73,6 +73,12 @@ export class SpHost {
     // Deterministic clock + seeded RNG for the whole sim.
     frameClock.setDeterministic(true, { startNow: 0, dtMs: GAME_CONFIG.LOGIC_TICK_MS });
     setRandomSource(this.rng);
+    // `frameClock` + the random source are PROCESS GLOBALS, so multiple SpHosts
+    // in one process (e.g. several MP rooms) would clobber each other's clock/RNG.
+    // We hold this room's clock state here and install it at the top of every
+    // tick() (and re-point the RNG), so concurrent rooms stay isolated.
+    this._clockNow = 0;
+    this._clockTick = 0;
     this.player = null;
     this.tickCount = 0;
     // VFX pools the SP sim reaches for directly (e.g.
@@ -595,6 +601,11 @@ export class SpHost {
    *   first; an `input` here still overrides slot 0.
    */
   tick(input = null) {
+    // Install this room's clock + RNG into the process globals (isolates
+    // concurrent SpHosts — see constructor). Captured back at the end of tick().
+    frameClock.now = this._clockNow;
+    frameClock.tick = this._clockTick;
+    setRandomSource(this.rng);
     frameClock.advance();
     this.tickCount += 1;
     if (input) {
@@ -664,7 +675,12 @@ export class SpHost {
     // 7. Wave progression (opt-in; reuses the real wave-data tables).
     if (this.autoWaves) this._updateWaves();
 
-    // 8. Drain + return the per-tick semantic event stream for the client.
+    // 8. Capture this room's advanced clock back (so the next tick resumes from
+    //    here even if another room ticked the global clock in between).
+    this._clockNow = frameClock.now;
+    this._clockTick = frameClock.tick;
+
+    // 9. Drain + return the per-tick semantic event stream for the client.
     return this.events.drain ? this.events.drain() : [];
   }
 

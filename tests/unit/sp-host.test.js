@@ -81,6 +81,28 @@ describe('SpHost — real SP Player headless', () => {
     };
     expect(await run()).toEqual(await run());
   });
+
+  it('two concurrent hosts keep independent clocks (multi-room isolation)', async () => {
+    // The deterministic frameClock is a process global; without per-room
+    // install/capture, a second host's ticks would advance the SAME clock, so
+    // each room would see time running at 2× (cooldowns/timers wrong).
+    const solo = new SpHost({ seed: 7 });
+    await solo.init();
+    for (let i = 0; i < 60; i++) solo.tick();
+    const soloClock = solo._clockNow; // 60 ticks of advance
+    frameClock.reset(); setRandomSource(null);
+
+    // Two hosts ticking INTERLEAVED in one process. Each must advance only its
+    // OWN clock by 60 — not be dragged to 120 by the other's interleaved ticks.
+    const a = new SpHost({ seed: 7 });
+    await a.init();
+    const b = new SpHost({ seed: 99 });
+    await b.init();
+    for (let i = 0; i < 60; i++) { a.tick(); b.tick(); }
+    expect(a._clockNow).toBeGreaterThan(0);
+    expect(a._clockNow).toBeCloseTo(soloClock, 5); // isolated: 60×, not 120×
+    expect(b._clockNow).toBeCloseTo(soloClock, 5);
+  });
 });
 
 describe('SpHost — real SP collisions headless', () => {

@@ -7,6 +7,22 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.32.2] - 2026-05-28
+
+### Fixed
+- **Multiple co-op rooms in one process corrupting each other** (robustness).
+  `SpHost` drives the deterministic `frameClock` + the seeded random source, which
+  are **process globals** — so two `SpRoom`s in one server (separate join codes,
+  the default real-sim sim) shared one clock/RNG: each room saw time at ~2× and
+  drew from the other's RNG. `tick()` now installs this room's clock + RNG at the
+  top and captures the advanced clock at the end, so concurrent rooms stay
+  isolated. Single-room behavior is unchanged; removes the prior "one sim per
+  process" footgun.
+
+### Tests
+- `tests/unit/sp-host.test.js`: two hosts ticking interleaved each keep an
+  independent clock (advance 60×, not 120×). 42/42 MP unit green.
+
 ## [0.32.1] - 2026-05-28
 
 ### Added
