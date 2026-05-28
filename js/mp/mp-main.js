@@ -150,6 +150,30 @@ async function main() {
   // client bursts shrapnel + embers, SP-style). Canvas2D + additive blending to
   // match the mp-renderer pipeline. Velocity is px/ms; life is ms.
   const particles = [];
+  // Rotating line-debris shed on destruction (SP's lineDebrisPool look): short
+  // hue-cycling line segments that fan out, tumble, and fade. Velocity px/ms.
+  const debris = [];
+  function spawnDebris(x, y, r = 24) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const n = 4 + Math.floor(r / 7) + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 0.10 + Math.random() * 0.22;
+      debris.push({
+        x, y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        rot: Math.random() * Math.PI * 2,
+        rotVel: (Math.random() - 0.5) * 0.012, // rad/ms
+        half: 3 + Math.random() * Math.min(9, r * 0.22),
+        hue: Math.random() * 360,
+        hueShift: 0.12 + Math.random() * 0.18, // deg/ms (rainbow drift)
+        born: performance.now(),
+        life: 620 + Math.random() * 360,
+      });
+    }
+    if (debris.length > 160) debris.splice(0, debris.length - 160);
+  }
   function spawnBurst(x, y, baseR = 24, big = false) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     const n = (big ? 18 : 11) + Math.floor(Math.random() * 7);
@@ -420,6 +444,7 @@ async function main() {
             case EV.ENEMY_DEATH:
               effects.push({ x: p.x, y: p.y, r: p.r || 24, born: performance.now() });
               spawnBurst(p.x, p.y, p.r || 24, false);
+              spawnDebris(p.x, p.y, p.r || 24); // rotating line shards (SP shatter)
               blastFeedback(p.x, p.y, p.r || 24); // shake + kick by size/proximity
               audio.playExplosion();
               break;
@@ -585,6 +610,16 @@ async function main() {
       pt.vx *= drag;
       pt.vy *= drag;
     }
+    // Advance + cull line debris (drift + tumble + rainbow hue drift).
+    for (let i = debris.length - 1; i >= 0; i--) {
+      const d = debris[i];
+      if (now - d.born >= d.life) { debris.splice(i, 1); continue; }
+      d.x += d.vx * dtMs;
+      d.y += d.vy * dtMs;
+      d.vx *= drag; d.vy *= drag;
+      d.rot += d.rotVel * dtMs;
+      d.hue = (d.hue + d.hueShift * dtMs) % 360;
+    }
     // Banner fades after ~2.5 s.
     if (banner && now - banner.born > 2500) banner = null;
     // Level-up announce fades after ~1.8 s.
@@ -630,6 +665,7 @@ async function main() {
       bullets,
       effects,
       particles,
+      debris,
       now,
       localId: playerId,
       localDowned,

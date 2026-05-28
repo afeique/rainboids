@@ -7,6 +7,15 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.42.0] - 2026-05-28
+
+### Added
+- **Rotating line-debris on destruction (look-like-SP step).** Enemy/asteroid
+  deaths now shed single-player's signature line-shards (ported from
+  `world/line-debris.js`): short hue-cycling line segments that fan out from the
+  blast, tumble as they drift, and fade — layered behind the existing shrapnel
+  embers, expanding ring, and flash. Count + length scale with blast radius.
+
 ## [0.41.0] - 2026-05-28
 
 ### Added

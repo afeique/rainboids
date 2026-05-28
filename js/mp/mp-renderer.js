@@ -360,7 +360,7 @@ function drawDrop(ctx, d, now) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera, fx, worldFloaters, levelText, bossCard, enemyHitFlash }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, debris, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera, fx, worldFloaters, levelText, bossCard, enemyHitFlash }) {
   const cam = camera || { x: 0, y: 0, zoom: 1 };
   const feel = fx || { shakeX: 0, shakeY: 0, flashWhite: 0, flashRed: 0 };
   const W = canvas.width, H = canvas.height;
@@ -484,6 +484,28 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+  }
+
+  // Line debris (rotating hue-cycling shards — SP shatter), behind the embers.
+  if (debris && debris.length && now != null) {
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    for (const d of debris) {
+      const a = Math.max(0, 1 - (now - d.born) / d.life);
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = `hsl(${d.hue | 0}, 100%, 60%)`;
+      ctx.save();
+      ctx.translate(d.x, d.y);
+      ctx.rotate(d.rot);
+      ctx.beginPath();
+      ctx.moveTo(-d.half, 0);
+      ctx.lineTo(d.half, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   // Explosion particles (client-authored shrapnel + embers, additive — SP look).
