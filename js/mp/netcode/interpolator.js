@@ -36,6 +36,7 @@ export class Interpolator {
       asteroids: toMap(snapshot.asteroids),
       enemies: toMap(snapshot.enemies),
       drops: toMap(snapshot.drops),
+      bullets: toMap(snapshot.bullets),
     });
     if (this.buf.length > BUFFER_CAP) this.buf.shift();
   }
@@ -149,6 +150,31 @@ export class Interpolator {
     for (const [id, sb] of b.drops) {
       const sa = a.drops.get(id) || sb;
       out.set(id, { x: lerp(sa.x, sb.x, f), y: lerp(sa.y, sb.y, f), kind: sb.k });
+    }
+    return out;
+  }
+
+  /**
+   * Sample interpolated bullet render states at `now`. `dx`/`dy` is the travel
+   * delta across the bracketing snapshots (0 for a brand-new bullet) — the
+   * renderer uses it to orient the motion trail. `color` is the SP weapon tint.
+   * @returns {Array<{id,x,y,dx,dy,color}>}
+   */
+  sampleBullets(now) {
+    const out = [];
+    const br = this._bracket(now);
+    if (!br) return out;
+    const { a, b, f } = br;
+    for (const [id, sb] of b.bullets) {
+      const sa = a.bullets.get(id) || sb;
+      out.push({
+        id,
+        x: lerp(sa.x, sb.x, f),
+        y: lerp(sa.y, sb.y, f),
+        dx: sb.x - sa.x,
+        dy: sb.y - sa.y,
+        color: sb.c || null,
+      });
     }
     return out;
   }

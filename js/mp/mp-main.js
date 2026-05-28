@@ -489,6 +489,7 @@ async function main() {
     const asteroids = interp.sampleAsteroids(now);
     const enemies = interp.sampleEnemies(now);
     const drops = interp.sampleDrops(now);
+    const bullets = interp.sampleBullets(now); // smooth + trail-able (was raw snapshot points)
     lastRemote = remote;
     lastAsteroids = asteroids;
     lastEnemies = enemies;
@@ -545,7 +546,7 @@ async function main() {
       asteroids,
       enemies,
       drops,
-      bullets: latestBullets,
+      bullets,
       effects,
       particles,
       now,

@@ -365,23 +365,43 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     for (const [, d] of drops) drawDrop(ctx, d);
   }
 
-  // Bullets — additive glow (bright core + warm halo), SP-style.
+  // Bullets — interpolated, with a tapered motion trail + clean colored glow.
+  // The halo is tinted by the SP weapon colour (sent per bullet); a white-hot
+  // core keeps every shot reading crisp, like single-player.
   if (bullets && bullets.length) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (const b of bullets) {
-      const R = 9;
+      const col = b.color ? _energyRgb(b.color) : { r: 150, g: 220, b: 255 };
+      // Trail: a streak opposite the travel direction; length scales with the
+      // per-bracket travel (≈ one snapshot of motion), clamped.
+      const len = Math.min(34, Math.hypot(b.dx || 0, b.dy || 0) * 1.8);
+      if (len > 2) {
+        const m = Math.hypot(b.dx, b.dy) || 1;
+        const tx = b.x - (b.dx / m) * len, ty = b.y - (b.dy / m) * len;
+        const tg = ctx.createLinearGradient(b.x, b.y, tx, ty);
+        tg.addColorStop(0, `rgba(${col.r},${col.g},${col.b},0.55)`);
+        tg.addColorStop(1, `rgba(${col.r},${col.g},${col.b},0)`);
+        ctx.strokeStyle = tg;
+        ctx.lineWidth = 3.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+      }
+      const R = 8;
       const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, R);
-      g.addColorStop(0, 'rgba(255,240,170,0.95)');
-      g.addColorStop(0.35, 'rgba(255,200,90,0.55)');
-      g.addColorStop(1, 'rgba(255,160,40,0)');
+      g.addColorStop(0, `rgba(${col.r},${col.g},${col.b},0.9)`);
+      g.addColorStop(0.4, `rgba(${col.r},${col.g},${col.b},0.4)`);
+      g.addColorStop(1, `rgba(${col.r},${col.g},${col.b},0)`);
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(b.x, b.y, R, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillStyle = 'rgba(255,255,255,0.96)';
       ctx.beginPath();
-      ctx.arc(b.x, b.y, 2.2, 0, Math.PI * 2);
+      ctx.arc(b.x, b.y, 2.0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

@@ -788,7 +788,10 @@ export class SpHost {
       // client generates its own verts, exactly like the toy-sim path).
       a: round(a.rot3D ? a.rot3D.x : 0, 3), r: round(a.radius, 1),
     }));
-    const bullets = this.bulletPool.activeObjects.map((b) => ({ id: b._netId, x: round(b.x), y: round(b.y), o: this.playerId }));
+    // `c` = the SP bullet's weapon colour (constant per bullet, so the delta
+    // codec only sends it on the bullet's first frame) — lets the client tint
+    // bullets like single-player instead of a single fixed hue.
+    const bullets = this.bulletPool.activeObjects.map((b) => ({ id: b._netId, x: round(b.x), y: round(b.y), o: this.playerId, c: b.color || null }));
     const drops = this._drops();
     return {
       tick: this.tickCount,

@@ -7,6 +7,23 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.38.0] - 2026-05-28
+
+### Added
+- **Clean, beautiful bullets (look-like-SP step).**
+  - **Interpolated bullets.** Bullets are now smoothed through the `Interpolator`
+    (buffered + lerped by id like ships/enemies) instead of jumping between raw
+    snapshot points — bullet motion is fluid at any frame rate. New
+    `Interpolator.sampleBullets(now)` returns each bullet's interpolated position
+    plus the per-bracket travel delta and colour.
+  - **Motion trails.** Each bullet draws a tapered additive streak opposite its
+    travel direction (length scales with speed), the way single-player's bullets
+    trail.
+  - **Weapon-colored glow.** `sp-host.js buildSnapshot` now sends each bullet's SP
+    weapon `color` (`c`, constant per bullet so the delta codec sends it once);
+    the renderer tints the halo with it over a white-hot core. Falls back to a
+    cyan-white plasma when no colour is sent (e.g. the legacy toy sim).
+
 ## [0.37.0] - 2026-05-28
 
 ### Added
