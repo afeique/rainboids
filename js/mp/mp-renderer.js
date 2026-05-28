@@ -186,7 +186,7 @@ function drawDrop(ctx, d) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, banner }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, wave, gold, players, banner }) {
   // Background.
   ctx.fillStyle = '#070710';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -313,4 +313,47 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     ctx.fillText(banner.text, canvas.width / 2, canvas.height * 0.28);
     ctx.restore();
   }
+
+  drawHud(ctx, canvas, { localHp, localMaxHp, wave, gold, players, localDowned });
+}
+
+// On-canvas HUD: local health bar + wave/gold readout (SP-style, on the
+// authoritative state). The minimal DOM line in mp-main stays for redundancy.
+function drawHud(ctx, canvas, { localHp, localMaxHp, wave, gold, players, localDowned }) {
+  ctx.save();
+  ctx.textBaseline = 'alphabetic';
+
+  // Top-left: wave / players / gold.
+  ctx.font = 'bold 18px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillText(`WAVE ${wave || 0}`, 16, 28);
+  ctx.font = '13px monospace';
+  ctx.fillStyle = 'rgba(180,200,230,0.8)';
+  ctx.fillText(`PILOTS ${players || 1}`, 16, 46);
+  ctx.fillStyle = 'rgba(255,210,63,0.9)';
+  ctx.fillText(`◆ ${gold || 0}`, 16, 62);
+
+  // Bottom-center: local player health bar.
+  if (localHp != null && localMaxHp) {
+    const w = 280;
+    const h = 16;
+    const x = (canvas.width - w) / 2;
+    const y = canvas.height - 40;
+    const frac = Math.max(0, Math.min(1, localHp / localMaxHp));
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    // Green→amber→red by remaining health.
+    const hue = 120 * frac;
+    ctx.fillStyle = localDowned ? 'rgba(120,120,140,0.7)' : `hsl(${hue}, 80%, 50%)`;
+    ctx.fillRect(x, y, w * frac, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(localDowned ? 'DOWNED — hold on' : `${Math.ceil(localHp)} / ${localMaxHp}`, canvas.width / 2, y + 12);
+  }
+  ctx.restore();
 }

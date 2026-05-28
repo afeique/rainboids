@@ -93,6 +93,7 @@ async function main() {
   let lastEnemies = new Map();
   let latestBullets = [];
   let localHp = null;
+  let localMaxHp = null;
   let localDowned = false;
   let localReviveProgress = 0;
   let localGold = 0;
@@ -192,6 +193,7 @@ async function main() {
           const me = full.ships.find((s) => s.id === playerId);
           if (me) {
             localHp = me.hp;
+            localMaxHp = me.mhp;
             localDowned = !!me.dn;
             localReviveProgress = me.rp || 0;
             localGold = me.g || 0;
@@ -384,6 +386,11 @@ async function main() {
       localId: playerId,
       localDowned,
       localReviveProgress,
+      localHp,
+      localMaxHp,
+      wave,
+      gold: localGold,
+      players: roster.length,
       banner,
     });
 

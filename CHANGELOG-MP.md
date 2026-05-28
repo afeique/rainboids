@@ -7,6 +7,19 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.30.0] - 2026-05-28
+
+### Added
+- **On-canvas HUD** (P7 parity). The MP client now draws an SP-style HUD on the
+  game canvas: a bottom-center **local health bar** (green→amber→red by remaining
+  HP, with `hp / maxHp` text, and a "DOWNED — hold on" state) plus a top-left
+  **wave / pilots / gold** readout — all from authoritative snapshot state. The
+  minimal DOM status line stays as redundancy.
+
+### Tests
+- Covered by both MP QA specs (the HUD draws every frame; the page-error guard
+  catches any throw). 12 (toy) + 13 (real) green.
+
 ## [0.29.1] - 2026-05-28
 
 ### Added
