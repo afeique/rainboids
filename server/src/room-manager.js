@@ -6,8 +6,14 @@
 // handler (index.js) on last-leave to free their tick loop.
 
 import { Room } from './room.js';
+import { SpRoom } from './sp-room.js';
 
 const PUBLIC_ROOM = 'public';
+
+// MP_SIM=sphost runs the REAL single-player simulation headless (Path A) instead
+// of the toy sim. Single-player for now (P4 milestone); the toy sim stays the
+// default so the existing N-player path is unaffected until SpHost goes co-op.
+const RoomClass = process.env.MP_SIM === 'sphost' ? SpRoom : Room;
 
 function normalizeCode(code) {
   const c = (code == null ? '' : String(code)).trim();
@@ -24,7 +30,7 @@ export class RoomManager {
     const id = normalizeCode(code);
     let room = this.rooms.get(id);
     if (!room) {
-      room = new Room({ id, seed: (Date.now() >>> 0) ^ (this.rooms.size * 2654435761) || 1 });
+      room = new RoomClass({ id, seed: (Date.now() >>> 0) ^ (this.rooms.size * 2654435761) || 1 });
       room.start();
       this.rooms.set(id, room);
     }

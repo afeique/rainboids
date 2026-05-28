@@ -7,6 +7,30 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.23.0] - 2026-05-27
+
+### Added
+- **Live server runs the REAL SP sim** (Path A, P4 milestone — "one player, MP
+  plays exactly like SP"). New `server/src/sp-room.js`: a drop-in `Room`
+  alternative (same `join`/`leave`/`setInput`/`start`/`stop`/`population`/`roster`
+  API + same wire shape) that drives a headless `SpHost` instead of the toy sim.
+  Real SP weapons, enemies, collisions, drops, and the wave driver now stream to
+  the existing SP-shape MP client unchanged — full gameplay parity for the single
+  controlling player.
+- **`MP_SIM=sphost` flag** (`room-manager.js`) selects the real-sim room; the toy
+  sim stays the **default**, so the existing N-player path + 2-client smoke test
+  are untouched until SpHost goes co-op (P5). `SpHost.init()` is async (dynamic
+  SP-module imports); the room gates its tick loop on readiness and answers
+  WELCOME immediately from the deterministic field-center spawn.
+
+### Tests
+- `tests/unit/sp-room.test.js` (new, 4): WELCOME + field-center spawn; an SP-shape
+  snapshot keyframe with the controller ship + real wave roster; `EV.BULLET_SPAWN`
+  + server-authoritative bullets on fire (reconstructed via the client's
+  `SnapshotStream`, keyframe + deltas); single-controller / spectator behavior.
+- Verified the server boots in BOTH modes (toy default + `MP_SIM=sphost`,
+  `/healthz` 200). All MP unit suites green (27/27).
+
 ## [0.22.0] - 2026-05-27
 
 ### Added
