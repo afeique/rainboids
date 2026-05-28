@@ -1829,6 +1829,14 @@ export class UIManager {
         this.elements.pauseTabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const tabName = tab.dataset.tab;
+                // 8.25.0 — INVENTORY isn't a content tab; it opens the full
+                // inventory overlay (same screen as the 'I' key).
+                if (tabName === 'inventory') {
+                    if (this.gameEngine && this.gameEngine.toggleInventoryScreen) {
+                        this.gameEngine.toggleInventoryScreen();
+                    }
+                    return;
+                }
                 this.switchTab(tabName);
             });
         });
@@ -2167,7 +2175,6 @@ export class UIManager {
         }
 
         // Refresh equip lists when their tabs are opened.
-        if (tabName === 'loadout') this.updateLoadoutTab();
         if (tabName === 'abilities') this.updateAbilitiesTab();
         if (tabName === 'passives') this.updatePassivesTab();
         if (tabName === 'keystones') this.updateKeystoneTab();

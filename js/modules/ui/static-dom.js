@@ -259,15 +259,15 @@ function _buildPauseMenu() {
         { key: 'controls', label: 'CONTROLS', active: true },
         { key: 'gamepad',  label: 'GAMEPAD' },
         { key: 'stats',    label: 'STATS' },
-        // 6.x — PRIMARY + POWER tabs replaced by a single compact LOADOUT tab
-        // (weapon + attunement / power + attunement / abilities + attunements).
-        { key: 'loadout',  label: 'LOADOUT' },
-        // 8.23.0 — dedicated ABILITIES screen: owned-only, circle icons, equip
-        // into the 4 slots (keys 1-4). Mirrors the PASSIVES tab.
+        // 8.25.0 — the LOADOUT tab was removed; weapons are equipped via the
+        // INVENTORY now (button below opens that overlay).
         { key: 'abilities', label: 'ABILITIES' },
         { key: 'passives', label: 'PASSIVES' },
         // 8.24.0 — build-defining KEYSTONE TRAITS, picked at L10/L20.
         { key: 'keystones', label: 'KEYSTONES' },
+        // 8.25.0 — opens the full INVENTORY overlay (handled specially, not a
+        // content tab). The 'I' key opens the same screen in-game.
+        { key: 'inventory', label: 'INVENTORY' },
         { key: 'assists',  label: 'ASSISTS' },
         { key: 'display',  label: 'DISPLAY' },
         { key: 'music',    label: 'MUSIC' },
@@ -293,9 +293,7 @@ function _buildPauseMenu() {
     // STATS tab — populated by ui-manager.updateStatsTab() with the
     // shared SP-allocation card (passive stat icons + [−]/[+] controls).
     menu.appendChild(el('div', { id: 'stats-tab',    className: 'pause-tab-content' }));
-    // LOADOUT tab — populated by ui-manager.updateLoadoutTab(): compact active
-    // weapon/power/abilities + their attunements, owned-only, switch in-flight.
-    menu.appendChild(el('div', { id: 'loadout-tab',  className: 'pause-tab-content' }));
+    // 8.25.0 — LOADOUT tab removed (weapons equipped via the INVENTORY overlay).
     // ABILITIES tab — populated by ui-manager.updateAbilitiesTab(): owned-only
     // abilities as circle-icon rows, equip into the 4 slots (8.23.0).
     menu.appendChild(el('div', { id: 'abilities-tab', className: 'pause-tab-content' }));

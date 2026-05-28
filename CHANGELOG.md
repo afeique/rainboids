@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.26.0] - 2026-05-28
+
+### Added
+- **INVENTORY button in the pause menu** — opens the full inventory overlay (the
+  same screen as the `I` key; opening it pauses the game).
+
+### Removed
+- **The LOADOUT pause tab** — weapons are equipped through the INVENTORY now, so
+  the redundant compact loadout tab was dropped, decluttering the pause menu.
+
 ## [8.25.0] - 2026-05-28
 
 ### Changed
