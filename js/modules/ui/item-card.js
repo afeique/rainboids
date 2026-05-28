@@ -99,10 +99,13 @@ export function createItemCard(item, opts = {}) {
         card.dataset.gamepadFocus = 'true';
     }
 
+    // An empty-slot card keeps its slot glyph + label (so you can tell WHICH slot
+    // is empty) but renders the name as an italic "Empty" (CSS .item-card--empty).
+    const slotForGlyph = item?.slot || opts.emptySlot || null;
     const icon = document.createElement('div');
     icon.className = 'item-card__icon';
-    if (item?.slot) {
-        const glyph = gearGlyph(item.slot, rarity, variant === 'compact' ? 34 : 58);
+    if (slotForGlyph) {
+        const glyph = gearGlyph(slotForGlyph, rarity, variant === 'compact' ? 34 : 58);
         if (glyph) icon.appendChild(glyph);
     } else if (item?.icon) {
         icon.innerHTML = renderIconHTML(item.icon, { size: variant === 'compact' ? 28 : 42, color: rarity, title: item.name });
@@ -123,7 +126,9 @@ export function createItemCard(item, opts = {}) {
         top.appendChild(chip.firstElementChild || chip);
     }
 
-    const meta = item?.slot ? `${SLOT_LABEL[item.slot] || item.slot.toUpperCase()} · L${item.level || 1}` : (item?.type || item?.id || '');
+    const meta = item?.slot
+        ? `${SLOT_LABEL[item.slot] || item.slot.toUpperCase()} · L${item.level || 1}`
+        : (slotForGlyph ? (SLOT_LABEL[slotForGlyph] || slotForGlyph.toUpperCase()) : (item?.type || item?.id || ''));
     addText(body, 'item-card__meta', meta);
 
     const affixes = item?.affixes || [];

@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.1.1] - 2026-05-28
+
+### Changed
+- **Empty gear/weapon/ability slots now read a clean italic _Empty_** instead of
+  the `— empty —` / `— none (default Pulse Cannon) —` filler text. Applies to the
+  pre-run ARMORY equip rows, the inventory equipped grid (slot glyph + label
+  kept, name italicized), and the pause-menu ability slots.
+
 ## [8.1.0] - 2026-05-27
 
 Weapons become equipped gear, and the pre-run BUILD menu becomes equip-and-go —

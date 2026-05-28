@@ -949,7 +949,8 @@ export class UIManager {
                 if (ABILITIES[id].color) name.style.color = ABILITIES[id].color;
                 any = true;
             } else {
-                name.textContent = '— empty —';
+                name.textContent = 'Empty';
+                name.style.fontStyle = 'italic';
                 name.style.opacity = '0.5';
             }
             row.append(key, name);

@@ -154,14 +154,11 @@ export class InventoryOverlay {
         grid.className = 'inv-equipped-grid';
         for (const slot of SLOT_ORDER) {
             const it = player.equippedItems ? player.equippedItems[slot] : null;
-            const display = it || {
-                slot,
-                rarityColor: '#3a4254',
-                name: `${SLOT_LABEL[slot] || slot.toUpperCase()} — empty`,
-                affixes: [],
-            };
-            const cell = createItemCard(display, { variant: 'standard', focusable: true });
-            if (!it) cell.classList.add('item-card--empty');
+            // Empty slots: null item + emptySlot keeps the slot glyph/label and
+            // renders an italic "Empty" (no more "— empty —" filler text).
+            const cell = it
+                ? createItemCard(it, { variant: 'standard', focusable: true })
+                : createItemCard(null, { variant: 'standard', focusable: true, emptySlot: slot });
             grid.appendChild(cell);
         }
         left.appendChild(grid);

@@ -469,7 +469,11 @@ export class ArmoryOverlay {
             eqName.textContent = `EQUIPPED: ${equipped.name || 'Weapon'} (L${equipped.level || 1})`;
             if (equipped.rarityColor) eqName.style.color = equipped.rarityColor;
         } else {
-            eqName.textContent = 'EQUIPPED: — none (default Pulse Cannon) —';
+            eqName.textContent = 'EQUIPPED: ';
+            const em = document.createElement('em');
+            em.className = 'slot-empty';
+            em.textContent = 'Empty';
+            eqName.appendChild(em);
         }
         eqRow.appendChild(eqName);
         list.appendChild(eqRow);
@@ -568,7 +572,11 @@ export class ArmoryOverlay {
                 name.textContent = `${label}: ${cur.name || slot} (L${cur.level || 1})`;
                 if (cur.rarityColor) name.style.color = cur.rarityColor;
             } else {
-                name.textContent = `${label}: — empty —`;
+                name.textContent = `${label}: `;
+                const em = document.createElement('em');
+                em.className = 'slot-empty';
+                em.textContent = 'Empty';
+                name.appendChild(em);
             }
             row.appendChild(name);
             if (cur) {

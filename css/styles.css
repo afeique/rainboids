@@ -618,6 +618,9 @@ button:not([disabled]),
     border-radius: 4px;
 }
 .inv-slot--empty { opacity: 0.5; }
+/* Empty-slot placeholder: italic "Empty" instead of "— empty —" filler. */
+.slot-empty { font-style: italic; opacity: 0.55; font-weight: normal; }
+.item-card--empty .item-card__name { font-style: italic; opacity: 0.5; }
 .inv-slot-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .inv-slot-label { font-size: calc(12px * var(--font-body-scale, 1)); color: #7e93b4; letter-spacing: 1px; }
 .inv-item-name { font-size: calc(12px * var(--font-body-scale, 1)); font-weight: bold; }
