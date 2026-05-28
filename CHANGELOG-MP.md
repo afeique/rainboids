@@ -7,6 +7,20 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.39.0] - 2026-05-28
+
+### Added
+- **Floating combat feedback (look-like-SP step).** All derived client-side from
+  snapshot diffs (the event stream carries no amounts):
+  - **Damage numbers** — a floating `-N` rises off any enemy whose HP dropped
+    between snapshots (paired with the existing hit spark), in world space so it
+    tracks the hit point.
+  - **Gold `+N` popups** — a gold floater rises off the local ship whenever its
+    Rainshards total increases (skips the first snapshot so a join with banked
+    gold doesn't fire a phantom popup).
+  - **LEVEL UP! announce** — a centered gold banner fades in/out when the local
+    pilot's level increases.
+
 ## [0.38.0] - 2026-05-28
 
 ### Added

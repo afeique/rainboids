@@ -317,7 +317,7 @@ function drawDrop(ctx, d) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera, fx }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera, fx, worldFloaters, levelText }) {
   const cam = camera || { x: 0, y: 0, zoom: 1 };
   const feel = fx || { shakeX: 0, shakeY: 0, flashWhite: 0, flashRed: 0 };
   const W = canvas.width, H = canvas.height;
@@ -465,6 +465,25 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     drawShip(ctx, localShip.x, localShip.y, localShip.angle, `P${localId} (you)`, true, localDowned, localReviveProgress);
   }
 
+  // Floating feedback (damage numbers / gold popups) — world space so they track
+  // the hit point; drawn last in the world layer so they sit on top.
+  if (worldFloaters && worldFloaters.length && now != null) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    for (const fl of worldFloaters) {
+      const a = Math.max(0, 1 - (now - fl.born) / fl.life);
+      ctx.globalAlpha = a;
+      ctx.font = `bold ${fl.size}px ${HUD_FONT}`;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.strokeText(fl.text, fl.x, fl.y);
+      ctx.fillStyle = fl.color;
+      ctx.fillText(fl.text, fl.x, fl.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   // ── End world layer — HUD + banner draw in screen space. ──
   ctx.restore();
 
@@ -502,6 +521,28 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
+  }
+
+  // LEVEL UP! announce (screen space, upper third) — fades in then out.
+  if (levelText && now != null) {
+    const p = (now - levelText.born) / 1800; // 0 → 1
+    if (p < 1) {
+      const a = p < 0.2 ? p / 0.2 : (p > 0.7 ? (1 - p) / 0.3 : 1);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, a));
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `28px ${HUD_FONT}`;
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.strokeText('LEVEL UP!', W / 2, H * 0.34);
+      ctx.fillStyle = '#ffe066';
+      ctx.fillText('LEVEL UP!', W / 2, H * 0.34);
+      ctx.font = `14px ${HUD_FONT}`;
+      ctx.fillStyle = 'rgba(255,245,200,0.95)';
+      ctx.fillText(levelText.text, W / 2, H * 0.34 + 30);
+      ctx.restore();
+    }
   }
 }
 

@@ -205,6 +205,12 @@ async function main() {
   let flashRed = 0;   // 0..1
   const prevEnemyHp = new Map(); // id → last-seen hp, for positioned hit sparks
 
+  // Floating feedback (SP-style): world-space damage numbers + gold "+N" popups
+  // that drift up and fade, plus a screen-space LEVEL UP! announce. All derived
+  // from snapshot diffs (the event stream carries no amounts).
+  const worldFloaters = []; // { x, y, vx, vy, text, color, size, born, life }
+  let levelText = null;     // { text, born }
+
   function addShake(mag) { if (mag > shakeMag) shakeMag = Math.min(34, mag); }
   // Blast feedback scaled by radius + proximity to the local ship (distant
   // explosions shouldn't rock the camera). Adds a kick pushing AWAY from it.
@@ -262,6 +268,32 @@ async function main() {
     }
   }
 
+  // Floating "-N" damage number at a hit (world space, drifts up + fades).
+  function spawnDamageNumber(x, y, amount) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || amount <= 0) return;
+    worldFloaters.push({
+      x: x + (Math.random() - 0.5) * 10, y: y - 6,
+      vx: (Math.random() - 0.5) * 0.012, vy: -0.045,
+      text: `${Math.round(amount)}`,
+      color: '#ffd0d0', size: 15,
+      born: performance.now(), life: 720,
+    });
+    if (worldFloaters.length > 80) worldFloaters.splice(0, worldFloaters.length - 80);
+  }
+  // Floating "+N" gold popup over the local ship (world space).
+  function spawnGoldPopup(amount) {
+    const s = predictor && predictor.ship;
+    if (!s || amount <= 0) return;
+    worldFloaters.push({
+      x: s.x + (Math.random() - 0.5) * 18, y: s.y - SHIP_RADIUS - 14,
+      vx: (Math.random() - 0.5) * 0.02, vy: -0.06,
+      text: `+${Math.round(amount)}`,
+      color: '#FFD700', size: amount >= 50 ? 20 : 16,
+      born: performance.now(), life: 1100,
+    });
+    if (worldFloaters.length > 80) worldFloaters.splice(0, worldFloaters.length - 80);
+  }
+
   // Debug/test hook: lets QA specs (and the console) inspect live client state
   // without coupling tests to internal module structure.
   window.__mp = {
@@ -311,7 +343,10 @@ async function main() {
         if (full.enemies) {
           for (const e of full.enemies) {
             const prev = prevEnemyHp.get(e.id);
-            if (prev != null && e.hp < prev - 0.01) spawnSpark(e.x, e.y);
+            if (prev != null && e.hp < prev - 0.01) {
+              spawnSpark(e.x, e.y);
+              spawnDamageNumber(e.x, e.y, prev - e.hp);
+            }
             prevEnemyHp.set(e.id, e.hp);
           }
           if (prevEnemyHp.size > full.enemies.length + 64) {
@@ -331,8 +366,16 @@ async function main() {
             localMaxHp = me.mhp;
             localDowned = !!me.dn;
             localReviveProgress = me.rp || 0;
-            localGold = me.g || 0;
-            if (me.lv != null) localLevel = me.lv;
+            // Gold gain → "+N" popup over the ship (skip the first snapshot so a
+            // join with banked gold doesn't fire a phantom popup).
+            const newGold = me.g || 0;
+            if (localGold > 0 && newGold > localGold) spawnGoldPopup(newGold - localGold);
+            localGold = newGold;
+            // Level up → centered announce.
+            if (me.lv != null) {
+              if (me.lv > localLevel) levelText = { text: `LEVEL ${me.lv}`, born: performance.now() };
+              localLevel = me.lv;
+            }
             if (me.xp != null) localXp = me.xp;
             if (me.e != null) localEnergy = me.e;
             if (me.me != null) localMaxEnergy = me.me;
@@ -518,6 +561,16 @@ async function main() {
     }
     // Banner fades after ~2.5 s.
     if (banner && now - banner.born > 2500) banner = null;
+    // Level-up announce fades after ~1.8 s.
+    if (levelText && now - levelText.born > 1800) levelText = null;
+    // Advance + cull floating feedback (damage numbers / gold popups).
+    for (let i = worldFloaters.length - 1; i >= 0; i--) {
+      const fl = worldFloaters[i];
+      if (now - fl.born >= fl.life) { worldFloaters.splice(i, 1); continue; }
+      fl.x += fl.vx * dtMs;
+      fl.y += fl.vy * dtMs;
+      fl.vy += 0.00012 * dtMs; // gentle gravity → arc
+    }
 
     // Camera tracks the local predicted ship (falls back to arena center until
     // we have a ship — e.g. while connecting or fully downed).
@@ -566,6 +619,8 @@ async function main() {
       banner,
       camera,
       fx,
+      worldFloaters,
+      levelText,
     });
 
     // Lightweight HUD line.
