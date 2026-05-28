@@ -5,7 +5,7 @@
  * manually instead of relying on the interval timer.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { Room } from '../../server/src/room.js';
 import { RoomManager } from '../../server/src/room-manager.js';
 import { S2C } from '../../js/sim/protocol.js';
@@ -87,6 +87,13 @@ describe('Room', () => {
 });
 
 describe('RoomManager (matchmaking)', () => {
+  // These tests exercise room lifecycle, not the sim. Pin the lightweight toy
+  // Room (the default is now SpRoom, whose async SpHost.init() dynamic-imports
+  // js/modules/* and would resolve after the test scope tears down).
+  let prevSim;
+  beforeAll(() => { prevSim = process.env.MP_SIM; process.env.MP_SIM = 'toy'; });
+  afterAll(() => { if (prevSim === undefined) delete process.env.MP_SIM; else process.env.MP_SIM = prevSim; });
+
   it('creates and reuses rooms by code; distinct codes are distinct rooms', () => {
     const m = new RoomManager();
     const a1 = m.getOrCreateRoom('alpha');
