@@ -7,6 +7,33 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.36.0] - 2026-05-28
+
+### Added
+- **SP-style vitals HUD (sphere health + energy, triforce tanks, XP bar).** The
+  flat bottom health bar is replaced by single-player's glass-orb HUD, ported
+  from `js/modules/hud/status.js`:
+  - **Health sphere** — red glass orb whose core fills center-out by HP fraction,
+    with an eased drain, specular highlight, a pulsing low-HP rim, and a
+    `{hp}/{max}` caption.
+  - **Energy sphere** — cyan glass orb fed by power-weapon energy, with additive
+    laser-diffraction streaks and a gold "ready" rim once a power shot is
+    affordable.
+  - **Triforce** — three spare-health-tank triangles (gold = owned, dim outline =
+    empty slot) so the widget is always visible.
+  - **Rainshards** — a gold diamond + count beside the orbs, with the run LEVEL
+    below it.
+  - **XP bar** — a thin segmented gold bar across the very bottom (white →
+    goldenrod → dark-gold), filling toward the next level.
+- **Additive HUD fields on the ship snapshot** (`sp-host.js buildSnapshot`):
+  `lv` (level), `xp` (in-level XP), `e`/`me` (energy / max energy), `tk` (spare
+  health tanks). The snapshot delta codec diffs ship fields generically, so these
+  flow through keyframes + deltas with no codec change. New `window.__mp`
+  accessors: `localLevel`, `localEnergy`, `localMaxEnergy`, `localTanks`.
+- **`mp.html` loads SP's `Press Start 2P` pixel font** (self-contained
+  `@font-face` → `css/fonts/`), and the client kicks `document.fonts.load` so the
+  canvas HUD renders in the pixel font instead of falling back to monospace.
+
 ## [0.35.0] - 2026-05-28
 
 ### Added

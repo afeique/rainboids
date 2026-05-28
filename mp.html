@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rainboids — Multiplayer (experimental)</title>
   <style>
+    /* SP's pixel font (bundled in css/fonts/) so the canvas HUD matches solo. */
+    @font-face {
+      font-family: 'Press Start 2P';
+      font-display: swap;
+      src: url('css/fonts/press-start-2p-latin.woff2') format('woff2');
+    }
     html, body {
       margin: 0; padding: 0; height: 100%; background: #04040a;
       color: #cdd6f4; font-family: monospace; overflow: hidden;

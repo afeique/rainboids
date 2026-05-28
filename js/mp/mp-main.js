@@ -46,6 +46,13 @@ function setStatus(text) {
 async function main() {
   const canvas = document.getElementById('game');
 
+  // The canvas HUD draws with SP's 'Press Start 2P' pixel font; a webfont isn't
+  // fetched until something uses it, and ctx.font alone doesn't trigger a load —
+  // so kick the fetch here. Until it resolves the HUD falls back to monospace.
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load("12px 'Press Start 2P'").catch(() => {});
+  }
+
   // Camera follows the local ship (SP framing: the arena is larger than the
   // viewport, the player stays centered, the camera is clamped to the field).
   // zoom>1 keeps the framing tight on large monitors so the action reads
@@ -127,6 +134,11 @@ async function main() {
   let localDowned = false;
   let localReviveProgress = 0;
   let localGold = 0;
+  let localLevel = 1;       // account/run level (HUD XP bar + readout)
+  let localXp = 0;          // XP banked toward the next level
+  let localEnergy = 0;      // power-weapon energy (energy sphere)
+  let localMaxEnergy = 100;
+  let localTanks = 0;       // spare health tanks (triforce)
   let lastDrops = new Map();
   let wave = 0;
   let waveState = 'intermission';
@@ -201,6 +213,10 @@ async function main() {
     dropCount: () => lastDrops.size,
     localHp: () => localHp,
     localGold: () => localGold,
+    localLevel: () => localLevel,
+    localEnergy: () => localEnergy,
+    localMaxEnergy: () => localMaxEnergy,
+    localTanks: () => localTanks,
     wave: () => wave,
     waveState: () => waveState,
   };
@@ -229,6 +245,11 @@ async function main() {
             localDowned = !!me.dn;
             localReviveProgress = me.rp || 0;
             localGold = me.g || 0;
+            if (me.lv != null) localLevel = me.lv;
+            if (me.xp != null) localXp = me.xp;
+            if (me.e != null) localEnergy = me.e;
+            if (me.me != null) localMaxEnergy = me.me;
+            if (me.tk != null) localTanks = me.tk;
             predictor.reconcile(
               { x: me.x, y: me.y, vx: me.vx, vy: me.vy, angle: me.a },
               me.li,
@@ -424,6 +445,11 @@ async function main() {
       localReviveProgress,
       localHp,
       localMaxHp,
+      localLevel,
+      localXp,
+      localEnergy,
+      localMaxEnergy,
+      localTanks,
       wave,
       gold: localGold,
       players: roster.length,

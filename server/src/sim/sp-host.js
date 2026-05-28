@@ -752,6 +752,14 @@ export class SpHost {
         hp: Math.ceil(p.health), mhp: p.maxHealth,
         al: p.active !== false, dn: !!p.downed, rp: p.reviveProgress || 0,
         g: this.game?.money | 0,
+        // HUD vitals (look-like-SP): level, in-level XP, power-weapon energy,
+        // and spare health tanks (triforce). The delta codec diffs per field, so
+        // these additive fields flow through keyframes + deltas unchanged.
+        lv: (p.level | 0) || 1,
+        xp: Math.max(0, p.xp | 0),
+        e: Math.round(p.energy || 0),
+        me: p.maxEnergy || 100,
+        tk: this.healthTanks | 0,
         li: slot.lastInputTick,
       };
     });

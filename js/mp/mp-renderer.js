@@ -317,7 +317,7 @@ function drawDrop(ctx, d) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, wave, gold, players, banner, camera }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera }) {
   const cam = camera || { x: 0, y: 0, zoom: 1 };
   const W = canvas.width, H = canvas.height;
 
@@ -460,46 +460,218 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     ctx.restore();
   }
 
-  drawHud(ctx, canvas, { localHp, localMaxHp, wave, gold, players, localDowned });
+  drawHud(ctx, canvas, {
+    localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp,
+    localTanks, wave, gold, players, localDowned, now,
+  });
 }
 
-// On-canvas HUD: local health bar + wave/gold readout (SP-style, on the
-// authoritative state). The minimal DOM line in mp-main stays for redundancy.
-function drawHud(ctx, canvas, { localHp, localMaxHp, wave, gold, players, localDowned }) {
+// ── SP-style HUD (ported from js/modules/hud/status.js) ──────────────────────
+// Top-left vitals cluster: [triforce spare-tanks] [health sphere] [energy
+// sphere] + Rainshards. A thin segmented gold XP bar runs across the very
+// bottom, and wave/pilots sit top-right. All in screen space.
+const HUD_FONT = "'Press Start 2P', monospace";
+const xpForLevel = (lv) => 500 + (Math.max(1, lv | 0) - 1) * 250; // SP sp-stats.js
+
+// Eased health display (SP drains slightly slower than it gains so a hit reads
+// as a chunk leaving the orb).
+let _hudDisplayedHp = null;
+
+function drawHealthSphere(ctx, cx, cy, r, hp, maxHp, now) {
+  const maxH = Math.max(1, maxHp || 100);
+  if (_hudDisplayedHp == null) _hudDisplayedHp = hp;
+  const delta = hp - _hudDisplayedHp;
+  _hudDisplayedHp += delta * (delta < 0 ? 0.16 : 0.30);
+  if (Math.abs(hp - _hudDisplayedHp) < 0.5) _hudDisplayedHp = hp;
+  const frac = Math.max(0, Math.min(1, _hudDisplayedHp / maxH));
+  const low = frac <= 0.3;
+
   ctx.save();
-  ctx.textBaseline = 'alphabetic';
-
-  // Top-left: wave / players / gold.
-  ctx.font = 'bold 18px monospace';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.fillText(`WAVE ${wave || 0}`, 16, 28);
-  ctx.font = '13px monospace';
-  ctx.fillStyle = 'rgba(180,200,230,0.8)';
-  ctx.fillText(`PILOTS ${players || 1}`, 16, 46);
-  ctx.fillStyle = 'rgba(255,210,63,0.9)';
-  ctx.fillText(`◆ ${gold || 0}`, 16, 62);
-
-  // Bottom-center: local player health bar.
-  if (localHp != null && localMaxHp) {
-    const w = 280;
-    const h = 16;
-    const x = (canvas.width - w) / 2;
-    const y = canvas.height - 40;
-    const frac = Math.max(0, Math.min(1, localHp / localMaxHp));
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
-    // Green→amber→red by remaining health.
-    const hue = 120 * frac;
-    ctx.fillStyle = localDowned ? 'rgba(120,120,140,0.7)' : `hsl(${hue}, 80%, 50%)`;
-    ctx.fillRect(x, y, w * frac, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, w, h);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 12px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(localDowned ? 'DOWNED — hold on' : `${Math.ceil(localHp)} / ${localMaxHp}`, canvas.width / 2, y + 12);
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(24, 8, 10, 0.78)'; ctx.fill();
+  if (frac > 0) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r - 1.5, 0, Math.PI * 2); ctx.clip();
+    const coreR = Math.max(1, r * frac);
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+    const solidStop = Math.min(0.97, 0.5 + 0.47 * frac);
+    grad.addColorStop(0, `rgba(255, 215, 210, ${0.85 * frac + 0.15})`);
+    grad.addColorStop(solidStop, `rgba(${low ? 255 : 235}, ${low ? 45 : 66}, ${low ? 45 : 64}, 0.85)`);
+    grad.addColorStop(1, 'rgba(200, 30, 40, 0)');
+    ctx.fillStyle = grad; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.restore();
   }
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255, 200, 200, 0.55)';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx - r * 0.32, cy - r * 0.34, r * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.fill();
+  if (low) {
+    const pulse = 0.4 + 0.35 * Math.abs(Math.sin(now * 0.012));
+    ctx.lineWidth = 2.5; ctx.strokeStyle = `rgba(255, 70, 70, ${pulse})`;
+    ctx.beginPath(); ctx.arc(cx, cy, r + 2.5, 0, Math.PI * 2); ctx.stroke();
+  }
+  // "{hp}/{max}" beneath the orb.
+  const txt = `${Math.round(hp)}/${Math.round(maxH)}`;
+  ctx.font = `9px ${HUD_FONT}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillStyle = low ? '#ff8a8a' : 'rgba(255, 212, 212, 0.95)';
+  ctx.strokeText(txt, cx, cy + r + 5); ctx.fillText(txt, cx, cy + r + 5);
+  ctx.restore();
+}
+
+function drawEnergySphere(ctx, cx, cy, r, energy, maxEnergy, now) {
+  const maxE = maxEnergy || 100;
+  const frac = Math.max(0, Math.min(1, (energy || 0) / maxE));
+  const cr = 0, cg = 204, cb = 255; // cyan — SP default primary tint
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(8, 12, 22, 0.78)'; ctx.fill();
+  if (frac > 0) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r - 1.5, 0, Math.PI * 2); ctx.clip();
+    const coreR = Math.max(1, r * frac);
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+    const solidStop = Math.min(0.97, 0.5 + 0.47 * frac);
+    grad.addColorStop(0, `rgba(255,255,255,${0.85 * frac + 0.15})`);
+    grad.addColorStop(solidStop, `rgba(${cr},${cg},${cb},0.8)`);
+    grad.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+    ctx.fillStyle = grad; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    // Laser-diffraction streaks through the gas (additive).
+    ctx.globalCompositeOperation = 'lighter';
+    const t = now * 0.001;
+    for (let i = 0; i < 5; i++) {
+      const a = t * 0.6 + i * (Math.PI / 5);
+      const alpha = (0.10 + 0.07 * Math.sin(t * 2 + i)) * frac;
+      ctx.strokeStyle = `rgba(255,255,255,${alpha})`; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * coreR, cy + Math.sin(a) * coreR);
+      ctx.lineTo(cx - Math.cos(a) * coreR, cy - Math.sin(a) * coreR);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(200, 230, 255, 0.55)';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx - r * 0.32, cy - r * 0.34, r * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.fill();
+  const ready = (energy || 0) >= 30; // SP default power cost
+  if (ready) {
+    const pulse = 0.4 + 0.3 * Math.sin(now * 0.012);
+    ctx.lineWidth = 2; ctx.strokeStyle = `rgba(255, 240, 160, ${pulse})`;
+    ctx.beginPath(); ctx.arc(cx, cy, r + 2.5, 0, Math.PI * 2); ctx.stroke();
+  }
+  const txt = `${Math.floor(energy || 0)}/${Math.round(maxE)}`;
+  ctx.font = `9px ${HUD_FONT}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillStyle = ready ? '#FFE0A0' : 'rgba(210, 232, 255, 0.92)';
+  ctx.strokeText(txt, cx, cy + r + 5); ctx.fillText(txt, cx, cy + r + 5);
+  ctx.restore();
+}
+
+// Triforce of spare health tanks (SP drawCanvasTriforce). Owned tanks render as
+// gold triangles; empty slots show a dim outline so the widget stays visible.
+function drawTriforce(ctx, leftX, cy, tanks) {
+  const SIZE = 12, SPACING = 2;
+  const halfHalf = SIZE / 2 + SPACING / 2;
+  const centerX = leftX + halfHalf + SIZE / 2;
+  const topY = cy - (SIZE + SPACING - 1) / 2;
+  const bottomY = topY + SIZE + SPACING - 1;
+  const slots = [
+    { x: centerX - halfHalf, y: bottomY }, // btmLeft  (kept last)
+    { x: centerX + halfHalf, y: bottomY }, // btmRight
+    { x: centerX, y: topY },               // top      (lost first)
+  ];
+  const tri = (cx, ty, filled) => {
+    const h = SIZE * 0.866;
+    ctx.beginPath();
+    ctx.moveTo(cx, ty - h / 2);
+    ctx.lineTo(cx - SIZE / 2, ty + h / 2);
+    ctx.lineTo(cx + SIZE / 2, ty + h / 2);
+    ctx.closePath();
+    if (filled) { ctx.fillStyle = '#FFD700'; ctx.strokeStyle = '#B8860B'; ctx.fill(); ctx.stroke(); }
+    else { ctx.strokeStyle = 'rgba(184,134,11,0.35)'; ctx.stroke(); }
+  };
+  ctx.save();
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 3; i++) tri(slots[i].x, slots[i].y, tanks >= i + 1);
+  ctx.restore();
+}
+
+function drawXpBar(ctx, W, H, level, xp) {
+  const barH = 6;
+  const y = H - barH;
+  const frac = level >= 100 ? 1 : Math.max(0, Math.min(1, (xp || 0) / (xpForLevel(level) || 1)));
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, y, W, barH);
+  if (frac > 0) {
+    const fillW = Math.max(1, W * frac);
+    const g = ctx.createLinearGradient(0, y, fillW, y);
+    g.addColorStop(0.0, '#fffbe6'); g.addColorStop(0.5, '#daa520'); g.addColorStop(1.0, '#8a6508');
+    ctx.fillStyle = g; ctx.fillRect(0, y, fillW, barH);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(0, y, fillW, 1);
+  }
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  for (let x = 40; x < W; x += 40) ctx.fillRect(x, y, 1, barH);
+  ctx.fillStyle = 'rgba(218,165,32,0.65)'; ctx.fillRect(0, y - 1, W, 1);
+  ctx.restore();
+}
+
+function drawHud(ctx, canvas, s) {
+  const W = canvas.width, H = canvas.height;
+  const now = s.now || 0;
+  ctx.save();
+
+  // Vitals cluster, top-left, on a shared midline.
+  const cy = 38;
+  const R = 20;
+  drawTriforce(ctx, 18, cy, s.localTanks | 0);
+  const healthCX = 18 + 20 + R;            // right of the triforce
+  if (s.localHp != null) drawHealthSphere(ctx, healthCX, cy, R, s.localHp, s.localMaxHp, now);
+  const energyCX = healthCX + R * 2 + 30;
+  drawEnergySphere(ctx, energyCX, cy, R, s.localEnergy, s.localMaxEnergy, now);
+
+  // Rainshards (gold) + level, right of the energy orb on the same midline.
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  const goldX = energyCX + R + 22;
+  // Gold diamond glyph.
+  ctx.save();
+  ctx.translate(goldX, cy); ctx.rotate(Math.PI / 4);
+  ctx.fillStyle = '#FFD700'; ctx.strokeStyle = '#B8860B'; ctx.lineWidth = 1.5;
+  ctx.fillRect(-6, -6, 12, 12); ctx.strokeRect(-6, -6, 12, 12);
+  ctx.restore();
+  ctx.font = `13px ${HUD_FONT}`;
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+  ctx.fillStyle = '#FFD700';
+  ctx.strokeText(`${s.gold | 0}`, goldX + 14, cy + 1);
+  ctx.fillText(`${s.gold | 0}`, goldX + 14, cy + 1);
+  // Level readout below the gold.
+  ctx.font = `9px ${HUD_FONT}`;
+  ctx.fillStyle = 'rgba(200,220,255,0.85)';
+  ctx.fillText(`LV ${s.localLevel | 0}`, goldX - 6, cy + 22);
+
+  // Top-right: wave + pilots.
+  ctx.textAlign = 'right';
+  ctx.font = `12px ${HUD_FONT}`;
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillText(`WAVE ${s.wave || 0}`, W - 16, 22);
+  ctx.fillStyle = 'rgba(180,200,230,0.8)';
+  ctx.font = `9px ${HUD_FONT}`;
+  ctx.fillText(`PILOTS ${s.players || 1}`, W - 16, 40);
+
+  // Downed prompt (center-bottom, above the XP bar).
+  if (s.localDowned) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.font = `12px ${HUD_FONT}`;
+    ctx.fillStyle = 'rgba(255,180,180,0.95)';
+    ctx.fillText('DOWNED — hold on', W / 2, H - 24);
+  }
+
+  // Bottom XP bar (full width).
+  drawXpBar(ctx, W, H, s.localLevel | 0, s.localXp | 0);
+
   ctx.restore();
 }
