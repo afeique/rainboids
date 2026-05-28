@@ -24,6 +24,48 @@ const SP_ENEMY_SHAPE = { chaser: 'HUNTER' };
 // once for the arena, then drawn stationary behind everything each frame.
 let _nebulaReady = false;
 
+// Client-authored background starfield (SP's space backdrop is nebula + a dense
+// parallax star field; the co-op arena is fixed, so a static twinkling field is
+// the right analogue). Generated once, seeded, with SP's star-colour mix
+// (~55% blue-white, 25% white, 12% warm, 8% orange-red).
+let _stars = null;
+function ensureStars(w, h) {
+  if (_stars) return _stars;
+  const rng = makeRng(0x5747); // fixed seed → stable field
+  const n = Math.round((w * h) / 9000); // ~230 on a 1920×1080 arena
+  _stars = [];
+  for (let i = 0; i < n; i++) {
+    const r = rng();
+    let color;
+    if (r < 0.55) color = `hsl(${208 + rng() * 22}, 65%, ${78 + rng() * 18}%)`;      // blue-white
+    else if (r < 0.80) color = `hsl(0, 0%, ${82 + rng() * 16}%)`;                     // white
+    else if (r < 0.92) color = `hsl(${38 + rng() * 16}, 70%, 76%)`;                   // warm
+    else color = `hsl(${12 + rng() * 16}, 82%, 66%)`;                                 // orange-red
+    _stars.push({
+      x: rng() * w, y: rng() * h,
+      size: 0.4 + rng() * 1.5,
+      color,
+      twPhase: rng() * Math.PI * 2,
+      twSpeed: 0.4 + rng() * 1.6,
+      base: 0.45 + rng() * 0.35,
+    });
+  }
+  return _stars;
+}
+function drawStarfield(ctx, w, h, now) {
+  const stars = ensureStars(w, h);
+  const t = (now || 0) / 1000;
+  for (const s of stars) {
+    const tw = 0.5 + 0.5 * Math.sin(t * s.twSpeed + s.twPhase);
+    ctx.globalAlpha = Math.max(0.12, s.base * (0.6 + 0.4 * tw));
+    ctx.fillStyle = s.color;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
 // Per-asteroid cosmetic cache (keyed by entity id, which is monotonic so never
 // reused). Each rock gets stable seeded 3D vertices + hue params so it looks
 // like its single-player counterpart; the snapshot only carries one `angle`, so
@@ -196,6 +238,9 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     if (!_nebulaReady) { nebulaRenderer.generate(canvas.width, canvas.height); _nebulaReady = true; }
     nebulaRenderer.draw(ctx, 0, 0, 0, 0, 0, canvas.width, canvas.height);
   } catch { /* background is non-essential — never break the frame */ }
+
+  // Twinkling starfield over the nebula (crisp points of light, SP-style).
+  try { drawStarfield(ctx, canvas.width, canvas.height, now); } catch { /* non-essential */ }
 
   // Arena border.
   ctx.strokeStyle = '#1d2440';

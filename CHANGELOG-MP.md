@@ -7,6 +7,21 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.30.1] - 2026-05-28
+
+### Added
+- **Background starfield** (P7 parity). SP's space backdrop is nebula **plus** a
+  dense star field; the MP client was drawing only the nebula. Added a
+  client-authored twinkling starfield over the nebula — seeded once, ~230 stars on
+  a 1920×1080 arena, with SP's colour mix (~55% blue-white / 25% white / 12% warm /
+  8% orange-red) and gentle per-star twinkle. Pure client cosmetic (no wire
+  change); the fixed co-op arena makes a static field the right analogue to SP's
+  parallax stars.
+
+### Tests
+- Covered by the default-sim co-op QA (starfield draws every frame; page-error
+  guard catches any throw). Green.
+
 ## [0.30.0] - 2026-05-28
 
 ### Added
