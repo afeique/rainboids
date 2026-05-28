@@ -75,6 +75,8 @@ export class Interpolator {
         x: lerp(sa.x, sb.x, f),
         y: lerp(sa.y, sb.y, f),
         angle: lerpAngle(sa.a, sb.a, f),
+        vx: sb.vx || 0,
+        vy: sb.vy || 0,
         hp: sb.hp,
         mhp: sb.mhp,
         downed: !!sb.dn,

@@ -13,7 +13,7 @@ import { MpInput } from './mp-input.js';
 import { SnapshotStream } from './netcode/snapshot-stream.js';
 import { RenderBridge } from './render-bridge.js';
 import { WIRE_VERSION, C2S, S2C, WS_PATH, DEFAULT_PORT } from '../sim/protocol.js';
-import { TICK_MS, FIELD_WIDTH, FIELD_HEIGHT } from '../sim/constants.js';
+import { TICK_MS, FIELD_WIDTH, FIELD_HEIGHT, SHIP_RADIUS } from '../sim/constants.js';
 import { EV } from '../sim/events.js';
 import { AudioManager } from '../modules/audio/audio-manager.js';
 
@@ -122,6 +122,31 @@ async function main() {
         life: ember ? 520 + Math.random() * 340 : 240 + Math.random() * 240,
         size: (ember ? 2.4 : 1.3) + Math.random() * (ember ? 1.8 : 1.4) + baseR * 0.012,
         hue: ember ? 28 + Math.random() * 16 : 16 + Math.random() * 34,
+      });
+    }
+  }
+
+  // Engine thrust trail: a moving ship sheds cyan exhaust out its rear (SP's
+  // engine is particle-based, so this reuses the same particle layer). Velocity
+  // is in px/tick; below ~0.6 the ship is effectively coasting → no plume.
+  function emitThrust(x, y, angle, vx, vy) {
+    const speed = Math.hypot(vx || 0, vy || 0);
+    if (speed < 0.6 || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const rear = angle + Math.PI;
+    const rx = x + Math.cos(rear) * SHIP_RADIUS * 0.6;
+    const ry = y + Math.sin(rear) * SHIP_RADIUS * 0.6;
+    const count = speed > 2.4 ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      const dir = rear + (Math.random() - 0.5) * 0.6;
+      const ps = 0.05 + Math.random() * 0.1;
+      particles.push({
+        x: rx, y: ry,
+        vx: Math.cos(dir) * ps + vx * 0.01,
+        vy: Math.sin(dir) * ps + vy * 0.01,
+        born: performance.now(),
+        life: 150 + Math.random() * 150,
+        size: 1.0 + Math.random() * 1.1,
+        hue: 190 + Math.random() * 22, // cyan-blue engine glow
       });
     }
   }
@@ -321,6 +346,14 @@ async function main() {
     lastAsteroids = asteroids;
     lastEnemies = enemies;
     lastDrops = drops;
+    // Engine trails for moving ships (local predicted + remote interpolated).
+    if (predictor && !localDowned) {
+      const s = predictor.ship;
+      emitThrust(s.x, s.y, s.angle, s.vx, s.vy);
+    }
+    for (const [, s] of remote) {
+      if (!s.downed) emitThrust(s.x, s.y, s.angle, s.vx, s.vy);
+    }
     // Age out finished destruction rings (~500 ms lifetime).
     for (let i = effects.length - 1; i >= 0; i--) {
       if (now - effects[i].born > 500) effects.splice(i, 1);

@@ -7,6 +7,20 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.28.1] - 2026-05-27
+
+### Added
+- **Engine thrust trails** (P7 parity). Moving ships now shed a cyan exhaust plume
+  out the rear, reusing the particle layer (SP's engine is particle-based too), so
+  ships read as alive/thrusting instead of static hulls. Driven by the ship's
+  authoritative velocity — local predicted + remote interpolated — and gated so a
+  coasting ship emits nothing. Ship velocity (`vx`/`vy`) is now carried through
+  the remote-ship interpolation sample.
+
+### Tests
+- Covered by `tests/qa/13-mp-sphost.spec.js`'s particle assertion (a moving pilot
+  now reliably emits a trail) + the page-error guard. Green.
+
 ## [0.28.0] - 2026-05-27
 
 ### Added
