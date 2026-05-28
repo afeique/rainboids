@@ -182,14 +182,33 @@ test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (
         expect(r.title).toBe('UPGRADES');
     });
 
-    test('START is enabled with a default loadout (has a primary)', async ({ page }) => {
+    test('BUILD → RUN SETUP → START is a two-step flow, both steps always enabled (8.21.0)', async ({ page }) => {
         const r = await page.evaluate(() => {
-            window.gameEngine.openArmory();
+            const ge = window.gameEngine;
+            ge.openArmory();
             const btn = document.getElementById('shop-prerun-start');
-            return { disabled: btn.disabled, text: btn.textContent };
+            const vis = (id) => getComputedStyle(document.getElementById(id)).display !== 'none';
+            const buildText = btn.textContent;
+            const buildDisabled = btn.disabled;
+            const treeBuild = vis('shop-tree');
+            const setupBuild = vis('shop-runsetup');
+            btn.click(); // BUILD → RUN SETUP
+            const setupText = btn.textContent;
+            const setupDisabled = btn.disabled;
+            const treeSetup = vis('shop-tree');
+            const setupSetup = vis('shop-runsetup');
+            return { buildText, buildDisabled, treeBuild, setupBuild, setupText, setupDisabled, treeSetup, setupSetup };
         });
-        expect(r.disabled).toBe(false);
-        expect(r.text).toContain('START RUN');
+        // BUILD step: GEAR tree shown, RUN SETUP hidden, button advances.
+        expect(r.buildDisabled).toBe(false);
+        expect(r.buildText).toContain('RUN SETUP');
+        expect(r.treeBuild).toBe(true);
+        expect(r.setupBuild).toBe(false);
+        // RUN SETUP step: tree hidden, RUN SETUP card shown, START enabled.
+        expect(r.setupDisabled).toBe(false);
+        expect(r.setupText).toContain('START RUN');
+        expect(r.treeSetup).toBe(false);
+        expect(r.setupSetup).toBe(true);
     });
 
     test('BUILD shows ONLY the GEAR tab — abilities/passives/stats + the legend are gone (8.19.0)', async ({ page }) => {
@@ -234,12 +253,13 @@ test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (
         expect(r.hintLen).toBeGreaterThan(10);
     });
 
-    test('START is always enabled — the run primary is equipped gear, not a pre-run pick', async ({ page }) => {
+    test('the run is always startable — no pre-run weapon/ability gate', async ({ page }) => {
         // 8.x — there is no weapon picker (and so no SELECT-A-PRIMARY gate): your
-        // primary is whatever weapon you have equipped, so a run is always
-        // startable, even with no ability picks.
+        // primary is whatever weapon you have equipped. 8.21.0 — START lives on
+        // the RUN SETUP step, so advance there first.
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
+            document.getElementById('shop-prerun-start').click(); // BUILD → RUN SETUP
             const btn = document.getElementById('shop-prerun-start');
             const status = document.getElementById('shop-prerun-status');
             return {

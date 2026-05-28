@@ -1,14 +1,15 @@
 /**
- * QA-19: RUN SETUP UI (8.10.0 — flat waves)
+ * QA-19: RUN SETUP UI (8.10.0 — flat waves; 8.21.0 — own screen)
  *
- * The pre-run BUILD footer carries a RUN SETUP control group: a single WAVES
- * slider (10–100, step 10), a difficulty MODE selector (Easy→Legendary), and a
- * live readout ("N waves · MODE · rewards ×M"). The chosen run shape
- * ({ maxWaves, mode }) flows into game.runConfig on START RUN. The "stages" +
- * waves-per-stage controls were removed.
+ * 8.21.0 — the pre-run is two screens: BUILD (equip gear) → RUN SETUP. The RUN
+ * SETUP screen carries a single WAVES slider (10–100, step 10), a difficulty
+ * MODE selector (Easy→Legendary), and a live readout ("N waves · MODE ·
+ * rewards ×M"). The chosen run shape ({ maxWaves, mode }) flows into
+ * game.runConfig on START RUN. Tests advance BUILD → RUN SETUP first (the
+ * BUILD primary button reads "RUN SETUP →" and switches screens).
  *
- * Mirrors the QA-08 BUILD-flow harness (loadGame → openArmory → BUILD tree,
- * then drive the engine via page.evaluate).
+ * Mirrors the QA-08 BUILD-flow harness (loadGame → openArmory → advance → RUN
+ * SETUP, then drive the engine via page.evaluate).
  */
 
 import { test, expect } from '@playwright/test';
@@ -22,9 +23,10 @@ test.describe('QA-19: RUN SETUP UI', () => {
         await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
     });
 
-    test('RUN SETUP controls are visible in BUILD mode with the default readout', async ({ page }) => {
+    test('RUN SETUP controls are visible on the RUN SETUP screen with the default readout', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             const group = document.getElementById('shop-runsetup');
             const readout = document.getElementById('shop-runsetup-readout');
             const slider = document.getElementById('shop-runsetup-waves');
@@ -64,6 +66,7 @@ test.describe('QA-19: RUN SETUP UI', () => {
     test('dragging the waves slider updates the value + live readout', async ({ page }) => {
         const r = await page.evaluate((waves) => {
             window.gameEngine.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             const s = document.getElementById('shop-runsetup-waves');
             s.value = String(waves);
             s.dispatchEvent(new Event('input', { bubbles: true }));
@@ -79,6 +82,7 @@ test.describe('QA-19: RUN SETUP UI', () => {
     test('the waves slider clamps to [10,100]', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             const s = document.getElementById('shop-runsetup-waves');
             const setVal = (n) => { s.value = String(n); s.dispatchEvent(new Event('input', { bubbles: true })); };
             const lbl = () => document.getElementById('shop-runsetup-waves-value').textContent;
@@ -96,6 +100,7 @@ test.describe('QA-19: RUN SETUP UI', () => {
         const r = await page.evaluate((waves) => {
             const ge = window.gameEngine;
             ge.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             const s = document.getElementById('shop-runsetup-waves');
             s.value = String(waves);
             s.dispatchEvent(new Event('input', { bubbles: true }));
@@ -113,6 +118,7 @@ test.describe('QA-19: RUN SETUP UI', () => {
         const runConfig = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             ge.beginPreRunFromTree({}); // no runConfig passed
             return ge.game.runConfig;
         });
@@ -123,6 +129,7 @@ test.describe('QA-19: RUN SETUP UI', () => {
     test('MODE controls render with NORMAL active + EPIC/LEGENDARY locked by default', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             const group = document.getElementById('shop-runsetup-mode');
             const ids = ['easy', 'normal', 'hard', 'epic', 'legendary'];
             const btns = Object.fromEntries(ids.map((k) => [k, document.getElementById(`shop-runsetup-mode-${k}`)]));
@@ -148,6 +155,7 @@ test.describe('QA-19: RUN SETUP UI', () => {
     test('clicking an unlocked mode (HARD) selects it + the readout updates', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             document.getElementById('shop-runsetup-mode-hard').click();
             const hard = document.getElementById('shop-runsetup-mode-hard');
             const normal = document.getElementById('shop-runsetup-mode-normal');
@@ -165,6 +173,7 @@ test.describe('QA-19: RUN SETUP UI', () => {
     test('a locked mode (EPIC) is disabled and clicking it is a no-op', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             const epic = document.getElementById('shop-runsetup-mode-epic');
             epic.click();
             const normal = document.getElementById('shop-runsetup-mode-normal');
@@ -183,6 +192,7 @@ test.describe('QA-19: RUN SETUP UI', () => {
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             document.getElementById('shop-runsetup-mode-hard').click();
             document.getElementById('shop-prerun-start').click();
             return { mode: ge.game.runConfig.mode };
@@ -194,6 +204,7 @@ test.describe('QA-19: RUN SETUP UI', () => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
+            document.getElementById('shop-prerun-start').click(); // 8.21.0 BUILD -> RUN SETUP
             const s = document.getElementById('shop-runsetup-waves');
             for (const v of [90, 50, 10, 100]) { s.value = String(v); s.dispatchEvent(new Event('input', { bubbles: true })); }
             document.getElementById('shop-runsetup-mode-easy').click();

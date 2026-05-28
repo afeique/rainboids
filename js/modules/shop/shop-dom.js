@@ -91,6 +91,9 @@ let _lastBuyAt = 0;
 // _preRunSel mirrors the LOADOUT contract ({primaries,powers,abilities})
 // consumed by startNewRun; _unlockedSets caches per-category unlocks.
 let _preRun = false;
+// 8.21.0 — the pre-run is TWO screens: 'build' (equip GEAR) → 'runsetup' (pick
+// the run shape + START). Reset to 'build' every time BUILD opens.
+let _preRunStep = 'build'; // 'build' | 'runsetup'
 let _preRunSel = { primaries: [], powers: [], abilities: [] };
 // 6.x — per-category "unlock more" store expansion on the compact BUILD list.
 // Collapsed by default so the screen shows ONLY owned items (the loadout);
@@ -344,11 +347,18 @@ export function initShopDom(gameEngine) {
     const startBtn = $('shop-prerun-start');
     if (startBtn) {
         startBtn.addEventListener('click', () => {
+            // 8.21.0 — two-step pre-run: BUILD's primary button advances to the
+            // RUN SETUP screen; RUN SETUP's button actually starts the run.
+            if (_preRunStep !== 'runsetup') {
+                _preRunStep = 'runsetup';
+                _applyPreRunStep();
+                return;
+            }
             if (_engine && typeof _engine.beginPreRunFromTree === 'function') {
                 // 8.x — weapons (primary/power) are no longer picked here: the
                 // primary comes from the equipped weapon item and powers are
-                // auto-granted. Only the ability picks, their attunements, the
-                // rule passives, and the run shape flow through.
+                // auto-granted. Abilities + passives are awarded in-run, so only
+                // the run shape really flows through now.
                 _engine.beginPreRunFromTree({
                     abilities: (_preRunSel && _preRunSel.abilities) || [],
                     abilityAttune: getPreRunAbilityAttune(),
@@ -361,6 +371,13 @@ export function initShopDom(gameEngine) {
     const backBtn = $('shop-prerun-back');
     if (backBtn) {
         backBtn.addEventListener('click', () => {
+            // 8.21.0 — from RUN SETUP, BACK returns to the BUILD screen; from
+            // BUILD, it returns to the title.
+            if (_preRunStep === 'runsetup') {
+                _preRunStep = 'build';
+                _applyPreRunStep();
+                return;
+            }
             if (_engine && typeof _engine.cancelPreRunToTitle === 'function') {
                 _engine.cancelPreRunToTitle();
             }
@@ -643,16 +660,6 @@ function _applyPreRunChrome() {
     // persistent Rainshard wallet (shown by the coins readout). The ✦ Cores box
     // is now vestigial and always hidden.
     if (_elements.coresBox) _elements.coresBox.style.visibility = 'hidden';
-    // Pre-run instructions hint (BUILD-only).
-    if (_elements.prerunHint) {
-        _elements.prerunHint.style.display = _preRun ? '' : 'none';
-        if (_preRun) {
-            // 8.19.0 — BUILD is GEAR-only now. Abilities, passives, and stats
-            // are all earned + managed IN-RUN, so the hint only covers gear.
-            _elements.prerunHint.textContent =
-                'Equip your weapons + gear, then START RUN — abilities, passives & stats are earned and managed during the run.';
-        }
-    }
     // 8.19.0 — the node-state LEGEND is hidden in BUILD. The GEAR tab uses
     // EQUIP/UNEQUIP buttons + rarity colors, not the gold-shop swatch key, so
     // the "Locked / Available / Equipped / Active" legend just added clutter.
@@ -674,13 +681,45 @@ function _applyPreRunChrome() {
     }
     if (_preRun && _activeTab !== 'gear') { _activeTab = 'gear'; _syncActiveTab(); }
     if (!_preRun && INRUN_HIDDEN.has(_activeTab)) { _activeTab = 'primary'; _syncActiveTab(); }
-    // RUN-06 — the RUN SETUP group is BUILD-only; refresh its displayed state
-    // when entering BUILD so it reflects the current/last-chosen run shape.
-    if (_elements.runSetup) _elements.runSetup.style.display = _preRun ? '' : 'none';
     if (_preRun) {
+        // 8.21.0 — the pre-run always (re)opens on the BUILD step.
+        _preRunStep = 'build';
         _updatePreRunStatus();
-        _renderRunSetup();
+        _applyPreRunStep();
+    } else {
+        // In-run shop: no two-step flow, RUN SETUP hidden.
+        if (_elements.runSetup) _elements.runSetup.style.display = 'none';
+        if (_elements.prerunHint) _elements.prerunHint.style.display = 'none';
     }
+}
+
+// 8.21.0 — the pre-run is two screens. BUILD (equip gear): the GEAR tree +
+// tabs + hint are shown, RUN SETUP is hidden, and the primary button reads
+// "RUN SETUP →". RUN SETUP (run shape): the tree/tabs/hint are hidden, the
+// RUN SETUP card takes the full panel, and the primary button reads
+// "START RUN →". This gives BUILD the full vertical height (no footer card)
+// and keeps the two concerns on their own focused screens.
+function _applyPreRunStep() {
+    if (!_preRun) return;
+    const onSetup = _preRunStep === 'runsetup';
+    if (_elements.tree) _elements.tree.style.display = onSetup ? 'none' : '';
+    if (_elements.tabs) _elements.tabs.style.display = onSetup ? 'none' : '';
+    if (_elements.prerunHint) {
+        _elements.prerunHint.style.display = onSetup ? 'none' : '';
+        _elements.prerunHint.textContent =
+            'Equip your weapons + gear, then RUN SETUP — abilities, passives & stats are earned during the run.';
+    }
+    if (_elements.runSetup) _elements.runSetup.style.display = onSetup ? '' : 'none';
+    // The shared status line only matters on the RUN SETUP step.
+    const status = $('shop-prerun-status');
+    if (status) status.style.display = onSetup ? '' : 'none';
+    // Relabel the action-bar buttons + the panel title per step.
+    if (_elements.startBtn) _elements.startBtn.textContent = onSetup ? 'START RUN →' : 'RUN SETUP →';
+    const backBtn = $('shop-prerun-back');
+    if (backBtn) backBtn.textContent = onSetup ? '← BACK' : '← TITLE';
+    const title = _elements.menu ? _elements.menu.querySelector('.shop-tree-title') : null;
+    if (title) title.textContent = onSetup ? 'RUN SETUP' : 'BUILD YOUR LOADOUT';
+    if (onSetup) _renderRunSetup();
 }
 
 // Pure readiness summary for a pre-run selection. 8.x — weapons are equipped
@@ -698,19 +737,19 @@ export function loadoutReadiness(sel, slots = LOADOUT_SLOTS) {
 // startable (the weapon is equipped gear), so START is never disabled.
 function _updatePreRunStatus() {
     const status = $('shop-prerun-status');
-    const r = loadoutReadiness(_preRunSel);
     if (status) {
-        let text = `ABILITY ${r.abilities}/${r.slots}`;
-        text += r.complete ? '   ·   ✓ READY' : '   ·   abilities optional';
-        status.textContent = text;
+        // 8.21.0 — abilities/passives are no longer picked pre-run, so there's
+        // no readiness gate: the run is always startable. The status line just
+        // reads READY on the RUN SETUP screen.
+        status.textContent = '✓ READY';
         status.classList.remove('shop-prerun-status--warn');
-        status.classList.toggle('shop-prerun-status--ready', r.complete);
+        status.classList.add('shop-prerun-status--ready');
     }
     const startBtn = _elements && _elements.startBtn;
     if (startBtn) {
         startBtn.disabled = false;
         startBtn.classList.remove('armory-btn--disabled');
-        startBtn.textContent = 'START RUN →';
+        // The button LABEL is owned by _applyPreRunStep (RUN SETUP → / START RUN →).
     }
 }
 

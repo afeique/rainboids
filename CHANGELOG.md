@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.21.0] - 2026-05-28
+
+### Changed
+- **The pre-run is now two screens.** BUILD (equip your GEAR) and RUN SETUP
+  (waves slider + difficulty) are no longer crammed onto one screen — BUILD's
+  primary button reads `RUN SETUP →` and switches to a dedicated RUN SETUP
+  screen with `START RUN →` and `← BACK`. BUILD gets the full panel height for
+  the gear loadout (the run-shape card no longer sits in its footer), and the
+  stale "ABILITY n/4" readiness line is gone (nothing is gated pre-run).
+
 ## [8.20.0] - 2026-05-28
 
 ### Changed
