@@ -48,7 +48,7 @@ import { salvageValue } from './world/cores.js'; // T44 — auto-salvage on comm
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
 import { isDebugMode, debugUnlockAllFor } from './core/debug-config.js';
 import { DebugMenu, installDebugConsoleApi } from './ui/debug-menu.js';
-import { MAX_STAGES, WAVES_PER_STAGE, DEFAULT_RUN_CONFIG, runMaxWaves, getRunMode, getStage, runWavesPerStage } from './core/constants.js';
+import { DEFAULT_RUN_CONFIG, runMaxWaves, getRunMode, clampRunConfig, runBossCount } from './core/constants.js';
 // 8.9.0 — the run stage DRAFT was removed (waves are CPU-governed now); the
 // run-randomizer + DraftOverlay imports are gone with it.
 // T45 — bounty board: persistent directed goals advanced by gameplay events.
@@ -1328,29 +1328,13 @@ export class GameEngine {
 
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
-        // RUN-06 — honor the RUN SETUP choice when the BUILD screen passed one
-        // (loadout.runConfig, already validated + clamped in
-        // beginPreRunFromTree). Absent (direct restart / CONTINUE / tests) →
-        // the canonical default 10 × 3 campaign, so untouched runs are
-        // byte-for-byte identical to before.
-        if (loadout && loadout.runConfig
-            && typeof loadout.runConfig.stages === 'number' && isFinite(loadout.runConfig.stages)
-            && typeof loadout.runConfig.wavesPerStage === 'number' && isFinite(loadout.runConfig.wavesPerStage)) {
-            const stages = Math.max(10, Math.min(100, loadout.runConfig.stages | 0));
-            const wps = [3, 6, 9].includes(loadout.runConfig.wavesPerStage | 0)
-                ? (loadout.runConfig.wavesPerStage | 0)
-                : [3, 6, 9].reduce((b, o) =>
-                    Math.abs(o - loadout.runConfig.wavesPerStage) < Math.abs(b - loadout.runConfig.wavesPerStage) ? o : b, 3);
-            // DIR-03 — carry the run's difficulty mode (valid MODES member,
-            // case-normalized; else NORMAL). beginPreRunFromTree already
-            // validated it, but re-guard here so a hand-crafted loadout can't
-            // smuggle a bogus mode into the run.
-            const rawMode = typeof loadout.runConfig.mode === 'string' ? loadout.runConfig.mode.toUpperCase() : '';
-            const mode = MODES.includes(rawMode) ? rawMode : DEFAULT_MODE;
-            this.game.runConfig = { stages, wavesPerStage: wps, mode };
-        } else {
-            this.game.runConfig = { ...DEFAULT_RUN_CONFIG };
-        }
+        // RUN-06 / 8.10.0 — honor the RUN SETUP choice (loadout.runConfig: a flat
+        // maxWaves + mode), re-clamped here so a hand-crafted loadout can't
+        // smuggle a bad value. Absent (direct restart / CONTINUE / tests) → the
+        // canonical default run. clampRunConfig also migrates legacy shapes.
+        this.game.runConfig = (loadout && loadout.runConfig)
+            ? clampRunConfig(loadout.runConfig)
+            : { ...DEFAULT_RUN_CONFIG };
         // RUN-05a — fresh Adaptive Difficulty Director per run. Reset on every
         // new-run init (incl. CONTINUE/restore: we re-create a fresh one rather
         // than serializing director state — re-warming over the first couple of
@@ -1514,18 +1498,10 @@ export class GameEngine {
         return {
             // Engine-side run fields
             wave: this.game.currentWave | 0,
-            // RUN-01a — persist the run shape so CONTINUE resumes with the
-            // same stages × wavesPerStage the run was started with. Old
-            // saves lack this; restoreRunState defaults them to 10 × 3.
-            // DIR-03 — persist `mode` alongside the run shape (NORMAL fallback);
-            // old saves lack it, restoreRunState defaults them to NORMAL.
-            runConfig: this.game.runConfig
-                ? {
-                    stages: this.game.runConfig.stages | 0,
-                    wavesPerStage: this.game.runConfig.wavesPerStage | 0,
-                    mode: MODES.includes(this.game.runConfig.mode) ? this.game.runConfig.mode : DEFAULT_MODE,
-                }
-                : { ...DEFAULT_RUN_CONFIG },
+            // 8.10.0 — persist the flat run shape ({ maxWaves, mode }) so
+            // CONTINUE resumes the same length. clampRunConfig migrates/guards
+            // both this save and any older {stages, wavesPerStage} save on read.
+            runConfig: clampRunConfig(this.game.runConfig),
             money: this.game.money | 0,
             // 5.88.0 — `lives` removed; energy tanks are now serialized via
             // `engineTanks` below (the runtime owner is `this.healthTanks`,
@@ -1585,23 +1561,12 @@ export class GameEngine {
         if (!p) return false;
         // Engine-side
         this.game.currentWave = Math.max(1, snap.wave | 0);
-        // RUN-01a — restore the run shape. Pre-RUN-01a saves have no
-        // runConfig → default to the canonical 10 × 3 so CONTINUE still
-        // works for existing saves. Guard stages/wavesPerStage to ≥ 1.
-        if (snap.runConfig
-            && typeof snap.runConfig.stages === 'number'
-            && typeof snap.runConfig.wavesPerStage === 'number') {
-            // DIR-03 — restore `mode`; pre-DIR-03 saves lack it → NORMAL.
-            const rawMode = typeof snap.runConfig.mode === 'string' ? snap.runConfig.mode.toUpperCase() : '';
-            const mode = MODES.includes(rawMode) ? rawMode : DEFAULT_MODE;
-            this.game.runConfig = {
-                stages: Math.max(1, snap.runConfig.stages | 0),
-                wavesPerStage: Math.max(1, snap.runConfig.wavesPerStage | 0),
-                mode,
-            };
-        } else {
-            this.game.runConfig = { ...DEFAULT_RUN_CONFIG };
-        }
+        // 8.10.0 — restore the run shape. clampRunConfig migrates legacy
+        // {stages, wavesPerStage} saves to flat maxWaves and defaults absent
+        // configs to the canonical run, so CONTINUE works for any old save.
+        this.game.runConfig = snap.runConfig
+            ? clampRunConfig(snap.runConfig)
+            : { ...DEFAULT_RUN_CONFIG };
         this.game.money = Math.max(0, snap.money | 0);
         // 5.88.3 — energy-tank restore. `engineTanks` is the new field
         // (= spare count, 0..3). Older saves with `lives` (1..3) map 1:1.
@@ -5027,8 +4992,9 @@ export class GameEngine {
         // validated against owned + known + slot-deliverable, capped at the
         // run's maxSlots, keystone budget ≤2.
         const ownedPass = getUnlockedSet('passives', meta);
-        const totalStages = (this.game.runConfig && this.game.runConfig.stages) || MAX_STAGES;
-        const slotCap = maxPassiveSlots(totalStages);
+        // 8.10.0 — passive-slot pacing scales with run length: one "segment" per
+        // boss (BOSS_INTERVAL waves), the flat-wave analogue of the old stages.
+        const slotCap = maxPassiveSlots(runBossCount(this.game));
         const passivesOut = [];
         let keystoneCount = 0;
         for (const id of ((sel && sel.passives) || [])) {
@@ -5041,28 +5007,13 @@ export class GameEngine {
             if (isKey) keystoneCount++;
         }
         loadout.passives = passivesOut;
-        // RUN-06 — carry the chosen RUN SHAPE so the run honors it. Validate +
-        // clamp here so a malformed selection can never produce a NaN-length
-        // run; absent / invalid → undefined, and init() keeps the default 10×3.
-        // DIR-03 — also carry the chosen difficulty MODE (valid MODES member,
-        // case-normalized; else NORMAL). Mode is resolved independently of the
-        // run shape so a player can pick a non-default mode on the default 10×3
-        // shape (and vice-versa).
-        const rawRc = sel && sel.runConfig;
-        const rawMode = rawRc && typeof rawRc.mode === 'string' ? rawRc.mode.toUpperCase() : '';
-        const mode = MODES.includes(rawMode) ? rawMode : DEFAULT_MODE;
-        if (rawRc
-            && typeof rawRc.stages === 'number' && isFinite(rawRc.stages)
-            && typeof rawRc.wavesPerStage === 'number' && isFinite(rawRc.wavesPerStage)) {
-            const stages = Math.max(10, Math.min(100, Math.round(rawRc.stages / 10) * 10));
-            const wps = [3, 6, 9].reduce((b, o) =>
-                Math.abs(o - rawRc.wavesPerStage) < Math.abs(b - rawRc.wavesPerStage) ? o : b, 3);
-            loadout.runConfig = { stages, wavesPerStage: wps, mode };
-        } else if (mode !== DEFAULT_MODE) {
-            // Non-default mode on the default run shape: carry it through so
-            // init() applies it (init()'s loadout branch supplies the default
-            // stages/wps clamps when a mode is present).
-            loadout.runConfig = { stages: MAX_STAGES, wavesPerStage: WAVES_PER_STAGE, mode };
+        // RUN-06 / 8.10.0 — carry the chosen RUN SHAPE ({ maxWaves, mode }) so the
+        // run honors it. clampRunConfig snaps the wave count to the 10–100 grid,
+        // resolves the mode (NORMAL fallback), and migrates legacy shapes — so a
+        // malformed selection can never produce a NaN-length run. Absent → leave
+        // undefined and init() keeps the canonical default.
+        if (sel && sel.runConfig) {
+            loadout.runConfig = clampRunConfig(sel.runConfig);
         }
         try { saveMeta({ loadout }); } catch {}
         this._preRunTreeOpen = false;

@@ -37,9 +37,7 @@ import {
 import { ELEMENTS } from '../combat/elements.js';
 // Phase P4 — rule-modifier PASSIVES cluster (the equippable build layer).
 import { PASSIVES, getSlotPassives, maxPassiveSlots } from '../combat/passive-data.js';
-import { MAX_STAGES, DEFAULT_RUN_CONFIG } from '../core/constants.js';
-// RUN-06 — the reward-dial helper drives the RUN SETUP readout multiplier.
-import { wavesPerStageRewardMultForWps } from '../world/reward-dial.js';
+import { DEFAULT_RUN_CONFIG, RUN_WAVES_MIN, RUN_WAVES_MAX, RUN_WAVES_STEP, clampRunWaves, clampRunMode, clampRunConfig, runBossCount } from '../core/constants.js';
 // DIR-09 — difficulty MODE selector: the canonical mode list + per-mode
 // reward multiplier feed the RUN SETUP mode control + its readout.
 import { MODES, DEFAULT_MODE, modeReward } from '../wave/difficulty-constants.js';
@@ -116,51 +114,17 @@ let _unlockedAbilityAttune = null;
 // into player.equippedPassives on START. `_unlockedPassives` caches owned ids.
 let _preRunPassives = [];
 let _unlockedPassives = null;
-// RUN-06 — chosen RUN SHAPE for the run: { stages, wavesPerStage }. Seeded by
-// game-engine before showing BUILD; the footer's RUN SETUP controls mutate it;
+// RUN-06 / 8.10.0 — chosen RUN SHAPE for the run: { maxWaves, mode }. Seeded by
+// game-engine before showing BUILD; the footer's RUN SETUP slider mutates it;
 // flows into game.runConfig on START RUN (beginPreRunFromTree).
 let _preRunRunConfig = { ...DEFAULT_RUN_CONFIG };
 
-// RUN-06 — run-shape bounds (UI + apply share these). Stages span 10..100
-// stepping by 10; waves-per-stage is one of 3/6/9.
-export const RUN_STAGES_MIN = 10;
-export const RUN_STAGES_MAX = 100;
-export const RUN_STAGES_STEP = 10;
-export const RUN_WPS_OPTIONS = [3, 6, 9];
+// 8.10.0 — run-length bounds + clamps live in core/constants now (one source of
+// truth shared with the engine). Re-export them so the UI + tests can reference
+// the same values. Runs are a flat 10..100 waves stepping by 10; mode resolves
+// to a valid MODES member (else NORMAL); clampRunConfig migrates legacy shapes.
+export { RUN_WAVES_MIN, RUN_WAVES_MAX, RUN_WAVES_STEP, clampRunWaves, clampRunMode, clampRunConfig };
 
-// RUN-06 — pure: snap a stages value into [10,100] on the 10-step grid.
-export function clampRunStages(n) {
-    let s = Math.round(((typeof n === 'number' && isFinite(n)) ? n : RUN_STAGES_MIN) / RUN_STAGES_STEP) * RUN_STAGES_STEP;
-    return Math.max(RUN_STAGES_MIN, Math.min(RUN_STAGES_MAX, s));
-}
-// RUN-06 — pure: snap waves-per-stage to the nearest of 3/6/9 (else default 3).
-export function clampRunWps(n) {
-    if (typeof n !== 'number' || !isFinite(n)) return 3;
-    let best = RUN_WPS_OPTIONS[0];
-    let bestD = Infinity;
-    for (const o of RUN_WPS_OPTIONS) {
-        const d = Math.abs(o - n);
-        if (d < bestD) { bestD = d; best = o; }
-    }
-    return best;
-}
-// DIR-09 — pure: resolve a difficulty mode to a canonical MODES member.
-// Upper-cases + validates against MODES; anything else → DEFAULT_MODE (NORMAL).
-export function clampRunMode(m) {
-    if (typeof m === 'string') {
-        const up = m.toUpperCase();
-        if (MODES.includes(up)) return up;
-    }
-    return DEFAULT_MODE;
-}
-// RUN-06 — pure: clamp a whole runConfig into the valid run-shape grid.
-// DIR-09 — also carries+validates `mode` (a valid MODES member, else NORMAL).
-export function clampRunConfig(rc) {
-    const stages = clampRunStages(rc && rc.stages);
-    const wavesPerStage = clampRunWps(rc && rc.wavesPerStage);
-    const mode = clampRunMode(rc && rc.mode);
-    return { stages, wavesPerStage, mode };
-}
 // DIR-09 — §14.7 gating: is `mode` unlocked given `maxModeCleared` (the highest
 // mode the player has cleared ≥ stage 5 on)? EASY/NORMAL/HARD are ALWAYS open.
 // EPIC needs Hard-cleared (maxModeCleared ≥ HARD); LEGENDARY needs Epic-cleared
@@ -184,22 +148,19 @@ export function isModeUnlocked(mode, maxModeCleared) {
 // multiplier always matches the in-run reward math (×1.0 / ×1.3 / ×1.6).
 // DIR-09 — when a mode is passed, the readout also shows the mode + its
 // per-mode reward multiplier, e.g. "300 waves · HARD · rewards ×1.3 ×1.3".
-export function runSetupReadout(stages, wps, mode) {
-    const total = clampRunStages(stages) * clampRunWps(wps);
-    const mult = wavesPerStageRewardMultForWps(clampRunWps(wps));
-    if (mode === undefined) {
-        return `${total} waves · rewards ×${mult.toFixed(1)}`;
-    }
+export function runSetupReadout(maxWaves, mode) {
+    const total = clampRunWaves(maxWaves);
     const m = clampRunMode(mode);
     const mr = modeReward(m);
-    return `${total} waves · ${m} · rewards ×${mult.toFixed(1)} ×${mr.toFixed(1)}`;
+    // 8.10.0 — run shape is just length now; reward scaling is mode-only here
+    // (the per-wave random-difficulty loot bonus is applied in-run, not shown).
+    return `${total} waves · ${m} · rewards ×${mr.toFixed(1)}`;
 }
 
-// Pre-run passive slot cap for THIS run (round-3 §11.A). Pre-Phase-X there's no
-// runConfig, so derive from the fixed stage count.
+// Pre-run passive slot cap for THIS run: scales with the run's boss-segment
+// count (one per BOSS_INTERVAL waves), the flat-wave analogue of stages.
 function _passiveMaxSlots() {
-    const stages = (_engine && _engine.game && _engine.game.runConfig && _engine.game.runConfig.stages) || MAX_STAGES;
-    return maxPassiveSlots(stages);
+    return maxPassiveSlots(runBossCount(_engine && _engine.game));
 }
 function _isKeystonePassive(id) {
     const def = PASSIVES[id];
@@ -345,14 +306,13 @@ export function initShopDom(gameEngine) {
         coresAmt:       $('shop-cores-amount'),
         prerunHint:     $('shop-prerun-hint'),
         startBtn:       $('shop-prerun-start'),
-        // RUN-06 — RUN SETUP controls (BUILD footer).
+        // RUN-06 / 8.10.0 — RUN SETUP controls (BUILD footer): a single waves
+        // slider (10–100) + the difficulty MODE selector.
         runSetup:       $('shop-runsetup'),
-        runSetupWps:    $('shop-runsetup-wps'),
+        runSetupWaves:    $('shop-runsetup-waves'),       // <input type=range>
+        runSetupWavesVal: $('shop-runsetup-waves-value'),
         // DIR-09 — difficulty MODE selector group.
         runSetupMode:   $('shop-runsetup-mode'),
-        runSetupStagesVal: $('shop-runsetup-stages-value'),
-        runSetupStagesDec: $('shop-runsetup-stages-dec'),
-        runSetupStagesInc: $('shop-runsetup-stages-inc'),
         runSetupReadout:   $('shop-runsetup-readout'),
         tree:           $('shop-tree'),
         tabs:           $('shop-tree-tabs'),
@@ -407,28 +367,12 @@ export function initShopDom(gameEngine) {
         });
     }
 
-    // RUN-06 — RUN SETUP controls. Waves-per-stage segmented buttons set
-    // _preRunRunConfig.wavesPerStage; the stages stepper bumps stages by 10
-    // clamped to [10,100]. Each change re-renders the controls (active state +
-    // value + readout). All pure-state mutations + a re-render — no run starts
-    // here (that's the START RUN handler).
-    if (_elements.runSetupWps) {
-        _elements.runSetupWps.addEventListener('click', (e) => {
-            const btn = e.target.closest('.shop-runsetup-btn');
-            if (!btn || !btn.dataset.wps) return;
-            _preRunRunConfig.wavesPerStage = clampRunWps(parseInt(btn.dataset.wps, 10));
-            _renderRunSetup();
-        });
-    }
-    if (_elements.runSetupStagesDec) {
-        _elements.runSetupStagesDec.addEventListener('click', () => {
-            _preRunRunConfig.stages = clampRunStages(_preRunRunConfig.stages - RUN_STAGES_STEP);
-            _renderRunSetup();
-        });
-    }
-    if (_elements.runSetupStagesInc) {
-        _elements.runSetupStagesInc.addEventListener('click', () => {
-            _preRunRunConfig.stages = clampRunStages(_preRunRunConfig.stages + RUN_STAGES_STEP);
+    // RUN-06 / 8.10.0 — RUN SETUP: a single waves slider (10–100, step 10) sets
+    // _preRunRunConfig.maxWaves. Each drag re-renders the value + readout. Pure
+    // state mutation + re-render — no run starts here (that's the START handler).
+    if (_elements.runSetupWaves) {
+        _elements.runSetupWaves.addEventListener('input', (e) => {
+            _preRunRunConfig.maxWaves = clampRunWaves(parseInt(e.target.value, 10));
             _renderRunSetup();
         });
     }
@@ -771,24 +715,21 @@ function _maxModeCleared() {
     return (m && typeof m.maxModeCleared === 'string') ? m.maxModeCleared : undefined;
 }
 
-// RUN-06 — reflect `_preRunRunConfig` into the RUN SETUP controls: the active
-// waves-per-stage button, the stages value, the stepper disabled-at-bounds
-// state, and the live readout (total waves + reward multiplier).
-// DIR-09 — also reflects the difficulty MODE selector: active mode button,
-// gated (EPIC/LEGENDARY) buttons disabled + unlock-hint title, and the readout
-// now carries the mode + its per-mode reward multiplier.
+// RUN-06 / 8.10.0 — reflect `_preRunRunConfig` into the RUN SETUP controls: the
+// waves slider position + its value label, and the difficulty MODE selector
+// (active button, gated EPIC/LEGENDARY disabled + unlock-hint title), plus the
+// live readout (wave count + mode + per-mode reward multiplier).
 function _renderRunSetup() {
     if (!_elements) return;
     const rc = clampRunConfig(_preRunRunConfig);
     _preRunRunConfig = rc; // keep state on-grid
-    if (_elements.runSetupWps) {
-        for (const btn of _elements.runSetupWps.querySelectorAll('.shop-runsetup-btn')) {
-            btn.classList.toggle('active', parseInt(btn.dataset.wps, 10) === rc.wavesPerStage);
-        }
+    if (_elements.runSetupWaves) {
+        _elements.runSetupWaves.min = String(RUN_WAVES_MIN);
+        _elements.runSetupWaves.max = String(RUN_WAVES_MAX);
+        _elements.runSetupWaves.step = String(RUN_WAVES_STEP);
+        _elements.runSetupWaves.value = String(rc.maxWaves);
     }
-    if (_elements.runSetupStagesVal) _elements.runSetupStagesVal.textContent = `${rc.stages}`;
-    if (_elements.runSetupStagesDec) _elements.runSetupStagesDec.disabled = rc.stages <= RUN_STAGES_MIN;
-    if (_elements.runSetupStagesInc) _elements.runSetupStagesInc.disabled = rc.stages >= RUN_STAGES_MAX;
+    if (_elements.runSetupWavesVal) _elements.runSetupWavesVal.textContent = `${rc.maxWaves} waves`;
     if (_elements.runSetupMode) {
         const maxCleared = _maxModeCleared();
         for (const btn of _elements.runSetupMode.querySelectorAll('.shop-runsetup-btn')) {
@@ -806,7 +747,7 @@ function _renderRunSetup() {
             }
         }
     }
-    if (_elements.runSetupReadout) _elements.runSetupReadout.textContent = runSetupReadout(rc.stages, rc.wavesPerStage, rc.mode);
+    if (_elements.runSetupReadout) _elements.runSetupReadout.textContent = runSetupReadout(rc.maxWaves, rc.mode);
 }
 
 // U3 — the ordered, currently-VISIBLE tabs. GEAR + PASSIVES are BUILD-only

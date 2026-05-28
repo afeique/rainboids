@@ -9,7 +9,7 @@
 import { POWERUP_TYPES } from '../world/powerup.js';
 import { iconSpriteCache } from '../core/utils.js';
 import { SLOT_ORDER, SLOT_LABEL } from '../world/item-names.js';
-import { getStageLabel as stageLabelFor, GAME_STATES } from '../core/constants.js';
+import { runMaxWaves, GAME_STATES } from '../core/constants.js';
 import { renderIconHTML } from './icons.js';
 import { renderSpAllocation } from './sp-allocation.js';
 import {
@@ -304,8 +304,7 @@ export class StatsOverlay {
         const summary = this.elements.summary;
         if (summary) {
             summary.replaceChildren();
-            // 6.1.0 — STAGE label (S-W format like the HUD shield)
-            // replaces the bare wave number. Gold stays as-is.
+            // 8.10.0 — flat WAVE readout ("N / max"); the stage grouping is gone.
             const wave = ge.game?.currentWave ?? 1;
             const player = ge.player;
             const lvl = player?.level | 0 || 1;
@@ -317,7 +316,7 @@ export class StatsOverlay {
                 { label: 'LEVEL', value: `${lvl}` },
                 { label: `SP${sp > 0 ? ' ●' : ''}`, value: `${sp}`, hot: sp > 0 },
                 { label: 'XP', value: xpLabel },
-                { label: 'STAGE', value: stageLabelFor(wave) },
+                { label: 'WAVE', value: `${wave} / ${runMaxWaves(ge.game)}` },
                 {
                     label: 'RAINSHARDS', value: `R$ ${ge.game?.money ?? 0}`, icon: 'coin',
                 },

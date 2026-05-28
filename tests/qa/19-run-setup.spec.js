@@ -1,10 +1,11 @@
 /**
- * QA-19: RUN SETUP UI (RUN-06)
+ * QA-19: RUN SETUP UI (8.10.0 — flat waves)
  *
- * The pre-run BUILD screen's footer now carries a RUN SETUP control group:
- * a waves-per-stage selector (3 / 6 / 9), a stages stepper (10..100, step 10),
- * and a live readout (total waves + reward multiplier). The chosen run shape
- * flows into game.runConfig on START RUN.
+ * The pre-run BUILD footer carries a RUN SETUP control group: a single WAVES
+ * slider (10–100, step 10), a difficulty MODE selector (Easy→Legendary), and a
+ * live readout ("N waves · MODE · rewards ×M"). The chosen run shape
+ * ({ maxWaves, mode }) flows into game.runConfig on START RUN. The "stages" +
+ * waves-per-stage controls were removed.
  *
  * Mirrors the QA-08 BUILD-flow harness (loadGame → openArmory → BUILD tree,
  * then drive the engine via page.evaluate).
@@ -18,7 +19,6 @@ test.describe('QA-19: RUN SETUP UI', () => {
         page._jsErrors = [];
         page.on('pageerror', (err) => page._jsErrors.push(err.message));
         await loadGame(page);
-        // Clean meta so the run shape starts at the default 10×3.
         await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
     });
 
@@ -27,34 +27,33 @@ test.describe('QA-19: RUN SETUP UI', () => {
             window.gameEngine.openArmory();
             const group = document.getElementById('shop-runsetup');
             const readout = document.getElementById('shop-runsetup-readout');
-            const w3 = document.getElementById('shop-runsetup-wps-3');
-            const w6 = document.getElementById('shop-runsetup-wps-6');
-            const w9 = document.getElementById('shop-runsetup-wps-9');
-            const dec = document.getElementById('shop-runsetup-stages-dec');
-            const inc = document.getElementById('shop-runsetup-stages-inc');
-            const val = document.getElementById('shop-runsetup-stages-value');
+            const slider = document.getElementById('shop-runsetup-waves');
+            const val = document.getElementById('shop-runsetup-waves-value');
             return {
                 visible: group && getComputedStyle(group).display !== 'none',
-                hasButtons: !!(w3 && w6 && w9 && dec && inc && val),
-                stages: val && val.textContent,
+                hasSlider: !!(slider && val),
+                sliderMin: slider && slider.min,
+                sliderMax: slider && slider.max,
+                sliderStep: slider && slider.step,
+                sliderValue: slider && slider.value,
+                wavesLabel: val && val.textContent,
                 readout: readout && readout.textContent,
-                wps3Active: w3 && w3.classList.contains('active'),
-                decDisabled: dec && dec.disabled, // at min (10) the dec is disabled
             };
         });
         expect(r.visible).toBe(true);
-        expect(r.hasButtons).toBe(true);
-        expect(r.stages).toBe('10');
-        // DIR-09 — the readout now carries the mode + its per-mode reward mult.
-        expect(r.readout).toBe('30 waves · NORMAL · rewards ×1.0 ×1.0');
-        expect(r.wps3Active).toBe(true);   // default wps = 3
-        expect(r.decDisabled).toBe(true);  // clamped at the floor (10)
+        expect(r.hasSlider).toBe(true);
+        expect(r.sliderMin).toBe('10');
+        expect(r.sliderMax).toBe('100');
+        expect(r.sliderStep).toBe('10');
+        expect(r.sliderValue).toBe('30');
+        expect(r.wavesLabel).toBe('30 waves');
+        expect(r.readout).toBe('30 waves · NORMAL · rewards ×1.0');
     });
 
     test('the RUN SETUP group is hidden in the in-run shop', async ({ page }) => {
         const display = await page.evaluate(() => {
             const ge = window.gameEngine;
-            ge.init(); // start a run so openShop shows the in-run shop
+            ge.init();
             ge.openShop();
             const group = document.getElementById('shop-runsetup');
             return group && getComputedStyle(group).display;
@@ -62,88 +61,65 @@ test.describe('QA-19: RUN SETUP UI', () => {
         expect(display).toBe('none');
     });
 
-    test('selecting 6 waves/stage + bumping stages updates the live readout', async ({ page }) => {
-        const r = await page.evaluate(() => {
+    test('dragging the waves slider updates the value + live readout', async ({ page }) => {
+        const r = await page.evaluate((waves) => {
             window.gameEngine.openArmory();
-            // Pick 6 waves/stage.
-            document.getElementById('shop-runsetup-wps-6').click();
-            // Bump stages 10 → 20 (one increment of 10).
-            document.getElementById('shop-runsetup-stages-inc').click();
-            const w6 = document.getElementById('shop-runsetup-wps-6');
-            const w3 = document.getElementById('shop-runsetup-wps-3');
+            const s = document.getElementById('shop-runsetup-waves');
+            s.value = String(waves);
+            s.dispatchEvent(new Event('input', { bubbles: true }));
             return {
-                stages: document.getElementById('shop-runsetup-stages-value').textContent,
+                value: document.getElementById('shop-runsetup-waves-value').textContent,
                 readout: document.getElementById('shop-runsetup-readout').textContent,
-                w6Active: w6.classList.contains('active'),
-                w3Active: w3.classList.contains('active'),
             };
-        });
-        expect(r.stages).toBe('20');
-        expect(r.w6Active).toBe(true);
-        expect(r.w3Active).toBe(false);
-        // 20 stages × 6 waves = 120 waves; wps 6 → ×1.3; default mode NORMAL ×1.0.
-        expect(r.readout).toBe('120 waves · NORMAL · rewards ×1.3 ×1.0');
+        }, 60);
+        expect(r.value).toBe('60 waves');
+        expect(r.readout).toBe('60 waves · NORMAL · rewards ×1.0');
     });
 
-    test('the stages stepper clamps to [10,100]', async ({ page }) => {
+    test('the waves slider clamps to [10,100]', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
-            const inc = document.getElementById('shop-runsetup-stages-inc');
-            const dec = document.getElementById('shop-runsetup-stages-dec');
-            const val = () => document.getElementById('shop-runsetup-stages-value').textContent;
-            // Spam increments past the cap.
-            for (let i = 0; i < 20; i++) inc.click();
-            const atMax = { stages: val(), incDisabled: inc.disabled };
-            // Spam decrements past the floor.
-            for (let i = 0; i < 20; i++) dec.click();
-            const atMin = { stages: val(), decDisabled: dec.disabled };
+            const s = document.getElementById('shop-runsetup-waves');
+            const setVal = (n) => { s.value = String(n); s.dispatchEvent(new Event('input', { bubbles: true })); };
+            const lbl = () => document.getElementById('shop-runsetup-waves-value').textContent;
+            setVal(500);
+            const atMax = lbl();
+            setVal(0);
+            const atMin = lbl();
             return { atMax, atMin };
         });
-        expect(r.atMax.stages).toBe('100');
-        expect(r.atMax.incDisabled).toBe(true);
-        expect(r.atMin.stages).toBe('10');
-        expect(r.atMin.decDisabled).toBe(true);
+        expect(r.atMax).toBe('100 waves');
+        expect(r.atMin).toBe('10 waves');
     });
 
-    test('START RUN threads the chosen run shape into game.runConfig', async ({ page }) => {
-        const r = await page.evaluate(() => {
+    test('START RUN threads the chosen wave count into game.runConfig', async ({ page }) => {
+        const r = await page.evaluate((waves) => {
             const ge = window.gameEngine;
             ge.openArmory();
-            // Pick 6 waves/stage + bump stages to 20.
-            document.getElementById('shop-runsetup-wps-6').click();
-            document.getElementById('shop-runsetup-stages-inc').click();
-            // Equip a primary so START enables (PULSE_CANNON is the base primary).
-            // 7.0.0 — compact list marks the active pick with `shop-node--equipped`
-            // (Pulse Cannon is equipped by default); only click to select if it isn't.
-            const primary = document.querySelector('#shop-tree-primary .shop-node--parent[data-id="PULSE_CANNON"]');
-            if (primary && !primary.classList.contains('shop-node--equipped')) primary.click();
+            const s = document.getElementById('shop-runsetup-waves');
+            s.value = String(waves);
+            s.dispatchEvent(new Event('input', { bubbles: true }));
             const startBtn = document.getElementById('shop-prerun-start');
             const startDisabled = startBtn.disabled;
             startBtn.click();
-            return {
-                startDisabled,
-                runConfig: ge.game.runConfig,
-                state: ge.game.state,
-            };
-        });
+            return { startDisabled, runConfig: ge.game.runConfig, state: ge.game.state };
+        }, 60);
         expect(r.startDisabled).toBe(false);
-        // DIR-09 — runConfig now also carries the difficulty mode (default NORMAL).
-        expect(r.runConfig).toEqual({ stages: 20, wavesPerStage: 6, mode: 'NORMAL' });
-        // The run has begun — playing or the brief wave-transition lead-in.
+        expect(r.runConfig).toEqual({ maxWaves: 60, mode: 'NORMAL' });
         expect(['PLAYING', 'WAVE_TRANSITION']).toContain(r.state);
     });
 
-    test('default run (untouched RUN SETUP) keeps the canonical 10×3', async ({ page }) => {
+    test('default run (untouched RUN SETUP) keeps the canonical 30-wave NORMAL run', async ({ page }) => {
         const runConfig = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            ge.beginPreRunFromTree({ primaries: ['PULSE_CANNON'] }); // no runConfig passed
+            ge.beginPreRunFromTree({}); // no runConfig passed
             return ge.game.runConfig;
         });
-        expect(runConfig).toEqual({ stages: 10, wavesPerStage: 3, mode: 'NORMAL' });
+        expect(runConfig).toEqual({ maxWaves: 30, mode: 'NORMAL' });
     });
 
-    // ── DIR-09 — difficulty MODE selector ─────────────────────────────
+    // ── difficulty MODE selector (unchanged by 8.10.0) ────────────────
     test('MODE controls render with NORMAL active + EPIC/LEGENDARY locked by default', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
@@ -154,7 +130,6 @@ test.describe('QA-19: RUN SETUP UI', () => {
                 visible: group && getComputedStyle(group).display !== 'none',
                 allPresent: ids.every((k) => !!btns[k]),
                 normalActive: btns.normal && btns.normal.classList.contains('active'),
-                easyDisabled: btns.easy.disabled,
                 hardDisabled: btns.hard.disabled,
                 epicDisabled: btns.epic.disabled,
                 legendaryDisabled: btns.legendary.disabled,
@@ -163,12 +138,11 @@ test.describe('QA-19: RUN SETUP UI', () => {
         });
         expect(r.visible).toBe(true);
         expect(r.allPresent).toBe(true);
-        expect(r.normalActive).toBe(true);     // default mode = NORMAL
-        expect(r.easyDisabled).toBe(false);    // always open
-        expect(r.hardDisabled).toBe(false);    // always open
-        expect(r.epicDisabled).toBe(true);     // §14.7 gated (default meta)
+        expect(r.normalActive).toBe(true);
+        expect(r.hardDisabled).toBe(false);
+        expect(r.epicDisabled).toBe(true);
         expect(r.legendaryDisabled).toBe(true);
-        expect(r.epicTitle).toMatch(/Locked/i); // unlock hint present
+        expect(r.epicTitle).toMatch(/Locked/i);
     });
 
     test('clicking an unlocked mode (HARD) selects it + the readout updates', async ({ page }) => {
@@ -185,15 +159,14 @@ test.describe('QA-19: RUN SETUP UI', () => {
         });
         expect(r.hardActive).toBe(true);
         expect(r.normalActive).toBe(false);
-        // 10 × 3 = 30 waves; wps 3 → ×1.0; HARD per-mode reward → ×1.3.
-        expect(r.readout).toBe('30 waves · HARD · rewards ×1.0 ×1.3');
+        expect(r.readout).toBe('30 waves · HARD · rewards ×1.3');
     });
 
     test('a locked mode (EPIC) is disabled and clicking it is a no-op', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
             const epic = document.getElementById('shop-runsetup-mode-epic');
-            epic.click(); // should not select (disabled + gated)
+            epic.click();
             const normal = document.getElementById('shop-runsetup-mode-normal');
             return {
                 epicDisabled: epic.disabled,
@@ -211,10 +184,6 @@ test.describe('QA-19: RUN SETUP UI', () => {
             const ge = window.gameEngine;
             ge.openArmory();
             document.getElementById('shop-runsetup-mode-hard').click();
-            // 7.0.0 — compact list marks the active pick with `shop-node--equipped`
-            // (Pulse Cannon is equipped by default); only click to select if it isn't.
-            const primary = document.querySelector('#shop-tree-primary .shop-node--parent[data-id="PULSE_CANNON"]');
-            if (primary && !primary.classList.contains('shop-node--equipped')) primary.click();
             document.getElementById('shop-prerun-start').click();
             return { mode: ge.game.runConfig.mode };
         });
@@ -225,12 +194,8 @@ test.describe('QA-19: RUN SETUP UI', () => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            document.getElementById('shop-runsetup-wps-9').click();
-            const inc = document.getElementById('shop-runsetup-stages-inc');
-            for (let i = 0; i < 5; i++) inc.click();
-            document.getElementById('shop-runsetup-wps-3').click();
-            document.getElementById('shop-runsetup-stages-dec').click();
-            // DIR-09 — exercise the mode selector too.
+            const s = document.getElementById('shop-runsetup-waves');
+            for (const v of [90, 50, 10, 100]) { s.value = String(v); s.dispatchEvent(new Event('input', { bubbles: true })); }
             document.getElementById('shop-runsetup-mode-easy').click();
             document.getElementById('shop-runsetup-mode-hard').click();
             document.getElementById('shop-runsetup-mode-epic').click(); // gated no-op

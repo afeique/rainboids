@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.10.0] - 2026-05-28
+
+### Changed
+- **Runs are a flat number of waves now — the "stages" grouping is gone.** The
+  pre-run RUN SETUP picks the run length on a single **WAVES slider (10–100,
+  step 10)** instead of stages × waves-per-stage; `runConfig` is `{ maxWaves,
+  mode }`. The HUD shows a flat **"Wave N / max"** (no more `1-1` stage labels).
+- **A boss now spawns every 10 waves** (`BOSS_INTERVAL`), so a full 100-wave run
+  plays all 10 roster bosses with the finale on wave 100, and a shorter run sees
+  fewer. The per-run milestone beats (the bigger health-orb burst, the level-up
+  STATS interpose, progressive passive-slot unlocks) re-anchor to boss waves.
+- Reward scaling dropped its run-shape terms (waves-per-stage + stage-depth);
+  `rewardMultiplier` is now `mode × performance` (the per-wave random-difficulty
+  loot bonus lands separately).
+
+### Migration
+- Legacy saves / loadouts carrying the old `{ stages, wavesPerStage }` run shape
+  are migrated to a flat `maxWaves = stages × wavesPerStage` (clamped to 100).
+
+---
+
 ## [8.9.0] - 2026-05-28
 
 ### Removed

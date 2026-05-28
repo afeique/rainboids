@@ -16,7 +16,13 @@ import {
   BOSS_TIER_STATS,
   WAVE_DATA,
 } from '../../js/modules/wave/wave-data.js';
-import { MAX_WAVES, BOSS_WAVES } from '../../js/modules/core/constants.js';
+import { MAX_WAVES } from '../../js/modules/core/constants.js';
+
+// 8.10.0 — WAVE_DATA's AUTHORED boss-group positions (every 3 — the table's
+// static markers). Distinct from the live boss CADENCE (isBossWave, every 10):
+// these authored positions still carry a boss-type group in the data table,
+// which spawns as a tanky escort on non-boss-cadence waves.
+const AUTHORED_BOSS_WAVES = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30];
 
 // ---------------------------------------------------------------------------
 // getWaveConfig()
@@ -54,8 +60,8 @@ describe('getWaveConfig() – 20-wave campaign', () => {
     }
   });
 
-  test('boss waves are marked isBossWave + bossTier and contain a TITAN with isBoss', () => {
-    for (const w of BOSS_WAVES) {
+  test('authored boss-group waves are marked isBossWave + bossTier and contain a TITAN with isBoss', () => {
+    for (const w of AUTHORED_BOSS_WAVES) {
       const cfg = getWaveConfig(w);
       expect(cfg.isBossWave).toBe(true);
       expect(cfg.bossTier).toBeGreaterThanOrEqual(1);
@@ -68,25 +74,24 @@ describe('getWaveConfig() – 20-wave campaign', () => {
     }
   });
 
-  test('non-boss waves do not set isBossWave', () => {
+  test('non-authored-boss waves do not set the WAVE_DATA isBossWave marker', () => {
     for (let w = 1; w <= MAX_WAVES; w++) {
-      if (BOSS_WAVES.includes(w)) continue;
+      if (AUTHORED_BOSS_WAVES.includes(w)) continue;
       const cfg = getWaveConfig(w);
       expect(cfg.isBossWave).toBeFalsy();
     }
   });
 
-  test('out-of-range waves clamp to wave 1 / wave 20 entries', () => {
+  test('out-of-range waves clamp to wave 1 / wave 30 entries', () => {
     expect(getWaveConfig(0)).toEqual(getWaveConfig(1));
     expect(getWaveConfig(-5)).toEqual(getWaveConfig(1));
     expect(getWaveConfig(MAX_WAVES + 1)).toEqual(getWaveConfig(MAX_WAVES));
     expect(getWaveConfig(999)).toEqual(getWaveConfig(MAX_WAVES));
   });
 
-  test('isBossWave matches BOSS_WAVES', () => {
-    for (const w of BOSS_WAVES) expect(isBossWave(w)).toBe(true);
-    for (let w = 1; w <= MAX_WAVES; w++) {
-      if (!BOSS_WAVES.includes(w)) expect(isBossWave(w)).toBe(false);
+  test('isBossWave is the flat cadence — every 10th wave', () => {
+    for (let w = 1; w <= 100; w++) {
+      expect(isBossWave(w)).toBe(w % 10 === 0);
     }
   });
 });

@@ -1,47 +1,37 @@
 /**
- * QA-20: NON-DEFAULT RUN SHAPE — boss spawning + past-30 content (H2)
+ * QA-20: FLAT-WAVE boss spawning + past-30 cycled content (8.10.0)
  *
- * Bug-Pass 2026-05-25 H2: with a non-default wavesPerStage (6), boss spawning
- * broke (the authored `isBoss` table sits at the fixed 3/6/9 positions, so the
- * stage-final boss vanished) and runs went trivial past wave 30 (getWaveConfig
- * fell back to wave-1 content). This spec drives the LIVE engine with a wps=6
- * run shape and asserts:
+ * Runs are a flat wave count now (no stages); a boss spawns every BOSS_INTERVAL
+ * (= 10) waves. This spec drives the LIVE engine and asserts:
  *
- *   (a) wave 6 (the first real stage-final for wps=6) spawns a modular boss,
- *       and wave 3 (mid-stage for wps=6) does NOT.
- *   (b) past wave 30 the wave config is NOT the trivial wave-1 content, and a
- *       boss still spawns on a stage-final (wave 36).
+ *   (a) wave 10 (the first boss wave) spawns a modular boss; wave 3 does NOT.
+ *   (b) past wave 30 the wave config is NOT the trivial wave-1 content (cycled),
+ *       and a boss still spawns on a later boss wave (wave 40).
+ *   (c) a boss spawns on every multiple of 10 across the run.
  *
- * Mirrors the QA-17 boss harness (drive the engine via page.evaluate; detect a
- * boss in the active enemy pool by isBoss + bossId). Sub-wave pacing is forced
- * by repeatedly clearing the non-boss field then ticking updateWaveSystem
- * (the live loop's wave driver) so the LAST sub-wave — where the stage-final
+ * Drives the engine via page.evaluate; detects a boss in the active enemy pool
+ * by isBoss + bossId. Sub-wave pacing is forced by repeatedly clearing the
+ * non-boss field then ticking updateWaveSystem so the LAST sub-wave — where the
  * boss lives — actually spawns, without needing an AI to pilot it.
  */
 
 import { test, expect } from '@playwright/test';
 import { loadGame, startGame } from '../helpers/game-helpers.js';
 
-// Configure a wps=6 run, jump the engine to `wave`, spawn that wave's entities,
+// Configure a run length, jump the engine to `wave`, spawn that wave's entities,
 // then force every sub-wave to spawn by clearing the non-boss field + ticking
 // the live wave driver. Returns whether a modular boss landed in the pool.
-async function spawnFullWave(page, { wave, stages, wavesPerStage }) {
-    return page.evaluate(({ w, st, wps }) => {
+async function spawnFullWave(page, { wave, maxWaves }) {
+    return page.evaluate(({ w, mw }) => {
         const ge = window.gameEngine;
-        ge.game.runConfig = { stages: st, wavesPerStage: wps, mode: 'NORMAL' };
+        ge.game.runConfig = { maxWaves: mw, mode: 'NORMAL' };
         ge.game.currentWave = w;
         ge._modularBossSpawnedWave = null;
-        ge._waveState = null; // reset tryAdvanceSubWave's per-wave state
-        // Clear the field so we measure only THIS wave's spawns.
+        ge._waveState = null;
         ge.enemyPool.activeObjects.slice().forEach((e) => ge.enemyPool.release(e));
         ge.game.state = 'PLAYING';
         ge.game.waveComplete = false;
-        // Sub-wave 0 (+ the stage-final boss if this wave has only one sub-wave).
         ge.spawnWaveEntities();
-        // Force-advance the remaining sub-waves: empty the non-boss field then
-        // tick the live wave driver (updateWaveSystem → tryAdvanceSubWave). The
-        // ≤2-enemy advance trigger fires immediately on an empty field, so each
-        // iteration promotes one sub-wave. Budget covers the deepest wave (3).
         for (let i = 0; i < 16; i++) {
             ge.enemyPool.activeObjects
                 .slice()
@@ -55,56 +45,50 @@ async function spawnFullWave(page, { wave, stages, wavesPerStage }) {
         const boss = pool.find((e) => e.isBoss && e.bossId && e.active);
         return {
             wave: ge.game.currentWave,
-            wavesPerStage: ge.game.runConfig.wavesPerStage,
+            maxWaves: ge.game.runConfig.maxWaves,
             hasBoss: !!boss,
             bossId: boss ? boss.bossId : null,
         };
-    }, { w: wave, st: stages, wps: wavesPerStage });
+    }, { w: wave, mw: maxWaves });
 }
 
-// Read the synthesized wave config for a wave under a long wps=6 run.
+// Read the synthesized wave config for a wave under a long run.
 async function waveConfigIsTrivial(page, wave) {
     return page.evaluate(async (w) => {
-        const ge = window.gameEngine;
-        ge.game.runConfig = { stages: 100, wavesPerStage: 6, mode: 'NORMAL' };
         const mod = await import('/js/modules/wave/wave-data.js');
-        const cfg = mod.getWaveConfig(w, 100 * 6);
+        const cfg = mod.getWaveConfig(w, 100);
         return { isWave1Config: cfg === mod.WAVE_DATA[1] };
     }, wave);
 }
 
-test.describe('QA-20: non-default run shape bosses', () => {
+test.describe('QA-20: flat-wave boss spawning', () => {
     test.beforeEach(async ({ page }) => {
         await loadGame(page);
         await startGame(page);
     });
 
-    test('(a) wps=6: a boss spawns on the stage-final (wave 6), not at wave 3', async ({ page }) => {
-        const w6 = await spawnFullWave(page, { wave: 6, stages: 100, wavesPerStage: 6 });
-        expect(w6.wavesPerStage).toBe(6);
-        expect(w6.hasBoss).toBe(true);     // stage-final → modular boss present
-        expect(w6.bossId).toBeTruthy();
+    test('(a) a boss spawns on the first boss wave (10), not at wave 3', async ({ page }) => {
+        const w10 = await spawnFullWave(page, { wave: 10, maxWaves: 100 });
+        expect(w10.maxWaves).toBe(100);
+        expect(w10.hasBoss).toBe(true);
+        expect(w10.bossId).toBeTruthy();
 
-        const w3 = await spawnFullWave(page, { wave: 3, stages: 100, wavesPerStage: 6 });
-        expect(w3.hasBoss).toBe(false);    // mid-stage for wps=6 → no boss
+        const w3 = await spawnFullWave(page, { wave: 3, maxWaves: 100 });
+        expect(w3.hasBoss).toBe(false); // off-cadence → no modular boss
     });
 
-    test('(b) wps=6 past wave 30: config is NOT trivial wave-1 + a boss spawns on a stage-final', async ({ page }) => {
-        // Wave 33 cycles to authored late-game content, NOT the trivial wave-1
-        // 3-HUNTER opener (the old past-30 fallback bug).
+    test('(b) past wave 30: config is NOT trivial wave-1 + a boss spawns on wave 40', async ({ page }) => {
         const shape = await waveConfigIsTrivial(page, 33);
         expect(shape.isWave1Config).toBe(false);
 
-        // Wave 36 is a real stage-final for wps=6 (36 % 6 === 0) → a boss spawns
-        // even though it's past the authored 30-wave table (cycled content).
-        const w36 = await spawnFullWave(page, { wave: 36, stages: 100, wavesPerStage: 6 });
-        expect(w36.hasBoss).toBe(true);
-        expect(w36.bossId).toBeTruthy();
+        const w40 = await spawnFullWave(page, { wave: 40, maxWaves: 100 });
+        expect(w40.hasBoss).toBe(true);
+        expect(w40.bossId).toBeTruthy();
     });
 
-    test('default 10×3 run still spawns its boss on wave 3 (default-safe)', async ({ page }) => {
-        const r = await spawnFullWave(page, { wave: 3, stages: 10, wavesPerStage: 3 });
-        expect(r.wavesPerStage).toBe(3);
+    test('(c) the default 30-wave run spawns its boss on wave 10', async ({ page }) => {
+        const r = await spawnFullWave(page, { wave: 10, maxWaves: 30 });
+        expect(r.maxWaves).toBe(30);
         expect(r.hasBoss).toBe(true);
         expect(r.bossId).toBeTruthy();
     });

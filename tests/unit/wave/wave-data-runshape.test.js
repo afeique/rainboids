@@ -43,7 +43,7 @@ import {
     getWaveConfig,
     isBossWave,
 } from '../../../js/modules/wave/wave-data.js';
-import { MAX_WAVES, WAVES_PER_STAGE } from '../../../js/modules/core/constants.js';
+import { MAX_WAVES } from '../../../js/modules/core/constants.js';
 import { _resetUrlOverrideForTests } from '../../../js/modules/platform/platform-detect.js';
 
 // Force DESKTOP for every test so getWaveConfig returns the raw authored
@@ -105,28 +105,27 @@ describe('getWaveConfig — past MAX_WAVES synthesizes by CYCLING (not wave-1 fa
     });
 });
 
-describe('isBossWave — stage-finals for a non-default wps are boss-eligible', () => {
-    test('default wps=3: stage-finals are 3,6,9,…,30 (unchanged)', () => {
-        for (let w = 1; w <= MAX_WAVES; w++) {
-            expect(isBossWave(w)).toBe(w % WAVES_PER_STAGE === 0);
+describe('isBossWave — flat-wave boss cadence (every BOSS_INTERVAL = 10)', () => {
+    test('a boss every 10th wave across a full 100-wave run', () => {
+        for (let w = 1; w <= 100; w++) {
+            expect(isBossWave(w)).toBe(w % 10 === 0);
         }
     });
 
-    test('wps=6: stage-finals move to 6,12,18,… and wave 3 is NOT a boss', () => {
-        expect(isBossWave(6, 6)).toBe(true);
-        expect(isBossWave(12, 6)).toBe(true);
-        expect(isBossWave(18, 6)).toBe(true);
-        // The OLD fixed table position (wave 3) is mid-stage for wps=6.
-        expect(isBossWave(3, 6)).toBe(false);
-        expect(isBossWave(9, 6)).toBe(false);
+    test('round-number finales are boss waves; off-cadence waves are not', () => {
+        expect(isBossWave(10)).toBe(true);
+        expect(isBossWave(50)).toBe(true);
+        expect(isBossWave(100)).toBe(true);
+        expect(isBossWave(3)).toBe(false);
+        expect(isBossWave(9)).toBe(false);
+        expect(isBossWave(0)).toBe(false);
     });
 
-    test('wps=6 past wave 30: cycled content still presents stage-finals as boss waves', () => {
-        // Combined with the wave-manager fix, the boss spawn is driven by this
-        // marker — so a long wps=6 run keeps getting bosses past wave 30.
-        expect(isBossWave(36, 6)).toBe(true);
-        expect(isBossWave(42, 6)).toBe(true);
-        expect(isBossWave(120, 6)).toBe(true);
-        expect(isBossWave(37, 6)).toBe(false);
+    // The modular boss-spawn (maybeSpawnStageFinalBoss) is driven by this marker,
+    // so a long run keeps getting bosses at 10, 20, 30, … all the way to 100.
+    test('drives bosses at every multiple of 10 deep into a run', () => {
+        expect(isBossWave(40)).toBe(true);
+        expect(isBossWave(90)).toBe(true);
+        expect(isBossWave(37)).toBe(false);
     });
 });

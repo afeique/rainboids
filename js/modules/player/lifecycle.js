@@ -28,7 +28,7 @@
 // SHIFT-key core movement primitive; its i-frames now live in
 // player.isDashIFrameActive(), checked at the collision sites.)
 
-import { GAME_STATES, WAVES_PER_STAGE } from '../core/constants.js';
+import { GAME_STATES, getBossSegment } from '../core/constants.js';
 import { STAT_CAPS } from '../core/sp-stats.js'; // T35 — global stat caps (DODGE)
 import { random } from '../core/utils.js';
 import { isMobile } from '../platform/platform-detect.js';
@@ -625,11 +625,12 @@ export function accumulateOverflowToTank(credit) {
 }
 
 export function handlePlayerDeath() {
-    // P6 — Second Heart passive: survive a lethal hit once PER STAGE at 30% HP
-    // + i-frames (the cheaper-but-repeating cousin of the Second Wind ability).
-    // Tracked by the stage it was last used in, so it auto-rearms each stage.
+    // P6 — Second Heart passive: survive a lethal hit once per BOSS SEGMENT at
+    // 30% HP + i-frames (the cheaper-but-repeating cousin of the Second Wind
+    // ability). Tracked by the segment it was last used in so it auto-rearms
+    // every BOSS_INTERVAL waves (8.10.0 — was per-stage).
     if (this.player && this.player.hasPassive && this.player.hasPassive('SECOND_HEART')) {
-        const stage = Math.max(1, Math.ceil((((this.game && this.game.currentWave) | 0) || 1) / WAVES_PER_STAGE));
+        const stage = getBossSegment(((this.game && this.game.currentWave) | 0) || 1);
         if (this.player._secondHeartUsedStage !== stage) {
             this.player._secondHeartUsedStage = stage;
             const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')

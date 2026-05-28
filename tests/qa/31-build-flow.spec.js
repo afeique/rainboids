@@ -130,9 +130,9 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
             };
         });
 
-        // The GEAR tab now hosts the weapon-equip UI.
-        expect(r.gearText).toContain('WEAPON');
-        expect(r.gearText).toContain('EQUIPPED:');
+        // The GEAR tab now hosts the weapon-equip UI (8.7.1 — Title-Case labels).
+        expect(r.gearText).toContain('Primary Weapon');
+        expect(r.gearText).toContain('Equipped');
         // No weapon/power equip toggles render in the pre-run BUILD anymore.
         expect(r.pulseParent).toBe(false);
         expect(r.chargeParent).toBe(false);
@@ -179,9 +179,9 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
             localStorage.setItem('rainboidsMeta', JSON.stringify({ unlockedAbilities: ['BULWARK', 'FIELD_MEDIC'] }));
             ge.openArmory();
 
-            // Configure a NON-default run: 6 waves/stage, stages 10 → 20, HARD mode.
-            document.getElementById('shop-runsetup-wps-6').click();
-            document.getElementById('shop-runsetup-stages-inc').click();
+            // Configure a NON-default run: 60 waves + HARD mode.
+            const slider = document.getElementById('shop-runsetup-waves');
+            slider.value = '60'; slider.dispatchEvent(new Event('input', { bubbles: true }));
             document.getElementById('shop-runsetup-mode-hard').click();
 
             // Pick the loadout: ensure PULSE_CANNON (primary), CHARGE_SHOT
@@ -222,8 +222,8 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
         expect(r.hasPlayer).toBe(true);
         expect(['PLAYING', 'WAVE_TRANSITION']).toContain(r.state);
 
-        // The chosen run shape round-tripped into game.runConfig (DIR-09 mode too).
-        expect(r.runConfig).toEqual({ stages: 20, wavesPerStage: 6, mode: 'HARD' });
+        // The chosen run shape round-tripped into game.runConfig (mode too).
+        expect(r.runConfig).toEqual({ maxWaves: 60, mode: 'HARD' });
 
         // The chosen loadout round-tripped into the live player state.
         expect(r.activePrimary).toBe('PULSE_CANNON');
@@ -239,7 +239,7 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
     // ------------------------------------------------------------------
     // 5. The default (untouched) BUILD flow starts the canonical 10×3 NORMAL.
     // ------------------------------------------------------------------
-    test('an untouched BUILD flow starts the canonical 10x3 NORMAL run', async ({ page }) => {
+    test('an untouched BUILD flow starts the canonical 30-wave NORMAL run', async ({ page }) => {
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
@@ -247,7 +247,7 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
             document.getElementById('shop-prerun-start').click();
             return { runConfig: ge.game.runConfig, state: ge.game.state };
         });
-        expect(r.runConfig).toEqual({ stages: 10, wavesPerStage: 3, mode: 'NORMAL' });
+        expect(r.runConfig).toEqual({ maxWaves: 30, mode: 'NORMAL' });
         expect(['PLAYING', 'WAVE_TRANSITION']).toContain(r.state);
         expect(fatalErrors(page._jsErrors)).toEqual([]);
     });
@@ -258,45 +258,41 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
     //    pre-equip path the BUILD flow exposes — no separate profile surface).
     // ------------------------------------------------------------------
     test('the chosen run shape seeds the next BUILD open via meta.loadout', async ({ page }) => {
-        // First BUILD: pick 9 waves/stage + stages 10 → 30 + EASY, then START
-        // (which persists the loadout to meta via saveMeta({loadout})).
+        // First BUILD: pick 90 waves + EASY, then START (which persists the
+        // loadout to meta via saveMeta({loadout})).
         const first = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            document.getElementById('shop-runsetup-wps-9').click();
-            document.getElementById('shop-runsetup-stages-inc').click(); // 10 → 20
-            document.getElementById('shop-runsetup-stages-inc').click(); // 20 → 30
+            const slider = document.getElementById('shop-runsetup-waves');
+            slider.value = '90'; slider.dispatchEvent(new Event('input', { bubbles: true }));
             document.getElementById('shop-runsetup-mode-easy').click();
             document.getElementById('shop-prerun-start').click();
             return { runConfig: ge.game.runConfig };
         });
-        expect(first.runConfig).toEqual({ stages: 30, wavesPerStage: 9, mode: 'EASY' });
+        expect(first.runConfig).toEqual({ maxWaves: 90, mode: 'EASY' });
 
         // The persisted run shape should be readable from meta.loadout.runConfig.
         const meta = await page.evaluate(() => {
             try { return JSON.parse(localStorage.getItem('rainboidsMeta')); } catch { return null; }
         });
-        expect(meta && meta.loadout && meta.loadout.runConfig).toEqual({
-            stages: 30, wavesPerStage: 9, mode: 'EASY',
-        });
+        expect(meta && meta.loadout && meta.loadout.runConfig).toEqual({ maxWaves: 90, mode: 'EASY' });
 
-        // Re-open BUILD: the RUN SETUP controls should re-seed from that meta,
-        // showing 30 stages, the 9-wps button active, and EASY active.
+        // Re-open BUILD: the RUN SETUP controls re-seed from that meta — the
+        // slider at 90 and EASY active.
         const seeded = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            const wps9 = document.getElementById('shop-runsetup-wps-9');
             const easy = document.getElementById('shop-runsetup-mode-easy');
             const normal = document.getElementById('shop-runsetup-mode-normal');
             return {
-                stages: document.getElementById('shop-runsetup-stages-value').textContent,
-                wps9Active: wps9.classList.contains('active'),
+                waves: document.getElementById('shop-runsetup-waves').value,
+                wavesLabel: document.getElementById('shop-runsetup-waves-value').textContent,
                 easyActive: easy.classList.contains('active'),
                 normalActive: normal.classList.contains('active'),
             };
         });
-        expect(seeded.stages).toBe('30');
-        expect(seeded.wps9Active).toBe(true);
+        expect(seeded.waves).toBe('90');
+        expect(seeded.wavesLabel).toBe('90 waves');
         expect(seeded.easyActive).toBe(true);
         expect(seeded.normalActive).toBe(false);
         expect(fatalErrors(page._jsErrors)).toEqual([]);
@@ -316,13 +312,9 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
                 const btn = tabStrip.querySelector(`.shop-tree-tab[data-tab="${tab}"]`);
                 if (btn) btn.click();
             }
-            // Exercise RUN SETUP (incl. a gated mode no-op + stepper clamps).
-            document.getElementById('shop-runsetup-wps-9').click();
-            const inc = document.getElementById('shop-runsetup-stages-inc');
-            for (let i = 0; i < 15; i++) inc.click();   // clamp to 100
-            const dec = document.getElementById('shop-runsetup-stages-dec');
-            for (let i = 0; i < 15; i++) dec.click();   // clamp to 10
-            document.getElementById('shop-runsetup-wps-6').click();
+            // Exercise RUN SETUP (waves slider sweep + a gated mode no-op).
+            const slider = document.getElementById('shop-runsetup-waves');
+            for (const v of [100, 10, 50, 30]) { slider.value = String(v); slider.dispatchEvent(new Event('input', { bubbles: true })); }
             document.getElementById('shop-runsetup-mode-easy').click();
             document.getElementById('shop-runsetup-mode-hard').click();
             document.getElementById('shop-runsetup-mode-epic').click(); // gated no-op

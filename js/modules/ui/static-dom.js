@@ -926,26 +926,15 @@ function _buildShopOverlay() {
 
     const groupsRow = el('div', { className: 'shop-runsetup-groups' });
 
-    // Waves-per-stage segmented selector (3 / 6 / 9).
-    const wpsButtons = [3, 6, 9].map((v) => {
-        const b = el('button', { id: `shop-runsetup-wps-${v}`, className: 'shop-runsetup-btn', text: `${v}` });
-        b.type = 'button';
-        b.dataset.wps = `${v}`;
-        return b;
+    // 8.10.0 — a single WAVES slider (10–100, step 10). Runs are a flat wave
+    // count now (no stages / waves-per-stage); shop-dom wires the slider's
+    // `input` event to _preRunRunConfig.maxWaves.
+    const wavesSlider = el('input', {
+        id: 'shop-runsetup-waves', className: 'shop-runsetup-slider',
+        attrs: { type: 'range', min: '10', max: '100', step: '10', value: '30', 'aria-label': 'number of waves' },
     });
-    groupsRow.appendChild(_runSetupGroup('shop-runsetup-wps', 'WAVES PER STAGE', wpsButtons));
-
-    groupsRow.appendChild(el('span', { className: 'shop-runsetup-divider' }));
-
-    // Stages stepper (− value + ), step 10, clamped [10,100].
-    const decBtn = el('button', { id: 'shop-runsetup-stages-dec', className: 'shop-runsetup-step', text: '−' });
-    decBtn.type = 'button';
-    decBtn.setAttribute('aria-label', 'fewer stages');
-    const stagesVal = el('span', { id: 'shop-runsetup-stages-value', className: 'shop-runsetup-value', text: '10' });
-    const incBtn = el('button', { id: 'shop-runsetup-stages-inc', className: 'shop-runsetup-step', text: '+' });
-    incBtn.type = 'button';
-    incBtn.setAttribute('aria-label', 'more stages');
-    groupsRow.appendChild(_runSetupGroup('shop-runsetup-stages', 'STAGES', [decBtn, stagesVal, incBtn]));
+    const wavesVal = el('span', { id: 'shop-runsetup-waves-value', className: 'shop-runsetup-value', text: '30 waves' });
+    groupsRow.appendChild(_runSetupGroup('shop-runsetup-waves-group', 'WAVES', [wavesSlider, wavesVal]));
 
     groupsRow.appendChild(el('span', { className: 'shop-runsetup-divider' }));
 
@@ -974,7 +963,7 @@ function _buildShopOverlay() {
 
     // Live readout: "N waves · MODE · rewards ×W ×M" (DIR-09 adds the mode +
     // its per-mode reward multiplier; shop-dom keeps it in sync on every edit).
-    runSetup.appendChild(el('div', { id: 'shop-runsetup-readout', className: 'shop-runsetup-readout', text: '30 waves · NORMAL · rewards ×1.0 ×1.0' }));
+    runSetup.appendChild(el('div', { id: 'shop-runsetup-readout', className: 'shop-runsetup-readout', text: '30 waves · NORMAL · rewards ×1.0' }));
 
     // ── Action bar (BACK · status · START) ────────────────────────
     const actionBar = el('div', { className: 'shop-prerun-actions' });

@@ -44,7 +44,7 @@
 //   JUGGERNAUT   (Kinetic ram)    : 22(1)                 — charge-and-ram bruiser
 //   THORNBACK    (Kinetic counter): 25(1)                 — counter-attack bruiser
 
-import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
+import { GAME_CONFIG, MAX_WAVES } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
 
 // 5.75.0 — Each wave is now a SEQUENCE of sub-waves instead of a single
@@ -424,18 +424,10 @@ export function getWaveConfig(waveNumber, maxWaves = MAX_WAVES) {
     return scaled;
 }
 
-// Returns true when this wave is a boss wave — the LAST wave of each
-// stage. RUN-01a: derived from `wavesPerStage` (boss is every multiple
-// of it) instead of the static BOSS_WAVES table, so longer / shorter
-// runs get bosses on their real stage finals. With the default
-// wavesPerStage=3 this yields exactly [3,6,9,...,30] — identical to the
-// BOSS_WAVES membership for waves 1..30. BOSS_WAVES stays exported for
-// any legacy reader; the live check routes through this param form.
-export function isBossWave(waveNumber, wavesPerStage = WAVES_PER_STAGE) {
-    const w = waveNumber | 0;
-    const wps = Math.max(1, wavesPerStage | 0);
-    return w > 0 && w % wps === 0;
-}
+// 8.10.0 — boss-wave test re-exported from constants (a boss every
+// BOSS_INTERVAL=10 waves, flat-wave model). Re-exported here so existing
+// `import { isBossWave } from './wave-data.js'` call sites keep working.
+export { isBossWave } from '../core/constants.js';
 
 // 1 → MAX_WAVES across the campaign so per-wave scaling formulas can
 // use the wave number directly. Each wave is a distinct level — no

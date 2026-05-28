@@ -343,15 +343,15 @@ export const GAME_STATES = {
 // Survivor-card economy: 1 free pick per stage clear × 10 stages = 10
 // picks per playthrough (same total budget as the pre-6.1.0 "every 3rd
 // wave" cadence, just renamed and aligned with the boss waves).
-export const MAX_WAVES = 30;
-export const WAVES_PER_STAGE = 3;
-export const MAX_STAGES = MAX_WAVES / WAVES_PER_STAGE; // 10
-// Bosses live on stage finals (was [5,10,15,20,25,30] in 6.0.x).
-// Every stage now ends with a boss; +67% boss density vs pre-6.1.0.
-export const BOSS_WAVES = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30];
-// Kept as 3 (was 5) so any legacy consumers reading this constant
-// produce sensible defaults under the new cadence.
-export const BOSS_WAVE_INTERVAL = WAVES_PER_STAGE;
+// 8.10.0 — Runs are a FLAT number of waves; the "stages" grouping was removed.
+// The player picks the wave count on a 10–100 slider (RUN_WAVES_*). A boss
+// spawns every BOSS_INTERVAL waves, so a full 100-wave run plays all 10 roster
+// bosses (the finale lands on the last wave) and a shorter run sees fewer.
+export const MAX_WAVES = 30;          // default run length (slider default) + level-scaling reference
+export const RUN_WAVES_MIN = 10;
+export const RUN_WAVES_MAX = 100;
+export const RUN_WAVES_STEP = 10;
+export const BOSS_INTERVAL = 10;      // a boss every 10 waves → the 10-boss roster
 
 // ── Combat-depth (CD) build-axis caps ───────────────────────────────────────
 // R-CAP — hard ceilings that keep the CD permanent stats from trivializing
@@ -473,77 +473,82 @@ export const HEAT_SINK_DECAY_PER_SEC = 60;
 // defaults to NORMAL so absent/invalid modes are byte-for-byte unchanged.
 // runConfig is plumbing only this phase — the RUN-06 UI will let
 // players pick other values later; for now it is always the default.
-export const DEFAULT_RUN_CONFIG = { stages: MAX_STAGES, wavesPerStage: WAVES_PER_STAGE, mode: DEFAULT_MODE };
+export const DEFAULT_RUN_CONFIG = { maxWaves: MAX_WAVES, mode: DEFAULT_MODE };
 
-// Pure: read a game-like object's runConfig, falling back to the
-// default. Guards against missing / non-numeric / sub-1 values so the
-// downstream math (runMaxWaves, the stage helpers) never produces NaN
-// or a zero-length run. NO side effects, NO game-state imports.
-// DIR-03 — also resolves `mode`: a valid MODES member (case-normalized to
-// upper) is kept; anything else (absent / bogus / wrong case-not-in-set)
-// falls back to DEFAULT_MODE. mode is resolved independently of the
-// stages/wavesPerStage validation so a valid mode survives even when the
-// run-shape fields are missing/invalid (and vice-versa).
+// Pure: read a game-like object's runConfig, falling back to the default.
+// Guards against missing / non-numeric / sub-1 values so the downstream math
+// never produces NaN or a zero-length run. NO side effects, NO game-state
+// imports. Resolves `mode` (a valid MODES member, upper-cased; else NORMAL)
+// independently of `maxWaves`. 8.10.0 — migrates legacy {stages, wavesPerStage}
+// runConfigs (pre-flat-waves saves) to a flat maxWaves = stages × wavesPerStage.
 export function getRunConfig(game) {
     const rc = game && game.runConfig;
-    // Resolve mode first so it can ride on either branch below.
     let mode = DEFAULT_MODE;
     if (rc && typeof rc.mode === 'string') {
         const up = rc.mode.toUpperCase();
         if (MODES.includes(up)) mode = up;
     }
-    if (rc
+    let maxWaves = MAX_WAVES;
+    if (rc && typeof rc.maxWaves === 'number' && isFinite(rc.maxWaves)) {
+        maxWaves = Math.max(1, rc.maxWaves | 0);
+    } else if (rc
         && typeof rc.stages === 'number' && isFinite(rc.stages)
         && typeof rc.wavesPerStage === 'number' && isFinite(rc.wavesPerStage)) {
-        return {
-            stages: Math.max(1, rc.stages | 0),
-            wavesPerStage: Math.max(1, rc.wavesPerStage | 0),
-            mode,
-        };
+        // Legacy migration: flatten the old stages × wavesPerStage shape.
+        maxWaves = Math.max(1, (rc.stages | 0) * (rc.wavesPerStage | 0));
     }
-    // Run-shape invalid/absent → default shape, but still honor a valid mode.
-    return mode === DEFAULT_MODE
-        ? DEFAULT_RUN_CONFIG
-        : { ...DEFAULT_RUN_CONFIG, mode };
+    return { maxWaves, mode };
 }
 
-// DIR-03 — the run's difficulty mode, always a valid MODES member
-// (NORMAL fallback for missing/invalid). Pure; nothing reads it for
-// gameplay yet (DIR-04/08/09 will consume it).
+// The run's difficulty mode, always a valid MODES member (NORMAL fallback).
 export function getRunMode(game) {
     return getRunConfig(game).mode;
 }
 
-// Total waves in the run = stages × wavesPerStage (default → 30).
+// Total waves in the run (default → 30).
 export function runMaxWaves(game) {
-    const rc = getRunConfig(game);
-    return rc.stages * rc.wavesPerStage;
+    return getRunConfig(game).maxWaves;
 }
 
-// Convenience accessor for the per-stage wave count (default → 3).
-export function runWavesPerStage(game) {
-    return getRunConfig(game).wavesPerStage;
+// 8.10.0 — boss cadence helpers (flat waves, no stages). A boss spawns every
+// BOSS_INTERVAL waves; `getBossSegment` is which boss (1-based) a wave belongs
+// to, used to pick from the 10-boss roster. `isBossWave` is the boss-wave test
+// AND the run's milestone beat (bonus orbs / stats interpose / passive slots).
+export function getBossSegment(wave) {
+    return Math.ceil(Math.max(1, wave | 0) / BOSS_INTERVAL);
+}
+export function isBossWave(wave) {
+    return (wave | 0) > 0 && ((wave | 0) % BOSS_INTERVAL) === 0;
 }
 
-// Stage / sub-wave helpers — pure functions on wave number. The
-// optional `wavesPerStage` param makes them runConfig-aware: callers
-// that pass `runWavesPerStage(game)` get a run-length-aware stage map.
-// The single-arg form defaults to WAVES_PER_STAGE (3) and is
-// byte-for-byte identical to the pre-RUN-01a behavior.
-export function getStage(wave, wavesPerStage = WAVES_PER_STAGE) {
-    const wps = Math.max(1, wavesPerStage | 0);
-    return Math.ceil(Math.max(1, wave | 0) / wps);
+// 8.10.0 — total bosses in a run = one per BOSS_INTERVAL waves (clamped to ≥1).
+export function runBossCount(game) {
+    return Math.max(1, Math.floor(runMaxWaves(game) / BOSS_INTERVAL));
 }
-export function getSubWaveIndex(wave, wavesPerStage = WAVES_PER_STAGE) {
-    const wps = Math.max(1, wavesPerStage | 0);
-    return ((Math.max(1, wave | 0) - 1) % wps) + 1; // 1..wps
+
+// 8.10.0 — pure clamps for the run config (single 10–100 wave count + mode).
+// Shared by the pre-run UI (shop-dom) and the engine so they agree exactly.
+// Snaps the wave count to the RUN_WAVES_STEP grid; falls back the difficulty
+// mode to NORMAL. clampRunConfig also migrates legacy {stages, wavesPerStage}.
+export function clampRunWaves(n) {
+    const num = Number(n);
+    const base = Number.isFinite(num) ? num : MAX_WAVES; // NaN/undefined → default (not 0)
+    const v = Math.round(base / RUN_WAVES_STEP) * RUN_WAVES_STEP;
+    return Math.max(RUN_WAVES_MIN, Math.min(RUN_WAVES_MAX, v));
 }
-export function isStageClear(wave, wavesPerStage = WAVES_PER_STAGE) {
-    const wps = Math.max(1, wavesPerStage | 0);
-    return (wave | 0) > 0 && ((wave | 0) % wps) === 0;
+export function clampRunMode(m) {
+    const up = (typeof m === 'string') ? m.toUpperCase() : '';
+    return MODES.includes(up) ? up : DEFAULT_MODE;
 }
-export function getStageLabel(wave, wavesPerStage = WAVES_PER_STAGE) {
-    return `${getStage(wave, wavesPerStage)}-${getSubWaveIndex(wave, wavesPerStage)}`;
+export function clampRunConfig(rc) {
+    rc = rc || {};
+    let maxWaves = (typeof rc.maxWaves === 'number' && isFinite(rc.maxWaves))
+        ? rc.maxWaves
+        : ((typeof rc.stages === 'number' && typeof rc.wavesPerStage === 'number'
+            && isFinite(rc.stages) && isFinite(rc.wavesPerStage))
+            ? rc.stages * rc.wavesPerStage   // migrate legacy shape
+            : MAX_WAVES);
+    return { maxWaves: clampRunWaves(maxWaves), mode: clampRunMode(rc.mode) };
 }
 
 // 5.71.0 — Speedrun completion tiers. Finishing the 20-wave campaign
