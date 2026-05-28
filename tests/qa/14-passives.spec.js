@@ -34,15 +34,19 @@ test.describe('QA-14: in-run PASSIVES swap (Phase P5b)', () => {
             ge.player.setOwnedPassives(['OPPORTUNIST', 'LAST_BASTION', 'GLASS_CANNON']);
             ge.uiManager.updatePassivesTab();
             const rows = [...document.querySelectorAll('#passives-tab .pause-equip-row')];
+            // 8.22.0 — each row carries a circular icon bubble.
+            const iconCount = document.querySelectorAll('#passives-tab .pause-equip-icon svg, #passives-tab .pause-equip-icon .icon-fallback').length;
             const opp = rows.find((row) => row.textContent.includes('Opportunist'));
             opp.click(); // equip into slot 0
             return {
                 rowCount: rows.length,
+                iconCount,
                 equipped0: ge.player.equippedPassives[0],
                 active: [...ge.player.activePassives],
             };
         });
         expect(r.rowCount).toBe(3);            // all 3 owned, slot-deliverable
+        expect(r.iconCount).toBe(3);           // a circle icon per row (8.22.0)
         expect(r.equipped0).toBe('OPPORTUNIST');
         expect(r.active).toContain('OPPORTUNIST');
     });

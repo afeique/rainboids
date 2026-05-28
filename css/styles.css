@@ -1751,8 +1751,8 @@ button:not([disabled]),
 /* P5b — in-run PASSIVES swap rows (pause menu). */
 .pause-equip-row {
     display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "name status" "desc desc";
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "icon name status" "icon desc desc";
     gap: 2px 12px;
     text-align: left;
     padding: 10px 14px;
@@ -1769,6 +1769,24 @@ button:not([disabled]),
 .pause-equip-name   { grid-area: name; font-size: calc(13px * var(--font-body-scale, 1)); }
 .pause-equip-status { grid-area: status; font-size: calc(12px * var(--font-body-scale, 1)); color: #8effc0; align-self: center; }
 .pause-equip-desc   { grid-area: desc; font-size: calc(12px * var(--font-body-scale, 1)); color: #9a90b8; line-height: 1.4; }
+/* 8.22.0 — circular icon bubble on each in-run passive/ability row (the same
+   "circle icon" look the pre-run tree used). Keystone rings glow gold. */
+.pause-equip-icon {
+    grid-area: icon;
+    align-self: center;
+    width: 36px; height: 36px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, rgba(90, 70, 130, 0.85), rgba(35, 26, 55, 0.95));
+    border: 1px solid rgba(170, 140, 230, 0.55);
+    color: #cbb0ff;
+}
+.pause-equip-icon--keystone {
+    border-color: #ffd24a;
+    color: #ffe27a;
+    box-shadow: 0 0 9px rgba(255, 210, 74, 0.45);
+}
+.pause-equip-row.equipped .pause-equip-icon { border-color: #2fe0a0; color: #8effc0; }
 
 /* ── SHOP OVERLAY ──────────────────────────────────────────────────────────
    Mirrors the pause-menu layout: full-viewport backdrop, centered column,

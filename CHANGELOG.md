@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.22.0] - 2026-05-28
+
+### Changed
+- **The in-run PASSIVES screen now shows circle icons.** Each owned passive in
+  the pause-menu PASSIVES tab carries a circular icon bubble (the same themed
+  "circle icon" the pre-run tree used — keystone rings glow gold), so the
+  owned-only swap panel reads at a glance instead of as a wall of text. The
+  screen already lists only the passives you own.
+
 ## [8.21.0] - 2026-05-28
 
 ### Changed

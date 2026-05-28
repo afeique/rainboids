@@ -1036,6 +1036,12 @@ export class UIManager {
         const row = document.createElement('button');
         row.type = 'button';
         row.className = 'pause-equip-row' + (equipped ? ' equipped' : '');
+        // 8.22.0 — the same "circle icon" the pre-run tree used, so the in-run
+        // passives screen reads visually (themed slug → star/disc fallback).
+        const icon = document.createElement('span');
+        icon.className = 'pause-equip-icon' + (keystone ? ' pause-equip-icon--keystone' : '');
+        icon.innerHTML = renderIconHTML(def.icon || (keystone ? 'star' : 'circle-fill'),
+            { size: 22, fallback: keystone ? '★' : '●' });
         const name = document.createElement('span');
         name.className = 'pause-equip-name';
         name.textContent = (keystone ? '★ ' : '') + (def.name || def.id);
@@ -1045,7 +1051,7 @@ export class UIManager {
         const status = document.createElement('span');
         status.className = 'pause-equip-status';
         status.textContent = equipped ? `SLOT ${slotIdx + 1}` : '';
-        row.append(name, desc, status);
+        row.append(icon, name, desc, status);
         row.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
         return row;
     }
