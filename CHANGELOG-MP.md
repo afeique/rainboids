@@ -7,6 +7,24 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.25.1] - 2026-05-27
+
+### Fixed
+- **Asteroid render crash in the real-sim path.** SP asteroids tumble in 3D
+  (`rot3D = {x,y,z}`) and have no flat `.angle`, so the snapshot serialized
+  `a: NaN` → the client's `drawAsteroidShape` projected NaN vertices and threw
+  (`Cannot read properties of undefined`), killing the render loop. SpHost now
+  serializes `rot3D.x` as the scalar tumble seed (the client expands it into the
+  wireframe spin, exactly like the toy-sim path). Caught by the new browser QA.
+
+### Tests
+- `tests/qa/13-mp-sphost.spec.js` (new): two-client co-op smoke against the REAL
+  SP sim (`MP_SIM=sphost`) — proves the user-facing goal end-to-end. Both pilots
+  connect + see each other; the real wave driver streams asteroids + enemies;
+  driving + firing render via the SAME SP `shapes.js` path; A's authoritative
+  movement + bullets reach B; **zero page errors** (the SP shape draw path is
+  exercised against the real enemy types / asteroid fields). Green (8s).
+
 ## [0.25.0] - 2026-05-27
 
 ### Added

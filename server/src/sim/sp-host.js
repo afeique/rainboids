@@ -598,7 +598,11 @@ export class SpHost {
       r: e.radius, hp: Math.ceil(e.health), mhp: e.maxHealth, ty: e.type,
     }));
     const asteroids = this.asteroidPool.activeObjects.map((a) => ({
-      id: a._netId, x: round(a.x), y: round(a.y), a: round(a.angle, 3), r: round(a.radius, 1),
+      id: a._netId, x: round(a.x), y: round(a.y),
+      // SP asteroids tumble in 3D (rot3D), not a flat `angle`; send rot3D.x as
+      // the scalar tumble seed the client expands into its wireframe spin (the
+      // client generates its own verts, exactly like the toy-sim path).
+      a: round(a.rot3D ? a.rot3D.x : 0, 3), r: round(a.radius, 1),
     }));
     const bullets = this.bulletPool.activeObjects.map((b) => ({ id: b._netId, x: round(b.x), y: round(b.y), o: this.playerId }));
     const drops = this._drops();
