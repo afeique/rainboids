@@ -212,9 +212,8 @@ export const POWERUP_TYPES = {
 
     // 5.101.0 — Defensive powerups restored to POWERUP_TYPES. With
     // defense abilities retired, these become the player's main defensive
-    // levers alongside the Diablo-style inventory. All three appear in
-    // the pause-menu POWERUPS tab AND the survivor-card wave-clear pick
-    // (one defensive slot per pick, see openWavePickOverlay).
+    // levers alongside the Diablo-style inventory. (8.x: the survivor-card
+    // wave-clear pick that used to grant them was removed in T70.)
     //   HEALTH_BOOST  — +35 max HP per stack (mirrors getEffectiveMaxHealth)
     //   SHIELD_BOOST  — +8% damage reduction (mirrors getEffectiveShield, capped 75%)
     //   REGEN         — passive HP/s regen (5.101.0 — new entry)

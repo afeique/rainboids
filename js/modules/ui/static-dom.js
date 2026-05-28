@@ -34,8 +34,6 @@ export function buildStaticDom() {
     _buildHudShopBtn();
     _buildHudPauseBtn();
     _buildPauseMenu();
-    _buildWavePickOverlay();
-    _buildShopSuggestOverlay();
     _buildShopOverlay();
     _buildStatsOverlay();
     _buildInventoryOverlay();
@@ -745,76 +743,10 @@ function _speakerSvg() {
     return svg;
 }
 
-// ── Wave-pick overlay ──────────────────────────────────────────────
-
-function _buildWavePickOverlay() {
-    const overlay = document.getElementById('wave-pick-overlay');
-    if (!overlay || !markBuilt(overlay, 'wave-pick-v1')) return;
-    overlay.replaceChildren();
-    overlay.className = 'ui-element';
-    overlay.style.display = 'none';
-
-    const panel = el('div', {
-        id: 'wave-pick-panel',
-        children: [
-            el('h2',  { className: 'wave-pick-title',    text: 'CARD DRAFT' }),
-            el('p',   { className: 'wave-pick-subtitle', text: 'PICK ONE' }),
-            el('div', { id: 'wave-pick-cards' }),
-            // R4 — in-run gold sinks (reroll / repair) rendered here.
-            el('div', { id: 'wave-pick-actions' }),
-        ],
-    });
-    overlay.appendChild(panel);
-}
-
-// ── Shop-suggest overlay (5.101.0) ─────────────────────────────────
-// Fires after the survivor-card pick. Three weapon-relevant upgrades
-// the player can buy with gold; CONTINUE button skips into the next
-// wave. Re-renders in place after each purchase so the player can
-// chain multiple buys without re-opening anything.
-function _buildShopSuggestOverlay() {
-    const overlay = document.getElementById('shop-suggest-overlay');
-    if (!overlay || !markBuilt(overlay, 'shop-suggest-v1')) return;
-    overlay.replaceChildren();
-    overlay.className = 'ui-element';
-    overlay.style.display = 'none';
-
-    const panel = el('div', {
-        id: 'shop-suggest-panel',
-        children: [
-            el('h2', { className: 'wave-pick-title', text: 'QUICK BUY' }),
-            el('p',  { className: 'wave-pick-subtitle', text: 'WEAPON UPGRADES FOR YOUR LOADOUT' }),
-            el('div', { id: 'shop-suggest-gold-row', children: [
-                el('span', { id: 'shop-suggest-gold', text: 'R$ 0' }),
-            ]}),
-            el('div', { id: 'shop-suggest-cards' }),
-            el('button', {
-                id: 'shop-suggest-skip',
-                className: 'shop-suggest-skip',
-                text: 'CONTINUE',
-                attrs: { type: 'button' },
-            }),
-        ],
-    });
-    overlay.appendChild(panel);
-
-    // Hook up the continue/skip button to close the overlay and start
-    // the next wave. We resolve the engine via window.gameEngine so
-    // the listener doesn't capture a stale reference at build time.
-    const skipBtn = panel.querySelector('#shop-suggest-skip');
-    if (skipBtn) {
-        skipBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            const ge = window.gameEngine;
-            if (ge && typeof ge.closeWavePickOverlay === 'function') {
-                ge.closeWavePickOverlay();
-            } else {
-                overlay.style.display = 'none';
-            }
-        });
-    }
-}
+// 8.x (T70) — the in-run CARD DRAFT (#wave-pick-overlay) + post-card QUICK-BUY
+// (#shop-suggest-overlay) were removed with the looter pivot; their builders are
+// gone. Power comes from looted gear/traits; the per-stage choose-moment is the
+// run stage DRAFT (DraftOverlay), which self-injects its own DOM.
 
 // ── Shop overlay ───────────────────────────────────────────────────
 // Phase 7 (2026-05-19) — Ability-tree rewrite. Replaces the list-based

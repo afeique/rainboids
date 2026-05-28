@@ -237,8 +237,9 @@ export function updateTempBonuses() {
 }
 
 export function triggerLevelUpEffects() {
-    // 6.0.0 — no-op. Wave-clear survivor cards are the new celebration
-    // beat (see wave-manager.openWavePickOverlay).
+    // 6.0.0 — no-op. (8.x: the wave-clear survivor-card celebration beat this
+    // referenced was removed in T70; level-up SP is spent at the STATS interpose
+    // on stage clear.)
 }
 
 export function createLevelUpParticles() {

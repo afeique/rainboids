@@ -3399,13 +3399,9 @@ export class GameEngine {
 
     completeWave() { return wave.completeWave.call(this); }
     completeRun() { return wave.completeRun.call(this); }
-    openWaveClearPowerupsMenu() { return wave.openWaveClearPowerupsMenu.call(this); }
-    // 5.98.0 — Mobile wave-clear 3-pick overlay.
-    openWavePickOverlay() { return wave.openWavePickOverlay.call(this); }
-    closeWavePickOverlay() { return wave.closeWavePickOverlay.call(this); }
-    // 5.101.0 — shop-suggestion overlay (3 weapon-relevant upgrades).
-    openShopSuggestOverlay() { return wave.openShopSuggestOverlay.call(this); }
-    renderShopSuggestOverlay() { return wave.renderShopSuggestOverlay.call(this); }
+    // 8.x (T70) — the in-run CARD DRAFT + post-card QUICK-BUY overlays were
+    // removed (power comes from looted gear/traits). The per-stage choose-moment
+    // is the run stage DRAFT (openStageDraft) below.
     // 5.75.0 — mission system bindings.
     checkMissionOnKill() { return wave.checkMissionOnKill.call(this); }
     checkMissionOnCrit() { return wave.checkMissionOnCrit.call(this); }
@@ -5201,20 +5197,6 @@ export class GameEngine {
     }
 
     togglePause() {
-        // 6.1.2 — Guard against ESC resuming while a modal "must-pick"
-        // overlay is still on screen. The survivor-card overlay (wave-
-        // pick) and the post-card shop-suggest overlay BOTH leave the
-        // game in GAME_STATES.PAUSED until the player picks / skips —
-        // pressing ESC during either would pop the resume frame and
-        // call startNextWave() with the overlay still visible, which
-        // resumed gameplay invisibly in the background. Short-circuit
-        // the toggle when either overlay is visible.
-        const wavePickOverlay = document.getElementById('wave-pick-overlay');
-        const shopSuggestOverlay = document.getElementById('shop-suggest-overlay');
-        const wavePickOpen = wavePickOverlay && wavePickOverlay.style.display === 'flex';
-        const shopSuggestOpen = shopSuggestOverlay && shopSuggestOverlay.style.display === 'flex';
-        if (wavePickOpen || shopSuggestOpen) return;
-
         // 5.99.0 — Explicit show/hide of the pause overlay (not via
         // uiManager.togglePause()'s display-string toggle). Pre-5.99 the
         // toggle relied on `style.display === 'flex'` round-tripping,

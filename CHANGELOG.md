@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.7.0] - 2026-05-28
+
+### Removed
+- **The in-run CARD DRAFT and post-card QUICK-BUY are gone.** Power now comes
+  from looted gear + rolled weapon traits, so the per-wave "pick one of 4
+  powerup cards" draft (`#wave-pick-overlay`) and the shop-suggest quick-buy
+  (`#shop-suggest-overlay`) that followed it are removed entirely — along with
+  their in-run gold sinks (reroll / Repair Kit / extra card / Revive Token).
+  Deleted `js/modules/combat/card-draft.js` and `js/modules/world/run-shop.js`
+  and all of their wave-manager machinery, DOM stubs, CSS, and tests.
+- Run-gold now simply banks into account-gold at run end (no in-run spending).
+
+### Changed
+- A wave/stage clear advances straight through (drops + R$ already granted); the
+  per-stage choose-moment remains the run **stage DRAFT** (`openStageDraft` —
+  choose your next stage's theme/modifiers/risk-reward), unchanged. The
+  wave-clear "stuck state" recovery now advances directly instead of re-opening
+  the removed card menu.
+
+---
+
 ## [8.6.0] - 2026-05-28
 
 ### Changed

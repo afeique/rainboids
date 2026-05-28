@@ -15,15 +15,11 @@ import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStat
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
-import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades, PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES } from '../combat/weapon-data.js';
-import { buildDraft, isCardStage } from '../combat/card-draft.js';
-import {
-    rerollCost as rerollGoldCost, canReroll as rerollCanReroll,
-    repairKitCost as repairKitGoldCost, canRepair as repairCanBuy,
-    REPAIR_KIT_HEAL_PCT as REPAIR_HEAL_PCT,
-    extraCardCost as extraCardGoldCost, canBuyExtraCard as extraCardCanBuy,
-    reviveCost as reviveGoldCost, canRevive as reviveCanBuy,
-} from '../world/run-shop.js';
+// 8.x looter pivot (T70) — the in-run CARD DRAFT + post-card QUICK-BUY were
+// removed (power comes from looted gear/traits, not card picks). The
+// card-draft.js / run-shop.js modules and the weapon-upgrade pools they
+// consumed are gone with them; the per-stage choose-moment lives in the run
+// stage DRAFT (openStageDraft) instead.
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { rewardMultiplier } from '../world/reward-dial.js';
 // RUN-05a — Adaptive Difficulty Director (RUN-04). Read D_hp at the enemy-HP
@@ -172,20 +168,16 @@ export function updateWaveSystem() {
     // they leave. This keeps the shop from popping over the explosion.
     const totalEnemies = this.enemyPool.activeObjects.length;
 
-    // 5.74.14 — recovery for the wave-clear stuck state. The wave-clear
-    // setTimeout(2700) below opens the powerups menu only if state is
-    // still WAVE_TRANSITION when the timer fires. If the player paused
-    // (or the tab was backgrounded — browser timer throttling) during
-    // that 2.7s window, the gate fails and the menu never opens. After
-    // resume, togglePause defaults to PLAYING (because
-    // `_pausedFromWaveClear` is set inside openWaveClearPowerupsMenu,
-    // which never ran), and the regular wave-clear branch below is gated
-    // by `!waveComplete` — so the run is permanently stuck: empty pool,
-    // waveComplete=true, state=PLAYING, no progression. Catch that here
-    // and re-trigger the menu. openWaveClearPowerupsMenu flips state to
-    // PAUSED, so this branch only fires once per stuck wave.
+    // 5.74.14 / 8.x — recovery for the wave-clear stuck state. The wave-clear
+    // setTimeout(2700) below only advances while state is still WAVE_TRANSITION
+    // when the timer fires. If the player paused (or the tab was backgrounded —
+    // browser timer throttling) during that 2.7s window and resumed to PLAYING
+    // with the wave already complete, the run could stall (empty pool,
+    // waveComplete=true, state=PLAYING, no progression). Catch that and advance
+    // directly. (This used to re-open the card-draft menu, removed in T70.)
     if (totalEnemies === 0 && this.game.waveComplete && this.game.state === GAME_STATES.PLAYING) {
-        this.openWaveClearPowerupsMenu();
+        this._pausedFromWaveClear = false;
+        if (typeof this.startNextWave === 'function') this.startNextWave();
         return;
     }
 
@@ -204,11 +196,10 @@ export function updateWaveSystem() {
         this.game.waveComplete = true;
         this.game.waveCountdownTime = Date.now() + this.game.waveCountdownDuration;
         this.game.state = GAME_STATES.WAVE_TRANSITION;
-        // 5.74.14 — set the pause-from-wave-clear flag NOW (was: only set
-        // inside openWaveClearPowerupsMenu when its 2.7s setTimeout fires).
-        // If the player pauses during the 2.7s gap before the menu opens,
-        // their resume needs to route through startNextWave instead of
-        // straight to PLAYING — otherwise the run gets stuck.
+        // 5.74.14 — set the pause-from-wave-clear flag NOW. If the player pauses
+        // during the 2.7s gap before the wave advances, their resume needs to
+        // route through startNextWave instead of straight to PLAYING — otherwise
+        // the run gets stuck.
         this._pausedFromWaveClear = true;
 
         // 5.75.0 — resolve the wave's mission (no_damage / asteroid clear).
@@ -221,10 +212,10 @@ export function updateWaveSystem() {
         // never actually fired in-game. Now it always does, on every
         // wave clear, before the shop opens.
         const clearedWave = this.game.currentWave;
-        // 6.1.0 — Stage clears (every Nth wave, N = wavesPerStage) get a
-        // meaty gold bonus; non-final stage clears ALSO get the survivor
-        // card (see isCardStage). Mid-stage waves get a smaller bonus and
-        // no card so the stage clear feels meaningfully bigger.
+        // 6.1.0 / 8.x — Stage clears (every Nth wave, N = wavesPerStage) get the
+        // health-orb burst + passive-slot unlocks + the run stage DRAFT choose-
+        // moment; mid-stage waves just advance. (The old survivor card was
+        // removed in T70.)
         const stageClear = isStageClear(clearedWave, runWavesPerStage(this.game));
         // P3 — unlock passive slots progressively on stage clears. maxSlots +
         // the unlock cadence scale with the run length (round-3 §11.A).
@@ -251,17 +242,10 @@ export function updateWaveSystem() {
                 this.createHealthOrb(hx + Math.cos(ang) * rad, hy + Math.sin(ang) * rad);
             }
         }
-        const _mob = isMobile();
-        // RUN-01b — the card draft fires on EVERY stage clear EXCEPT the final
-        // stage (runConfig-aware → default 10×3 run: waves 3,6,…,27 but NOT
-        // wave 30, the run-ending boss). Cards-per-run = stages − 1 (default 9).
-        // The final stage clear still grants the gold bonus + boss, just no card.
-        const survivorWave = isCardStage(clearedWave, this.game);
-
-        // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
-        // the bonus gold + pick info to the message renderer.
+        // 5.76.1 — recap stats stash for showWaveComplete. 8.x: the card draft
+        // is gone (T70), so there's no pick to recap — only the mission result.
         this._waveClearRecap = {
-            picks: survivorWave ? 1 : 0,
+            picks: 0,
             mission: this.game.mission ? {
                 completed: !!this.game.mission.completed,
                 failed: !!this.game.mission.failed,
@@ -286,61 +270,53 @@ export function updateWaveSystem() {
 
         this.showWaveComplete();
 
-        // 8.x looter pivot (T22) — the in-game CARD DRAFT + powerup picks are
-        // REMOVED. Stage clear now just proceeds (R$ + drops already granted);
-        // the per-stage CHOICE moment moves to the run DRAFT (T32), and the old
-        // card "powerups" become rolled WEAPON TRAITS (T30). So no card menu fires.
-        // (The openWaveClearPowerupsMenu / #wave-pick-overlay / card-draft.js
-        //  machinery is now dead — left inert here, removed/reworked in T30/T70.)
-        const fireSurvivorOverlay = false;
+        // 8.x looter pivot (T22/T70) — the in-game CARD DRAFT + powerup picks
+        // are GONE (power comes from looted gear/traits). Stage clear just
+        // proceeds (R$ + drops already granted); the per-stage CHOICE moment is
+        // the run stage DRAFT (T32: theme/modifiers/risk-reward), then the STATS
+        // interpose if the player leveled up, then the next wave starts.
         setTimeout(() => {
             if (this.game.state !== GAME_STATES.WAVE_TRANSITION) return;
-            if (fireSurvivorOverlay) {
-                this.openWaveClearPowerupsMenu();
-            } else {
-                // No card this wave. Mimic the resume-from-wave-clear path.
-                const proceed = () => {
-                    this._pausedFromWaveClear = false;
-                    if (typeof this.startNextWave === 'function') this.startNextWave();
-                };
-                // R7.3 — on a STAGE clear where the player leveled up, interpose
-                // the STATS screen so freshly-earned SP is spent before the next
-                // stage. Pause first so the deferred STATS mode holds gameplay.
-                // Mid-stage waves bank the SP silently (spend it next stage clear).
-                const statsThenProceed = () => {
-                    if (stageClear && this.player && this.player._leveledUpPending
-                        && typeof this.openStatsForLevelUp === 'function') {
-                        this.player._leveledUpPending = false;
-                        this.game.state = GAME_STATES.PAUSED;
-                        if (this.player.pauseChargeShot) this.player.pauseChargeShot();
-                        const opened = this.openStatsForLevelUp(() => {
-                            if (this.player && this.player.resumeChargeShot) this.player.resumeChargeShot();
-                            proceed();
-                        });
-                        if (opened) return;            // proceed() fires on close
-                        this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → undo pause
-                    }
-                    proceed();
-                };
-                // T32 — a STAGE clear opens the run DRAFT first (choose the next
-                // stage: theme/modifiers/risk-reward, PWR vs threat), THEN the
-                // STATS interpose, THEN proceed. This is the per-stage choose-
-                // moment that replaced the removed card draft (T22). Mid-stage
-                // waves skip straight through. Falls through if the draft can't
-                // open so progression never soft-locks.
-                if (stageClear && typeof this.openStageDraft === 'function') {
+            // Resume-from-wave-clear path: advance to the next wave.
+            const proceed = () => {
+                this._pausedFromWaveClear = false;
+                if (typeof this.startNextWave === 'function') this.startNextWave();
+            };
+            // R7.3 — on a STAGE clear where the player leveled up, interpose the
+            // STATS screen so freshly-earned SP is spent before the next stage.
+            // Pause first so the deferred STATS mode holds gameplay. Mid-stage
+            // waves bank the SP silently (spend it next stage clear).
+            const statsThenProceed = () => {
+                if (stageClear && this.player && this.player._leveledUpPending
+                    && typeof this.openStatsForLevelUp === 'function') {
+                    this.player._leveledUpPending = false;
                     this.game.state = GAME_STATES.PAUSED;
-                    if (this.player && this.player.pauseChargeShot) this.player.pauseChargeShot();
-                    const opened = this.openStageDraft(() => {
+                    if (this.player.pauseChargeShot) this.player.pauseChargeShot();
+                    const opened = this.openStatsForLevelUp(() => {
                         if (this.player && this.player.resumeChargeShot) this.player.resumeChargeShot();
-                        this.game.state = GAME_STATES.WAVE_TRANSITION;
-                        statsThenProceed();
+                        proceed();
                     });
-                    if (opened) return;            // draft → chain fires on pick
-                    this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → fall through
+                    if (opened) return;            // proceed() fires on close
+                    this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → undo pause
                 }
-                statsThenProceed();
+                proceed();
+            };
+            // T32 — a STAGE clear opens the run DRAFT first (choose the next
+            // stage), THEN the STATS interpose, THEN proceed. Mid-stage waves
+            // skip straight through. Falls through if the draft can't open so
+            // progression never soft-locks.
+            if (stageClear && typeof this.openStageDraft === 'function') {
+                this.game.state = GAME_STATES.PAUSED;
+                if (this.player && this.player.pauseChargeShot) this.player.pauseChargeShot();
+                const opened = this.openStageDraft(() => {
+                    if (this.player && this.player.resumeChargeShot) this.player.resumeChargeShot();
+                    this.game.state = GAME_STATES.WAVE_TRANSITION;
+                    statsThenProceed();
+                });
+                if (opened) return;            // draft → chain fires on pick
+                this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → fall through
             }
+            statsThenProceed();
         }, 2700);
     }
 
@@ -1875,479 +1851,5 @@ export function spawnRandomEnemy() {
         newEnemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
         newEnemy.startWarpIn(sp.targetX, sp.targetY);
         this.enemyPool.activeObjects.push(newEnemy);
-    }
-}
-
-// 5.101.0 — Survivor cards are the universal wave-clear reward, on
-// BOTH desktop and mobile. The old desktop path (pause menu on the
-// POWERUPS tab) was replaced now that defensive powerups are back in
-// POWERUP_TYPES and the 3-card pick is balanced as 2 offense + 1
-// defense. After the pick lands, the shop-suggestion overlay fires
-// (3 weapon-relevant upgrades) so the player can spend gold quickly.
-export function openWaveClearPowerupsMenu() {
-    if (!this.uiManager) return;
-    openWavePickOverlay.call(this);
-}
-
-// 5.98.0 — Mobile wave-clear powerup pick. Pauses gameplay, picks 3
-// random non-maxed POWERUP_TYPES entries, and shows the
-// #wave-pick-overlay DOM modal. Tapping a card adds a stack of that
-// powerup (free — no SP cost) and resumes into the next wave via the
-// same togglePause path the pause-menu uses.
-export function openWavePickOverlay() {
-    if (!this.player) return;
-    const player = this.player;
-
-    // Phase R3 — the per-run CARD draft: 2 weapon + 1 ability card, all
-    // relevance-filtered to the equipped loadout (card-draft.js). Replaces
-    // the old PASSIVE-stat survivor cards; stats now live in the SP menu.
-    let picks = buildDraft(player, { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES });
-
-    // If the player has maxed EVERY powerup, fall through to the
-    // pre-5.98 pause-menu path so they at least see the wave-clear
-    // chrome and can resume into the next wave.
-    if (picks.length === 0) {
-        this.events.emit('ui:hide-message');
-        this._pausedFromWaveClear = true;
-        this.game.state = GAME_STATES.PAUSED;
-        if (this.player) this.player.pauseChargeShot();
-        // Resume directly via togglePause so the next-wave start fires.
-        if (typeof this.togglePause === 'function') this.togglePause();
-        return;
-    }
-
-    // ── State setup ──
-    this.events.emit('ui:hide-message');
-    this._pausedFromWaveClear = true;
-    this.game.state = GAME_STATES.PAUSED;
-    if (this.player) this.player.pauseChargeShot();
-
-    // ── Build the DOM ──
-    const overlay = document.getElementById('wave-pick-overlay');
-    const cardsContainer = document.getElementById('wave-pick-cards');
-    if (!overlay || !cardsContainer) {
-        // DOM missing — defensive fall-through. Resume immediately.
-        if (typeof this.togglePause === 'function') this.togglePause();
-        return;
-    }
-    overlay.style.display = 'flex';
-    this._rerollsThisOffer = 0;  // R4 — one paid reroll per offer
-    this._bonusPickPending = 0;  // R4.1 — bought-but-unpicked extra cards
-
-    const renderCards = (cardList) => {
-    cardsContainer.replaceChildren();
-
-    for (const [type, cfg] of cardList) {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'wave-pick-card';
-        card.style.setProperty('--wp-color', cfg.color || '#cccccc');
-
-        const iconWrap = document.createElement('div');
-        iconWrap.className = 'wave-pick-card-icon';
-        iconWrap.innerHTML = renderIconHTML(cfg.icon, { size: 36, fallback: '★' });
-        card.appendChild(iconWrap);
-
-        const body = document.createElement('div');
-        body.className = 'wave-pick-card-body';
-
-        const name = document.createElement('div');
-        name.className = 'wave-pick-card-name';
-        name.textContent = cfg.displayName || cfg.name || type;
-        body.appendChild(name);
-
-        const desc = document.createElement('div');
-        desc.className = 'wave-pick-card-desc';
-        desc.textContent = cfg.description || '';
-        body.appendChild(desc);
-
-        card.appendChild(body);
-
-        const stacksLbl = document.createElement('div');
-        stacksLbl.className = 'wave-pick-card-stacks';
-        const haveStacks = player.getPowerupStacks ? player.getPowerupStacks(type) : 0;
-        const cap = cfg.maxStacks || 99;
-        stacksLbl.textContent = `${haveStacks} / ${cap}`;
-        card.appendChild(stacksLbl);
-
-        card.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            // Apply the pick — free (no gold cost on wave-clear).
-            player.addPowerup(type, { ...cfg, duration: Infinity }, true);
-            if (this.events?.emit) {
-                this.events.emit('audio:powerup');
-                this.events.emit('ui:show-message', {
-                    title: cfg.displayName || cfg.name || type,
-                    subtitle: `+1 STACK (${(player.getPowerupStacks(type) || 1)} / ${cap})`,
-                    duration: 1400,
-                    position: 'top',
-                });
-            }
-
-            // Boss-wave bonus: on top of the card just picked, grant a chunk
-            // of bonus run-gold. R7.4 — this used to auto-grant a random
-            // PASSIVE stack, but stat passives are now SP-driven ONLY (earned
-            // by leveling, spent in the STATS menu). Gold fits the new economy
-            // (spend on extra cards / repair, or bank toward unlocks).
-            const justCleared = (this.game && this.game.currentWave) | 0;
-            // M1: thread the run's wavesPerStage so boss-bonus gold fires on
-            // the SAME waves as every other isBossWave() call in this file.
-            // Omitting it defaulted to 3, mis-firing under a non-default config.
-            if (justCleared > 0 && isBossWave(justCleared, runWavesPerStage(this.game))) {
-                const bossGold = 200 + justCleared * 20;
-                this.game.money = (this.game.money | 0) + bossGold;
-                if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
-                if (this.events?.emit) {
-                    this.events.emit('ui:show-message', {
-                        title: '★ BOSS BONUS ★',
-                        subtitle: `+${bossGold} gold`,
-                        duration: 1800,
-                        position: 'top',
-                    });
-                }
-            }
-
-            // R4.1 — if the player bought an extra ("6th/7th") card, this pick
-            // consumes one bonus pick and re-draws a fresh offer instead of
-            // closing; otherwise the pick ends the draft → next wave.
-            // (R2.4: the post-card gold UPGRADE quick-buy is retired.)
-            if ((this._bonusPickPending | 0) > 0) {
-                this._bonusPickPending = (this._bonusPickPending | 0) - 1;
-                this._rerollsThisOffer = 0; // fresh offer → reroll available again
-                redraw();
-            } else {
-                this.closeWavePickOverlay();
-            }
-        });
-
-        cardsContainer.appendChild(card);
-    }
-    }; // end renderCards
-
-    // Re-draw a fresh offer (used by paid reroll + the bonus-pick path) and
-    // refresh the gold-sink action buttons.
-    const pools = { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES };
-    const redraw = () => {
-        picks = buildDraft(player, pools);
-        renderCards(picks);
-        renderActions();
-    };
-    const renderActions = () => _renderDraftActions.call(this, redraw);
-
-    renderCards(picks);
-    renderActions();
-}
-
-// R4 — render the in-run gold-sink buttons (paid REROLL + REPAIR KIT) into
-// the card overlay's actions row. Run-gold spent here is gold not banked.
-function _renderDraftActions(onReroll) {
-    const actions = document.getElementById('wave-pick-actions');
-    if (!actions) return;
-    const player = this.player;
-    actions.replaceChildren();
-
-    const mkBtn = (label, enabled, onClick) => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'wave-pick-action-btn';
-        b.textContent = label;
-        b.disabled = !enabled;
-        if (enabled) b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
-        return b;
-    };
-
-    const gold = (this.game && this.game.money) | 0;
-
-    // Paid reroll — once per offer.
-    const rerolls = this._rerollsThisOffer | 0;
-    actions.appendChild(mkBtn(
-        rerollCanReroll(rerolls, gold) ? `REROLL · ${rerollGoldCost(rerolls)}🪙` : (rerolls >= 1 ? 'REROLLED' : `REROLL · ${rerollGoldCost(rerolls)}🪙`),
-        rerollCanReroll(rerolls, gold),
-        () => {
-            const cost = rerollGoldCost(this._rerollsThisOffer | 0);
-            if ((this.game.money | 0) < cost) return;
-            this.game.money = Math.max(0, (this.game.money | 0) - cost);
-            this._rerollsThisOffer = (this._rerollsThisOffer | 0) + 1;
-            if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
-            onReroll();
-            _renderDraftActions.call(this, onReroll);
-        },
-    ));
-
-    // Repair Kit — escalating per use this run.
-    const repairs = this._repairsThisRun | 0;
-    const repairCost = repairKitGoldCost(repairs);
-    actions.appendChild(mkBtn(
-        `REPAIR · ${repairCost}🪙`,
-        repairCanBuy(repairs, gold) && player && player.health < player.getEffectiveMaxHealth(),
-        () => {
-            const c = repairKitGoldCost(this._repairsThisRun | 0);
-            if ((this.game.money | 0) < c) return;
-            const maxHp = player.getEffectiveMaxHealth();
-            if (player.health >= maxHp) return;
-            this.game.money = Math.max(0, (this.game.money | 0) - c);
-            player.health = Math.min(maxHp, player.health + maxHp * REPAIR_HEAL_PCT);
-            this._repairsThisRun = (this._repairsThisRun | 0) + 1;
-            if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
-            _renderDraftActions.call(this, onReroll);
-        },
-    ));
-
-    // R4.1 — buy the 6th/7th card: a bonus pick this draft (run-capped at 2,
-    // steeply escalating). The current cards stay pickable; taking a pick
-    // consumes one bonus and re-draws a fresh offer.
-    const extras = this._extraCardsThisRun | 0;
-    if (extraCardCanBuy(extras, gold) || extraCardGoldCost(extras) !== Infinity) {
-        actions.appendChild(mkBtn(
-            `+CARD · ${extraCardGoldCost(extras)}🪙`,
-            extraCardCanBuy(extras, gold),
-            () => {
-                const c = extraCardGoldCost(this._extraCardsThisRun | 0);
-                if ((this.game.money | 0) < c) return;
-                this.game.money = Math.max(0, (this.game.money | 0) - c);
-                this._extraCardsThisRun = (this._extraCardsThisRun | 0) + 1;
-                this._bonusPickPending = (this._bonusPickPending | 0) + 1;
-                if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
-                _renderDraftActions.call(this, onReroll);
-            },
-        ));
-    }
-
-    // R4.3 — Revive Token: very steep, once per run. Consumed on death
-    // (player._reviveToken) to cheat death once.
-    const revives = this._revivesThisRun | 0;
-    if (!(player && player._reviveToken) && reviveGoldCost(revives) !== Infinity) {
-        actions.appendChild(mkBtn(
-            `REVIVE · ${reviveGoldCost(revives)}🪙`,
-            reviveCanBuy(revives, gold),
-            () => {
-                const c = reviveGoldCost(this._revivesThisRun | 0);
-                if ((this.game.money | 0) < c) return;
-                this.game.money = Math.max(0, (this.game.money | 0) - c);
-                this._revivesThisRun = (this._revivesThisRun | 0) + 1;
-                if (player) player._reviveToken = true;
-                if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
-                _renderDraftActions.call(this, onReroll);
-            },
-        ));
-    } else if (player && player._reviveToken) {
-        const owned = mkBtn('REVIVE ✓', false, () => {});
-        actions.appendChild(owned);
-    }
-}
-
-// 5.98.0 — Tear down the wave-pick overlay and route into the next
-// wave. We can't call togglePause directly because pause-overlay is
-// not open on this code path (we opened wave-pick-overlay instead) —
-// togglePause would flash the pause menu visible for a frame. Instead
-// we manually pop the resume frame and start the next wave, mirroring
-// the togglePause PAUSED-branch logic without touching the DOM.
-export function closeWavePickOverlay() {
-    const overlay = document.getElementById('wave-pick-overlay');
-    if (overlay) overlay.style.display = 'none';
-    const suggest = document.getElementById('shop-suggest-overlay');
-    if (suggest) suggest.style.display = 'none';
-    // 5.99.0 — Defensively hide the pause-overlay too. If the player
-    // had paused mid-wave-clear (during the 2.7s gap before wave-pick
-    // fires), the pause overlay is also showing UNDERNEATH the wave-
-    // pick modal. Without this clear, picking a card hid wave-pick but
-    // left pause-overlay 'flex', and the game's first Resume tap would
-    // re-pause instead of resuming (the togglePause state machine
-    // assumed PLAYING when called).
-    const pauseOverlay = document.getElementById('pause-overlay');
-    if (pauseOverlay) pauseOverlay.style.display = 'none';
-    if (this.player && typeof this.player.resumeChargeShot === 'function') {
-        this.player.resumeChargeShot();
-    }
-    const frame = this._popResumeFrame ? this._popResumeFrame() : null;
-
-    // The next-wave routing, deferred into a closure so we can interpose
-    // the level-up STATS screen before it runs.
-    const proceed = () => {
-        if (frame && frame.fromWaveClear) {
-            this.game.state = GAME_STATES.WAVE_TRANSITION;
-            if (typeof this.startNextWave === 'function') this.startNextWave();
-        } else if (this.game && this.game.waveComplete) {
-            // 6.26.2 — Defensive recovery for the "post-shop ghost" bug.
-            //   When this branch was reached previously, the engine flipped
-            //   to PLAYING without calling startNextWave, leaving the run
-            //   in a stuck state: pools un-spawned, currentWave un-incremented,
-            //   spawn timers never scheduled. checkWaveComplete then re-fired
-            //   openWaveClearPowerupsMenu the next tick → overlay pop-up
-            //   loop, OR (with the pool's last-frame entity refs cleaned up)
-            //   the canvas appeared "empty" of player/asteroids/enemies
-            //   while the WebGL layers (bullets, starfield) kept rendering.
-            //   If we reach this fallback with waveComplete still true, the
-            //   only safe recovery is to flip to WAVE_TRANSITION and start
-            //   the next wave anyway — that's what the missing/dropped
-            //   resume frame would have routed to.
-            this.game.state = GAME_STATES.WAVE_TRANSITION;
-            if (typeof this.startNextWave === 'function') this.startNextWave();
-        } else {
-            // True defensive fallback — neither path applies, just restore PLAYING.
-            this.game.state = GAME_STATES.PLAYING;
-        }
-    };
-
-    // 6.36.0 — If the player leveled up during the wave just cleared,
-    // interpose the STATS screen so they can spend the freshly-earned SP
-    // before the next wave begins. Closing it continues into proceed().
-    // The game is still PAUSED here, which the deferred STATS mode relies
-    // on (it must not touch togglePause).
-    if (this.player && this.player._leveledUpPending
-        && typeof this.openStatsForLevelUp === 'function') {
-        this.player._leveledUpPending = false;
-        const opened = this.openStatsForLevelUp(proceed);
-        if (opened) return; // proceed() fires when the STATS screen closes
-    }
-
-    proceed();
-}
-
-// 5.101.0 — Shop-suggest overlay. Fires immediately after the player
-// claims a survivor card. Picks up to 3 upgrades that are
-//   1) attached to the equipped primary OR power weapon
-//   2) not yet maxed for the player
-//   3) affordable at current gold
-// and renders them as quick-buy cards. Clicking a card purchases the
-// upgrade, deducts gold, and re-renders the remaining options. A SKIP
-// button closes into startNextWave when the player is done. If there
-// are zero eligible suggestions the overlay auto-skips so the player
-// is never blocked behind an empty modal.
-export function openShopSuggestOverlay() {
-    if (!this.player) {
-        closeWavePickOverlay.call(this);
-        return;
-    }
-    const overlay = document.getElementById('shop-suggest-overlay');
-    if (!overlay) {
-        closeWavePickOverlay.call(this);
-        return;
-    }
-    overlay.style.display = 'flex';
-    renderShopSuggestOverlay.call(this);
-}
-
-function _collectSuggestions() {
-    const player = this.player;
-    if (!player) return [];
-    const gold = (this.game && this.game.money) || 0;
-    const primary = player.activePrimary;
-    const power = player.activePower;
-    const suggestions = [];
-
-    const considerList = (upgrades, kind) => {
-        for (const upg of upgrades) {
-            // Cost (handle costOverrides for staged upgrades).
-            const stacks = player.getPowerupStacks ? player.getPowerupStacks(upg.id) : 0;
-            const maxStacks = upg.maxStacks || 1;
-            if (stacks >= maxStacks) continue;
-            // Tier-2 / mastery upgrades hide behind a prereq.
-            if (upg.requires) {
-                const reqStacks = player.getPowerupStacks
-                    ? player.getPowerupStacks(upg.requires.id)
-                    : 0;
-                if (reqStacks < (upg.requires.stacks || 1)) continue;
-            }
-            let cost = upg.cost;
-            if (upg.costOverrides && upg.costOverrides[stacks] != null) {
-                cost = upg.costOverrides[stacks];
-            }
-            if (cost > gold) continue; // affordability gate
-            suggestions.push({ upg, cost, kind });
-        }
-    };
-
-    if (primary) considerList(getPrimaryUpgrades(primary), 'primary');
-    if (power)   considerList(getPowerUpgrades(power),   'power');
-
-    // Mix primary + power so the player sees a variety. Stable sort
-    // by cost ascending so the first card is the cheapest entry.
-    suggestions.sort((a, b) => a.cost - b.cost);
-    return suggestions.slice(0, 3);
-}
-
-export function renderShopSuggestOverlay() {
-    const overlay = document.getElementById('shop-suggest-overlay');
-    const cards = document.getElementById('shop-suggest-cards');
-    const goldEl = document.getElementById('shop-suggest-gold');
-    if (!overlay || !cards) {
-        closeWavePickOverlay.call(this);
-        return;
-    }
-    const suggestions = _collectSuggestions.call(this);
-    if (suggestions.length === 0) {
-        // Nothing to suggest (maxed out or no gold) — skip immediately.
-        closeWavePickOverlay.call(this);
-        return;
-    }
-    cards.replaceChildren();
-    if (goldEl) goldEl.textContent = `${(this.game && this.game.money) | 0} G`;
-
-    const primaryCfg = this.player && this.player.activePrimary
-        ? PRIMARY_WEAPONS[this.player.activePrimary] : null;
-    const powerCfg = this.player && this.player.activePower
-        ? POWER_WEAPONS[this.player.activePower] : null;
-
-    for (const { upg, cost, kind } of suggestions) {
-        const parentCfg = kind === 'primary' ? primaryCfg : powerCfg;
-        const accent = parentCfg?.color || '#ffd54a';
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'wave-pick-card';
-        card.style.setProperty('--wp-color', accent);
-
-        const iconWrap = document.createElement('div');
-        iconWrap.className = 'wave-pick-card-icon';
-        iconWrap.innerHTML = renderIconHTML(upg.icon, { size: 36, fallback: '★' });
-        card.appendChild(iconWrap);
-
-        const body = document.createElement('div');
-        body.className = 'wave-pick-card-body';
-        const name = document.createElement('div');
-        name.className = 'wave-pick-card-name';
-        name.textContent = upg.name;
-        body.appendChild(name);
-        const desc = document.createElement('div');
-        desc.className = 'wave-pick-card-desc';
-        const parentName = parentCfg?.name || (kind === 'primary' ? 'PRIMARY' : 'POWER');
-        desc.textContent = `${parentName} · ${upg.description}`;
-        body.appendChild(desc);
-        card.appendChild(body);
-
-        const costLbl = document.createElement('div');
-        costLbl.className = 'wave-pick-card-stacks';
-        costLbl.textContent = `${cost} G`;
-        card.appendChild(costLbl);
-
-        card.addEventListener('click', (e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            if ((this.game.money || 0) < cost) return;
-            this.game.money -= cost;
-            this.player.addPowerup(upg.id, {
-                name: upg.name,
-                description: upg.description,
-                color: accent,
-                gradientColors: parentCfg?.gradientColors || [accent, accent],
-                icon: upg.icon,
-                maxStacks: upg.maxStacks,
-                duration: Infinity,
-            }, true);
-            if (this.events?.emit) {
-                this.events.emit('audio:coin');
-                this.events.emit('ui:show-message', {
-                    title: upg.name,
-                    subtitle: `-${cost} G`,
-                    duration: 1100,
-                    position: 'top',
-                });
-            }
-            // Re-render so the player can buy another suggestion or skip.
-            renderShopSuggestOverlay.call(this);
-        });
-
-        cards.appendChild(card);
     }
 }
