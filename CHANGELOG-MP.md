@@ -7,6 +7,23 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.25.0] - 2026-05-27
+
+### Added
+- **SpRoom drives co-op N players** (Path A, P5 — completes the live co-op loop).
+  `join` now allocates a real SpHost ship slot per player (spread around the arena
+  center so they don't stack), `setInput` routes each player's frame to its own
+  slot (`setSlotInput`), and `leave` releases the slot. The snapshot carries one
+  authoritative ship per player, so 2+ pilots fight the real SP sim together —
+  shared arena, nearest-player enemy aggro, per-ship collisions. Async-init joins
+  register their slot once the host's SP modules finish importing.
+
+### Tests
+- `tests/unit/sp-room.test.js`: the single-controller/spectator test is replaced
+  by two co-op tests — both joiners get authoritative ships; each player's input
+  drives its own ship (A right / B left). 25/25 SpRoom + SpHost green; server
+  boots in `MP_SIM=sphost` mode (`/healthz` 200).
+
 ## [0.24.0] - 2026-05-27
 
 ### Added

@@ -654,8 +654,12 @@ export class SpHost {
     return out;
   }
 
-  /** Convenience: advance one tick and return { snapshot, events } for the room. */
-  frame(input = NEUTRAL_INPUT) {
+  /**
+   * Convenience: advance one tick and return { snapshot, events } for the room.
+   * Pass no input in co-op (slots already hold their inputs via setSlotInput);
+   * an explicit `input` still overrides slot 0 (single-player / tests).
+   */
+  frame(input = null) {
     const rawEvents = this.tick(input);
     const snapshot = this.buildSnapshot();
     const events = this.deriveEvents(snapshot, rawEvents);

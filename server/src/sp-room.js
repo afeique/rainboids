@@ -7,10 +7,10 @@
 // the existing SP-shape MP client renders it unchanged — now with the real SP
 // weapons, enemies, collisions, drops, and waves.
 //
-// Scope: ONE controlling player (the P4 milestone — "one player, MP plays
-// exactly like SP"). SpHost is still single-player; co-op N players is P5, at
-// which point this room generalizes to N slots. Additional joiners spectate.
-// Selected via MP_SIM=sphost (room-manager.js); the toy sim stays the default.
+// Co-op: N players share one arena (SpHost N slots — each joiner gets a real
+// ship that moves/shoots/collides via the actual SP code). Selected via
+// MP_SIM=sphost (room-manager.js); the toy sim stays the default until the
+// real-sim path is browser-verified at co-op scale.
 
 import { SpHost } from './sim/sp-host.js';
 import { S2C } from '../../js/sim/protocol.js';
@@ -21,11 +21,6 @@ import { TICK_MS } from '../../js/sim/constants.js';
 // Send a full keyframe at least this often (and whenever a player joins) so new
 // clients get a baseline and any drift is bounded. Deltas in between.
 const KEYFRAME_TICKS = 30;
-
-const EMPTY_INPUT = Object.freeze({
-  up: false, down: false, left: false, right: false, fire: false,
-  aimX: null, aimY: null, clientTick: 0,
-});
 
 function sanitizeInput(m) {
   return {
@@ -53,9 +48,7 @@ export class SpRoom {
       .then(() => { this.host.autoWaves = true; this.ready = true; })
       .catch((err) => { console.error(`[mp] SpRoom "${id}" init failed`, err); });
     this.players = new Map(); // playerId -> { conn, name }
-    this.controllerId = null; // the single player driving the SpHost ship
     this.nextPlayerId = 1;
-    this._pendingInput = { ...EMPTY_INPUT };
     this._timer = null;
     this._lastFull = null;
     this._sinceKeyframe = 0;
@@ -75,26 +68,34 @@ export class SpRoom {
     if (this._timer) { clearInterval(this._timer); this._timer = null; }
   }
 
+  // Spread joiners around the arena center so ships don't stack on spawn.
+  _spawnFor(playerId) {
+    const cx = this.host.gameField.width / 2;
+    const cy = this.host.gameField.height / 2;
+    const i = (playerId - 1) % 8;
+    const ang = (i / 8) * Math.PI * 2;
+    const r = i === 0 ? 0 : 90;
+    return { x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r };
+  }
+
   join(conn, name) {
     const playerId = this.nextPlayerId++;
     this.players.set(playerId, { conn, name: name || `player${playerId}` });
-    // First joiner controls the ship; bind the SpHost ship to its id so the
-    // client reconciles against the right snapshot ship.
-    if (this.controllerId == null) {
-      this.controllerId = playerId;
-      this.host.playerId = playerId;
-    }
+    const sp = this._spawnFor(playerId);
+    // Give the joiner a real co-op ship slot in the shared SpHost arena. If the
+    // host hasn't finished importing the SP modules yet, register the slot once
+    // it's ready (WELCOME below still answers from the deterministic spawn).
+    if (this.ready) this.host.addPlayer(playerId, sp.x, sp.y);
+    else this._ready.then(() => this.host.addPlayer(playerId, sp.x, sp.y));
     this._forceKeyframe = true;
-    const sx = this.host.gameField.width / 2;
-    const sy = this.host.gameField.height / 2;
     conn.send({
       t: S2C.WELCOME,
       playerId,
       room: this.id,
       serverTick: this.host.tickCount,
       seed: this.seed,
-      spawnX: sx,
-      spawnY: sy,
+      spawnX: sp.x,
+      spawnY: sp.y,
       roster: this.roster(),
     });
     this._broadcast({ t: S2C.PEER_JOINED, playerId, roster: this.roster() }, playerId);
@@ -104,19 +105,21 @@ export class SpRoom {
   leave(playerId) {
     if (!this.players.has(playerId)) return;
     this.players.delete(playerId);
-    if (playerId === this.controllerId) this.controllerId = this.roster()[0] ?? null;
+    if (this.ready) this.host.removePlayer(playerId);
+    else this._ready.then(() => this.host.removePlayer(playerId));
     this._broadcast({ t: S2C.PEER_LEFT, playerId, roster: this.roster() });
   }
 
   setInput(playerId, msg) {
-    // Only the controlling player drives the (single) SpHost ship for now.
-    if (playerId === this.controllerId) this._pendingInput = sanitizeInput(msg);
+    if (this.ready) this.host.setSlotInput(playerId, sanitizeInput(msg));
   }
 
   _tick() {
     if (!this.ready) return; // host still importing the SP modules
 
-    const { snapshot, events } = this.host.frame(this._pendingInput);
+    // Co-op: each ship's input is already on its slot (setInput → setSlotInput);
+    // advance with no override so all slots step from their latest inputs.
+    const { snapshot, events } = this.host.frame();
     const full = { t: S2C.SNAPSHOT, ...snapshot };
 
     // Keyframe (full) on first tick / join / interval; field-level delta otherwise.

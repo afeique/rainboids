@@ -84,19 +84,41 @@ describe('SpRoom — SpHost-backed authoritative room', () => {
     room.stop();
   });
 
-  it('keeps a single controller; a second joiner spectates (one ship)', async () => {
+  it('two joiners both get co-op ships in the shared arena', async () => {
     const room = new SpRoom({ id: 'test', seed: 5 });
     await room._ready;
     const a = makeConn();
     const b = makeConn();
     const pidA = room.join(a, 'a');
     const pidB = room.join(b, 'b');
-    expect(room.controllerId).toBe(pidA);
     expect(room.roster()).toEqual([pidA, pidB]);
     room._tick();
     const keyframe = b.frames.find((m) => m.t === S2C.SNAPSHOT && m.full);
-    expect(keyframe.ships).toHaveLength(1);       // only the controller's ship
-    expect(keyframe.ships[0].id).toBe(pidA);
+    expect(keyframe.ships).toHaveLength(2); // both ships authoritative
+    expect(keyframe.ships.map((s) => s.id).sort()).toEqual([pidA, pidB].sort());
+    room.stop();
+  });
+
+  it('routes each player\'s input to its own ship', async () => {
+    const room = new SpRoom({ id: 'test', seed: 5 });
+    await room._ready;
+    const a = makeConn();
+    const b = makeConn();
+    const pidA = room.join(a, 'a');
+    const pidB = room.join(b, 'b');
+    room._tick();
+    const shipOf = (frames, id) => {
+      const kf = [...frames].reverse().find((m) => m.t === S2C.SNAPSHOT && m.full);
+      return kf.ships.find((s) => s.id === id);
+    };
+    const ax0 = shipOf(a.frames, pidA).x;
+    const bx0 = shipOf(b.frames, pidB).x;
+    // A drives right, B drives left.
+    room.setInput(pidA, { right: true, clientTick: 1 });
+    room.setInput(pidB, { left: true, clientTick: 1 });
+    for (let i = 0; i < 30; i++) { room._forceKeyframe = true; room._tick(); }
+    expect(shipOf(a.frames, pidA).x).toBeGreaterThan(ax0 + 8);
+    expect(shipOf(b.frames, pidB).x).toBeLessThan(bx0 - 4);
     room.stop();
   });
 });
