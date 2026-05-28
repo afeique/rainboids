@@ -115,6 +115,7 @@ export class SpHost {
     // When on, tick() self-drives enemy spawns from the REAL wave-data tables.
     this.autoWaves = false;
     this.waveStarted = false;
+    this.startWaveAt = 1;       // wave the auto-driver opens on (debug/test hook)
     this._clearPending = false; // true during the wave-clear breather
     this._interWave = 0;        // ticks left in the breather
     // ── Snapshot / network identity ──
@@ -417,7 +418,7 @@ export class SpHost {
   /** Advance the wave driver: start wave 1, then the next when fully cleared. */
   _updateWaves() {
     if (this.game.state !== GAME_STATES.PLAYING) return;
-    if (!this.waveStarted) { this.startWave(1); return; }
+    if (!this.waveStarted) { this.startWave(this.startWaveAt || 1); return; }
     // Enemies in their death animation keep active=true and stay pooled;
     // cleanupInactive (run in tick) frees them only once fully dead — so an
     // empty pool is the true "wave cleared" signal.

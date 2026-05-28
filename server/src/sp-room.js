@@ -45,7 +45,14 @@ export class SpRoom {
     // (field center), so join() can answer WELCOME before init resolves.
     this.ready = false;
     this._ready = this.host.init()
-      .then(() => { this.host.autoWaves = true; this.ready = true; })
+      .then(() => {
+        this.host.autoWaves = true;
+        // Debug/test hook: open on a specific wave (e.g. a boss wave) so QA can
+        // reach late-game content without grinding through earlier waves.
+        const sw = Number(process.env.MP_START_WAVE);
+        if (Number.isFinite(sw) && sw >= 1) this.host.startWaveAt = sw | 0;
+        this.ready = true;
+      })
       .catch((err) => { console.error(`[mp] SpRoom "${id}" init failed`, err); });
     this.players = new Map(); // playerId -> { conn, name }
     this.nextPlayerId = 1;

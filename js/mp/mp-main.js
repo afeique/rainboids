@@ -164,6 +164,8 @@ async function main() {
     asteroidCount: () => lastAsteroids.size,
     enemyCount: () => lastEnemies.size,
     enemyTypes: () => [...new Set([...lastEnemies.values()].map((e) => e.type))],
+    bossCount: () => [...lastEnemies.values()].filter((e) => e.boss).length,
+    bossPartCount: () => [...lastEnemies.values()].reduce((n, e) => n + (e.parts ? e.parts.length : 0), 0),
     particleCount: () => particles.length,
     bulletCount: () => latestBullets.length,
     dropCount: () => lastDrops.size,

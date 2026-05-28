@@ -7,6 +7,21 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.32.1] - 2026-05-28
+
+### Added
+- **In-browser boss-render verification + `MP_START_WAVE` debug hook.** SpRoom now
+  honors `MP_START_WAVE=N` (via `SpHost.startWaveAt`) so the auto-wave driver opens
+  on a chosen wave — letting QA reach late content without grinding earlier waves.
+  Client gains `__mp.bossCount()` / `__mp.bossPartCount()` accessors.
+
+### Tests
+- `tests/qa/14-mp-boss.spec.js` (new): boots the default real-sim server on the
+  stage-1 boss wave (`MP_START_WAVE=3`) and verifies a browser client receives the
+  modular boss + its orbiting shield parts and renders the boss / parts / phase /
+  intro paths with **zero page errors** — the in-browser proof the unit test
+  couldn't give. Green.
+
 ## [0.32.0] - 2026-05-28
 
 ### Added
