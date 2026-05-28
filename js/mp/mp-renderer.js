@@ -159,7 +159,7 @@ function drawDrop(ctx, d) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, now, localId, localDowned, localReviveProgress, banner }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, banner }) {
   // Background.
   ctx.fillStyle = '#070710';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -246,6 +246,22 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+  }
+
+  // Explosion particles (client-authored shrapnel + embers, additive — SP look).
+  if (particles && particles.length && now != null) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const pt of particles) {
+      const a = Math.max(0, 1 - (now - pt.born) / pt.life);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = `hsl(${pt.hue}, 95%, ${58 + a * 22}%)`;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   // Remote ships (interpolated).

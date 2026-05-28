@@ -118,6 +118,11 @@ test.describe('MULTIPLAYER — co-op on the DEFAULT (real SP) sim', () => {
     await expect.poll(() => b.evaluate(() => window.__mp.bulletCount()), { timeout: 5000 })
       .toBeGreaterThan(0);
 
+    // Client re-derives explosion particles from the event stream: a death or a
+    // ship-down (idle B is overrun by the swarm) bursts shrapnel on A's view.
+    await expect.poll(() => a.evaluate(() => window.__mp.particleCount()), { timeout: 8000 })
+      .toBeGreaterThan(0);
+
     await a.keyboard.up('KeyD');
     await a.keyboard.up('Space');
 

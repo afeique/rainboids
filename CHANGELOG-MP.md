@@ -7,6 +7,23 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.28.0] - 2026-05-27
+
+### Added
+- **Client-authored explosion particles** (Path A, P7 — the plan's "client
+  re-derives the particle burst from the event stream" vision). The MP client now
+  bursts SP-style shrapnel + embers on the positioned death/down events
+  (`ENEMY_DEATH`, `ASTEROID_DESTROYED`, `SHIP_DOWNED`) — additive Canvas2D, drag-
+  decayed, time-faded — layered over the existing flash + expanding ring. Deaths
+  now read with real SP-like debris instead of a bare ring, with no extra
+  bandwidth (the server still only sends semantic events). Added
+  `__mp.particleCount()` for inspection/QA.
+
+### Tests
+- `tests/qa/13-mp-sphost.spec.js`: assert particles appear after combat (a kill or
+  the idle pilot being downed bursts shrapnel). 12-mp2-ws (toy) + 13 (real) QA
+  both green — the particle path is shared + backward-compatible.
+
 ## [0.27.1] - 2026-05-27
 
 ### Fixed

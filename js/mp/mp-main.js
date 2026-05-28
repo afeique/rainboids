@@ -102,6 +102,30 @@ async function main() {
   let banner = null; // { text, born }
   const effects = []; // ephemeral client-side juice: { x, y, r, born }
 
+  // Client-authored explosion particles, re-derived from the server's semantic
+  // event stream (the sim never sends particles — it sends deaths/downs, and the
+  // client bursts shrapnel + embers, SP-style). Canvas2D + additive blending to
+  // match the mp-renderer pipeline. Velocity is px/ms; life is ms.
+  const particles = [];
+  function spawnBurst(x, y, baseR = 24, big = false) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const n = (big ? 18 : 11) + Math.floor(Math.random() * 7);
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const ember = Math.random() < 0.35;
+      const spd = (ember ? 0.04 : 0.09) + Math.random() * (ember ? 0.12 : 0.26);
+      particles.push({
+        x, y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        born: performance.now(),
+        life: ember ? 520 + Math.random() * 340 : 240 + Math.random() * 240,
+        size: (ember ? 2.4 : 1.3) + Math.random() * (ember ? 1.8 : 1.4) + baseR * 0.012,
+        hue: ember ? 28 + Math.random() * 16 : 16 + Math.random() * 34,
+      });
+    }
+  }
+
   // Debug/test hook: lets QA specs (and the console) inspect live client state
   // without coupling tests to internal module structure.
   window.__mp = {
@@ -114,6 +138,7 @@ async function main() {
     asteroidCount: () => lastAsteroids.size,
     enemyCount: () => lastEnemies.size,
     enemyTypes: () => [...new Set([...lastEnemies.values()].map((e) => e.type))],
+    particleCount: () => particles.length,
     bulletCount: () => latestBullets.length,
     dropCount: () => lastDrops.size,
     localHp: () => localHp,
@@ -159,6 +184,7 @@ async function main() {
             case EV.ASTEROID_DESTROYED:
             case EV.ENEMY_DEATH:
               effects.push({ x: p.x, y: p.y, r: p.r || 24, born: performance.now() });
+              spawnBurst(p.x, p.y, p.r || 24, false);
               audio.playExplosion();
               break;
             case EV.ASTEROID_HIT:
@@ -170,6 +196,7 @@ async function main() {
               audio.playShoot();
               break;
             case EV.SHIP_DOWNED:
+              spawnBurst(p.x, p.y, 40, true); // bigger burst for a ship going down
               audio.playPlayerExplosion();
               break;
             case EV.SHIP_REVIVED:
@@ -269,6 +296,7 @@ async function main() {
   let last = performance.now();
   let acc = 0;
   function frame(now) {
+    const dtMs = Math.min(50, now - last); // per-frame delta (clamped for tab stalls)
     acc += now - last;
     last = now;
     // Guard against spiral-of-death after a tab stall.
@@ -297,6 +325,16 @@ async function main() {
     for (let i = effects.length - 1; i >= 0; i--) {
       if (now - effects[i].born > 500) effects.splice(i, 1);
     }
+    // Advance + cull explosion particles (drag-decayed; time-based fade).
+    const drag = Math.pow(0.9, dtMs / 16.67);
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const pt = particles[i];
+      if (now - pt.born >= pt.life) { particles.splice(i, 1); continue; }
+      pt.x += pt.vx * dtMs;
+      pt.y += pt.vy * dtMs;
+      pt.vx *= drag;
+      pt.vy *= drag;
+    }
     // Banner fades after ~2.5 s.
     if (banner && now - banner.born > 2500) banner = null;
 
@@ -308,6 +346,7 @@ async function main() {
       drops,
       bullets: latestBullets,
       effects,
+      particles,
       now,
       localId: playerId,
       localDowned,
