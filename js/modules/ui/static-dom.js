@@ -262,6 +262,9 @@ function _buildPauseMenu() {
         // 6.x — PRIMARY + POWER tabs replaced by a single compact LOADOUT tab
         // (weapon + attunement / power + attunement / abilities + attunements).
         { key: 'loadout',  label: 'LOADOUT' },
+        // 8.23.0 — dedicated ABILITIES screen: owned-only, circle icons, equip
+        // into the 4 slots (keys 1-4). Mirrors the PASSIVES tab.
+        { key: 'abilities', label: 'ABILITIES' },
         { key: 'passives', label: 'PASSIVES' },
         { key: 'assists',  label: 'ASSISTS' },
         { key: 'display',  label: 'DISPLAY' },
@@ -291,6 +294,9 @@ function _buildPauseMenu() {
     // LOADOUT tab — populated by ui-manager.updateLoadoutTab(): compact active
     // weapon/power/abilities + their attunements, owned-only, switch in-flight.
     menu.appendChild(el('div', { id: 'loadout-tab',  className: 'pause-tab-content' }));
+    // ABILITIES tab — populated by ui-manager.updateAbilitiesTab(): owned-only
+    // abilities as circle-icon rows, equip into the 4 slots (8.23.0).
+    menu.appendChild(el('div', { id: 'abilities-tab', className: 'pause-tab-content' }));
     // PASSIVES tab — populated by ui-manager.updatePassivesTab(): the in-run
     // swap panel (assign owned passives to unlocked slots; P5b).
     menu.appendChild(el('div', { id: 'passives-tab', className: 'pause-tab-content' }));

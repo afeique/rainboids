@@ -1056,6 +1056,82 @@ export class UIManager {
         return row;
     }
 
+    // 8.23.0 — dedicated in-run ABILITIES screen. Shows ONLY the abilities the
+    // player owns (they're awarded by leveling), as circle-icon rows; click to
+    // equip into a free 1-4 slot or unequip. Mirrors updatePassivesTab.
+    updateAbilitiesTab() {
+        const tab = document.getElementById('abilities-tab');
+        if (!tab) return;
+        const player = this.gameEngine && this.gameEngine.player;
+        tab.replaceChildren();
+        if (!player) return;
+
+        const slots = Array.isArray(player.equippedAbilities) ? player.equippedAbilities : [];
+        const owned = (player.ownedAbilities instanceof Set) ? player.ownedAbilities : new Set();
+        const equippedCount = slots.filter(Boolean).length;
+
+        const h2 = document.createElement('h2');
+        h2.textContent = 'ABILITIES';
+        tab.appendChild(h2);
+        const subtitle = document.createElement('div');
+        subtitle.className = 'pause-tab-subtitle';
+        subtitle.textContent = `${equippedCount}/4 slots filled · keys 1–4 · click to equip / unequip`;
+        tab.appendChild(subtitle);
+
+        const list = document.createElement('div');
+        list.id = 'abilities-swap-list';
+        list.className = 'pause-tab-list';
+        tab.appendChild(list);
+
+        const ownedIds = [...owned].filter((id) => ABILITIES[id]);
+        if (ownedIds.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.color = '#888';
+            empty.textContent = 'No abilities yet — they unlock as you level up during a run.';
+            list.appendChild(empty);
+            return;
+        }
+
+        for (const id of ownedIds) {
+            const def = ABILITIES[id];
+            const slotIdx = slots.indexOf(id);
+            const equipped = slotIdx !== -1;
+            const row = this._buildAbilitySwapRow(def, equipped, slotIdx, () => {
+                if (equipped) {
+                    player.equippedAbilities[slotIdx] = null; // activeAbility proxies slot 0
+                } else {
+                    let free = -1;
+                    for (let i = 0; i < 4; i++) { if (!slots[i]) { free = i; break; } }
+                    if (free !== -1) player.equipAbility(id, free);
+                }
+                this.updateAbilitiesTab();
+            });
+            list.appendChild(row);
+        }
+    }
+
+    _buildAbilitySwapRow(def, equipped, slotIdx, onClick) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'pause-equip-row' + (equipped ? ' equipped' : '');
+        const icon = document.createElement('span');
+        icon.className = 'pause-equip-icon';
+        icon.innerHTML = renderIconHTML(def.icon || 'circle-fill',
+            { size: 22, color: def.color || '#cbb0ff', fallback: '●' });
+        const name = document.createElement('span');
+        name.className = 'pause-equip-name';
+        name.textContent = def.name || def.id;
+        const desc = document.createElement('span');
+        desc.className = 'pause-equip-desc';
+        desc.textContent = def.description || '';
+        const status = document.createElement('span');
+        status.className = 'pause-equip-status';
+        status.textContent = equipped ? `KEY ${slotIdx + 1}` : '';
+        row.append(icon, name, desc, status);
+        row.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+        return row;
+    }
+
     // Shared row builder for both PRIMARY and POWER tabs.
     // No innerHTML anywhere — every text node is set via textContent.
     // The click listener wraps `onClick` with stopPropagation BEFORE calling
@@ -2024,6 +2100,7 @@ export class UIManager {
 
         // Refresh equip lists when their tabs are opened.
         if (tabName === 'loadout') this.updateLoadoutTab();
+        if (tabName === 'abilities') this.updateAbilitiesTab();
         if (tabName === 'passives') this.updatePassivesTab();
         if (tabName === 'stats') this.updateStatsTab();
         if (tabName === 'assists') this.syncAssistsTab();

@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.23.0] - 2026-05-28
+
+### Added
+- **Dedicated in-run ABILITIES screen.** The pause menu gains an ABILITIES tab
+  that shows ONLY the abilities you own (they're awarded by leveling), as
+  circle-icon rows just like the PASSIVES screen — click one to equip it into a
+  free 1–4 slot, click an equipped one to unequip. (Abilities were previously
+  only a read-only list inside the LOADOUT tab.)
+
 ## [8.22.0] - 2026-05-28
 
 ### Changed

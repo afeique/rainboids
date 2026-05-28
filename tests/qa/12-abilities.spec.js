@@ -45,23 +45,33 @@ test.describe('QA-12: R6.3 new abilities', () => {
         expect(marked === true || marked === 'no-enemy').toBe(true);
     });
 
-    test('owned abilities appear as rows in the BUILD ABILITIES cluster', async ({ page }) => {
-        // 7.0.0 — the compact BUILD list shows ONLY owned abilities (abilities
-        // are purchase-locked). Seed them as owned, then they render as
-        // `.shop-node--parent` equip rows in the ABILITIES cluster.
-        const ids = await page.evaluate(() => {
+    test('owned abilities appear as circle-icon rows on the in-run ABILITIES screen', async ({ page }) => {
+        // 8.23.0 — abilities are no longer picked pre-run; the dedicated in-run
+        // ABILITIES pause tab shows ONLY owned abilities as circle-icon rows.
+        // Clicking an unequipped one equips it into a free 1-4 slot.
+        const r = await page.evaluate(() => {
             const ge = window.gameEngine;
-            localStorage.setItem('rainboidsMeta', JSON.stringify({
-                unlockedAbilities: ['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR'],
-            }));
-            ge.game.accountGold = 99999;
-            ge.openArmory();
-            return [...document.querySelectorAll('#shop-tree-abilities .shop-node--parent')]
-                .map((n) => n.dataset.id);
+            ge.startNewRun({ primaries: ['PULSE_CANNON'] });
+            ge.player.ownedAbilities = new Set(['BLINK', 'GRAVITY_SNARE', 'DESIGNATOR']);
+            ge.player.equippedAbilities = [null, null, null, null];
+            ge.uiManager.updateAbilitiesTab();
+            const rows = [...document.querySelectorAll('#abilities-tab .pause-equip-row')];
+            const names = rows.map((n) => n.textContent);
+            const iconCount = document.querySelectorAll(
+                '#abilities-tab .pause-equip-icon svg, #abilities-tab .pause-equip-icon .icon-fallback').length;
+            const blink = rows.find((n) => n.textContent.includes('Blink'));
+            blink.click(); // equip into slot 0
+            return {
+                rowCount: rows.length,
+                iconCount,
+                names,
+                equipped0: ge.player.equippedAbilities[0],
+            };
         });
-        expect(ids).toContain('BLINK');
-        expect(ids).toContain('GRAVITY_SNARE');
-        expect(ids).toContain('DESIGNATOR');
+        expect(r.rowCount).toBe(3);                 // owned-only
+        expect(r.iconCount).toBe(3);                // a circle icon per row
+        expect(r.names.join(' ')).toContain('Blink');
+        expect(r.equipped0).toBe('BLINK');          // click equipped it
     });
 
     test('Second Wind cheats death once', async ({ page }) => {
