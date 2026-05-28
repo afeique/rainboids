@@ -152,7 +152,7 @@ export class SpHost {
   async init() {
     const [
       { Player }, { PoolManager }, { Bullet }, { Enemy }, { EnemyBullet },
-      { Asteroid }, { ColorStar }, { GoldCoin }, { GoldShape }, powerupMod,
+      { Asteroid }, { ColorStar }, { GoldCoin }, { GoldShape }, { Powerup },
       { SpatialGrid }, { createDefaultGameState }, bosses,
     ] = await Promise.all([
       import('../../../js/modules/player/player.js'),
@@ -171,10 +171,6 @@ export class SpHost {
     ]);
     this._getBossForStage = bosses.getBossForStage;
     this._getBossById = bosses.getBossById;
-    // Wave-clear powerup draft pool: the active (non-retired) generic powerups,
-    // applied via the real player.addPowerup.
-    this._powerupCatalog = powerupMod.POWERUP_TYPES;
-    this._draftKeys = Object.keys(this._powerupCatalog).filter((k) => !this._powerupCatalog[k].hidden);
     this._PlayerClass = Player; // for addPlayer() (co-op N slots)
     this.player = new Player();
     this.player.x = this.gameField.width / 2;
@@ -193,7 +189,7 @@ export class SpHost {
     this.colorStarPool = new PoolManager(ColorStar, (GAME_CONFIG.COLOR_STAR_COUNT || 30) + 10);
     this.goldCoinPool = new PoolManager(GoldCoin, 60);
     this.goldShapePool = new PoolManager(GoldShape, 20);
-    this.powerupPool = new PoolManager(powerupMod.Powerup, 8);
+    this.powerupPool = new PoolManager(Powerup, 8);
     // Broad-phase grid for collisions (sim).
     this.spatialGrid = new SpatialGrid(this.gameField.width, this.gameField.height, 8, 6);
     this.game = createDefaultGameState();
@@ -435,74 +431,16 @@ export class SpHost {
     if (this.enemyPool.activeObjects.length > 0) { this._clearPending = false; return; }
     if (this.game.currentWave >= MAX_WAVES) return; // campaign finished
     if (!this._clearPending) {
-      // First tick the wave reads empty: announce the clear, open a powerup
-      // draft for each living pilot, and start the breather (the pick window).
+      // First tick the wave reads empty: announce the clear + open a short
+      // breather (SP shows a wave-clear interlude before the next wave).
       this._clearPending = true;
       this._interWave = INTER_WAVE_TICKS;
       if (this.events?.emit) this.events.emit('wave:clear', { wave: this.game.currentWave });
-      this._openDraft();
       return;
     }
     if (this._interWave > 0) { this._interWave -= 1; return; }
-    // Breather over: auto-resolve any unpicked drafts, then advance.
-    this._resolveDrafts();
     this._clearPending = false;
     this.startWave(this.game.currentWave + 1);
-  }
-
-  // ── Wave-clear powerup draft (run progression) ─────────────────────────────
-  // Each living pilot is offered `count` distinct, non-maxed active powerups at
-  // wave-clear; they pick one (applyDraftPick) during the breather, else the
-  // first option auto-applies. Powerups apply through the REAL player.addPowerup.
-
-  _rollDraft(player, count = 3) {
-    const stacksOf = (k) => (typeof player.getPowerupStacks === 'function' ? player.getPowerupStacks(k) : 0);
-    let pool = this._draftKeys.filter((k) => stacksOf(k) < (this._powerupCatalog[k].maxStacks || 99));
-    if (pool.length < count) pool = this._draftKeys.slice();
-    const copy = pool.slice();
-    const picks = [];
-    while (picks.length < count && copy.length) {
-      picks.push(copy.splice(Math.floor(random(0, copy.length)), 1)[0]);
-    }
-    return picks;
-  }
-
-  _applyPowerupTo(player, key) {
-    if (!key || !this._powerupCatalog[key] || typeof player.addPowerup !== 'function') return false;
-    return player.addPowerup(key, this._powerupCatalog[key]);
-  }
-
-  /** Open a wave-clear powerup draft for every living pilot. */
-  _openDraft() {
-    for (const slot of this.players) {
-      if (slot.player.downed) { slot.draft = null; continue; }
-      slot.draft = { options: this._rollDraft(slot.player), resolved: false };
-      if (this.events?.emit) this.events.emit('draft:offer', { playerId: slot.id, wave: this.game.currentWave, options: slot.draft.options });
-    }
-  }
-
-  /** A pilot picks option `index` from their open draft. */
-  applyDraftPick(playerId, index) {
-    const slot = this.players.find((s) => s.id === playerId);
-    if (!slot || !slot.draft || slot.draft.resolved) return false;
-    const key = slot.draft.options[index | 0];
-    const ok = this._applyPowerupTo(slot.player, key);
-    slot.draft.resolved = true;
-    if (ok && this.events?.emit) this.events.emit('draft:pick', { playerId, key });
-    return ok;
-  }
-
-  /** Auto-resolve unpicked drafts (first option) at the end of the breather. */
-  _resolveDrafts() {
-    for (const slot of this.players) {
-      if (slot.draft && !slot.draft.resolved) {
-        const key = slot.draft.options[0];
-        if (this._applyPowerupTo(slot.player, key) && this.events?.emit) {
-          this.events.emit('draft:pick', { playerId: slot.id, key, auto: true });
-        }
-      }
-      slot.draft = null;
-    }
   }
 
   // ── Real SIM systems, bound exactly as game-engine.js delegates them ───────
@@ -887,8 +825,6 @@ export class SpHost {
         case 'ship:revived': out.push({ type: EV.SHIP_REVIVED, x: ev[1]?.x, y: ev[1]?.y }); break;
         case 'wave:start': out.push({ type: EV.WAVE_START, wave: ev[1]?.wave | 0 }); break;
         case 'wave:clear': out.push({ type: EV.WAVE_CLEAR, wave: ev[1]?.wave | 0 }); break;
-        case 'draft:offer': out.push({ type: EV.DRAFT_OFFER, playerId: ev[1]?.playerId, wave: ev[1]?.wave | 0, options: ev[1]?.options || [] }); break;
-        case 'draft:pick': out.push({ type: EV.DRAFT_PICK, playerId: ev[1]?.playerId, key: ev[1]?.key, auto: !!ev[1]?.auto }); break;
         default: break; // enemy-destroy/asteroid-destroy/coin/powerup owned by the diff
       }
     }

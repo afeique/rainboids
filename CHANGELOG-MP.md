@@ -7,28 +7,15 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
-## [0.33.0] - 2026-05-28
+## [0.34.0] - 2026-05-28
 
-### Added
-- **Co-op wave-clear powerup draft — run progression** (server side). At each
-  wave-clear, every living pilot is offered 3 distinct, non-maxed active powerups
-  (the real `POWERUP_TYPES` catalog), emitted as a `DRAFT_OFFER` event during the
-  inter-wave breather; a pick applies through the REAL `player.addPowerup` and is
-  one of the offered options. So co-op now builds up over a run instead of
-  fighting wave after wave with the starting kit.
-  - `SpHost`: `_openDraft` / `applyDraftPick(playerId, index)` / `_resolveDrafts`
-    (unpicked drafts auto-apply the first option at the end of the breather — also
-    the AFK fallback). `C2S.DRAFT_PICK { index }` routes via `SpRoom.draftPick` →
-    `applyDraftPick`. New `EV.DRAFT_OFFER` / `EV.DRAFT_PICK`.
-  - Interactive client pick UI (cards on `DRAFT_OFFER` → send `DRAFT_PICK`) is the
-    next step; until then the breather auto-drafts, so progression already works.
-
-### Tests
-- `tests/unit/sp-host.test.js` (+2): a draft is offered at wave-clear and the pick
-  applies (powerup count +1, from the offered options); an unpicked draft
-  auto-resolves and the wave still advances. `tests/unit/sp-room.test.js` (+1):
-  the `DRAFT_OFFER` streams to the client and a `draftPick` routes to the host.
-  45/45 MP unit green; default co-op QA green.
+### Removed
+- **Wave-clear powerup draft** (the `DRAFT_OFFER` / `DRAFT_PICK` system added in
+  0.33.0). Direction change: there are no more draft cards — all progression is
+  through **gear**. Reverted the server draft state (`_openDraft` / `applyDraftPick`
+  / `_resolveDrafts`), `SpRoom.draftPick`, the `C2S.DRAFT_PICK` route, the
+  `EV.DRAFT_OFFER` / `EV.DRAFT_PICK` events, and their tests. The wave-clear
+  breather remains, but it no longer opens a draft.
 
 ## [0.32.2] - 2026-05-28
 

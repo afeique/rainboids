@@ -57,9 +57,6 @@ transport.onConnection((conn) => {
       case C2S.INPUT:
         room.setInput(playerId, msg);
         break;
-      case C2S.DRAFT_PICK:
-        if (typeof room.draftPick === 'function') room.draftPick(playerId, msg);
-        break;
       case C2S.BYE:
         conn.close();
         break;
