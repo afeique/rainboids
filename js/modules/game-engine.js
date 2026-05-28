@@ -727,12 +727,13 @@ export class GameEngine {
                 // (everything else is unlocked, T20). Item rolls are best-effort
                 // — a roll failure still grants the wallet seed.
                 try {
-                    // 8.x — weapons are gear: a fresh account starts with ONLY the
-                    // common Pulse Cannon equipped (no power weapon, no abilities).
-                    // Power weapons + other primaries are FOUND as loot and equipped
-                    // from the stash (pre-run GEAR tab); abilities unlock with gold.
+                    // 8.16.0 — a fresh account starts with ONLY the two stock
+                    // basics, equipped: the common "Stock Pulse Cannon" (primary)
+                    // and "Stock Charge Shot" (power weapon). Every other primary /
+                    // power is FOUND as loot and equipped from the INVENTORY;
+                    // abilities + passives unlock by leveling (8.15.0).
                     seed.equippedWeapon = createWeaponItem(1, 'common', 'PULSE');
-                    seed.equippedPowerWeapon = null;
+                    seed.equippedPowerWeapon = createPowerWeaponItem('CHARGE_SHOT', 1, 'common');
                     seed.stash = [
                         createItem('hull', 1, 'common'),
                     ];

@@ -287,6 +287,41 @@ function _weaponArchetypeName(archetype) {
     return (cfg && cfg.name) || `${archetype} Weapon`;
 }
 
+// ── 8.16.0 — weapon naming system ────────────────────────────────────────────
+// A weapon item's name = a martial RARITY TITLE + the base weapon + an optional
+// ELEMENT EPITHET. Commons read as "Stock <Weapon>" (the starter kit's voice),
+// higher tiers earn escalating titles, and an elemental roll tacks on an "of X"
+// epithet — so loot reads like loot ("Vanguard Rail Driver of Cinders").
+const WEAPON_RARITY_TITLE = {
+    common: 'Stock',
+    rare: 'Honed',
+    exceptional: 'Tempered',
+    legendary: 'Vanguard',
+    epic: "Tyrant's",
+    godlike: "Warlord's",
+    divine: "Seraph's",
+    transcendental: 'Eternal',
+};
+const WEAPON_ELEMENT_EPITHET = {
+    PYRO: 'of Cinders',
+    CRYO: 'of Frost',
+    VOLT: 'of the Storm',
+    TOXIC: 'of Venom',
+    VOID: 'of the Void',
+    RADIANT: 'of Radiance',
+    // KINETIC (or no element) → no epithet.
+};
+export function weaponItemName(baseName, rarity, element = null) {
+    const title = WEAPON_RARITY_TITLE[rarity] || WEAPON_RARITY_TITLE.common;
+    const el = (typeof element === 'string') ? element.toUpperCase() : null;
+    // Commons read clean ("Stock <Weapon>"); the element epithet is a higher-tier
+    // flourish, so the starter kit is exactly "Stock Pulse Cannon" / "Stock Charge Shot".
+    const epithet = (rarity && rarity !== 'common' && el && WEAPON_ELEMENT_EPITHET[el])
+        ? ` ${WEAPON_ELEMENT_EPITHET[el]}`
+        : '';
+    return `${title} ${baseName}${epithet}`;
+}
+
 // Decorate a pure rollWeapon item ({archetype, rarity, traits, element}) into a
 // stash-ready weapon ITEM: synthetic `slot:'weapon'` + `kind:'weapon'` so it
 // rides the existing collection/stash, plus name/level/rarity styling + a
@@ -295,14 +330,13 @@ export function decorateWeaponItem(weapon, level) {
     const rarity = RARITY_TIERS[weapon.rarity] ? weapon.rarity : 'common';
     const tier = RARITY_TIERS[rarity];
     const L = Math.max(1, level | 0);
-    const adj = tier.rarityAdjective ? `${tier.rarityAdjective} ` : '';
     return {
         ...weapon,
         slot: 'weapon',
         kind: 'weapon',
         rarity,
         level: L,
-        name: `${adj}${_weaponArchetypeName(weapon.archetype)}`,
+        name: weaponItemName(_weaponArchetypeName(weapon.archetype), rarity, weapon.element),
         bonusLabel: describeWeapon(weapon),
         rarityColor: tier.color, rarityLabel: tier.label, rarityGlow: tier.glow,
     };
@@ -332,7 +366,7 @@ export function createPowerWeaponItem(powerId, level = 1, rarityKey = 'common') 
         powerId: id,
         level: Math.max(1, level | 0),
         rarity,
-        name: cfg.name || id,
+        name: weaponItemName(cfg.name || id, rarity, null),
         rarityColor: tier.color, rarityLabel: tier.label, rarityGlow: tier.glow,
     };
 }

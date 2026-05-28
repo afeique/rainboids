@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.16.0] - 2026-05-28
+
+### Added
+- **Weapon naming system.** Every primary and power weapon item now earns a
+  flavorful name built from a rarity **title** + the base weapon + an optional
+  element **epithet**: commons read clean as `Stock <Weapon>`, then escalate
+  (`Honed` → `Tempered` → `Vanguard` → `Tyrant's` → `Warlord's` → `Seraph's` →
+  `Eternal`), and an elemental roll adds an `of X` suffix (e.g. *Vanguard Rail
+  Driver of Cinders*). The element epithet is a higher-tier flourish — commons
+  stay clean — so the starter kit reads exactly `Stock Pulse Cannon` /
+  `Stock Charge Shot` (`weaponItemName` in `item-system.js`).
+
+### Changed
+- **Fresh accounts now start with BOTH stock weapons equipped** — a `Stock
+  Pulse Cannon` primary **and** a `Stock Charge Shot` power weapon (previously
+  the power-weapon slot started empty). Everything else is still found as loot.
+
 ## [8.15.0] - 2026-05-28
 
 ### Added
