@@ -333,7 +333,14 @@ export class SpHost {
     this.game.enemyLevel = getEnemyLevel(n, playerLevel);
     const cfg = getWaveConfig(n) || {};
     const astLevel = getAsteroidLevel(n);
-    for (let i = 0; i < (cfg.asteroids | 0); i++) {
+    // Cap the field's asteroid population at SP's concurrent cap. Previously each
+    // wave dumped cfg.asteroids on top of whatever survived (and the splits), so
+    // rocks accumulated endlessly across waves (and flooded gem/gold drops). SP
+    // maintains a bounded population (GAME_CONFIG.MAX_ASTEROIDS); top up toward it
+    // instead of spawning unconditionally. (random(30,60) radius matches SP.)
+    const astCap = GAME_CONFIG.MAX_ASTEROIDS || 16;
+    const want = Math.max(0, Math.min(cfg.asteroids | 0, astCap - this.asteroidPool.activeObjects.length));
+    for (let i = 0; i < want; i++) {
       const p = this._edgeSpawnPoint();
       this.asteroidPool.get(p.x, p.y, random(30, 60), astLevel);
     }

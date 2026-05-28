@@ -7,6 +7,23 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.44.1] - 2026-05-28
+
+### Fixed
+- **Infinite asteroids (and the gem/gold flood that rode on it).** The headless
+  host's `startWave` spawned `cfg.asteroids` **unconditionally every wave**, on top
+  of whatever rocks survived (and their split fragments), so the field grew without
+  bound across waves — overcrowding the arena, making collisions feel broken, and
+  (because every asteroid death drops orbs via `dropOrbsFromEntity`) flooding gems.
+  `startWave` now tops up toward single-player's concurrent cap
+  (`GAME_CONFIG.MAX_ASTEROIDS` = 16) instead of spawning unconditionally, so the
+  population stays bounded exactly like SP. Asteroid split/destruction was already
+  correct (real SP `destroyAsteroid`); the bug was purely the uncapped spawn.
+
+### Tests
+- `tests/unit/sp-host.test.js`: spawning 12 waves' rosters back-to-back keeps the
+  asteroid count ≤ `MAX_ASTEROIDS` (regression for the unbounded-growth bug).
+
 ## [0.44.0] - 2026-05-28
 
 ### Changed

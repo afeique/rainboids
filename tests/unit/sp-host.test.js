@@ -9,7 +9,7 @@ import { frameClock } from '../../js/modules/core/frame-clock.js';
 import { setRandomSource } from '../../js/modules/core/utils.js';
 import { EV } from '../../js/sim/events.js';
 import { REVIVE_TICKS } from '../../js/sim/constants.js';
-import { GAME_STATES } from '../../js/modules/core/constants.js';
+import { GAME_STATES, GAME_CONFIG } from '../../js/modules/core/constants.js';
 import { getEnemyLevel } from '../../js/modules/wave/wave-data.js';
 
 afterEach(() => { frameClock.reset(); setRandomSource(null); });
@@ -193,6 +193,16 @@ describe('SpHost — headless wave driver', () => {
     }
     expect(advanced).toBe(true);
     expect(host.enemyPool.activeObjects.length).toBeGreaterThan(0); // wave 2 roster
+  });
+
+  it('caps the asteroid population across waves (no infinite accumulation)', async () => {
+    const host = new SpHost({ seed: 3 });
+    await host.init();
+    // Spawn many waves' rosters back-to-back without anything clearing the rocks.
+    // The old bug dumped cfg.asteroids every wave unconditionally → unbounded
+    // growth; now startWave tops up toward GAME_CONFIG.MAX_ASTEROIDS and stops.
+    for (let w = 1; w <= 12; w++) host.startWave(w);
+    expect(host.asteroidPool.activeObjects.length).toBeLessThanOrEqual(GAME_CONFIG.MAX_ASTEROIDS);
   });
 
   it('does not self-drive waves when autoWaves is off (default)', async () => {
