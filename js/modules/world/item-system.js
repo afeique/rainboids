@@ -319,9 +319,8 @@ export function createWeaponItem(level, rarityKey = null, archetype = null) {
 
 // 8.x — a stash/equip-ready POWER weapon ITEM: synthetic `slot:'power'` +
 // `kind:'powerweapon'`, carrying the chosen `powerId` (a POWER_WEAPONS key) that
-// drives the player's activePower when equipped. Powers aren't rolled loot (yet)
-// — they're equipped from the unlocked set in the pre-run GEAR tab — so this is a
-// thin item, not a trait-rolled weapon.
+// drives the player's activePower when equipped. Power weapons are FOUND AS LOOT
+// (a second gear category alongside primary weapons) and equipped from the stash.
 export function createPowerWeaponItem(powerId, level = 1, rarityKey = 'common') {
     const cfg = POWER_WEAPONS[powerId] || POWER_WEAPONS.CHARGE_SHOT;
     const id = POWER_WEAPONS[powerId] ? powerId : 'CHARGE_SHOT';
@@ -336,6 +335,15 @@ export function createPowerWeaponItem(powerId, level = 1, rarityKey = 'common') 
         name: cfg.name || id,
         rarityColor: tier.color, rarityLabel: tier.label, rarityGlow: tier.glow,
     };
+}
+
+// Drop-roll a random power weapon (used by the loot path). Excludes any
+// `hidden`/retired powers so only real, equippable powers drop.
+const _POWER_DROP_IDS = Object.keys(POWER_WEAPONS).filter((k) => !POWER_WEAPONS[k].hidden);
+export function createRandomPowerWeaponItem(level = 1, rarityKey = 'common', rng = Math.random) {
+    const pool = _POWER_DROP_IDS.length ? _POWER_DROP_IDS : Object.keys(POWER_WEAPONS);
+    const powerId = pool[Math.floor(rng() * pool.length)] || 'CHARGE_SHOT';
+    return createPowerWeaponItem(powerId, level, rarityKey);
 }
 
 // The next rarity up the 8-tier ladder, or null if already at the top.

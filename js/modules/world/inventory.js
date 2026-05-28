@@ -142,6 +142,41 @@ export function unequipWeapon(meta) {
     return { ok: true, meta: { ...(meta || {}), stash, equippedWeapon: null } };
 }
 
+// ── Power weapons (8.x — a SECOND found-as-gear category, mirroring weapons) ──
+// Power weapon items carry `kind === 'powerweapon'` + `powerId`; they live in
+// the stash and equip into the dedicated meta.equippedPowerWeapon slot. The
+// equipped power's id drives the run's secondary (player.equipPowerWeaponItem).
+
+/** The stash power-weapon items (kind === 'powerweapon') with their indices. */
+export function stashPowerWeapons(meta) {
+    const stash = (meta && Array.isArray(meta.stash)) ? meta.stash : [];
+    const out = [];
+    for (let i = 0; i < stash.length; i++) {
+        if (stash[i] && stash[i].kind === 'powerweapon') out.push({ item: stash[i], index: i });
+    }
+    return out;
+}
+
+/** Equip stash[stashIndex] (a power-weapon item) into the power slot. */
+export function equipPowerWeaponFromStash(meta, stashIndex) {
+    const stash = (meta && Array.isArray(meta.stash)) ? meta.stash.slice() : [];
+    const item = stash[stashIndex];
+    if (!item || item.kind !== 'powerweapon') return { ok: false, meta };
+    const prev = (meta && meta.equippedPowerWeapon) || null;
+    stash.splice(stashIndex, 1);
+    if (prev) stash.push(prev);
+    return { ok: true, meta: { ...(meta || {}), stash, equippedPowerWeapon: item } };
+}
+
+/** Unequip the power weapon, returning it to the stash. */
+export function unequipPowerWeapon(meta) {
+    const item = (meta && meta.equippedPowerWeapon) || null;
+    if (!item) return { ok: false, meta };
+    const stash = (meta && Array.isArray(meta.stash)) ? meta.stash.slice() : [];
+    stash.push(item);
+    return { ok: true, meta: { ...(meta || {}), stash, equippedPowerWeapon: null } };
+}
+
 /**
  * Score delta from equipping `candidate` into `slot` (vs the current item),
  * using a caller-supplied scoreFn. Positive = upgrade.

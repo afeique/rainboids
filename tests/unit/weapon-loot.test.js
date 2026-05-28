@@ -12,7 +12,7 @@ import {
 } from '../../js/modules/player/weapons.js';
 import { getEffectiveCritChance } from '../../js/modules/player/progression.js';
 import { weaponLevelScale, archetypeToWeaponId } from '../../js/modules/combat/weapon-data.js';
-import { createPowerWeaponItem } from '../../js/modules/world/item-system.js';
+import { createPowerWeaponItem, createRandomPowerWeaponItem } from '../../js/modules/world/item-system.js';
 
 function weapon(archetype, traits = []) {
     return { archetype, rarity: 'common', traits, element: 'KINETIC' };
@@ -211,5 +211,27 @@ describe('T30 — MULTISHOT / VOLLEY re-fire the weapon at angle offsets', () =>
         const { stub, calls } = fireStub([]);
         firePrimary.call(stub, bulletPool, audio, null);
         expect(calls.length).toBe(1);
+    });
+});
+
+describe('Power weapons as loot', () => {
+    test('createRandomPowerWeaponItem rolls an equippable power-weapon item', () => {
+        const item = createRandomPowerWeaponItem(7, 'rare', () => 0.5);
+        expect(item.kind).toBe('powerweapon');
+        expect(item.slot).toBe('power');
+        expect(typeof item.powerId).toBe('string');
+        expect(item.level).toBe(7);
+        expect(item.rarity).toBe('rare');
+        // It equips through the real player path.
+        const stub = { equippedPowerWeapon: null };
+        equipPowerWeaponItem.call(stub, item);
+        expect(getEquippedPowerWeapon.call(stub)).toBe(item);
+        expect(stub.activePower).toBe(item.powerId);
+    });
+
+    test('the random roll is deterministic for a given rng', () => {
+        const a = createRandomPowerWeaponItem(1, 'common', () => 0);
+        const b = createRandomPowerWeaponItem(1, 'common', () => 0);
+        expect(a.powerId).toBe(b.powerId);
     });
 });

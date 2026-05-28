@@ -6,7 +6,7 @@ import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, ABILITIES } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
-import { createItem, createWeaponItem } from '../world/item-system.js';
+import { createItem, createWeaponItem, createRandomPowerWeaponItem } from '../world/item-system.js';
 import { rollRarity } from '../world/item-names.js';
 // T29 — Rainshard income faucet (§2.4): per-kill R$ ramps with wave depth,
 // the difficulty mode lens, the killstreak multiplier, and the gear/Matrix
@@ -1023,6 +1023,15 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         if (Math.random() < Math.min(1.0, weaponRate)) {
             const rarity = rollRarity(bonusRare + (boss ? 0.12 : 0.03), bonusEpic);
             player.registerItemDrop(createWeaponItem(wave, rarity));
+        }
+
+        // 8.x — POWER weapons are a second loot category (found, then equipped in
+        // the GEAR tab), rarer than primary weapons. Boss/elite kills are likelier
+        // + biased to higher rarity, same as the primary-weapon jackpot.
+        const powerRate = (boss ? 0.04 : (entity && entity.isElite) ? 0.015 : 0.004) * dropMult * runRewardMult;
+        if (Math.random() < Math.min(1.0, powerRate)) {
+            const rarity = rollRarity(bonusRare + (boss ? 0.12 : 0.03), bonusEpic);
+            player.registerItemDrop(createRandomPowerWeaponItem(wave, rarity));
         }
     }
 

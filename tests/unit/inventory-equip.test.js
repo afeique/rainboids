@@ -2,6 +2,7 @@
 import {
     getEquipped, stashForSlot, equipFromStash, unequipSlot, equipDelta,
     getEquippedWeapon, stashWeapons, equipWeaponFromStash, unequipWeapon,
+    getEquippedPowerWeapon, stashPowerWeapons, equipPowerWeaponFromStash, unequipPowerWeapon,
 } from '../../js/modules/world/inventory.js';
 
 const it = (slot, score) => ({ slot, name: `${slot}-${score}`, affixes: [{ type: 'hp', value: score, label: '' }] });
@@ -123,5 +124,31 @@ describe('Inventory — weapon equip model', () => {
         expect(total()).toBe(2);
         ({ meta } = equipWeaponFromStash(meta, 0));
         expect(total()).toBe(2);
+    });
+
+    // ── Power weapons (second found-as-gear category) ──
+    const pw = (name) => ({ slot: 'power', kind: 'powerweapon', name, powerId: 'NOVA_BLAST' });
+
+    test('stashPowerWeapons filters kind:powerweapon (not weapons/gear)', () => {
+        const meta = { stash: [pw('a'), wpn('w'), it('hull', 1), pw('b')] };
+        expect(stashPowerWeapons(meta).map((x) => x.index)).toEqual([0, 3]);
+    });
+
+    test('equipPowerWeaponFromStash moves stash → power slot, swaps prev back', () => {
+        let meta = { stash: [pw('found')], equippedPowerWeapon: pw('old') };
+        ({ meta } = equipPowerWeaponFromStash(meta, 0));
+        expect(getEquippedPowerWeapon(meta).name).toBe('found');
+        expect(meta.stash).toHaveLength(1);
+        expect(meta.stash[0].name).toBe('old');
+        // Non-power index is a no-op.
+        expect(equipPowerWeaponFromStash({ stash: [it('hull', 1)] }, 0).ok).toBe(false);
+    });
+
+    test('unequipPowerWeapon returns it to the stash', () => {
+        const { ok, meta: next } = unequipPowerWeapon({ stash: [], equippedPowerWeapon: pw('eq') });
+        expect(ok).toBe(true);
+        expect(next.equippedPowerWeapon).toBeNull();
+        expect(next.stash).toHaveLength(1);
+        expect(unequipPowerWeapon({ equippedPowerWeapon: null }).ok).toBe(false);
     });
 });
