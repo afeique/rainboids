@@ -7,6 +7,26 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.37.0] - 2026-05-28
+
+### Added
+- **Combat-feel juice (look-like-SP step).** Render-only impact effects, since the
+  authoritative sim can't be frozen:
+  - **Screen shake + camera kick** on explosions, scaled by blast radius and
+    proximity to the local ship (distant blasts don't rock the camera); the kick
+    pushes the camera away from the blast. A bigger jolt fires when a ship goes
+    down. Applied as a render-only camera nudge so aim mapping stays steady.
+  - **Screen flashes** — a white full-screen flash when a ship is downed, and a
+    red damage vignette (edge glow) when the **local** ship loses HP (detected
+    from the snapshot HP delta, since hit events carry no coords).
+  - **Positioned hit sparks** — any enemy whose HP drops between snapshots emits a
+    hot strike spark at its position.
+  - **Muzzle flash** — a cyan nose bloom on the local ship when a shot fires.
+
+### Notes
+- True per-bullet motion trails are deferred: MP bullet snapshots carry no id or
+  velocity, so trails are paired with a future bullet-interpolation pass.
+
 ## [0.36.0] - 2026-05-28
 
 ### Added

@@ -317,8 +317,9 @@ function drawDrop(ctx, d) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera }) {
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera, fx }) {
   const cam = camera || { x: 0, y: 0, zoom: 1 };
+  const feel = fx || { shakeX: 0, shakeY: 0, flashWhite: 0, flashRed: 0 };
   const W = canvas.width, H = canvas.height;
 
   // Background fill (screen space).
@@ -338,7 +339,7 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     ctx.scale(zoom, zoom);
     ctx.translate(-W / 2, -H / 2);
   }
-  ctx.translate(-cam.x, -cam.y);
+  ctx.translate(-cam.x - (feel.shakeX || 0), -cam.y - (feel.shakeY || 0));
 
   // Arena border (true field bounds in world space).
   ctx.strokeStyle = '#1d2440';
@@ -464,6 +465,24 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
     localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp,
     localTanks, wave, gold, players, localDowned, now,
   });
+
+  // Full-screen flash channels (screen space, on top of the HUD).
+  if (feel.flashWhite > 0.01) {
+    ctx.save();
+    ctx.fillStyle = `rgba(255,255,255,${Math.min(0.85, feel.flashWhite)})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+  if (feel.flashRed > 0.01) {
+    // Damage vignette — red glow hugging the screen edges, transparent center.
+    ctx.save();
+    const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.62);
+    g.addColorStop(0, 'rgba(255,40,40,0)');
+    g.addColorStop(1, `rgba(220,20,30,${Math.min(0.6, feel.flashRed)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
 }
 
 // ── SP-style HUD (ported from js/modules/hud/status.js) ──────────────────────

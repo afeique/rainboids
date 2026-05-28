@@ -194,6 +194,74 @@ async function main() {
     }
   }
 
+  // ── Camera-feel + impact juice (client-side, SP-style) ─────────────────────
+  // The sim is authoritative and can't be frozen, so these are render-only:
+  // screen SHAKE (random offset), camera KICK (directional impulse away from a
+  // nearby blast), and two full-screen FLASH channels (white for big events, red
+  // damage vignette when the local ship takes a hit). All decay toward 0.
+  let shakeMag = 0;
+  let kickX = 0, kickY = 0;
+  let flashWhite = 0; // 0..1
+  let flashRed = 0;   // 0..1
+  const prevEnemyHp = new Map(); // id → last-seen hp, for positioned hit sparks
+
+  function addShake(mag) { if (mag > shakeMag) shakeMag = Math.min(34, mag); }
+  // Blast feedback scaled by radius + proximity to the local ship (distant
+  // explosions shouldn't rock the camera). Adds a kick pushing AWAY from it.
+  function blastFeedback(x, y, r = 24) {
+    const s = predictor && predictor.ship;
+    if (!s) return;
+    const dx = s.x - x, dy = s.y - y;
+    const dist = Math.hypot(dx, dy);
+    const prox = Math.max(0, 1 - dist / 640);
+    if (prox <= 0) return;
+    addShake((3 + r * 0.16) * prox);
+    const len = dist || 1;
+    const kmag = (1.4 + r * 0.05) * prox;
+    kickX += (dx / len) * kmag;
+    kickY += (dy / len) * kmag;
+  }
+
+  // Small bright spark burst at an impact point (non-lethal hits). Reuses the
+  // particle layer with a short life + hot hue so it reads as a strike spark.
+  function spawnSpark(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const n = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 0.12 + Math.random() * 0.22;
+      particles.push({
+        x, y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        born: performance.now(),
+        life: 120 + Math.random() * 120,
+        size: 0.9 + Math.random() * 1.2,
+        hue: 48 + Math.random() * 14, // hot yellow-white spark
+      });
+    }
+  }
+
+  // Muzzle flash at the local ship's nose when a shot leaves the barrel.
+  function spawnMuzzle() {
+    const s = predictor && predictor.ship;
+    if (!s) return;
+    const nx = s.x + Math.cos(s.angle) * SHIP_RADIUS * 1.1;
+    const ny = s.y + Math.sin(s.angle) * SHIP_RADIUS * 1.1;
+    for (let i = 0; i < 3; i++) {
+      const dir = s.angle + (Math.random() - 0.5) * 0.8;
+      const ps = 0.06 + Math.random() * 0.12;
+      particles.push({
+        x: nx, y: ny,
+        vx: Math.cos(dir) * ps, vy: Math.sin(dir) * ps,
+        born: performance.now(),
+        life: 70 + Math.random() * 60,
+        size: 1.1 + Math.random() * 1.0,
+        hue: 190 + Math.random() * 30, // cyan muzzle bloom
+      });
+    }
+  }
+
   // Debug/test hook: lets QA specs (and the console) inspect live client state
   // without coupling tests to internal module structure.
   window.__mp = {
@@ -237,9 +305,28 @@ async function main() {
         if (typeof full.wave === 'number') wave = full.wave;
         if (full.ws) waveState = full.ws;
         interp.add(full);
+        // Positioned hit sparks: any enemy whose HP dropped since the last
+        // snapshot took a hit → strike spark at its position (the hit events
+        // carry no coords, but the snapshot HP does).
+        if (full.enemies) {
+          for (const e of full.enemies) {
+            const prev = prevEnemyHp.get(e.id);
+            if (prev != null && e.hp < prev - 0.01) spawnSpark(e.x, e.y);
+            prevEnemyHp.set(e.id, e.hp);
+          }
+          if (prevEnemyHp.size > full.enemies.length + 64) {
+            const live = new Set(full.enemies.map((e) => e.id));
+            for (const id of prevEnemyHp.keys()) if (!live.has(id)) prevEnemyHp.delete(id);
+          }
+        }
         if (predictor) {
           const me = full.ships.find((s) => s.id === playerId);
           if (me) {
+            // Local damage feedback: HP fell → red vignette + a small shake.
+            if (localHp != null && me.hp < localHp - 0.5) {
+              flashRed = Math.min(1, flashRed + 0.55);
+              addShake(7);
+            }
             localHp = me.hp;
             localMaxHp = me.mhp;
             localDowned = !!me.dn;
@@ -265,6 +352,7 @@ async function main() {
             case EV.ENEMY_DEATH:
               effects.push({ x: p.x, y: p.y, r: p.r || 24, born: performance.now() });
               spawnBurst(p.x, p.y, p.r || 24, false);
+              blastFeedback(p.x, p.y, p.r || 24); // shake + kick by size/proximity
               audio.playExplosion();
               break;
             case EV.ASTEROID_HIT:
@@ -273,10 +361,14 @@ async function main() {
               audio.playHit();
               break;
             case EV.BULLET_SPAWN:
+              spawnMuzzle(); // nose bloom at the local ship
               audio.playShoot();
               break;
             case EV.SHIP_DOWNED:
               spawnBurst(p.x, p.y, 40, true); // bigger burst for a ship going down
+              blastFeedback(p.x, p.y, 60);
+              addShake(22);
+              flashWhite = Math.max(flashWhite, 0.5);
               audio.playPlayerExplosion();
               break;
             case EV.SHIP_REVIVED:
@@ -430,6 +522,23 @@ async function main() {
     // we have a ship — e.g. while connecting or fully downed).
     if (predictor) updateCamera(predictor.ship.x, predictor.ship.y);
 
+    // Decay the camera-feel FX (frame-rate independent) and roll a fresh shake
+    // offset. Shake + kick are passed to the renderer as a render-only camera
+    // nudge (kept out of camera.{x,y} so aim mapping stays steady).
+    shakeMag *= Math.pow(0.86, dtMs / 16.67); if (shakeMag < 0.15) shakeMag = 0;
+    const kd = Math.pow(0.88, dtMs / 16.67);
+    kickX *= kd; kickY *= kd;
+    if (Math.abs(kickX) < 0.05) kickX = 0;
+    if (Math.abs(kickY) < 0.05) kickY = 0;
+    flashWhite *= Math.pow(0.88, dtMs / 16.67); if (flashWhite < 0.01) flashWhite = 0;
+    flashRed *= Math.pow(0.90, dtMs / 16.67); if (flashRed < 0.01) flashRed = 0;
+    const fx = {
+      shakeX: (Math.random() * 2 - 1) * shakeMag + kickX,
+      shakeY: (Math.random() * 2 - 1) * shakeMag + kickY,
+      flashWhite,
+      flashRed,
+    };
+
     bridge.present({
       localShip: predictor ? predictor.ship : null,
       remoteShips: remote,
@@ -455,6 +564,7 @@ async function main() {
       players: roster.length,
       banner,
       camera,
+      fx,
     });
 
     // Lightweight HUD line.
