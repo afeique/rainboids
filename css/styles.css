@@ -784,6 +784,12 @@ button:not([disabled]),
 }
 .inv-drop-row--equipped .inv-drop-tag { background: #7CFC9A; }
 
+/* 8.18.1 — Kill ALL text glow inside the inventory. The overlay is a
+   .ui-element, which carries a global `text-shadow: 0 0 5px ...` that bleeds
+   onto every label/name/affix and makes the small text fuzzy + hard to read.
+   (Mirrors the same suppression already done for #shop-menu.) */
+#inventory-overlay, #inventory-overlay * { text-shadow: none; }
+
 .item-card {
     --item-rarity: #7fb6ff;
     position: relative;

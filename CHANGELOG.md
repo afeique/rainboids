@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.18.1] - 2026-05-28
+
+### Fixed
+- **Inventory text is readable again** — removed the text glow inside the
+  INVENTORY overlay. The overlay inherits the global `.ui-element` text-shadow,
+  which bled onto every small label/name/affix and made them fuzzy; it's now
+  suppressed for `#inventory-overlay` (the same fix already applied to the shop
+  menu).
+
 ## [8.18.0] - 2026-05-28
 
 ### Changed
