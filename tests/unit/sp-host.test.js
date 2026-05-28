@@ -8,6 +8,8 @@ import { SpHost } from '../../server/src/sim/sp-host.js';
 import { frameClock } from '../../js/modules/core/frame-clock.js';
 import { setRandomSource } from '../../js/modules/core/utils.js';
 import { EV } from '../../js/sim/events.js';
+import { REVIVE_TICKS } from '../../js/sim/constants.js';
+import { GAME_STATES } from '../../js/modules/core/constants.js';
 
 afterEach(() => { frameClock.reset(); setRandomSource(null); });
 
@@ -283,5 +285,65 @@ describe('SpHost — co-op (N players)', () => {
     expect(host.players).toHaveLength(1);
     host.tick();
     expect(host.buildSnapshot().ships).toHaveLength(1);
+  });
+});
+
+describe('SpHost — downed + revive (P6)', () => {
+  it('a lethal hit DOWNS a player when a teammate is alive (not game over)', async () => {
+    const host = new SpHost({ seed: 11 });
+    await host.init();
+    host.addPlayer(2, 1500, 540); // teammate alive, far away
+    const p1 = host.players[0].player;
+    host.player = p1;
+    host.handlePlayerDeath(); // lethal hit on p1
+    expect(p1.downed).toBe(true);
+    expect(p1.active).toBe(false);
+    expect(host.game.state).not.toBe(GAME_STATES.GAME_OVER);
+    // The downed state surfaces on the wire for the client's DOWNED overlay.
+    const ship1 = host.buildSnapshot().ships.find((s) => s.id === host.players[0].id);
+    expect(ship1.dn).toBe(true);
+  });
+
+  it('a nearby living teammate revives a downed player (SHIP_REVIVED)', async () => {
+    const host = new SpHost({ seed: 11 });
+    await host.init();
+    const s2 = host.addPlayer(2, 1000, 540); // within REVIVE_RADIUS (90) of center
+    const p1 = host.players[0].player;        // at 960,540
+    host.player = p1;
+    host.handlePlayerDeath();
+    expect(p1.downed).toBe(true);
+    const collected = [];
+    let revived = false;
+    for (let i = 0; i < REVIVE_TICKS + 10 && !revived; i++) {
+      const { events } = host.frame();
+      collected.push(...events);
+      if (!p1.downed) revived = true;
+    }
+    expect(revived).toBe(true);
+    expect(p1.active).toBe(true);
+    expect(p1.health).toBeGreaterThan(0);
+    expect(collected.some((e) => e.type === EV.SHIP_REVIVED)).toBe(true);
+    expect(collected.some((e) => e.type === EV.SHIP_DOWNED)).toBe(true);
+    void s2;
+  });
+
+  it('no nearby teammate → stays downed, progress decays', async () => {
+    const host = new SpHost({ seed: 11 });
+    await host.init();
+    host.addPlayer(2, 1700, 540); // far outside REVIVE_RADIUS
+    const p1 = host.players[0].player;
+    host.player = p1;
+    host.handlePlayerDeath();
+    for (let i = 0; i < REVIVE_TICKS + 30; i++) host.tick();
+    expect(p1.downed).toBe(true);          // never revived
+    expect(p1.reviveProgress).toBe(0);     // decayed back to zero
+  });
+
+  it('single player: downing ends the run (all players down → GAME_OVER)', async () => {
+    const host = new SpHost({ seed: 11 });
+    await host.init();
+    host.player = host.players[0].player;
+    host.handlePlayerDeath();
+    expect(host.game.state).toBe(GAME_STATES.GAME_OVER);
   });
 });

@@ -25,6 +25,7 @@ import { installBrowserShim } from './browser-shim.js';
 import { frameClock } from '../../../js/modules/core/frame-clock.js';
 import { setRandomSource, random } from '../../../js/modules/core/utils.js';
 import { getWaveConfig, getEnemyLevel, getAsteroidLevel } from '../../../js/modules/wave/wave-data.js';
+import { REVIVE_RADIUS, REVIVE_TICKS, REVIVE_DECAY } from '../../../js/sim/constants.js';
 import { GAME_CONFIG, GAME_STATES, MAX_WAVES } from '../../../js/modules/core/constants.js';
 import { makeRng } from '../../../js/sim/rng.js';
 import * as col from '../../../js/modules/combat/collision-system.js';
@@ -410,14 +411,56 @@ export class SpHost {
     }
   }
 
-  // Headless death flow (single player for now). The heavyweight SP version is
-  // pure FX + the game-over overlay; the SIM essentials are: drop the ship out
-  // of collisions and flip the run to GAME_OVER. P5 replaces this with
-  // downed+revive for co-op.
+  // Co-op death flow (P6): a lethal hit DOWNS the current player (active=false,
+  // downed=true) rather than ending the run — a living teammate can revive them
+  // (see _updateRevives). The run only ends (GAME_OVER) when EVERY player is
+  // down. Single-player (1 slot) collapses to the old behavior: down → all-down
+  // → game over. `this.player` is the slot being collision-resolved.
   handlePlayerDeath() {
-    if (this.player) this.player.active = false;
-    if (this.game) this.game.state = GAME_STATES.GAME_OVER;
-    if (this.events?.emit) this.events.emit('audio:player-explosion');
+    const p = this.player;
+    if (!p) return;
+    p.active = false;
+    p.downed = true;
+    p.reviveProgress = 0;
+    if (this.events?.emit) this.events.emit('ship:downed', { x: p.x, y: p.y });
+    if (this.players.every((s) => s.player.downed)) {
+      if (this.game) this.game.state = GAME_STATES.GAME_OVER;
+      if (this.events?.emit) this.events.emit('game:over');
+    }
+  }
+
+  // Revive downed teammates (mirrors the toy sim's co-op revive). A downed ship
+  // accrues reviveProgress while any LIVING teammate is within REVIVE_RADIUS;
+  // at REVIVE_TICKS it comes back at half HP with brief i-frames. Progress
+  // decays when no one is near.
+  _updateRevives() {
+    const r2 = REVIVE_RADIUS * REVIVE_RADIUS;
+    for (const slot of this.players) {
+      const p = slot.player;
+      if (!p.downed) { p.reviveProgress = 0; continue; }
+      let reviver = false;
+      for (const o of this.players) {
+        if (o === slot) continue;
+        const op = o.player;
+        if (op.downed || op.active === false) continue; // living teammate only
+        const dx = op.x - p.x;
+        const dy = op.y - p.y;
+        if (dx * dx + dy * dy <= r2) { reviver = true; break; }
+      }
+      if (reviver) {
+        p.reviveProgress = (p.reviveProgress || 0) + 1;
+        if (p.reviveProgress >= REVIVE_TICKS) {
+          p.active = true;
+          p.downed = false;
+          p.reviveProgress = 0;
+          p.health = Math.max(1, Math.round((p.maxHealth || 40) * 0.5));
+          if (typeof p.makeInvincible === 'function') p.makeInvincible(1500);
+          if (this.events?.emit) this.events.emit('ship:revived', { x: p.x, y: p.y });
+        }
+      } else if (p.reviveProgress > 0) {
+        p.reviveProgress = Math.max(0, p.reviveProgress - REVIVE_DECAY);
+      }
+    }
   }
 
   // ── Cosmetic / UI hooks — no-op on the server (clients re-derive these) ────
@@ -468,6 +511,7 @@ export class SpHost {
     //    the SP code's `this.player` / `window.gameEngine.player` reads (they're
     //    the same object) refer to the player being updated.
     for (const slot of this.players) {
+      if (slot.player.downed) continue; // downed pilots lie still, awaiting revive
       this.player = slot.player;
       const inp = { ...NEUTRAL_INPUT, ...slot.input };
       slot.player.update(inp, noopPool, this.bulletPool, noopAudio, noopPool, false, this.gameField);
@@ -500,6 +544,7 @@ export class SpHost {
     //    World collisions (bullet↔enemy, enemy↔asteroid) deactivate their
     //    entities on the first pass, so they're effectively processed once.
     for (const slot of this.players) {
+      if (slot.player.downed) continue; // downed pilots take no hits / pickups
       this.player = slot.player;
       this.handleCollisions();
     }
@@ -515,10 +560,13 @@ export class SpHost {
     this.goldShapePool.cleanupInactive();
     this.powerupPool.cleanupInactive();
 
-    // 6. Wave progression (opt-in; reuses the real wave-data tables).
+    // 6. Co-op revives (downed pilots brought back by nearby teammates).
+    this._updateRevives();
+
+    // 7. Wave progression (opt-in; reuses the real wave-data tables).
     if (this.autoWaves) this._updateWaves();
 
-    // 7. Drain + return the per-tick semantic event stream for the client.
+    // 8. Drain + return the per-tick semantic event stream for the client.
     return this.events.drain ? this.events.drain() : [];
   }
 
@@ -645,7 +693,8 @@ export class SpHost {
       switch (ev[0]) {
         case 'audio:hit': out.push({ type: EV.SHIP_HIT }); break;
         case 'audio:enemy-hit-by-bullet': out.push({ type: EV.ENEMY_HIT }); break;
-        case 'audio:player-explosion': out.push({ type: EV.SHIP_DOWNED }); break;
+        case 'ship:downed': out.push({ type: EV.SHIP_DOWNED, x: ev[1]?.x, y: ev[1]?.y }); break;
+        case 'ship:revived': out.push({ type: EV.SHIP_REVIVED, x: ev[1]?.x, y: ev[1]?.y }); break;
         case 'wave:start': out.push({ type: EV.WAVE_START, wave: ev[1]?.wave | 0 }); break;
         default: break; // enemy-destroy/asteroid-destroy/coin/powerup owned by the diff
       }

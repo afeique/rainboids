@@ -7,6 +7,26 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.26.0] - 2026-05-27
+
+### Added
+- **Co-op downed + revive** (Path A, P6). A lethal hit now DOWNS a pilot
+  (`active=false, downed=true`) instead of ending the run; a living teammate
+  within `REVIVE_RADIUS` revives them over `REVIVE_TICKS` (~2 s) at half HP with
+  brief i-frames, and revive progress decays when no one is near — mirroring the
+  toy sim's co-op revive so the existing client `dn`/`rp` fields + `SHIP_DOWNED`/
+  `SHIP_REVIVED` events drive the DOWNED overlay and audio unchanged. The run
+  ends (`GAME_OVER`) only when EVERY pilot is down; single-player (1 slot)
+  collapses to the prior behavior (down → all-down → game over).
+- Downed pilots lie still (skipped in the per-slot update + collision passes) and
+  are excluded from enemy aggro until revived.
+
+### Tests
+- `tests/unit/sp-host.test.js` (+4): a lethal hit downs (not game-over) with a
+  teammate alive; a nearby teammate revives (emits `SHIP_DOWNED` + `SHIP_REVIVED`);
+  no nearby teammate → stays downed + progress decays; single-player downing ends
+  the run. 24/24 SpHost + 12/12 SpRoom/netcode green.
+
 ## [0.25.1] - 2026-05-27
 
 ### Fixed
