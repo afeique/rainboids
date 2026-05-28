@@ -10,7 +10,6 @@ import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
 import { drawItemFeed } from './item-feed.js';
 import { drawBossHealthbarHook } from './boss-healthbar.js';
-import { drawThreatLevelHook } from './threat-level.js';
 import { drawBossFxHook } from '../enemy/boss-fx.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 // SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE) HUD cue. isSuppressed is
@@ -103,10 +102,8 @@ export function drawHUD() {
             // hook scans the pool for a boss playing an intro/death
             // sequence and no-ops otherwise.
             drawBossFxHook.call(this);
-            // CD-16 — Threat-Level meter (top-center). 8.0.0 — DISABLED in all
-            // builds for now (see THREAT_HUD_ENABLED in threat-level.js); the
-            // hook early-returns. Call kept so re-enabling is a one-line flip.
-            drawThreatLevelHook.call(this);
+            // 8.8.0 — the THREAT-level meter was removed (it ate top-center
+            // screen space and read as noise); difficulty is CPU-governed now.
         } else {
             // Clear stale rects so input handlers don't act on them.
             this._hudButtonRects = null;

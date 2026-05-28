@@ -1358,8 +1358,6 @@ export class GameEngine {
         // new-run init (incl. CONTINUE/restore: we re-create a fresh one rather
         // than serializing director state — re-warming over the first couple of
         // waves is acceptable, and cold-start holds D=1 for waves 1–2 anyway).
-        // Storing it here auto-lights the CD-16 threat HUD, which resolves
-        // this.game.difficultyDirector in drawThreatLevelHook.
         this.game.difficultyDirector = createDirector();
         // CD-17 — fresh per-run director telemetry buffer (READ-ONLY instrumentation).
         // Reset on every new-run init so records never leak across runs. Each

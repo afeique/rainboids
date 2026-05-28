@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.8.0] - 2026-05-28
+
+### Removed
+- **The THREAT-level HUD meter is gone.** The 5-pip top-center meter (already
+  globally disabled) ate screen real estate and read as noise; deleted the
+  `hud/threat-level.js` module, its `status.js` draw hook, and its tests
+  (unit + QA-18). The difficulty director's internal threat value is untouched
+  for now (it's being reworked into CPU-governed random difficulty).
+
+---
+
 ## [8.7.1] - 2026-05-28
 
 ### Changed
