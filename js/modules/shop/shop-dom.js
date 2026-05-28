@@ -647,27 +647,33 @@ function _applyPreRunChrome() {
     if (_elements.prerunHint) {
         _elements.prerunHint.style.display = _preRun ? '' : 'none';
         if (_preRun) {
+            // 8.19.0 — BUILD is GEAR-only now. Abilities, passives, and stats
+            // are all earned + managed IN-RUN, so the hint only covers gear.
             _elements.prerunHint.textContent =
-                'Equip your weapons + gear on the GEAR tab · pick abilities on the ABILITIES tab · ◂ ▸ / Q E / Tab switch tabs, then START RUN';
+                'Equip your weapons + gear, then START RUN — abilities, passives & stats are earned and managed during the run.';
         }
     }
-    // Legend labels read differently pre-run (the same node states mean
-    // locked / equip-able / equipped / active rather than shop costs).
+    // 8.19.0 — the node-state LEGEND is hidden in BUILD. The GEAR tab uses
+    // EQUIP/UNEQUIP buttons + rarity colors, not the gold-shop swatch key, so
+    // the "Locked / Available / Equipped / Active" legend just added clutter.
+    const legendEl = _elements.menu ? _elements.menu.querySelector('.shop-tree-legend') : null;
+    if (legendEl) legendEl.style.display = _preRun ? 'none' : '';
     _relabelLegend(_preRun);
-    // 8.x — tab visibility per mode: GEAR + PASSIVES are BUILD-only; PRIMARY +
-    // POWER are in-run-shop-only (weapons are equipped gear now, not picked in
-    // the pre-run menu). Hide the off-mode tabs and bounce the active tab off
-    // any tab that isn't visible in the current mode.
-    const prerunOnly = ['gear', 'passiveskills'];
-    const inrunOnly = ['primary', 'power'];
-    for (const t of [...prerunOnly, ...inrunOnly]) {
+    // 8.19.0 — BUILD shows ONLY the GEAR tab (equip your weapons + gear). The
+    // ABILITIES / PASSIVES / STATS tabs are gone from the pre-run — those are
+    // chosen + viewed in-run now. The in-run shop is unchanged (primary, power,
+    // abilities, stats; gear + passiveskills stay hidden there).
+    const ALL_TABS = ['gear', 'primary', 'power', 'abilities', 'passiveskills', 'passive'];
+    const PRERUN_VISIBLE = new Set(['gear']);
+    const INRUN_HIDDEN = new Set(['gear', 'passiveskills']);
+    for (const t of ALL_TABS) {
         const btn = _elements.tabs ? _elements.tabs.querySelector(`.shop-tree-tab[data-tab="${t}"]`) : null;
         if (!btn) continue;
-        const visible = _preRun ? !inrunOnly.includes(t) : !prerunOnly.includes(t);
+        const visible = _preRun ? PRERUN_VISIBLE.has(t) : !INRUN_HIDDEN.has(t);
         btn.style.display = visible ? '' : 'none';
     }
-    if (_preRun && inrunOnly.includes(_activeTab)) { _activeTab = 'gear'; _syncActiveTab(); }
-    if (!_preRun && prerunOnly.includes(_activeTab)) { _activeTab = 'primary'; _syncActiveTab(); }
+    if (_preRun && _activeTab !== 'gear') { _activeTab = 'gear'; _syncActiveTab(); }
+    if (!_preRun && INRUN_HIDDEN.has(_activeTab)) { _activeTab = 'primary'; _syncActiveTab(); }
     // RUN-06 — the RUN SETUP group is BUILD-only; refresh its displayed state
     // when entering BUILD so it reflects the current/last-chosen run shape.
     if (_elements.runSetup) _elements.runSetup.style.display = _preRun ? '' : 'none';
@@ -753,11 +759,11 @@ function _renderRunSetup() {
 // U3 — the ordered, currently-VISIBLE tabs. GEAR + PASSIVES are BUILD-only
 // (hidden in the in-run shop), so they're only in the cycle pre-run.
 function _visibleTabs() {
-    // 8.x — weapons are gear: the pre-run menu no longer picks PRIMARY/POWER
-    // weapons (you equip a weapon item in your inventory / the GEAR tab), so
-    // those tabs are hidden in BUILD mode. The in-run shop keeps them.
+    // 8.19.0 — BUILD is GEAR-only (equip weapons + gear). Abilities, passives,
+    // and stats are chosen + viewed in-run, so the pre-run has a single tab and
+    // nothing to cycle. The in-run shop keeps its tabs.
     return _preRun
-        ? ['gear', 'abilities', 'passiveskills', 'passive']
+        ? ['gear']
         : ['primary', 'power', 'abilities', 'passive'];
 }
 

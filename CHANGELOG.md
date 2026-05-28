@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.19.0] - 2026-05-28
+
+### Changed
+- **Pre-run BUILD is now GEAR-only.** The ABILITIES, PASSIVES, and STATS tabs
+  were removed from the pre-run — those are all chosen and managed IN-RUN now
+  (abilities + passives unlock as you level; stats spend SP on the in-run STATS
+  screen). BUILD opens straight on GEAR with nothing to tab-cycle, freeing the
+  screen up for the gear loadout.
+- **Removed the "Locked / Available / Equipped / Active" legend from BUILD** —
+  the GEAR tab uses EQUIP/UNEQUIP buttons + rarity colors, so the node-state
+  swatch key was just clutter. (The in-run shop keeps its legend.)
+
 ## [8.18.1] - 2026-05-28
 
 ### Fixed

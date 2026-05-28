@@ -192,37 +192,46 @@ test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (
         expect(r.text).toContain('START RUN');
     });
 
-    test('keyboard cycles the BUILD-visible tabs (◂ ▸ / Tab) + shows the pre-run hint & relabeled legend', async ({ page }) => {
-        // 8.x — BUILD opens on GEAR (weapons are equipped here); the visible
-        // cycle is gear → abilities → passiveskills → passive (PRIMARY/POWER are
-        // in-run-shop-only and excluded from the BUILD tab cycle).
+    test('BUILD shows ONLY the GEAR tab — abilities/passives/stats + the legend are gone (8.19.0)', async ({ page }) => {
+        // 8.19.0 — the pre-run is GEAR-only. Abilities, passives, and stats are
+        // earned + managed IN-RUN, so the ABILITIES / PASSIVES / STATS tabs and
+        // the node-state legend were removed from BUILD; there's nothing to
+        // cycle (◂ ▸ / Tab keep it on GEAR), and a one-line hint still shows.
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
             const tree = document.getElementById('shop-tree');
-            const fire = (code, shift = false) => document.dispatchEvent(
-                new KeyboardEvent('keydown', { code, shiftKey: shift, bubbles: true, cancelable: true }));
+            const vis = (tab) => {
+                const b = document.querySelector(`.shop-tree-tab[data-tab="${tab}"]`);
+                return !!(b && getComputedStyle(b).display !== 'none');
+            };
+            const fire = (code) => document.dispatchEvent(
+                new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true }));
             const start = tree.dataset.activeTab;
             fire('ArrowRight'); const afterRight = tree.dataset.activeTab;
-            fire('ArrowLeft');  const afterLeft = tree.dataset.activeTab;
-            fire('Tab');        const afterTab = tree.dataset.activeTab;
-            fire('ArrowLeft'); fire('ArrowLeft'); const wrapped = tree.dataset.activeTab; // abilities→gear→passive
             const hint = document.getElementById('shop-prerun-hint');
-            const firstLegend = document.querySelector('.shop-tree-legend-label');
+            const legend = document.querySelector('.shop-tree-legend');
             return {
-                start, afterRight, afterLeft, afterTab, wrapped,
+                start, afterRight,
+                gearVisible: vis('gear'),
+                abilitiesVisible: vis('abilities'),
+                passivesVisible: vis('passiveskills'),
+                statsVisible: vis('passive'),
+                primaryVisible: vis('primary'),
+                legendShown: !!(legend && getComputedStyle(legend).display !== 'none'),
                 hintShown: hint && hint.style.display !== 'none',
                 hintLen: hint ? hint.textContent.length : 0,
-                legend0: firstLegend && firstLegend.textContent,
             };
         });
         expect(r.start).toBe('gear');
-        expect(r.afterRight).toBe('abilities');
-        expect(r.afterLeft).toBe('gear');
-        expect(r.afterTab).toBe('abilities');
-        expect(r.wrapped).toBe('passive');
+        expect(r.afterRight).toBe('gear'); // nothing else to cycle to
+        expect(r.gearVisible).toBe(true);
+        expect(r.abilitiesVisible).toBe(false);
+        expect(r.passivesVisible).toBe(false);
+        expect(r.statsVisible).toBe(false);
+        expect(r.primaryVisible).toBe(false);
+        expect(r.legendShown).toBe(false); // legend removed from BUILD
         expect(r.hintShown).toBe(true);
         expect(r.hintLen).toBeGreaterThan(10);
-        expect(r.legend0).toBe('Locked'); // pre-run legend relabel (was "Too expensive")
     });
 
     test('START is always enabled — the run primary is equipped gear, not a pre-run pick', async ({ page }) => {
@@ -255,25 +264,15 @@ test.describe('QA-08f: PASSIVES cluster + loadout carry (Phase P4)', () => {
         await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
     });
 
-    test('BUILD has a PASSIVES tab + a populated rule-passive cluster', async ({ page }) => {
+    test('BUILD has NO passives tab — passives are chosen + viewed in-run (8.19.0)', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
             const tab = document.querySelector('.shop-tree-tab[data-tab="passiveskills"]');
-            const nodes = document.querySelectorAll('#shop-tree-passiveskills .shop-node--passive');
-            const starters = [...nodes].map((n) => n.dataset.id);
             return {
-                tabLabel: tab && tab.textContent,
-                tabVisible: tab && getComputedStyle(tab).display !== 'none',
-                count: nodes.length,
-                hasOpportunist: starters.includes('OPPORTUNIST'),
-                hasKeystone: starters.includes('GLASS_CANNON'),
+                tabHidden: tab ? getComputedStyle(tab).display === 'none' : true,
             };
         });
-        expect(r.tabLabel).toBe('PASSIVES');
-        expect(r.tabVisible).toBe(true);
-        expect(r.count).toBeGreaterThan(10);
-        expect(r.hasOpportunist).toBe(true); // base starter (slot-deliverable)
-        expect(r.hasKeystone).toBe(true);    // keystones are slot-deliverable too
+        expect(r.tabHidden).toBe(true); // the PASSIVES tab is gone from the pre-run
     });
 
     test('the PASSIVES tab is hidden in the in-run shop', async ({ page }) => {
@@ -286,23 +285,20 @@ test.describe('QA-08f: PASSIVES cluster + loadout carry (Phase P4)', () => {
         expect(vis).toBe('none');
     });
 
-    test('clicking an owned passive equips it; START carries it into the run', async ({ page }) => {
+    test('an owned passive passed to START carries into the run (programmatic)', async ({ page }) => {
+        // 8.19.0 — there's no pre-run passive picker anymore; the carry path
+        // (beginPreRunFromTree → equipped + active) still works for an owned
+        // passive (used by CONTINUE + future in-run equip).
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            // Equip the base starter OPPORTUNIST by clicking its bubble.
-            const node = document.querySelector('#shop-tree-passiveskills .shop-node[data-id="OPPORTUNIST"]');
-            node.click();
-            const chosenBadge = document.querySelector('#shop-tree-passiveskills .shop-node[data-id="OPPORTUNIST"] .shop-node-badge');
             ge.beginPreRunFromTree({ primaries: ['PULSE_CANNON'], passives: ['OPPORTUNIST'] });
             return {
-                badge: chosenBadge && chosenBadge.textContent,
                 equipped0: ge.player.equippedPassives[0],
                 active: [...ge.player.activePassives],
                 slots: ge.player.passiveSlotsUnlocked,
             };
         });
-        expect(r.badge).toBe('1');                 // slot-1 badge after equip
         expect(r.equipped0).toBe('OPPORTUNIST');
         expect(r.active).toContain('OPPORTUNIST'); // slot 1 unlocked from start
         expect(r.slots).toBeGreaterThanOrEqual(1);
@@ -345,12 +341,13 @@ test.describe('QA-08f: PASSIVES cluster + loadout carry (Phase P4)', () => {
         expect(r.active).toEqual(expect.arrayContaining(['OPPORTUNIST', 'LAST_BASTION']));
     });
 
-    test('no fatal JS errors through the passives BUILD flow', async ({ page }) => {
+    test('no fatal JS errors opening BUILD (passives removed from pre-run)', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            const node = document.querySelector('#shop-tree-passiveskills .shop-node[data-id="LAST_BASTION"]');
-            if (node) { node.click(); node.click(); } // equip + unequip
+            // 8.19.0 — no pre-run passive bubbles to click; just exercise the
+            // carry path that the in-run passives screen will reuse.
+            ge.beginPreRunFromTree({ primaries: ['PULSE_CANNON'], passives: ['LAST_BASTION'] });
         });
         const fatal = page._jsErrors.filter(m =>
             !m.includes('sfxr') && !m.includes('Audio') && !m.includes('audio') &&
