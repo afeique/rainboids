@@ -41,10 +41,11 @@ export const UNLOCK_CATEGORIES = {
     mods: { metaKey: 'unlockedMods', base: [], cost: 5000 },
     // W6 — per-ability Attunements (one element per ability, element-flavored).
     abilityAttunements: { metaKey: 'unlockedAbilityAttunements', base: [], cost: 6000 },
-    // Phase P — rule-modifier Passives (gold-bought, 3 equip slots, swappable
-    // mid-run). Priced between mods and abilities (design §4.2). Two safe,
-    // no-downside modular starters are owned from the start.
-    passives: { metaKey: 'unlockedPassives', base: ['OPPORTUNIST', 'LAST_BASTION'], cost: 9000 },
+    // Phase P — rule-modifier Passives (3 equip slots, swappable mid-run).
+    // 8.20.0 — ALL passives now start LOCKED: a fresh account owns none. They're
+    // awarded DURING a run (level-up unlocks; keystone TRAITS are picked at L10/
+    // L20), so there are no base starters to seed here.
+    passives: { metaKey: 'unlockedPassives', base: [], cost: 9000 },
 };
 
 // ── New-account starter grant ──────────────────────────────────────────────
@@ -91,10 +92,11 @@ export function isAllUnlocked() { return _allUnlocked; }
 
 // 8.x — categories that stay GOLD-GATED even under the looter-pivot "everything
 // unlocked" flag. The pivot frees gear/weapons/powers (power is looted, not
-// bought), but ABILITIES remain a deliberate account-gold sink: a fresh account
-// owns none and buys them in the BUILD ABILITIES tab's "Unlock more" store. The
-// DEBUG unlock-all resolver still covers abilities so dev/testing can grant them.
-const GOLD_GATED_CATEGORIES = new Set(['abilities']);
+// bought), but ABILITIES and PASSIVES are EXCLUDED so a fresh account owns
+// NEITHER — both are acquired specifically during a run (8.20.0: passives +
+// keystone TRAITS are awarded by leveling, not free from the all-unlock pivot).
+// The DEBUG unlock-all resolver still covers them so dev/testing can grant them.
+const GOLD_GATED_CATEGORIES = new Set(['abilities', 'passives']);
 
 /** The set of ids the player can equip in `category`: base ∪ purchased
  *  (∪ everything, when all-unlocked or a debug "unlock all" covers the category).

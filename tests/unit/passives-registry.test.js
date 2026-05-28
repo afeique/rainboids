@@ -113,11 +113,13 @@ describe('passives unlock category (P1)', () => {
         }
     });
 
-    test('getUnlockedSet returns the base starters for fresh meta', () => {
+    test('8.20.0 — ALL passives start LOCKED: fresh meta owns none', () => {
         const set = getUnlockedSet('passives', {});
-        expect(set.has('OPPORTUNIST')).toBe(true);
-        expect(set.has('LAST_BASTION')).toBe(true);
-        // A non-base passive is locked until purchased.
+        // No base starters anymore — passives are awarded during a run
+        // (level-up unlocks + keystone TRAIT picks), not owned from the start.
+        expect(set.size).toBe(0);
+        expect(set.has('OPPORTUNIST')).toBe(false);
+        expect(set.has('LAST_BASTION')).toBe(false);
         expect(set.has('GLASS_CANNON')).toBe(false);
     });
 });

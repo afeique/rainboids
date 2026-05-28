@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.20.0] - 2026-05-28
+
+### Changed
+- **All passives now start LOCKED.** A fresh account owns no passives (the two
+  base starters OPPORTUNIST + LAST_BASTION are gone from the base set, and
+  `passives` joined `abilities` in the set of categories the looter-pivot
+  all-unlock flag skips). Passives are **awarded during a run** instead —
+  unlocked as you level up (and keystone TRAITS picked at level milestones,
+  landing next) — so builds are earned in the run, not pre-shopped.
+
+### Fixed
+- The "un-owned passive is dropped on START" QA case now passes — with no
+  auto-owned base passives, nothing leaks into a fresh run's active set.
+
 ## [8.19.0] - 2026-05-28
 
 ### Changed

@@ -285,23 +285,37 @@ test.describe('QA-08f: PASSIVES cluster + loadout carry (Phase P4)', () => {
         expect(vis).toBe('none');
     });
 
-    test('an owned passive passed to START carries into the run (programmatic)', async ({ page }) => {
-        // 8.19.0 — there's no pre-run passive picker anymore; the carry path
-        // (beginPreRunFromTree → equipped + active) still works for an owned
-        // passive (used by CONTINUE + future in-run equip).
+    test('8.20.0 — passives start LOCKED: a fresh account owns none', async ({ page }) => {
+        // Passives are no longer base-owned; they're awarded DURING a run
+        // (level-up unlocks + keystone TRAIT picks). A fresh run owns zero.
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
-            ge.openArmory();
-            ge.beginPreRunFromTree({ primaries: ['PULSE_CANNON'], passives: ['OPPORTUNIST'] });
+            ge.startNewRun({ primaries: ['PULSE_CANNON'] });
+            return {
+                owned: [...ge.player.ownedPassives],
+                equipped: ge.player.equippedPassives.filter(Boolean),
+                active: [...ge.player.activePassives],
+            };
+        });
+        expect(r.owned).toHaveLength(0);
+        expect(r.equipped).toHaveLength(0);
+        expect(r.active).toHaveLength(0);
+    });
+
+    test('an awarded passive can be equipped + carried (in-run grant)', async ({ page }) => {
+        // The equip/carry mechanic still works once a passive is awarded in-run.
+        const r = await page.evaluate(() => {
+            const ge = window.gameEngine;
+            ge.startNewRun({ primaries: ['PULSE_CANNON'] });
+            ge.player.setOwnedPassives(['OPPORTUNIST']); // simulate an in-run award
+            ge.player.equipPassive(0, 'OPPORTUNIST');
             return {
                 equipped0: ge.player.equippedPassives[0],
                 active: [...ge.player.activePassives],
-                slots: ge.player.passiveSlotsUnlocked,
             };
         });
         expect(r.equipped0).toBe('OPPORTUNIST');
-        expect(r.active).toContain('OPPORTUNIST'); // slot 1 unlocked from start
-        expect(r.slots).toBeGreaterThanOrEqual(1);
+        expect(r.active).toContain('OPPORTUNIST');
     });
 
     test('an un-owned passive is dropped on START', async ({ page }) => {
@@ -319,9 +333,12 @@ test.describe('QA-08f: PASSIVES cluster + loadout carry (Phase P4)', () => {
     test('CONTINUE restores equipped passives + slot count (P5)', async ({ page }) => {
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
-            ge.startNewRun({ primaries: ['PULSE_CANNON'], passives: ['OPPORTUNIST'] });
+            ge.startNewRun({ primaries: ['PULSE_CANNON'] });
+            // 8.20.0 — passives start locked; simulate two in-run awards.
+            ge.player.setOwnedPassives(['OPPORTUNIST', 'LAST_BASTION']);
             ge.player.setPassiveSlotsUnlocked(2);
-            ge.player.equipPassive(1, 'LAST_BASTION'); // base, owned
+            ge.player.equipPassive(0, 'OPPORTUNIST');
+            ge.player.equipPassive(1, 'LAST_BASTION');
             const snap = ge.serializeRunState();
             // Wipe the live passive state, then restore from the snapshot.
             ge.player.equippedPassives = [null, null, null, null, null];
