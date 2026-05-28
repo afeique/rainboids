@@ -54,12 +54,27 @@ export class SpHost {
     this.tickCount = 0;
   }
 
-  /** Construct the real SP Player (dynamic import keeps load order browser-shim-first). */
+  /** Construct the real SP Player + bullet pool (dynamic import, shim-first). */
   async init() {
-    const { Player } = await import('../../../js/modules/player/player.js');
+    const [{ Player }, { PoolManager }, { Bullet }] = await Promise.all([
+      import('../../../js/modules/player/player.js'),
+      import('../../../js/modules/core/pool-manager.js'),
+      import('../../../js/modules/player/bullet.js'),
+    ]);
     this.player = new Player();
     this.player.x = this.gameField.width / 2;
     this.player.y = this.gameField.height / 2;
+    // Real SP player-bullet pool (Bullet's ctor reads window — shimmed).
+    this.bulletPool = new PoolManager(Bullet, 64);
+    // Minimal engine stand-in bullet.update() reads (cluster detonation etc.);
+    // unused by the starter Pulse Cannon but present so any weapon is safe.
+    this._engineStub = {
+      detonateSubBomblet() {},
+      particlePool: noopPool,
+      enemyPool: noopPool,
+      asteroidPool: noopPool,
+      gameField: this.gameField,
+    };
     return this;
   }
 
@@ -67,10 +82,14 @@ export class SpHost {
   tick(input = NEUTRAL_INPUT) {
     frameClock.advance();
     this.tickCount += 1;
-    // Real SP player movement. Firing is held off until the bullet pool is
-    // wired (next iteration), so force fire flags off for now.
-    const inp = { ...NEUTRAL_INPUT, ...input, fire: false, fireSecondary: false };
-    this.player.update(inp, noopPool, noopPool, noopAudio, noopPool, false, this.gameField);
+    const inp = { ...NEUTRAL_INPUT, ...input };
+    // Real SP player movement + firing (spawns real Bullets into bulletPool).
+    this.player.update(inp, noopPool, this.bulletPool, noopAudio, noopPool, false, this.gameField);
+    // Real SP bullet motion/lifetime.
+    for (const b of this.bulletPool.activeObjects) {
+      b.update(noopPool, noopPool, noopPool, this._engineStub, this.gameField);
+    }
+    this.bulletPool.cleanupInactive();
   }
 
   /** Serialize the player to the snapshot wire shape. */
@@ -80,5 +99,10 @@ export class SpHost {
       x: p.x, y: p.y, vx: p.vel.x, vy: p.vel.y, a: p.angle,
       hp: p.health, mhp: p.maxHealth,
     };
+  }
+
+  /** Serialize active bullets (rendered at latest position; no interp needed). */
+  snapshotBullets() {
+    return this.bulletPool.activeObjects.map((b) => ({ x: b.x, y: b.y }));
   }
 }

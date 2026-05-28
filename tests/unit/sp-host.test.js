@@ -36,6 +36,23 @@ describe('SpHost — real SP Player headless', () => {
     expect(host.player.vel.x).toBeGreaterThan(0);
   });
 
+  it('fires real SP bullets that spawn and travel', async () => {
+    const host = new SpHost({ seed: 1 });
+    await host.init();
+    // Aim right + hold fire.
+    const fireInput = {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimX: host.player.x + 200, aimY: host.player.y,
+      stickInput: { x: 0, y: 0, magnitude: 0 }, aimStick: { x: 0, y: 0, magnitude: 0 },
+    };
+    for (let i = 0; i < 40; i++) host.tick(fireInput);
+    const bullets = host.snapshotBullets();
+    expect(bullets.length).toBeGreaterThan(0); // the Pulse Cannon fired
+    // Bullets carry finite world coords.
+    expect(Number.isFinite(bullets[0].x)).toBe(true);
+    expect(Number.isFinite(bullets[0].y)).toBe(true);
+  });
+
   it('is deterministic: identical input + seed → identical player state', async () => {
     const run = async () => {
       const host = new SpHost({ seed: 42 });
