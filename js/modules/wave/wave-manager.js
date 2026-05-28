@@ -7,6 +7,13 @@
 
 import { GAME_CONFIG, GAME_STATES, MAX_WAVES, getEnemyFiringCooldown, getRunConfig, runMaxWaves, getBossSegment, isBossWave, runBossCount } from '../core/constants.js';
 import { passiveSlotsUnlockedAfter } from '../combat/passive-data.js';
+import { xpForLevel } from '../core/sp-stats.js';
+
+// 8.12.0 — fraction of the current level's XP requirement granted per wave
+// clear, so the player levels roughly every 1/FRAC ≈ 2.8 waves (the small
+// per-kill XP brings fast clearers nearer ~2.4). Self-scaling: holds at every
+// level because the grant tracks xpForLevel(level).
+const WAVE_CLEAR_LEVEL_FRAC = 0.35;
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
 import { linkBosses } from '../enemy/boss-rage.js';
@@ -221,11 +228,15 @@ export function updateWaveSystem() {
         if (bossWave && this.player && typeof this.player.setPassiveSlotsUnlocked === 'function') {
             this.player.setPassiveSlotsUnlocked(passiveSlotsUnlockedAfter(getBossSegment(clearedWave), runBossCount(this.game)));
         }
-        const bonusXP = 40 + clearedWave * 15; // gainExperience is a no-op since 6.0.0; kept for back-compat
-        // 6.x — Wave-clear GOLD bonus REMOVED. Gold now comes only from per-kill
-        // drops (flat + randomized), so clearing a wave grants no lump sum —
-        // keeping gold-find purely skill-based (kill fast / hold streaks).
-        this.player.gainExperience(bonusXP);
+        // 8.12.0 — level up roughly every 2–3 waves: each wave clear grants a
+        // FRACTION of the current level's XP requirement (self-scaling, so the
+        // cadence holds at every level). 0.35 ≈ one level per ~2.8 clears before
+        // the small per-kill XP nudges fast clearers toward ~2.4. Drives the
+        // ability/passive level-unlock pacing.
+        if (typeof this.player.addXp === 'function' && typeof this.player.level === 'number') {
+            this.player.addXp(Math.round(xpForLevel(this.player.level) * WAVE_CLEAR_LEVEL_FRAC));
+        }
+        // 6.x — Wave-clear GOLD bonus REMOVED (gold is per-kill only, skill-based).
         // 6.x — Health pickups on clear: a few every wave, more at a stage
         // clear. The flat economy no longer hands out wave-clear gold and
         // ability heals are scarce early, so this keeps sustain healthy.

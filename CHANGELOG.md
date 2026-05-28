@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.12.0] - 2026-05-28
+
+### Changed
+- **You level up about every 2–3 waves now** (was ~1 level per 8–10). Each wave
+  clear grants `0.35 × xpForLevel(level)` (self-scaling, so the cadence holds at
+  every level), and per-kill XP is trimmed to a small bonus (12→4, boss 120→40)
+  that nudges fast clearers up a touch without breaking the band. This drives the
+  upcoming ability/passive level-unlock pacing — a short run gives a few levels,
+  a long run many.
+
+---
+
 ## [8.11.0] - 2026-05-28
 
 ### Changed

@@ -1312,12 +1312,13 @@ export function onEnemyKill(enemy) {
         }
     }
 
-    // 6.35.0 — XP toward the persistent meta level. Bosses are worth a
-    // big chunk; regular kills a flat trickle. Tuned slow so a full run
-    // is ~3-4 levels early on and reaching 100 is a long cross-run grind.
+    // 8.12.0 — per-kill XP is now a small bonus ON TOP of the wave-clear grant
+    // (wave-manager) that drives the ~1-level-per-2-3-waves cadence. Kept modest
+    // (a flat trickle) so it nudges fast clearers up a touch without blowing past
+    // the band; a boss is a chunkier reward.
     if (this.player && typeof this.player.addXp === 'function') {
         const isBoss = !!(enemy && enemy.isBoss);
-        this.player.addXp(isBoss ? 120 : 12);
+        this.player.addXp(isBoss ? 40 : 4);
     }
 
     // 5.74.3 — kill-streak coin bonuses removed. Gold is pickup-only;
