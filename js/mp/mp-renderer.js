@@ -15,7 +15,9 @@ import {
 import { makeRng } from '../sim/rng.js';
 import { nebulaRenderer } from '../modules/performance/nebula-renderer.js';
 
-// Map the headless-sim enemy type keys → the SP shape registry's type strings.
+// Legacy toy-sim enemy key → SP shape registry type. The real SP sim already
+// sends SP type strings (HUNTER/WASP/GUARDIAN/…), which drawEnemyShapeByType
+// renders directly; only the toy sim's generic 'chaser' needs remapping.
 const SP_ENEMY_SHAPE = { chaser: 'HUNTER' };
 
 // SP nebula background (shared Canvas2D renderer, self-contained). Generated
@@ -123,8 +125,9 @@ function drawAsteroid(ctx, ast, now) {
 function drawEnemy(ctx, e, now) {
   // SP enemy silhouette (shared render/shapes.js). Enemy shapes draw at the
   // origin, so pre-translate + rotate to the enemy's facing; `now` drives idle
-  // animation. The headless-sim type maps to the SP shape registry.
-  const type = SP_ENEMY_SHAPE[e.type] || 'HUNTER';
+  // animation. Real-sim types pass straight through to the SP shape registry;
+  // the legacy toy key is remapped; anything unknown falls back to HUNTER.
+  const type = SP_ENEMY_SHAPE[e.type] || e.type || 'HUNTER';
   ctx.save();
   ctx.translate(e.x, e.y);
   ctx.rotate(e.angle);

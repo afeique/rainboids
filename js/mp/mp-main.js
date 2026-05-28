@@ -113,6 +113,7 @@ async function main() {
     remoteShips: () => [...lastRemote.entries()].map(([id, s]) => ({ id, x: s.x, y: s.y })),
     asteroidCount: () => lastAsteroids.size,
     enemyCount: () => lastEnemies.size,
+    enemyTypes: () => [...new Set([...lastEnemies.values()].map((e) => e.type))],
     bulletCount: () => latestBullets.length,
     dropCount: () => lastDrops.size,
     localHp: () => localHp,

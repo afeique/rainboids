@@ -7,6 +7,22 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.27.1] - 2026-05-27
+
+### Fixed
+- **MP enemies all rendered as the HUNTER silhouette.** The client's enemy-shape
+  lookup (`SP_ENEMY_SHAPE[e.type] || 'HUNTER'`) was a toy-sim leftover that only
+  mapped the generic `chaser` key, so every real-sim type (WASP, GUARDIAN,
+  STALKER, DRIFTER, PROWLER, WEAVER, SENTINEL, TANGERINE, TITAN) fell through to
+  the HUNTER shape. Pass the real SP type straight to `drawEnemyShapeByType` (it
+  already renders all ten); keep the legacy `chaser` remap + HUNTER fallback.
+  Now each enemy renders with its own SP shape — true silhouette parity.
+
+### Tests
+- `tests/qa/13-mp-sphost.spec.js`: assert the client receives ≥2 distinct enemy
+  types (wave 1 = HUNTER + WASP), so the varied roster is proven to stream + render
+  without error. Added `__mp.enemyTypes()` debug accessor. Green.
+
 ## [0.27.0] - 2026-05-27
 
 ### Changed

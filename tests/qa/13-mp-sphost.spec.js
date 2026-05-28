@@ -87,6 +87,9 @@ test.describe('MULTIPLAYER — co-op on the DEFAULT (real SP) sim', () => {
     await expect.poll(() => a.evaluate(() => window.__mp.asteroidCount())).toBeGreaterThan(0);
     await expect.poll(() => a.evaluate(() => window.__mp.wave())).toBeGreaterThanOrEqual(1);
     await expect.poll(() => a.evaluate(() => window.__mp.enemyCount())).toBeGreaterThan(0);
+    // The varied real-sim roster reaches the client (wave 1 = HUNTER + WASP) and
+    // each renders with its OWN SP shape — not all collapsed to one silhouette.
+    await expect.poll(() => a.evaluate(() => window.__mp.enemyTypes().length)).toBeGreaterThanOrEqual(2);
 
     const aId = await a.evaluate(() => window.__mp.playerId());
 
