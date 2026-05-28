@@ -7,6 +7,27 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.32.0] - 2026-05-28
+
+### Added
+- **Modular multi-phase bosses are LIVE** (Path A, P7 — completes boss-fight
+  parity). Boss waves now spawn the real SP boss descriptor for the stage
+  (`spawnModularBoss(stage)` in `startWave`; tier boss is the descriptorless
+  fallback) — multi-phase, orbiting bolt-head parts that shield the core, intro,
+  and death script, all run headless by the descriptor driver. The authoritative
+  `collision-system` already routes player fire to the boss parts, so destroying
+  the bolt-heads to expose the core works exactly like SP.
+- **Boss parts on the wire + rendered.** `buildSnapshot` serializes each boss's
+  living parts (`pt`: position/radius/hp); the interpolator lerps them by index;
+  the client renders them as glowing cyan nodes with a per-part damage ring, so
+  players can see and target the shields.
+
+### Tests
+- `tests/unit/sp-host.test.js`: wave 3 spawns the real modular boss (a descriptor
+  `bossId`, initialized `_partsState`) and serializes living parts with finite
+  coords; `_applyBossTier` retains a direct test as the descriptorless fallback.
+  41/41 MP unit green; default-sim co-op QA green (no wave-1 regression).
+
 ## [0.31.0] - 2026-05-28
 
 ### Added

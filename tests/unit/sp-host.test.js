@@ -181,28 +181,35 @@ describe('SpHost — headless wave driver', () => {
     expect(host.enemyPool.activeObjects.length).toBe(0);
   });
 
-  it('spawns a tier-scaled BOSS on a boss wave (wave 3)', async () => {
+  it('boss wave (wave 3) spawns the REAL modular boss with serialized parts', async () => {
     const host = new SpHost({ seed: 3 });
     await host.init();
-    const lvl = getEnemyLevel(3, 1); // startWave uses playerLevel=1 by default
-    // A plain TITAN at the same level, for an HP/size baseline.
+    host.startWave(3); // wave 3 = stage-1 boss (the modular Harbinger descriptor)
+    const boss = host.enemyPool.activeObjects.find((e) => e.isBoss);
+    expect(boss).toBeTruthy();
+    expect(typeof boss.bossId).toBe('string');         // a real descriptor, not a tier stand-in
+    expect(boss._partsState).toBeTruthy();              // orbiting parts initialized
+    // The boss + its living parts surface on the wire for the client to render.
+    host.tick(); // let the parts position themselves
+    const snapBoss = host.buildSnapshot().enemies.find((e) => e.b > 0);
+    expect(snapBoss).toBeTruthy();
+    expect(Array.isArray(snapBoss.pt) && snapBoss.pt.length).toBeGreaterThan(0);
+    expect(Number.isFinite(snapBoss.pt[0].x) && Number.isFinite(snapBoss.pt[0].y)).toBe(true);
+  });
+
+  it('_applyBossTier inflates an enemy into a tier boss (descriptorless fallback)', async () => {
+    const host = new SpHost({ seed: 3 });
+    await host.init();
+    const lvl = getEnemyLevel(3, 1);
     const plain = host.spawnEnemy(0, 0, 'TITAN', lvl);
     const plainHp = plain.maxHealth;
     const plainR = plain.radius;
-    plain.active = false;
-    host.enemyPool.cleanupInactive();
-
-    host.startWave(3); // wave 3 = stage-1 boss (TITAN, tier 1)
-    const boss = host.enemyPool.activeObjects.find((e) => e.isBoss);
-    expect(boss).toBeTruthy();
-    expect(boss.type).toBe('TITAN');
+    const boss = host.spawnEnemy(100, 100, 'TITAN', lvl);
+    host._applyBossTier(boss, 1);
+    expect(boss.isBoss).toBe(true);
     expect(boss.bossTier).toBe(1);
-    expect(boss.maxHealth).toBeGreaterThan(plainHp * 3);  // tier-1 hpMul = ×4
-    expect(boss.radius).toBeGreaterThan(plainR * 1.3);    // tier-1 sizeMul = ×1.35
-    // The boss tier surfaces on the wire for the client's boss health bar.
-    const snapBoss = host.buildSnapshot().enemies.find((e) => e.b > 0);
-    expect(snapBoss).toBeTruthy();
-    expect(snapBoss.b).toBe(1);
+    expect(boss.maxHealth).toBeGreaterThan(plainHp * 3); // tier-1 hpMul = ×4
+    expect(boss.radius).toBeGreaterThan(plainR * 1.3);   // tier-1 sizeMul = ×1.35
   });
 
   it('runs a real MODULAR boss (harbinger) headless — phases/parts/intro tick', async () => {

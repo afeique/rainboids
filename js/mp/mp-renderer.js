@@ -189,6 +189,39 @@ function drawEnemy(ctx, e, now) {
   drawEnemyShapeByType(ctx, type, { radius: e.r, now: now || 0 });
   ctx.restore();
 
+  // Modular-boss parts: the orbiting bolt-heads that shield the core. Drawn as
+  // glowing cyan nodes (with a damage ring) so the player can see + target them.
+  if (e.parts && e.parts.length) {
+    for (const p of e.parts) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 1.7);
+      g.addColorStop(0, 'rgba(120,200,255,0.45)');
+      g.addColorStop(1, 'rgba(120,200,255,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r * 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.fillStyle = 'rgba(30,46,72,0.92)';
+      ctx.strokeStyle = '#7ec8ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (p.mhp && p.hp < p.mhp) {
+        ctx.strokeStyle = '#9ece6a';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r + 3, -Math.PI / 2, -Math.PI / 2 + (p.hp / p.mhp) * Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
   if (e.boss) {
     // Boss health bar — wide, always-on, with a label (SP shows a top banner;
     // this above-boss bar reads clearly in the shared arena).

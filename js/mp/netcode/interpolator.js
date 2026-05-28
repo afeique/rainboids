@@ -127,6 +127,11 @@ export class Interpolator {
         mhp: sb.mhp,
         type: sb.ty,
         boss: sb.b || 0,
+        // Boss parts (orbiting bolt-heads). Lerp by index when the count matches
+        // both snapshots; otherwise (a part just died) snap to the latest.
+        parts: (sa.pt && sb.pt && sa.pt.length === sb.pt.length)
+          ? sb.pt.map((p, i) => ({ x: lerp(sa.pt[i].x, p.x, f), y: lerp(sa.pt[i].y, p.y, f), r: p.r, hp: p.hp, mhp: p.mhp }))
+          : (sb.pt || null),
       });
     }
     return out;

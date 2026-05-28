@@ -330,19 +330,27 @@ export class SpHost {
       const p = this._edgeSpawnPoint();
       this.asteroidPool.get(p.x, p.y, random(30, 60), astLevel);
     }
-    // Boss groups spawn as tier-scaled bosses (BOSS_TIER_STATS: inflated HP +
-    // size + the isBoss/bossTier flags the client reads for the boss health bar).
-    // The heavier modular boss path (descriptors / phases / parts / intro) is a
-    // later P7 step; this gives boss waves a real, hulking, high-HP boss now.
+    // A boss group spawns the REAL modular boss for this stage (multi-phase +
+    // orbiting parts + intro, run headless by the descriptor driver). If no
+    // descriptor exists for the stage, fall back to a tier-scaled boss
+    // (BOSS_TIER_STATS). Escort (non-boss) groups spawn normally.
+    const wps = (this.game.runConfig && this.game.runConfig.wavesPerStage) || 3;
+    const bossCx = this.gameField.width / 2;
+    const bossCy = this.gameField.height * 0.28; // top-center dramatic entrance
     for (const sub of (cfg.subWaves || [])) {
       for (const group of sub) {
-        const isBoss = !!group.isBoss;
+        if (group.isBoss) {
+          const stage = Math.max(1, Math.ceil(n / wps));
+          const mb = this.spawnModularBoss(stage, { x: bossCx, y: bossCy });
+          if (!mb) {
+            const e = this.spawnEnemy(bossCx, bossCy, group.type, this.game.enemyLevel);
+            if (e) this._applyBossTier(e, group.bossTier || 1);
+          }
+          continue; // one boss per boss group (ignore count)
+        }
         for (let i = 0; i < (group.count | 0); i++) {
-          const p = isBoss
-            ? { x: this.gameField.width / 2, y: this.gameField.height * 0.28 } // dramatic entrance, top-center
-            : this._edgeSpawnPoint();
-          const e = this.spawnEnemy(p.x, p.y, group.type, this.game.enemyLevel);
-          if (isBoss && e) this._applyBossTier(e, group.bossTier || 1);
+          const p = this._edgeSpawnPoint();
+          this.spawnEnemy(p.x, p.y, group.type, this.game.enemyLevel);
         }
       }
     }
@@ -730,11 +738,24 @@ export class SpHost {
         li: slot.lastInputTick,
       };
     });
-    const enemies = this.enemyPool.activeObjects.map((e) => ({
-      id: e._netId, x: round(e.x), y: round(e.y), a: round(e.faceAngle ?? e.angle ?? 0, 3),
-      r: e.radius, hp: Math.ceil(e.health), mhp: e.maxHealth, ty: e.type,
-      b: e.isBoss ? (e.bossTier || 1) : 0, // boss tier (0 = ordinary enemy)
-    }));
+    const enemies = this.enemyPool.activeObjects.map((e) => {
+      const out = {
+        id: e._netId, x: round(e.x), y: round(e.y), a: round(e.faceAngle ?? e.angle ?? 0, 3),
+        r: e.radius, hp: Math.ceil(e.health), mhp: e.maxHealth, ty: e.type,
+        b: e.isBoss ? (e.bossTier || 1) : 0, // boss tier (0 = ordinary enemy)
+      };
+      // Modular boss: serialize the living orbiting parts (the bolt-heads that
+      // shield the core) so the client can render + the player can target them.
+      const ps = e._partsState && e._partsState.parts;
+      if (ps && ps.length) {
+        const pt = [];
+        for (const p of ps) {
+          if (p.alive) pt.push({ x: round(p.x), y: round(p.y), r: round(p.radius, 1), hp: Math.ceil(p.health), mhp: p.maxHealth });
+        }
+        if (pt.length) out.pt = pt;
+      }
+      return out;
+    });
     const asteroids = this.asteroidPool.activeObjects.map((a) => ({
       id: a._netId, x: round(a.x), y: round(a.y),
       // SP asteroids tumble in 3D (rot3D), not a flat `angle`; send rot3D.x as
