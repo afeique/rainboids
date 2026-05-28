@@ -31,6 +31,7 @@ import * as col from '../../../js/modules/combat/collision-system.js';
 import * as combat from '../../../js/modules/combat/combat-manager.js';
 import * as lifecycle from '../../../js/modules/player/lifecycle.js';
 import { EventBus } from '../../../js/modules/core/event-bus.js';
+import { EV } from '../../../js/sim/events.js';
 
 // Headless stand-ins for the presentation systems the SP update() paths take as
 // arguments. A pool stub swallows .get()/.updateActive() (no cosmetic particles
@@ -107,6 +108,23 @@ export class SpHost {
     // When on, tick() self-drives enemy spawns from the REAL wave-data tables.
     this.autoWaves = false;
     this.waveStarted = false;
+    // ── Snapshot / network identity ──
+    // The owning ship's network id (SpRoom assigns the real player id; default 1
+    // for headless single-player tests). The client reconciles its ship by this.
+    this.playerId = 1;
+    this._lastInputTick = 0;
+    // Stable per-entity network ids. Every pool acquisition (spawn / split /
+    // bullet fire) stamps a FRESH id (see init's pool-get wrap), so a recycled
+    // pool object never reuses an id — keeping snapshot diffs + client-side
+    // interpolation correct across deaths and respawns.
+    this._netCounter = 0;
+    // Previous-tick entity views, keyed by net id, for diff-derived FX events
+    // (deaths/spawns/collects carry the LAST-known position the SP audio stream
+    // can't provide).
+    this._lastEnemies = new Map();
+    this._lastAsteroids = new Map();
+    this._lastDrops = new Map();
+    this._lastBulletIds = new Set();
   }
 
   /**
@@ -157,6 +175,20 @@ export class SpHost {
     this._activeShotElement = null;
     // The SP code reads window.gameEngine in a few places — point it here.
     if (globalThis.window) globalThis.window.gameEngine = this;
+    // Stamp a fresh network id on every pool acquisition. This covers ALL spawn
+    // sites — including the ones SpHost doesn't call directly (asteroid splits +
+    // bullet fire happen inside collision-system / weapons via `this.X.get()`) —
+    // so a recycled pool slot never carries a stale id into the snapshot.
+    for (const pool of [this.bulletPool, this.enemyPool, this.enemyBulletPool,
+      this.asteroidPool, this.colorStarPool, this.goldCoinPool, this.goldShapePool,
+      this.powerupPool]) {
+      const origGet = pool.get.bind(pool);
+      pool.get = (...args) => {
+        const o = origGet(...args);
+        if (o) o._netId = ++this._netCounter;
+        return o;
+      };
+    }
     return this;
   }
 
@@ -364,6 +396,7 @@ export class SpHost {
     frameClock.advance();
     this.tickCount += 1;
     const inp = { ...NEUTRAL_INPUT, ...input };
+    if (typeof input.clientTick === 'number') this._lastInputTick = input.clientTick;
 
     // 1. Player movement + firing (spawns real Bullets into bulletPool).
     this.player.update(inp, noopPool, this.bulletPool, noopAudio, noopPool, false, this.gameField);
@@ -443,4 +476,106 @@ export class SpHost {
     for (const g of this.goldShapePool.activeObjects) orbs.push({ x: g.x, y: g.y, k: 'gold' });
     return orbs;
   }
+
+  // ── Network serialization (the MP wire contract) ──────────────────────────
+  // Produces the SAME snapshot shape the toy-sim room emits + the SP client
+  // consumes (ships / enemies / asteroids / bullets / drops), so the existing
+  // SP-shape MP renderer + interpolator render it unchanged.
+
+  /** Active drops in wire shape: { id, x, y, k } (k ∈ health|gold). */
+  _drops() {
+    const drops = [];
+    for (const s of this.colorStarPool.activeObjects) {
+      drops.push({ id: s._netId, x: round(s.x), y: round(s.y), k: s.starType === 'money' ? 'gold' : 'health' });
+    }
+    for (const c of this.goldCoinPool.activeObjects) drops.push({ id: c._netId, x: round(c.x), y: round(c.y), k: 'gold' });
+    for (const g of this.goldShapePool.activeObjects) drops.push({ id: g._netId, x: round(g.x), y: round(g.y), k: 'gold' });
+    return drops;
+  }
+
+  /** Full authoritative snapshot in the MP wire shape. */
+  buildSnapshot() {
+    const p = this.player;
+    const ships = [{
+      id: this.playerId,
+      x: round(p.x), y: round(p.y), vx: round(p.vel.x), vy: round(p.vel.y), a: round(p.angle, 3),
+      hp: Math.ceil(p.health), mhp: p.maxHealth,
+      al: p.active !== false, dn: false, rp: 0,
+      g: this.game?.money | 0,
+      li: this._lastInputTick,
+    }];
+    const enemies = this.enemyPool.activeObjects.map((e) => ({
+      id: e._netId, x: round(e.x), y: round(e.y), a: round(e.faceAngle ?? e.angle ?? 0, 3),
+      r: e.radius, hp: Math.ceil(e.health), mhp: e.maxHealth, ty: e.type,
+    }));
+    const asteroids = this.asteroidPool.activeObjects.map((a) => ({
+      id: a._netId, x: round(a.x), y: round(a.y), a: round(a.angle, 3), r: round(a.radius, 1),
+    }));
+    const bullets = this.bulletPool.activeObjects.map((b) => ({ id: b._netId, x: round(b.x), y: round(b.y), o: this.playerId }));
+    const drops = this._drops();
+    return {
+      tick: this.tickCount,
+      wave: this.game?.currentWave | 0,
+      ws: this.enemyPool.activeObjects.length > 0 ? 'active' : 'intermission',
+      ships, enemies, asteroids, bullets, drops,
+    };
+  }
+
+  /**
+   * Translate one tick into the EV.* protocol event stream the SP client maps to
+   * sounds + juice. Positioned FX (spawns / deaths / collects / bullet-spawn)
+   * are DERIVED from the snapshot diff (the SP audio stream carries no coords);
+   * positionless sounds (hits, downs, wave-start) come from the SP audio stream.
+   * Call AFTER buildSnapshot for this tick (it diffs against the prior tick).
+   */
+  deriveEvents(snapshot, rawEvents) {
+    const out = [];
+    const curEnemies = new Map(snapshot.enemies.map((e) => [e.id, e]));
+    const curAsteroids = new Map(snapshot.asteroids.map((a) => [a.id, a]));
+    const curDrops = new Map(snapshot.drops.map((d) => [d.id, d]));
+    const curBulletIds = new Set(snapshot.bullets.map((b) => b.id));
+
+    // Spawns (new ids this tick).
+    for (const [id, e] of curEnemies) if (!this._lastEnemies.has(id)) out.push({ type: EV.ENEMY_SPAWN, x: e.x, y: e.y });
+    // Deaths / collects (ids that vanished) — positioned at last-known coords.
+    for (const [id, e] of this._lastEnemies) if (!curEnemies.has(id)) out.push({ type: EV.ENEMY_DEATH, x: e.x, y: e.y, r: e.r });
+    for (const [id, a] of this._lastAsteroids) if (!curAsteroids.has(id)) out.push({ type: EV.ASTEROID_DESTROYED, x: a.x, y: a.y, r: a.r });
+    for (const [id, d] of this._lastDrops) if (!curDrops.has(id)) out.push({ type: EV.DROP_COLLECTED, x: d.x, y: d.y, kind: d.k });
+    // Bullet fire: any new bullet id this tick → one shoot event (avoids N sounds
+    // for a multishot volley).
+    let firedThisTick = false;
+    for (const id of curBulletIds) if (!this._lastBulletIds.has(id)) { firedThisTick = true; break; }
+    if (firedThisTick) out.push({ type: EV.BULLET_SPAWN });
+
+    // Positionless sounds from the SP audio stream.
+    for (const ev of (rawEvents || [])) {
+      switch (ev[0]) {
+        case 'audio:hit': out.push({ type: EV.SHIP_HIT }); break;
+        case 'audio:enemy-hit-by-bullet': out.push({ type: EV.ENEMY_HIT }); break;
+        case 'audio:player-explosion': out.push({ type: EV.SHIP_DOWNED }); break;
+        case 'wave:start': out.push({ type: EV.WAVE_START, wave: ev[1]?.wave | 0 }); break;
+        default: break; // enemy-destroy/asteroid-destroy/coin/powerup owned by the diff
+      }
+    }
+
+    this._lastEnemies = curEnemies;
+    this._lastAsteroids = curAsteroids;
+    this._lastDrops = curDrops;
+    this._lastBulletIds = curBulletIds;
+    return out;
+  }
+
+  /** Convenience: advance one tick and return { snapshot, events } for the room. */
+  frame(input = NEUTRAL_INPUT) {
+    const rawEvents = this.tick(input);
+    const snapshot = this.buildSnapshot();
+    const events = this.deriveEvents(snapshot, rawEvents);
+    return { snapshot, events };
+  }
+}
+
+/** Round to `dp` decimal places (wire compactness; mirrors room.js). */
+function round(n, dp = 2) {
+  const f = 10 ** dp;
+  return Math.round(n * f) / f;
 }

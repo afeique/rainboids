@@ -7,6 +7,7 @@ import { describe, it, expect, afterEach } from '@jest/globals';
 import { SpHost } from '../../server/src/sim/sp-host.js';
 import { frameClock } from '../../js/modules/core/frame-clock.js';
 import { setRandomSource } from '../../js/modules/core/utils.js';
+import { EV } from '../../js/sim/events.js';
 
 afterEach(() => { frameClock.reset(); setRandomSource(null); });
 
@@ -168,5 +169,71 @@ describe('SpHost — headless wave driver', () => {
     for (let i = 0; i < 5; i++) host.tick();
     expect(host.waveStarted).toBe(false);
     expect(host.enemyPool.activeObjects.length).toBe(0);
+  });
+});
+
+describe('SpHost — snapshot + protocol events (MP wire)', () => {
+  it('builds the wire snapshot shape the SP client consumes', async () => {
+    const host = new SpHost({ seed: 5 });
+    await host.init();
+    host.autoWaves = true;
+    host.tick(); // spawn wave 1
+    const snap = host.buildSnapshot();
+    expect(snap).toHaveProperty('tick');
+    expect(snap).toHaveProperty('wave', 1);
+    // One ship — the local player — keyed by playerId, with reconcile fields.
+    expect(snap.ships).toHaveLength(1);
+    const ship = snap.ships[0];
+    expect(ship.id).toBe(host.playerId);
+    for (const k of ['x', 'y', 'vx', 'vy', 'a', 'hp', 'mhp', 'al', 'g', 'li']) {
+      expect(ship).toHaveProperty(k);
+    }
+    // Enemies + asteroids carry stable ids + render fields.
+    expect(snap.enemies.length).toBeGreaterThan(0);
+    expect(snap.enemies[0]).toHaveProperty('id');
+    expect(snap.enemies[0]).toHaveProperty('ty');
+    expect(snap.asteroids.length).toBeGreaterThan(0);
+    expect(snap.asteroids[0]).toHaveProperty('id');
+  });
+
+  it('keeps stable net ids across ticks (interpolation needs this)', async () => {
+    const host = new SpHost({ seed: 5 });
+    await host.init();
+    const e = host.spawnEnemy(host.player.x + 300, host.player.y, 'HUNTER', 1);
+    const id1 = host.buildSnapshot().enemies[0].id;
+    host.tick();
+    const id2 = host.buildSnapshot().enemies.find((x) => x.id === id1);
+    expect(id2).toBeTruthy(); // same enemy → same id next tick
+    expect(typeof e._netId).toBe('number');
+  });
+
+  it('derives a positioned ENEMY_DEATH event + a BULLET_SPAWN on fire', async () => {
+    const host = new SpHost({ seed: 5 });
+    await host.init();
+    host.cheats.onePunchMan = true;
+    const e = host.spawnEnemy(host.player.x + 110, host.player.y, 'HUNTER', 1);
+    host.buildSnapshot(); // prime the diff baseline (enemy present)
+    host.deriveEvents(host.buildSnapshot(), []);
+    const fireInput = {
+      fire: true, aimX: e.x, aimY: e.y, clientTick: 1,
+      stickInput: { x: 0, y: 0, magnitude: 0 }, aimStick: { x: 0, y: 0, magnitude: 0 },
+    };
+    const collected = [];
+    for (let i = 0; i < 240; i++) {
+      const { events } = host.frame(fireInput);
+      collected.push(...events);
+    }
+    const death = collected.find((ev) => ev.type === EV.ENEMY_DEATH);
+    expect(death).toBeTruthy();
+    expect(Number.isFinite(death.x) && Number.isFinite(death.y)).toBe(true); // positioned
+    expect(collected.some((ev) => ev.type === EV.BULLET_SPAWN)).toBe(true);
+  });
+
+  it('frame() ticks + serializes, echoing the input tick for reconcile', async () => {
+    const host = new SpHost({ seed: 5 });
+    await host.init();
+    const { snapshot, events } = host.frame({ clientTick: 42, right: true });
+    expect(Array.isArray(events)).toBe(true);
+    expect(snapshot.ships[0].li).toBe(42);
   });
 });

@@ -7,6 +7,30 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.22.0] - 2026-05-27
+
+### Added
+- **SpHost network serialization + protocol event stream** (Path A, P4 — the wire
+  layer before live server integration). `buildSnapshot()` emits the SAME shape
+  the toy-sim room sends + the SP client consumes (`ships` / `enemies` /
+  `asteroids` / `bullets` / `drops` with reconcile fields `al`/`dn`/`rp`/`g`/`li`),
+  so the existing SP-shape MP renderer + interpolator render it unchanged.
+- **Stable network identity across ticks.** Every pool acquisition (spawn /
+  asteroid split / bullet fire) stamps a fresh `_netId` via a wrapped `pool.get`,
+  so a recycled pool slot never carries a stale id — keeping snapshot diffs +
+  client interpolation correct across deaths and respawns.
+- **`deriveEvents()` → `EV.*` stream.** Positioned FX (enemy/asteroid deaths,
+  spawns, drop collects, bullet-fire) are DERIVED from the snapshot diff (the SP
+  audio stream carries no coordinates), while positionless sounds (ship/enemy
+  hits, ship-down, wave-start) come from the SP audio event stream — full SP
+  audio + explosion-ring parity without the server simulating cosmetics.
+- **`frame(input)`** convenience: one tick → `{ snapshot, events }` for the room.
+
+### Tests
+- `tests/unit/sp-host.test.js` (+4): wire snapshot shape; stable ids across ticks;
+  a positioned `ENEMY_DEATH` + `BULLET_SPAWN` on fire; `frame()` echoes the input
+  tick for reconcile. 16/16 green.
+
 ## [0.21.0] - 2026-05-27
 
 ### Added
