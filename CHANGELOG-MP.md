@@ -7,6 +7,19 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.46.0] - 2026-05-28
+
+### Changed
+- **Enemy health bars match single-player.** Damaged enemies now show SP's exact
+  bar (ported from `enemy/shapes.js drawHealthBar`): a rounded green→yellow→red
+  gradient (radius×2.2 wide, 3 tall) just above the enemy, only while hurt.
+- **Amazing explosions.** Destruction FX rebuilt toward SP: a white-hot core flash
+  + a warm fireball + twin expanding shockwave rings (a fast bright front ring and
+  the slower warm ring), and ~50% denser/faster shrapnel + embers that scale with
+  blast radius. (Layers on top of the existing line-debris + screen shake/kick.)
+- Enemy **hit-highlight** (the additive white bloom on a struck enemy) already
+  ships from 0.40.0 and reads like SP's hit flash.
+
 ## [0.45.0] - 2026-05-28
 
 ### Added

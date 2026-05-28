@@ -178,19 +178,21 @@ async function main() {
   }
   function spawnBurst(x, y, baseR = 24, big = false) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    const n = (big ? 18 : 11) + Math.floor(Math.random() * 7);
+    // Denser, faster shrapnel + embers scale with blast radius for a meatier,
+    // SP-like fireball. ~50% more particles than before.
+    const n = (big ? 26 : 16) + Math.floor(Math.random() * 9) + Math.floor(baseR * 0.18);
     for (let i = 0; i < n; i++) {
       const ang = Math.random() * Math.PI * 2;
       const ember = Math.random() < 0.35;
-      const spd = (ember ? 0.04 : 0.09) + Math.random() * (ember ? 0.12 : 0.26);
+      const spd = (ember ? 0.05 : 0.11) + Math.random() * (ember ? 0.14 : 0.34);
       particles.push({
         x, y,
         vx: Math.cos(ang) * spd,
         vy: Math.sin(ang) * spd,
         born: performance.now(),
-        life: ember ? 520 + Math.random() * 340 : 240 + Math.random() * 240,
-        size: (ember ? 2.4 : 1.3) + Math.random() * (ember ? 1.8 : 1.4) + baseR * 0.012,
-        hue: ember ? 28 + Math.random() * 16 : 16 + Math.random() * 34,
+        life: ember ? 560 + Math.random() * 380 : 260 + Math.random() * 260,
+        size: (ember ? 2.6 : 1.4) + Math.random() * (ember ? 2.0 : 1.6) + baseR * 0.015,
+        hue: ember ? 28 + Math.random() * 16 : 14 + Math.random() * 36,
       });
     }
   }

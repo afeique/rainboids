@@ -367,13 +367,46 @@ function drawEnemy(ctx, e, now, hit = 0) {
     ctx.textAlign = 'center';
     ctx.fillText(`◆ BOSS ${e.type} ◆`, e.x, by - 4);
   } else if (e.hp < e.mhp) {
-    // HP pip bar when damaged.
-    const w = e.r * 2;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(e.x - w / 2, e.y - e.r - 10, w, 4);
-    ctx.fillStyle = '#9ece6a';
-    ctx.fillRect(e.x - w / 2, e.y - e.r - 10, w * (e.hp / e.mhp), 4);
+    drawEnemyHealthBar(ctx, e);
   }
+}
+
+// SP enemy health bar (ported from enemy/shapes.js drawHealthBar): a rounded
+// green→yellow→red gradient bar (radius×2.2 wide, 3 tall) just above the enemy,
+// shown only while damaged.
+function drawEnemyHealthBar(ctx, e) {
+  const barWidth = e.r * 2.2;
+  const barHeight = 3;
+  const barX = e.x - barWidth / 2;
+  const barY = e.y - e.r - 8;
+  const pct = Math.max(0, Math.min(1, e.hp / e.mhp));
+  let grad, bg;
+  if (pct > 0.5) {
+    grad = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+    grad.addColorStop(0, '#66ff66'); grad.addColorStop(1, '#00cc00');
+    bg = 'rgba(0, 102, 0, 0.6)';
+  } else if (pct > 0.25) {
+    grad = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+    grad.addColorStop(0, '#ffff99'); grad.addColorStop(1, '#cccc00');
+    bg = 'rgba(102, 102, 0, 0.6)';
+  } else {
+    grad = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+    grad.addColorStop(0, '#ff6666'); grad.addColorStop(1, '#cc0000');
+    bg = 'rgba(102, 0, 0, 0.6)';
+  }
+  ctx.save();
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(barX, barY, barWidth, barHeight, 1); else ctx.rect(barX, barY, barWidth, barHeight);
+  ctx.fill();
+  const filled = barWidth * pct;
+  if (filled > 0) {
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(barX, barY, filled, barHeight, 1); else ctx.rect(barX, barY, filled, barHeight);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawDrop(ctx, d, now) {
@@ -538,34 +571,46 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
   if (bullets && bullets.length) drawBulletList(ctx, bullets, FALLBACK_PLAYER_BULLET);
   if (ebullets && ebullets.length) drawBulletList(ctx, ebullets, FALLBACK_ENEMY_BULLET);
 
-  // Destruction effects (event-driven juice): expanding ring + an early
-  // additive flash so deaths read like SP explosions.
+  // Destruction effects (event-driven juice): a white-hot core flash, a warm
+  // fireball, and twin expanding shockwave rings — deaths pop like SP explosions.
   if (effects && now != null) {
     for (const e of effects) {
       const age = (now - e.born) / 500; // 0 → 1 over lifetime
-      // Additive flash for the first ~40% of life.
-      if (age < 0.4) {
-        const fa = 1 - age / 0.4;
-        const fr = e.r * 0.9;
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      // Warm fireball flash (first ~45% of life).
+      if (age < 0.45) {
+        const fa = 1 - age / 0.45;
+        const fr = e.r * (0.9 + age * 0.8);
         const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, fr);
-        g.addColorStop(0, `rgba(255,230,160,${0.9 * fa})`);
-        g.addColorStop(1, 'rgba(255,120,40,0)');
+        g.addColorStop(0, `rgba(255,235,170,${0.95 * fa})`);
+        g.addColorStop(0.5, `rgba(255,150,60,${0.5 * fa})`);
+        g.addColorStop(1, 'rgba(255,90,30,0)');
         ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, fr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        ctx.beginPath(); ctx.arc(e.x, e.y, fr, 0, Math.PI * 2); ctx.fill();
       }
-      // Expanding ring.
-      const rr = e.r * (1 + age * 1.6);
+      // White-hot core (very brief, intense).
+      if (age < 0.22) {
+        const ca = 1 - age / 0.22;
+        const cr = e.r * 0.5;
+        const g2 = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, cr);
+        g2.addColorStop(0, `rgba(255,255,255,${0.95 * ca})`);
+        g2.addColorStop(1, 'rgba(255,240,210,0)');
+        ctx.fillStyle = g2;
+        ctx.beginPath(); ctx.arc(e.x, e.y, cr, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+      // Fast bright shockwave ring (front), then the slower warm ring.
+      const r1 = e.r * (0.6 + age * 2.6);
+      ctx.globalAlpha = Math.max(0, 1 - age) * 0.7;
+      ctx.strokeStyle = 'rgba(255,240,200,0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(e.x, e.y, r1, 0, Math.PI * 2); ctx.stroke();
+      const r2 = e.r * (1 + age * 1.6);
       ctx.globalAlpha = Math.max(0, 1 - age);
       ctx.strokeStyle = '#ff9e64';
       ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, rr, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(e.x, e.y, r2, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1;
     }
   }
