@@ -75,23 +75,28 @@ function ensureStarLayers() {
   const spanW = FIELD_WIDTH + STAR_PAD * 2;
   const spanH = FIELD_HEIGHT + STAR_PAD * 2;
   _starLayers = STAR_DEPTHS.map((depth) => {
-    const n = Math.round((spanW * spanH) / 16000); // ~150 per layer
+    const n = Math.round((spanW * spanH) / 10000); // denser field (~240 per layer)
     const stars = [];
     for (let i = 0; i < n; i++) {
       const r = rng();
+      // ~9% are brighter colourful "accent" stars (saturated blue/violet/teal),
+      // sprinkled through the field like SP's colour-stars — they get a soft glow.
+      const accent = rng() < 0.09;
       let color;
-      if (r < 0.55) color = `hsl(${208 + rng() * 22}, 65%, ${78 + rng() * 18}%)`;      // blue-white
+      if (accent) color = `hsl(${[200, 270, 175, 320][Math.floor(rng() * 4)] + rng() * 24}, 90%, 72%)`;
+      else if (r < 0.55) color = `hsl(${208 + rng() * 22}, 65%, ${78 + rng() * 18}%)`; // blue-white
       else if (r < 0.80) color = `hsl(0, 0%, ${82 + rng() * 16}%)`;                     // white
       else if (r < 0.92) color = `hsl(${38 + rng() * 16}, 70%, 76%)`;                   // warm
       else color = `hsl(${12 + rng() * 16}, 82%, 66%)`;                                 // orange-red
       stars.push({
         x: -STAR_PAD + rng() * spanW,
         y: -STAR_PAD + rng() * spanH,
-        size: (0.4 + rng() * 1.3) * (0.6 + depth * 0.7), // near layer = bigger
+        size: (0.4 + rng() * 1.3) * (0.6 + depth * 0.7) * (accent ? 1.6 : 1), // near + accent = bigger
         color,
+        accent,
         twPhase: rng() * Math.PI * 2,
         twSpeed: 0.4 + rng() * 1.6,
-        base: 0.4 + rng() * 0.35 + depth * 0.1,
+        base: 0.4 + rng() * 0.35 + depth * 0.1 + (accent ? 0.15 : 0),
       });
     }
     return { depth, stars };
@@ -112,7 +117,22 @@ function drawBackdrop(ctx, w, h, cam, now) {
       const sy = s.y - oy;
       if (sx < -4 || sx > w + 4 || sy < -4 || sy > h + 4) continue;
       const tw = 0.5 + 0.5 * Math.sin(t * s.twSpeed + s.twPhase);
-      ctx.globalAlpha = Math.max(0.12, s.base * (0.6 + 0.4 * tw));
+      const alpha = Math.max(0.12, s.base * (0.6 + 0.4 * tw));
+      // Accent stars get a soft additive glow halo so the field reads richer.
+      if (s.accent) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = alpha * 0.5;
+        const gl = ctx.createRadialGradient(sx, sy, 0, sx, sy, s.size * 4);
+        gl.addColorStop(0, s.color);
+        gl.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gl;
+        ctx.beginPath();
+        ctx.arc(sx, sy, s.size * 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = s.color;
       ctx.beginPath();
       ctx.arc(sx, sy, s.size, 0, Math.PI * 2);

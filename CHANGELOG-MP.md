@@ -7,6 +7,17 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.43.1] - 2026-05-28
+
+### Changed
+- **Richer starfield backdrop.** Bumped parallax star density ~60% and added
+  occasional brighter, saturated colour-accent stars (blue/violet/teal/magenta)
+  with a soft additive glow — sprinkled like single-player's colour-stars so the
+  backdrop reads denser and more "beautifully rendered" behind the nebula. (SP's
+  visible nebula is itself just a dense WebGL starfield + colour-stars — there is
+  no volumetric WebGL nebula to port — so MP's Canvas2D nebula + this denser field
+  already meets/exceeds SP's backdrop without a WebGL layer.)
+
 ## [0.43.0] - 2026-05-28
 
 ### Added
