@@ -25,7 +25,9 @@ export function levelUp() { return false; }
 // carries level/XP/SP.) `level`, `xp`, `sp`, and `spStats` live on the player
 // for the duration of a run and are captured by the wave-start run snapshot
 // (serializeRunState) so CONTINUE resumes the in-run climb.
-import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-stats.js';
+import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS, LEVEL_UNLOCKS } from '../core/sp-stats.js';
+import { ABILITIES } from '../combat/weapon-data.js';
+import { PASSIVES } from '../combat/passive-data.js';
 import { EFFICIENCY_CAP, FLUX_PER_STACK, CAPACITOR_BANK_OVERCHARGE_MULT, CAPACITOR_BANK_DECAY_PER_SEC } from '../core/constants.js';
 // T26 — Gear amplification (§2.1). Gear/Matrix/set bonuses are % AMPLIFIERS of
 // an invested SP stat, ramped by the per-run level (dormant at L1, full at
@@ -82,6 +84,10 @@ export function addXp(amount) {
     if (this.level >= MAX_LEVEL) this.xp = 0;
     if (leveled) {
         this._leveledUpPending = true;
+        // 8.15.0 — grant any ability/passive whose milestone level was just
+        // reached (alternating; see LEVEL_UNLOCKS). Per-run + in-memory (not
+        // saved to meta), so each run re-earns its kit by leveling.
+        grantLevelUnlocks.call(this);
         this.saveMetaState();
         // T25 — PWR is LIVE current power: a level-up raises the level-ramp that
         // gear amplifies (T26) and unlocks SP to invest, so refresh the build-
@@ -94,6 +100,49 @@ export function addXp(amount) {
         // driven by `levelUpAnimation`; the DOM ui:show-message path is dead
         // (game-message-overlay is commented out of index.html).
         triggerLevelUpAnnounce.call(this);
+    }
+}
+
+// 8.15.0 — apply the alternating level-up unlock schedule (LEVEL_UNLOCKS). For
+// every milestone at/below the current level not yet owned this run, grant the
+// ability/passive + auto-equip it into a free slot, and surface a notification.
+// Per-run: writes only the in-memory player Sets/slots (never saveMeta), so a
+// fresh run re-earns its kit by leveling. `this` is the player.
+export function grantLevelUnlocks() {
+    for (const u of LEVEL_UNLOCKS) {
+        if (this.level < u.level) continue;
+        if (u.kind === 'ability') {
+            if (!ABILITIES[u.id]) continue;
+            if (!(this.ownedAbilities instanceof Set)) this.ownedAbilities = new Set(this.ownedAbilities || []);
+            if (this.ownedAbilities.has(u.id)) continue;
+            this.ownedAbilities.add(u.id);
+            if (!Array.isArray(this.equippedAbilities)) this.equippedAbilities = [null, null, null, null];
+            if (!this.equippedAbilities.includes(u.id)) {
+                const free = this.equippedAbilities.indexOf(null);
+                if (free >= 0) this.equippedAbilities[free] = u.id;
+            }
+            if (!this.activeAbility) this.activeAbility = u.id;
+            _announceUnlock.call(this, 'ABILITY UNLOCKED', ABILITIES[u.id].name || u.id);
+        } else {
+            if (!PASSIVES[u.id]) continue;
+            if (!(this.ownedPassives instanceof Set)) this.ownedPassives = new Set(this.ownedPassives || []);
+            if (this.ownedPassives.has(u.id)) continue;
+            this.ownedPassives.add(u.id);
+            if (!Array.isArray(this.equippedPassives)) this.equippedPassives = [null, null, null, null, null];
+            if (!this.equippedPassives.includes(u.id)) {
+                const free = this.equippedPassives.indexOf(null);
+                if (free >= 0) this.equippedPassives[free] = u.id;
+            }
+            if (typeof this._rebuildActivePassives === 'function') this._rebuildActivePassives();
+            _announceUnlock.call(this, 'PASSIVE UNLOCKED', (PASSIVES[u.id] && PASSIVES[u.id].name) || u.id);
+        }
+    }
+}
+
+function _announceUnlock(title, subtitle) {
+    const ge = this.gameEngine;
+    if (ge && typeof ge.queueNotification === 'function') {
+        try { ge.queueNotification(title, subtitle, 2400); } catch (_e) { /* notification is optional */ }
     }
 }
 

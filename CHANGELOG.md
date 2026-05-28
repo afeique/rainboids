@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.15.0] - 2026-05-28
+
+### Added
+- **Abilities + passives now unlock by LEVELING UP during a run, alternating.**
+  An ability at L5, a passive at L7, an ability at L9, … (4 abilities at
+  5/9/13/17, 5 passives at 7/11/15/19/21 — `LEVEL_UNLOCKS`). Each unlock auto-
+  equips into a free slot with a notification. Because you level ~every 2–3
+  waves, a short run unlocks only the first few and the **full kit lands only
+  across a longer run** (everything by ~L21 ≈ 50+ waves). Grants are per-run +
+  in-memory (re-earned each run), so the early game stays a focused shooting
+  experience and your kit fills in as you push deeper.
+
+---
+
 ## [8.14.0] - 2026-05-28
 
 ### Changed

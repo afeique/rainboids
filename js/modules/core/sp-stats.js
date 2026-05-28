@@ -77,3 +77,21 @@ export function xpForLevel(level) {
     const L = Math.max(1, level | 0);
     return 500 + (L - 1) * 250;
 }
+
+// 8.15.0 — ALTERNATING level-up unlocks. Reaching a milestone level grants (and
+// auto-equips) the next ability or passive, alternating, during the run. Because
+// leveling is per-run (~1 level / 2-3 waves), a short run unlocks only the first
+// few; the full kit (4 abilities + 5 passives) only lands across a LONGER run —
+// everything is unlocked by L21 (≈ 50+ waves). Order is fixed + curated so the
+// progression reads as a deliberate power curve.
+export const LEVEL_UNLOCKS = Object.freeze([
+    { level: 5,  kind: 'ability', id: 'BULWARK' },
+    { level: 7,  kind: 'passive', id: 'OPPORTUNIST' },
+    { level: 9,  kind: 'ability', id: 'FIELD_MEDIC' },
+    { level: 11, kind: 'passive', id: 'LAST_BASTION' },
+    { level: 13, kind: 'ability', id: 'BLINK' },
+    { level: 15, kind: 'passive', id: 'CATALYST' },
+    { level: 17, kind: 'ability', id: 'EMP_PULSE' },
+    { level: 19, kind: 'passive', id: 'RICOCHET' },
+    { level: 21, kind: 'passive', id: 'BLOODLUST' },
+]);
