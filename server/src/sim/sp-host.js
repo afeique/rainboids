@@ -23,8 +23,9 @@
 
 import { installBrowserShim } from './browser-shim.js';
 import { frameClock } from '../../../js/modules/core/frame-clock.js';
-import { setRandomSource } from '../../../js/modules/core/utils.js';
-import { GAME_CONFIG, GAME_STATES } from '../../../js/modules/core/constants.js';
+import { setRandomSource, random } from '../../../js/modules/core/utils.js';
+import { getWaveConfig, getEnemyLevel, getAsteroidLevel } from '../../../js/modules/wave/wave-data.js';
+import { GAME_CONFIG, GAME_STATES, MAX_WAVES } from '../../../js/modules/core/constants.js';
 import { makeRng } from '../../../js/sim/rng.js';
 import * as col from '../../../js/modules/combat/collision-system.js';
 import * as combat from '../../../js/modules/combat/combat-manager.js';
@@ -102,6 +103,10 @@ export class SpHost {
     this.healthTanks = 0;
     // UI accumulator the money-pickup path writes to (display only).
     this.moneyPickupDisplay = { amount: 0, displayTime: 0 };
+    // Headless wave driver (off by default so manual-spawn tests are unaffected).
+    // When on, tick() self-drives enemy spawns from the REAL wave-data tables.
+    this.autoWaves = false;
+    this.waveStarted = false;
   }
 
   /**
@@ -184,6 +189,65 @@ export class SpHost {
     const e = this.enemyPool.get();
     e.reset(x, y, type, level, this);
     return e;
+  }
+
+  // ── Headless wave driver ───────────────────────────────────────────────────
+  // Reuses the REAL wave-data tables (getWaveConfig / getEnemyLevel /
+  // getAsteroidLevel) so spawn composition + scaling match SP — it is NOT a
+  // second sim. What it intentionally OMITS (vs the SP wave-manager) is the
+  // DOM-coupled between-wave orchestration: the draft/shop overlay + pause + the
+  // sub-wave pacing timers. Those require the co-op "shared draft + everyone
+  // ready" design (plan §4), so for now a wave spawns its full roster at once
+  // and the next wave starts when every enemy is cleared. P5/P6 refine this.
+
+  /** A random spawn point just inside a field edge (no camera headless). */
+  _edgeSpawnPoint() {
+    const { width: w, height: h } = this.gameField;
+    const m = 60;
+    switch (Math.floor(random(0, 4))) {
+      case 0: return { x: random(m, w - m), y: m };           // top
+      case 1: return { x: w - m, y: random(m, h - m) };       // right
+      case 2: return { x: random(m, w - m), y: h - m };       // bottom
+      default: return { x: m, y: random(m, h - m) };          // left
+    }
+  }
+
+  /** Spawn the full roster (asteroids + every sub-wave's enemies) for wave n. */
+  startWave(n) {
+    this.game.currentWave = n;
+    const playerLevel = (this.player && this.player.level) || 1;
+    this.game.enemyLevel = getEnemyLevel(n, playerLevel);
+    const cfg = getWaveConfig(n) || {};
+    const astLevel = getAsteroidLevel(n);
+    for (let i = 0; i < (cfg.asteroids | 0); i++) {
+      const p = this._edgeSpawnPoint();
+      this.asteroidPool.get(p.x, p.y, random(30, 60), astLevel);
+    }
+    // NOTE: boss groups (group.isBoss / bossTier) currently spawn as ordinary
+    // enemies of that type — the modular boss-spawn path (boss descriptors,
+    // intro/phases) is a later P7 parity step.
+    for (const sub of (cfg.subWaves || [])) {
+      for (const group of sub) {
+        for (let i = 0; i < (group.count | 0); i++) {
+          const p = this._edgeSpawnPoint();
+          this.spawnEnemy(p.x, p.y, group.type, this.game.enemyLevel);
+        }
+      }
+    }
+    this.waveStarted = true;
+    if (this.events?.emit) this.events.emit('wave:start', { wave: n });
+  }
+
+  /** Advance the wave driver: start wave 1, then the next when fully cleared. */
+  _updateWaves() {
+    if (this.game.state !== GAME_STATES.PLAYING) return;
+    if (!this.waveStarted) { this.startWave(1); return; }
+    // Enemies in their death animation keep active=true and stay pooled;
+    // cleanupInactive (run in tick) frees them only once fully dead — so an
+    // empty pool is the true "wave cleared" signal.
+    if (this.enemyPool.activeObjects.length === 0 && this.game.currentWave < MAX_WAVES) {
+      this.startWave(this.game.currentWave + 1);
+    }
   }
 
   // ── Real SIM systems, bound exactly as game-engine.js delegates them ───────
@@ -331,7 +395,10 @@ export class SpHost {
     this.goldShapePool.cleanupInactive();
     this.powerupPool.cleanupInactive();
 
-    // 6. Drain + return the per-tick semantic event stream for the client.
+    // 6. Wave progression (opt-in; reuses the real wave-data tables).
+    if (this.autoWaves) this._updateWaves();
+
+    // 7. Drain + return the per-tick semantic event stream for the client.
     return this.events.drain ? this.events.drain() : [];
   }
 

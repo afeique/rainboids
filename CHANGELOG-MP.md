@@ -7,6 +7,28 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.21.0] - 2026-05-27
+
+### Added
+- **Headless wave driver** (Path A, P4 — `SpHost` self-drives enemy spawns). Opt-in
+  (`host.autoWaves = true`) so manual-spawn tests are unaffected. Reuses the REAL
+  wave-data tables (`getWaveConfig` / `getEnemyLevel` / `getAsteroidLevel`) so the
+  spawn composition + level scaling match SP — it is NOT a second sim. `startWave(n)`
+  spawns the wave's asteroids + every sub-wave's enemies at field-edge points;
+  `_updateWaves()` starts wave 1 then advances to the next once every enemy is
+  cleared (an empty pool is the true "cleared" signal — mid-death enemies stay
+  pooled). Emits a `wave:start` event for the client.
+- Intentionally OMITS (vs the SP wave-manager) the DOM-coupled between-wave
+  orchestration — the draft/shop overlay + pause + sub-wave pacing timers — which
+  needs the co-op "shared draft + everyone ready" design (plan §4); deferred to
+  P5/P6. Boss groups currently spawn as ordinary enemies of that type (the modular
+  boss-spawn path is a later P7 parity step).
+
+### Tests
+- `tests/unit/sp-host.test.js` (+3): auto-starts wave 1 + spawns the real roster;
+  advances to wave 2 once enemies are cleared; stays idle when `autoWaves` is off.
+  12/12 green.
+
 ## [0.20.0] - 2026-05-27
 
 ### Added

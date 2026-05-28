@@ -135,3 +135,38 @@ describe('SpHost — real SP collisions headless', () => {
     expect(Number.isFinite(host.player.x)).toBe(true);
   });
 });
+
+describe('SpHost — headless wave driver', () => {
+  it('auto-starts wave 1 and spawns the real wave roster', async () => {
+    const host = new SpHost({ seed: 3 });
+    await host.init();
+    host.autoWaves = true;
+    host.tick(); // first tick starts wave 1
+    expect(host.game.currentWave).toBe(1);
+    expect(host.enemyPool.activeObjects.length).toBeGreaterThan(0);
+    expect(host.asteroidPool.activeObjects.length).toBeGreaterThan(0);
+  });
+
+  it('advances to the next wave once every enemy is cleared', async () => {
+    const host = new SpHost({ seed: 3 });
+    await host.init();
+    host.autoWaves = true;
+    host.tick();
+    expect(host.game.currentWave).toBe(1);
+    // Force-clear the wave: deactivate every enemy, then tick so cleanup +
+    // the wave driver advance fire.
+    for (const e of host.enemyPool.activeObjects) e.active = false;
+    host.tick();
+    host.tick();
+    expect(host.game.currentWave).toBeGreaterThanOrEqual(2);
+    expect(host.enemyPool.activeObjects.length).toBeGreaterThan(0); // wave 2 roster
+  });
+
+  it('does not self-drive waves when autoWaves is off (default)', async () => {
+    const host = new SpHost({ seed: 3 });
+    await host.init();
+    for (let i = 0; i < 5; i++) host.tick();
+    expect(host.waveStarted).toBe(false);
+    expect(host.enemyPool.activeObjects.length).toBe(0);
+  });
+});
