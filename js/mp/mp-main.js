@@ -135,6 +135,7 @@ async function main() {
   let localDowned = false;
   let localReviveProgress = 0;
   let localGold = 0;
+  let goldInit = false; // skip the +N popup on the FIRST snapshot only (join with banked gold)
   let localLevel = 1;       // account/run level (HUD XP bar + readout)
   let localXp = 0;          // XP banked toward the next level
   let localEnergy = 0;      // power-weapon energy (energy sphere)
@@ -421,7 +422,8 @@ async function main() {
             // Gold gain → "+N" popup over the ship (skip the first snapshot so a
             // join with banked gold doesn't fire a phantom popup).
             const newGold = me.g || 0;
-            if (localGold > 0 && newGold > localGold) spawnGoldPopup(newGold - localGold);
+            if (goldInit && newGold > localGold) spawnGoldPopup(newGold - localGold);
+            goldInit = true;
             localGold = newGold;
             // Level up → centered announce.
             if (me.lv != null) {

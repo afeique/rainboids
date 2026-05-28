@@ -7,6 +7,27 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.44.0] - 2026-05-28
+
+### Changed
+- **HUD reworked to match single-player.** Reuses the actual SP HUD glyphs +
+  curve (`drawCachedMoneyIcon` / `drawCachedHeartIcon` from `core/utils.js`,
+  `xpForLevel` / `MAX_LEVEL` from `core/sp-stats.js`):
+  - Top-left vitals cluster now uses SP's exact layout/spacing —
+    `[triforce] [health sphere] [energy sphere]` on one midline — so the orbs no
+    longer overlap. The health orb caption gains SP's heart icon.
+  - **Triforce** rewritten to SP `drawCanvasTriforce` style: solid gold triangles
+    for owned tanks only (the placeholder dim outlines are gone).
+  - **Removed** the top-left LEVEL readout and the **WAVE number** top-right (only
+    a small PILOTS count remains there; the wave shows via the center banner).
+  - **Rainshards/gold moved to the bottom-right** in SP style — coin icon + an
+    eased slot-rolling counter.
+
+### Fixed
+- **Money popup** no longer suppresses the first pickup from zero — the
+  join-phantom guard is now a one-time init flag, so every real gold gain pops a
+  "+N" over the ship.
+
 ## [0.43.1] - 2026-05-28
 
 ### Changed
