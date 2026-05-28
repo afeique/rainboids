@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.6.0] - 2026-05-28
+
+### Changed
+- **Abilities are gold-gated again** (the README already said so; the code now
+  matches). The looter-pivot "everything unlocked" flag no longer covers
+  abilities — a fresh account owns **none** and buys them with account-gold in
+  the BUILD **ABILITIES** tab. Gear, weapons, and power weapons stay free /
+  found-as-loot; only abilities are an intentional gold sink. The DEBUG
+  unlock-all still grants abilities for dev/testing.
+- The BUILD compact list's **"Unlock more" gold store now renders even when you
+  own nothing** in a category (and auto-expands), so a fresh account can buy its
+  first ability right there instead of seeing a dead-end "buy in the Armory"
+  hint with no buy button.
+
+---
+
 ## [8.5.0] - 2026-05-28
 
 ### Changed

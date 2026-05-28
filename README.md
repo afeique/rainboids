@@ -23,8 +23,8 @@ Elements & resistances, rolled rarity-tiered gear, kill-streak power tiers, and 
 
 > **🚧 8.0.0 — Looter-Economy Pivot (in development on `master`).** Rainboids is
 > mid-transition into a deeper looter-shooter: persistent **Rainshards (R$)** +
-> gear / weapons / **Matrices**, **per-run** level & SP, *everything unlocked*
-> from the start, randomized **drafted stages**, **bounties**, and a per-run
+> gear / weapons / **Matrices**, **per-run** level & SP, *gear, weapons & powers
+> found as loot* (abilities stay a gold sink), **bounties**, and a per-run
 > **class**. The functional systems have landed (see the [8.0.0 changelog](CHANGELOG.md));
 > the BUILD-screen UI polish + balance pass are still in progress and **not yet
 > deployed**. The sections below describe the currently-live **7.1.0** build and

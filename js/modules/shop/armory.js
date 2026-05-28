@@ -89,12 +89,22 @@ let _allUnlocked = false;
 export function setAllUnlocked(on) { _allUnlocked = !!on; }
 export function isAllUnlocked() { return _allUnlocked; }
 
+// 8.x — categories that stay GOLD-GATED even under the looter-pivot "everything
+// unlocked" flag. The pivot frees gear/weapons/powers (power is looted, not
+// bought), but ABILITIES remain a deliberate account-gold sink: a fresh account
+// owns none and buys them in the BUILD ABILITIES tab's "Unlock more" store. The
+// DEBUG unlock-all resolver still covers abilities so dev/testing can grant them.
+const GOLD_GATED_CATEGORIES = new Set(['abilities']);
+
 /** The set of ids the player can equip in `category`: base ∪ purchased
- *  (∪ everything, when all-unlocked or a debug "unlock all" covers the category). */
+ *  (∪ everything, when all-unlocked or a debug "unlock all" covers the category).
+ *  Gold-gated categories (abilities) ignore the looter-pivot all-unlocked flag
+ *  but still honor the debug unlock-all resolver. */
 export function getUnlockedSet(category, meta) {
     const c = UNLOCK_CATEGORIES[category];
     if (!c) return new Set();
-    const everything = (_allUnlocked || (_debugUnlockAllResolver && _debugUnlockAllResolver(category)));
+    const pivotCovers = _allUnlocked && !GOLD_GATED_CATEGORIES.has(category);
+    const everything = pivotCovers || (_debugUnlockAllResolver && _debugUnlockAllResolver(category));
     if (everything && _debugAllIdsResolver) {
         return new Set([...c.base, ...(_debugAllIdsResolver(category) || [])]);
     }

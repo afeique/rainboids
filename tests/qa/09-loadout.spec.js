@@ -95,6 +95,11 @@ test.describe('QA-09: BUILD → run start (weapons-as-gear)', () => {
     test('chosen abilities fill the ability slots', async ({ page }) => {
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
+            // 8.x — abilities are gold-gated; only OWNED abilities can be equipped,
+            // so seed them as unlocked first (the gold-buy path is covered by QA-49).
+            localStorage.setItem('rainboidsMeta', JSON.stringify({
+                unlockedAbilities: ['BULWARK', 'FIELD_MEDIC', 'EMP_PULSE', 'SENTRY_DRONE'],
+            }));
             ge.beginPreRunFromTree({ abilities: ['BULWARK', 'FIELD_MEDIC', 'EMP_PULSE', 'SENTRY_DRONE'] });
             return ge.player.equippedAbilities;
         });
@@ -104,6 +109,8 @@ test.describe('QA-09: BUILD → run start (weapons-as-gear)', () => {
     test('chosen abilities persist to meta for next time (weapons/powers do not)', async ({ page }) => {
         const saved = await page.evaluate(() => {
             const ge = window.gameEngine;
+            // 8.x — must OWN an ability to equip it (gold-gated); seed it unlocked.
+            localStorage.setItem('rainboidsMeta', JSON.stringify({ unlockedAbilities: ['BULWARK'] }));
             ge.openArmory();
             ge.beginPreRunFromTree({ abilities: ['BULWARK'] });
             return JSON.parse(localStorage.getItem('rainboidsMeta') || '{}').loadout;

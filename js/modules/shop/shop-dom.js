@@ -1048,15 +1048,16 @@ function _renderCompactList(container, groups, player, category) {
     list.className = 'shop-prerun-list';
 
     const ownedGroups = groups.filter((g) => !ownedSet || ownedSet.has(g.parent.id));
+    // When nothing is owned, show a hint but DON'T early-return — the "Unlock
+    // more" gold store below must still render so a fresh (gold-gated) account
+    // can buy its first item right here. (8.x — abilities start owned-none.)
     if (ownedGroups.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'shop-prerun-empty';
         empty.textContent = category === 'abilities'
-            ? 'No abilities yet. Clear Stage 1 for a free pick, or buy more in the Armory.'
-            : 'Only your starter is unlocked. Earn gold, then buy more in the Armory.';
+            ? 'No abilities yet — unlock one below with gold, or clear Stage 1 for a free pick.'
+            : 'Only your starter is unlocked. Unlock more below with gold.';
         list.appendChild(empty);
-        container.appendChild(list);
-        return;
     }
 
     for (const group of ownedGroups) {
@@ -1148,7 +1149,9 @@ function _renderCompactList(container, groups, player, category) {
         const toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = 'shop-prerun-store-toggle';
-        const open = !!_prerunStoreOpen[category];
+        // Auto-expand when nothing is owned so a fresh account sees what it can
+        // buy right away (otherwise the only content would be the empty hint).
+        const open = !!_prerunStoreOpen[category] || ownedGroups.length === 0;
         toggle.textContent = open
             ? `− Hide store`
             : `＋ Unlock more (${lockedGroups.length}) · ${unlockCost(category).toLocaleString()} ea`;
