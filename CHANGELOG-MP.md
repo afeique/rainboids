@@ -7,6 +7,27 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.43.0] - 2026-05-28
+
+### Added
+- **Enemy bullets are now visible.** `sp-host.js buildSnapshot` serializes the
+  enemy bullet pool (`ebullets`: id/x/y/colour) — previously incoming fire was
+  **invisible client-side even though it damaged the player**. `ebullets` is a new
+  delta-codec group, buffered + interpolated by the client (`Interpolator
+  .sampleEbullets`) and rendered in a menacing red palette (trail + glow + core),
+  distinct from the player's bright shots. New `window.__mp.ebulletCount`.
+
+### Fixed
+- **Bullet weapon-colour tinting** silently fell back to the default hue because
+  `_energyRgb` (the hex→rgb parser) was referenced but never defined in
+  `mp-renderer.js`. Now defined, so both player and enemy bullets tint by their
+  actual colour. (The bug only surfaced visibly with enemy bullets, which always
+  carry a colour.)
+
+### Changed
+- Bullet rendering is unified into one `drawBulletList(ctx, list, fallback)`
+  helper, used for both player and enemy bullets.
+
 ## [0.42.0] - 2026-05-28
 
 ### Added

@@ -3,7 +3,7 @@
 // `applyDelta(prev, buildDelta(prev, next))` reconstructs `next`.
 //
 // Snapshot shape: { t, tick, wave, ws, ships[], asteroids[], bullets[],
-// enemies[], drops[] } — entity arrays of flat objects keyed by `id`.
+// ebullets[], enemies[], drops[] } — entity arrays of flat objects keyed by `id`.
 //
 // Delta shape: { tick, wave?, ws?, <group>?: { u:[{id, ...changedFields}], r:[id…] } }
 //   - `u` (upsert): existing entities carry only changed fields (+ id); NEW
@@ -11,7 +11,7 @@
 //   - `r` (removed): ids gone since the baseline
 //   - a group is omitted entirely when nothing changed; wave/ws only when changed
 
-const GROUPS = ['ships', 'asteroids', 'bullets', 'enemies', 'drops'];
+const GROUPS = ['ships', 'asteroids', 'bullets', 'ebullets', 'enemies', 'drops'];
 
 function indexById(arr) {
   const m = new Map();

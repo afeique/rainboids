@@ -792,12 +792,16 @@ export class SpHost {
     // codec only sends it on the bullet's first frame) — lets the client tint
     // bullets like single-player instead of a single fixed hue.
     const bullets = this.bulletPool.activeObjects.map((b) => ({ id: b._netId, x: round(b.x), y: round(b.y), o: this.playerId, c: b.color || null }));
+    // Enemy bullets — previously NOT serialized, so incoming fire was invisible
+    // client-side even though it damaged the player. Same shape as player bullets
+    // (id/x/y/colour); the client renders them in a menacing red palette.
+    const ebullets = this.enemyBulletPool.activeObjects.map((b) => ({ id: b._netId, x: round(b.x), y: round(b.y), c: b.color || null }));
     const drops = this._drops();
     return {
       tick: this.tickCount,
       wave: this.game?.currentWave | 0,
       ws: this.enemyPool.activeObjects.length > 0 ? 'active' : 'intermission',
-      ships, enemies, asteroids, bullets, drops,
+      ships, enemies, asteroids, bullets, ebullets, drops,
     };
   }
 

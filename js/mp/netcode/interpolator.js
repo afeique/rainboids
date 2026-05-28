@@ -37,6 +37,7 @@ export class Interpolator {
       enemies: toMap(snapshot.enemies),
       drops: toMap(snapshot.drops),
       bullets: toMap(snapshot.bullets),
+      ebullets: toMap(snapshot.ebullets),
     });
     if (this.buf.length > BUFFER_CAP) this.buf.shift();
   }
@@ -167,6 +168,27 @@ export class Interpolator {
     const { a, b, f } = br;
     for (const [id, sb] of b.bullets) {
       const sa = a.bullets.get(id) || sb;
+      out.push({
+        id,
+        x: lerp(sa.x, sb.x, f),
+        y: lerp(sa.y, sb.y, f),
+        dx: sb.x - sa.x,
+        dy: sb.y - sa.y,
+        color: sb.c || null,
+      });
+    }
+    return out;
+  }
+
+  /** Sample interpolated ENEMY bullets at `now` (same shape as sampleBullets). */
+  sampleEbullets(now) {
+    const out = [];
+    const br = this._bracket(now);
+    if (!br) return out;
+    const { a, b, f } = br;
+    if (!b.ebullets) return out;
+    for (const [id, sb] of b.ebullets) {
+      const sa = (a.ebullets && a.ebullets.get(id)) || sb;
       out.push({
         id,
         x: lerp(sa.x, sb.x, f),

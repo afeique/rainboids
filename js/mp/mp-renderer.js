@@ -360,7 +360,65 @@ function drawDrop(ctx, d, now) {
   }
 }
 
-export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, effects, particles, debris, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera, fx, worldFloaters, levelText, bossCard, enemyHitFlash }) {
+// Hex → {r,g,b}, cached (parses the SP bullet/weapon colour strings).
+const _HEX_RGB_CACHE = {};
+function _energyRgb(hex) {
+  if (_HEX_RGB_CACHE[hex]) return _HEX_RGB_CACHE[hex];
+  let h = (hex || '#00ccff').replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const rgb = {
+    r: parseInt(h.slice(0, 2), 16) || 0,
+    g: parseInt(h.slice(2, 4), 16) || 0,
+    b: parseInt(h.slice(4, 6), 16) || 0,
+  };
+  _HEX_RGB_CACHE[hex] = rgb;
+  return rgb;
+}
+
+// Bullet glow palettes when the wire carries no per-bullet colour.
+const FALLBACK_PLAYER_BULLET = { r: 150, g: 220, b: 255 }; // cyan-white plasma
+const FALLBACK_ENEMY_BULLET = { r: 255, g: 70, b: 70 };    // menacing red
+
+// Shared additive bullet renderer (player + enemy). Each bullet: a tapered trail
+// opposite its travel direction + a colored halo + a white-hot core.
+function drawBulletList(ctx, list, fallback) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const b of list) {
+    const col = b.color ? _energyRgb(b.color) : fallback;
+    const len = Math.min(34, Math.hypot(b.dx || 0, b.dy || 0) * 1.8);
+    if (len > 2) {
+      const m = Math.hypot(b.dx, b.dy) || 1;
+      const tx = b.x - (b.dx / m) * len, ty = b.y - (b.dy / m) * len;
+      const tg = ctx.createLinearGradient(b.x, b.y, tx, ty);
+      tg.addColorStop(0, `rgba(${col.r},${col.g},${col.b},0.55)`);
+      tg.addColorStop(1, `rgba(${col.r},${col.g},${col.b},0)`);
+      ctx.strokeStyle = tg;
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+    }
+    const R = 8;
+    const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, R);
+    g.addColorStop(0, `rgba(${col.r},${col.g},${col.b},0.9)`);
+    g.addColorStop(0.4, `rgba(${col.r},${col.g},${col.b},0.4)`);
+    g.addColorStop(1, `rgba(${col.r},${col.g},${col.b},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 2.0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies, drops, bullets, ebullets, effects, particles, debris, now, localId, localDowned, localReviveProgress, localHp, localMaxHp, localEnergy, localMaxEnergy, localLevel, localXp, localTanks, wave, gold, players, banner, camera, fx, worldFloaters, levelText, bossCard, enemyHitFlash }) {
   const cam = camera || { x: 0, y: 0, zoom: 1 };
   const feel = fx || { shakeX: 0, shakeY: 0, flashWhite: 0, flashRed: 0 };
   const W = canvas.width, H = canvas.height;
@@ -413,46 +471,11 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
   }
 
   // Bullets — interpolated, with a tapered motion trail + clean colored glow.
-  // The halo is tinted by the SP weapon colour (sent per bullet); a white-hot
-  // core keeps every shot reading crisp, like single-player.
-  if (bullets && bullets.length) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    for (const b of bullets) {
-      const col = b.color ? _energyRgb(b.color) : { r: 150, g: 220, b: 255 };
-      // Trail: a streak opposite the travel direction; length scales with the
-      // per-bracket travel (≈ one snapshot of motion), clamped.
-      const len = Math.min(34, Math.hypot(b.dx || 0, b.dy || 0) * 1.8);
-      if (len > 2) {
-        const m = Math.hypot(b.dx, b.dy) || 1;
-        const tx = b.x - (b.dx / m) * len, ty = b.y - (b.dy / m) * len;
-        const tg = ctx.createLinearGradient(b.x, b.y, tx, ty);
-        tg.addColorStop(0, `rgba(${col.r},${col.g},${col.b},0.55)`);
-        tg.addColorStop(1, `rgba(${col.r},${col.g},${col.b},0)`);
-        ctx.strokeStyle = tg;
-        ctx.lineWidth = 3.2;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(b.x, b.y);
-        ctx.lineTo(tx, ty);
-        ctx.stroke();
-      }
-      const R = 8;
-      const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, R);
-      g.addColorStop(0, `rgba(${col.r},${col.g},${col.b},0.9)`);
-      g.addColorStop(0.4, `rgba(${col.r},${col.g},${col.b},0.4)`);
-      g.addColorStop(1, `rgba(${col.r},${col.g},${col.b},0)`);
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, R, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.96)';
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, 2.0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
+  // Player shots tint by SP weapon colour (cyan fallback); enemy shots render in
+  // a menacing red so incoming fire reads clearly. A white-hot core keeps every
+  // shot crisp, like single-player.
+  if (bullets && bullets.length) drawBulletList(ctx, bullets, FALLBACK_PLAYER_BULLET);
+  if (ebullets && ebullets.length) drawBulletList(ctx, ebullets, FALLBACK_ENEMY_BULLET);
 
   // Destruction effects (event-driven juice): expanding ring + an early
   // additive flash so deaths read like SP explosions.

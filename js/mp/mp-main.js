@@ -129,6 +129,7 @@ async function main() {
   let lastAsteroids = new Map();
   let lastEnemies = new Map();
   let latestBullets = [];
+  let latestEbullets = [];
   let localHp = null;
   let localMaxHp = null;
   let localDowned = false;
@@ -355,6 +356,7 @@ async function main() {
     bossPartCount: () => [...lastEnemies.values()].reduce((n, e) => n + (e.parts ? e.parts.length : 0), 0),
     particleCount: () => particles.length,
     bulletCount: () => latestBullets.length,
+    ebulletCount: () => latestEbullets.length,
     dropCount: () => lastDrops.size,
     localHp: () => localHp,
     localGold: () => localGold,
@@ -379,6 +381,7 @@ async function main() {
         if (!full) break; // delta before a keyframe — wait for the next keyframe
         lastSnapshotTick = full.tick;
         latestBullets = full.bullets || [];
+        latestEbullets = full.ebullets || [];
         if (typeof full.wave === 'number') wave = full.wave;
         if (full.ws) waveState = full.ws;
         interp.add(full);
@@ -584,6 +587,7 @@ async function main() {
     const enemies = interp.sampleEnemies(now);
     const drops = interp.sampleDrops(now);
     const bullets = interp.sampleBullets(now); // smooth + trail-able (was raw snapshot points)
+    const ebullets = interp.sampleEbullets(now); // enemy fire (now visible client-side)
     lastRemote = remote;
     lastAsteroids = asteroids;
     lastEnemies = enemies;
@@ -663,6 +667,7 @@ async function main() {
       enemies,
       drops,
       bullets,
+      ebullets,
       effects,
       particles,
       debris,
