@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.14.0] - 2026-05-28
+
+### Changed
+- **Kill-streak HUD reworked.** It now only appears once you reach **10 kills**
+  (both desktop and mobile), so the opening of a run stays clean. The **rank
+  label** (EMPOWERED, …) is now the LARGE element with the **kill count small
+  beneath it** (was the reverse). On **desktop** it moved to the **top-right**
+  (out of the play area — it kept blocking the action at bottom-center). On
+  **mobile** it uses a **sans-serif font** (Inter/Helvetica) instead of the big
+  pixel font.
+
+---
+
 ## [8.13.0] - 2026-05-28
 
 ### Added

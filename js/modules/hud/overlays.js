@@ -1514,228 +1514,146 @@ export function drawSpawnTimer() {
         ctx.restore();
 }
 
-// Streak indicator — top-right corner, clear of the pause button (top:16, h:56),
-// minimap (bottom-right), enemy info (top-center), and wave message
-// (top-center y=200). Two display modes:
-//
-//   ACTIVE (buff timer running): tier-colored pulse, glow halo, full info
-//      "N KILLS / TIER_LABEL / +X% DMG / [progress bar to next tier]"
-//
-//   SAVED (streak ≥ 3 but buff faded — waiting on next kill to re-arm):
-//      Dimmed grey-white, no glow, "N KILLS / SAVED" — reminds the player
-//      that the streak is preserved (only damage breaks it now).
-//
-//   HIDDEN: streak below 3 OR streak is 0 (just took damage / fresh game).
+// Streak indicator (8.14.0) — appears only at 10+ kills. TOP-RIGHT on desktop
+// (out of the play area), top-center on mobile (sans-serif). Rank label LARGE,
+// kill-count small beneath; gold-find + tier/idle bars on desktop.
 export function drawStreakIndicator() {
     if (!this.player) return;
     const k = this.killStreakCount || 0;
-    // 5.74.23 — show indicator from the FIRST kill, not the first tier
-    // threshold. The idle-countdown bar (added below) is the primary
-    // motivator: the player needs to see how long they have to land
-    // their next kill or the streak resets.
-    if (k < 1) return;
+    // 8.14.0 — the streak HUD only appears once a real streak is going: 10+
+    // kills, on BOTH desktop and mobile. Below that it stays hidden so the
+    // opening of a run isn't cluttered. `_streakDrawn` is a queryable QA marker
+    // (the kill count when shown, else null — mirrors _pwrDrawn).
+    this._streakDrawn = null;
+    if (k < 10) return;
+    this._streakDrawn = k;
 
-    // 5.99.3 — Mobile gets a stripped-down version: just a big
-    // transparent NUMBER, no glow, no tier label, no progress bars, no
-    // countdown timer. The verbose desktop block ate ~110 px of vertical
-    // space and obscured enemies; mobile players need to SEE THROUGH the
-    // HUD chrome. Show from k>=2 (single kill isn't worth the visual
-    // weight). Auto-pulses to slightly-higher alpha when the streak buff
-    // is active to give a subtle "you're in a tier" cue.
-    if (isMobile()) {
-        if (k < 2) return;
-        const ctx = this.ctx;
-        const player = this.player;
-        const buffActive = player.streakDamageMult > 1;
-        // Top-center, just below the healthbar row.
-        const x = this.width / 2;
-        const y = 84;
-        const alpha = buffActive ? 0.55 : 0.32;
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.font = "bold 36px 'Press Start 2P', monospace";
-        ctx.fillStyle = '#ffffff';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.65)';
-        ctx.lineWidth = 3;
-        ctx.lineJoin = 'round';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        const text = `${k}`;
-        ctx.strokeText(text, x, y);
-        ctx.fillText(text, x, y);
-        ctx.restore();
-        return;
-    }
-
-    const ctx = this.ctx;
-    const player = this.player;
     const tiers = WEAPON_DATA_STREAK_TIERS;
     let currentTier = null;
     let currentIdx = -1;
     for (let i = 0; i < tiers.length; i++) {
-        if (k >= tiers[i].kills) {
-            currentTier = tiers[i];
-            currentIdx = i;
-        }
+        if (k >= tiers[i].kills) { currentTier = tiers[i]; currentIdx = i; }
     }
-    // Below the first tier (1-2 kills): no tier yet but we still show
-    // the count + idle bar. `currentTier` stays null → use a neutral
-    // pre-tier color/label below.
     const nextTier = currentTier ? (tiers[currentIdx + 1] || null) : tiers[0];
-
-    // 5.74.32 — clean stacked layout, no overlapping elements:
-    //   y+0   : "N KILLS" big number (22px), always tier-colored.
-    //   y+30  : tier label (12px) — current tier's name, "STREAK" pre-tier,
-    //           or "MAX TIER" at the top. Always full color.
-    //   y+50  : tier progress bar (5px) toward next tier.
-    //   y+62  : idle-countdown bar (5px) — green→red drain over 10s.
-    //   y+74  : "X.Xs" idle countdown (8px).
-    //
-    // Removed: the gray-out "SAVED" state, the "+N% DMG" text that
-    // overlapped the tier progress bar's caption, the "→ NEXT TIER" /
-    // "▲ MAX TIER" captions that printed inside the progress bar, and
-    // the "▶ KILL TO RE-ARM" text that overlapped the idle bar.
-    const buffActive = player.streakDamageMult > 1;
-    const tierColor = currentTier ? currentTier.color : '#7FE7FF';
-
-    const x = this.width / 2;
-    // 6.22.1 — moved 10 px up so the streak block doesn't overlap the
-    // bottom action-button bar (was -180, now -190).
-    const y = this.height - 190;
-    const pulse = buffActive ? 0.85 + Math.sin(Date.now() * 0.015) * 0.15 : 1;
-
-    // 5.74.36 — fade the streak block to ~25% opacity when the player
-    // ship or the mouse cursor is inside its bounding box, so it never
-    // hides what the player is doing. Slow lerp so the transition reads
-    // smoothly. Block AABB is roughly 200×95 centered on (x, y+40).
-    const halfW = 100, halfH = 50;
-    const blockTop = y - 8;
-    // 6.18.0 — Extended block bottom by 14 px to cover the new
-    //   "+N% GOLD" row + the shifted bars.
-    const blockBottom = y + 98;
-    const blockLeft = x - halfW;
-    const blockRight = x + halfW;
-    const playerSx = (this.player.x - this.camera.x);
-    const playerSy = (this.player.y - this.camera.y);
-    const mouseSx = (this.inputHandler && this.inputHandler.input.screenAimX) || -9999;
-    const mouseSy = (this.inputHandler && this.inputHandler.input.screenAimY) || -9999;
-    const playerOver = playerSx + this.player.radius >= blockLeft && playerSx - this.player.radius <= blockRight
-                     && playerSy + this.player.radius >= blockTop && playerSy - this.player.radius <= blockBottom;
-    const mouseOver = mouseSx >= blockLeft && mouseSx <= blockRight && mouseSy >= blockTop && mouseSy <= blockBottom;
-    const targetFade = (playerOver || mouseOver) ? 0.20 : 1.0;
-    if (this._streakFade === undefined) this._streakFade = 1.0;
-    // Lerp toward target — 0.12 per frame ≈ 60% in 90ms at 60Hz.
-    this._streakFade += (targetFade - this._streakFade) * 0.12;
-    const fadeAlpha = this._streakFade;
-
-    ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-
-    // ── Streak count (big number) ──
-    if (buffActive) {
-        ctx.shadowColor = tierColor;
-        ctx.shadowBlur = 12 * pulse;
-    }
-    ctx.font = "bold 22px 'Press Start 2P', monospace";
-    ctx.fillStyle = tierColor;
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 3;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    const streakText = `${k} KILL${k === 1 ? '' : 'S'}`;
-    ctx.strokeText(streakText, x, y);
-    ctx.fillText(streakText, x, y);
-
-    // ── Tier label ──
-    ctx.font = "bold 12px 'Press Start 2P', monospace";
-    ctx.shadowBlur = buffActive ? 6 : 0;
-    ctx.fillStyle = tierColor;
     const isMaxTier = currentTier && !nextTier;
-    const labelText = currentTier
+    const tierColor = currentTier ? currentTier.color : '#7FE7FF';
+    const rankLabel = currentTier
         ? (isMaxTier ? `${currentTier.label} (MAX)` : currentTier.label)
         : 'STREAK';
-    ctx.strokeText(labelText, x, y + 30);
-    ctx.fillText(labelText, x, y + 30);
 
-    // 6.18.0 — Gold-find readout BELOW the tier name. Replaces the
-    //   prior implicit "STREAK = +damage" framing with an explicit
-    //   "you are earning +N% gold". Uses the same gold curve as the
-    //   drop math so what the HUD says matches what drops deliver.
-    //   Pre-tier (1-9 kills) shows the linear ramp percentage so the
-    //   player sees the bonus moving from the first kill. Bars below
-    //   shift down 14 px (see y+64 / y+76 / y+88) to make room.
-    let goldRowDrawn = false;
-    {
-        const goldMult = getStreakGoldMult(k);
-        const pct = Math.round((goldMult - 1) * 100);
-        if (pct > 0) {
-            ctx.font = "bold 9px 'Press Start 2P', monospace";
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = '#ffd700';
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            const goldText = `+${pct}% R$`;
-            ctx.strokeText(goldText, x, y + 46);
-            ctx.fillText(goldText, x, y + 46);
-            // Restore stroke for downstream draws.
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 3;
-            goldRowDrawn = true;
-        }
-    }
-    const rowShift = goldRowDrawn ? 14 : 0;
+    const ctx = this.ctx;
+    const player = this.player;
+    const buffActive = player.streakDamageMult > 1;
+    const pulse = buffActive ? 0.85 + Math.sin(Date.now() * 0.015) * 0.15 : 1;
+    const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-    // ── Tier progress bar (toward next tier — or full bar at MAX) ──
-    {
-        const barW = 160, barH = 5;
-        const barX = x - barW / 2;
-        const barY = y + 50 + rowShift;
+    // ── MOBILE — sans-serif (no pixel font), top-center. Rank LARGE, count
+    // small beneath. No bars/glow chrome (mobile players need to see through). ──
+    if (isMobile()) {
+        const x = this.width / 2;
+        const y = 70;
+        ctx.save();
+        ctx.globalAlpha = buffActive ? 0.9 : 0.62;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+        // Rank (large sans).
+        if (buffActive) { ctx.shadowColor = tierColor; ctx.shadowBlur = 8 * pulse; }
+        ctx.font = "700 23px Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif";
+        ctx.fillStyle = tierColor;
+        ctx.lineWidth = 4;
+        ctx.strokeText(rankLabel, x, y);
+        ctx.fillText(rankLabel, x, y);
         ctx.shadowBlur = 0;
+        // Count (smaller sans) beneath.
+        ctx.font = "600 13px Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif";
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+        ctx.lineWidth = 3;
+        ctx.strokeText(`${k} kills`, x, y + 27);
+        ctx.fillText(`${k} kills`, x, y + 27);
+        ctx.restore();
+        return;
+    }
+
+    // ── DESKTOP — TOP-RIGHT (out of the play area). Rank LARGE, count small
+    // beneath, then the gold-find readout + tier-progress + idle-countdown bars,
+    // all right-aligned. (8.14.0 — moved from bottom-center, which blocked play.) ──
+    const RIGHT = this.width - 18;
+    const y = 58;
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#000000';
+
+    // Rank label (big, tier-colored).
+    if (buffActive) { ctx.shadowColor = tierColor; ctx.shadowBlur = 12 * pulse; }
+    ctx.font = "bold 19px 'Press Start 2P', monospace";
+    ctx.fillStyle = tierColor;
+    ctx.lineWidth = 4;
+    ctx.strokeText(rankLabel, RIGHT, y);
+    ctx.fillText(rankLabel, RIGHT, y);
+    ctx.shadowBlur = 0;
+
+    // Kill count (small) beneath the rank.
+    ctx.font = "bold 11px 'Press Start 2P', monospace";
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(`${k} KILLS`, RIGHT, y + 26);
+    ctx.fillText(`${k} KILLS`, RIGHT, y + 26);
+
+    let by = y + 42;
+
+    // Gold-find readout (matches the drop math's streak gold curve).
+    const goldMult = getStreakGoldMult(k);
+    const pct = Math.round((goldMult - 1) * 100);
+    if (pct > 0) {
+        ctx.font = "bold 9px 'Press Start 2P', monospace";
+        ctx.fillStyle = '#ffd700';
+        ctx.lineWidth = 2;
+        ctx.strokeText(`+${pct}% R$`, RIGHT, by);
+        ctx.fillText(`+${pct}% R$`, RIGHT, by);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#000000';
+        by += 14;
+    }
+
+    const barW = 150, barH = 5;
+    const barX = RIGHT - barW;
+
+    // Tier progress bar (toward next tier; full at MAX).
+    {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-        ctx.fillRect(barX, barY, barW, barH);
+        ctx.fillRect(barX, by, barW, barH);
         let fillFrac;
         if (currentTier && nextTier && currentTier.kills < nextTier.kills) {
-            const span = nextTier.kills - currentTier.kills;
-            fillFrac = Math.max(0, Math.min(1, (k - currentTier.kills) / span));
+            fillFrac = clamp01((k - currentTier.kills) / (nextTier.kills - currentTier.kills));
         } else if (!currentTier && nextTier) {
-            // Pre-tier: progress from 0 → first tier threshold.
-            fillFrac = Math.max(0, Math.min(1, k / nextTier.kills));
+            fillFrac = clamp01(k / nextTier.kills);
         } else {
-            // MAX tier — show full bar.
             fillFrac = 1;
         }
         ctx.fillStyle = tierColor;
-        ctx.fillRect(barX, barY, Math.round(barW * fillFrac), barH);
+        ctx.fillRect(barX, by, Math.round(barW * fillFrac), barH);
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
         ctx.lineWidth = 1;
-        ctx.strokeRect(barX + 0.5, barY + 0.5, barW - 1, barH - 1);
+        ctx.strokeRect(barX + 0.5, by + 0.5, barW - 1, barH - 1);
+        by += 9;
     }
 
-    // ── Idle-countdown bar (green→red drain over 10s) ──
+    // Idle-countdown bar (green→red drain over 10s — land a kill before it empties).
     {
         const STREAK_IDLE_MS = 10000;
         const elapsed = Math.max(0, Date.now() - (this.killStreakTimer || 0));
-        const remainingFrac = Math.max(0, 1 - elapsed / STREAK_IDLE_MS);
-        const idleBarW = 160, idleBarH = 5;
-        const idleBarX = x - idleBarW / 2;
-        const idleBarY = y + 62 + rowShift;
+        const remFrac = Math.max(0, 1 - elapsed / STREAK_IDLE_MS);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(idleBarX, idleBarY, idleBarW, idleBarH);
-        const fillR = Math.round(255 * (1 - remainingFrac));
-        const fillG = Math.round(220 * remainingFrac);
-        ctx.fillStyle = `rgb(${fillR}, ${fillG}, 80)`;
-        ctx.fillRect(idleBarX, idleBarY, Math.round(idleBarW * remainingFrac), idleBarH);
+        ctx.fillRect(barX, by, barW, barH);
+        ctx.fillStyle = `rgb(${Math.round(255 * (1 - remFrac))}, ${Math.round(220 * remFrac)}, 80)`;
+        ctx.fillRect(barX, by, Math.round(barW * remFrac), barH);
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
         ctx.lineWidth = 1;
-        ctx.strokeRect(idleBarX + 0.5, idleBarY + 0.5, idleBarW - 1, idleBarH - 1);
-        // Numeric countdown — placed BELOW the bar so it never overlaps.
-        ctx.font = "8px 'Press Start 2P', monospace";
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-        ctx.lineWidth = 2;
-        const secLeft = (Math.max(0, STREAK_IDLE_MS - elapsed) / 1000).toFixed(1);
-        ctx.strokeText(`${secLeft}s`, x, idleBarY + 10);
-        ctx.fillText(`${secLeft}s`, x, idleBarY + 10);
+        ctx.strokeRect(barX + 0.5, by + 0.5, barW - 1, barH - 1);
     }
 
     ctx.restore();
