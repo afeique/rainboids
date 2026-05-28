@@ -214,17 +214,20 @@ export const ENEMY_BULLET_CONFIG = {
     
     // Enemy firing rate cooldowns (in milliseconds)
     // MIN = fast (high level), MAX = slow (level 1 — dumb punching bags)
+    // 8.18.0 — AGGRESSION PASS. Every enemy fires noticeably more often (the
+    // slow "quiet" end of each range is pulled in ~30–40%), so engagements stay
+    // hot instead of lulling. The harder/tankier enemies got the biggest cuts.
     ENEMY_FIRING_COOLDOWNS: {
-        HUNTER: { MIN: 600, MAX: 2200 },        // 5.80.x — burst shooter (3-shot rapid bursts via handleBurstShooting)
-        GUARDIAN: { MIN: 3000, MAX: 8000 },     // Slow but devastating
-        WASP: { MIN: 600, MAX: 2000 },          // Rapid pulse shooter
-        TITAN: { MIN: 1200, MAX: 4000 },        // Tank missiles
-        STALKER: { MIN: 2000, MAX: 6000 },      // Charged laser
-        TANGERINE: { MIN: 2500, MAX: 7000 },    // Slow homing missiles
-        DRIFTER: { MIN: 2000, MAX: 5500 },      // Laser turret
-        PROWLER: { MIN: 1000, MAX: 3500 },      // Missile turret
-        WEAVER: { MIN: 400, MAX: 1600 },        // Rapid pulse turret
-        SENTINEL: { MIN: 1800, MAX: 5000 },     // Shield burst turret
+        HUNTER: { MIN: 500, MAX: 1500 },        // 5.80.x — burst shooter (3-shot rapid bursts via handleBurstShooting)
+        GUARDIAN: { MIN: 2000, MAX: 5000 },     // Slow but devastating — now devastating far more often
+        WASP: { MIN: 480, MAX: 1400 },          // Rapid pulse shooter
+        TITAN: { MIN: 900, MAX: 2600 },         // Tank (machine-gun timer is self-managed in firing.js)
+        STALKER: { MIN: 1400, MAX: 3800 },      // Charged laser
+        TANGERINE: { MIN: 2000, MAX: 5000 },    // Slow homing mines
+        DRIFTER: { MIN: 1400, MAX: 3600 },      // Laser turret
+        PROWLER: { MIN: 750, MAX: 2400 },       // Missile turret — relentless
+        WEAVER: { MIN: 350, MAX: 1200 },        // Rapid pulse turret
+        SENTINEL: { MIN: 1300, MAX: 3400 },     // Shield burst turret
     }
 };
 

@@ -415,14 +415,17 @@ export function updateEvasiveManeuvers(gameEngine) {
     if (this._dodgeCooldown === undefined) {
         // Stagger initial cadence so a fresh wave doesn't all dodge
         // at once on the same frame.
-        this._dodgeCooldown = 600 + Math.random() * 900;
+        // 8.18.0 — a modest cadence tighten so enemies reposition a bit more
+        // often without becoming un-hittable (the bigger aggression bump is in
+        // their FIRING, not their dodge weave).
+        this._dodgeCooldown = 550 + Math.random() * 850;
     }
     const cooldownExpired = now - this.lastEvasiveManeuver > this._dodgeCooldown;
-    if ((playerSpeed > 2 || cooldownExpired) && now - this.lastEvasiveManeuver > 600) {
+    if ((playerSpeed > 2 || cooldownExpired) && now - this.lastEvasiveManeuver > 550) {
         this.lastEvasiveManeuver = now;
         this.evasiveTimer = 30; // 30 frames of evasion
-        // Re-roll cadence for the next dodge (1.0 - 1.9s).
-        this._dodgeCooldown = 1000 + Math.random() * 900;
+        // Re-roll cadence for the next reposition (0.9 - 1.7s).
+        this._dodgeCooldown = 900 + Math.random() * 800;
 
         // Choose random evasive direction; bias slightly perpendicular
         // to the player so enemies sidestep the line of fire instead
@@ -444,7 +447,7 @@ export function updateEvasiveManeuvers(gameEngine) {
 
     // Apply evasive movement if timer is active
     if (this.evasiveTimer > 0) {
-        const evasiveStrength = 0.8 * (this.evasiveTimer / 30); // Fade out over time
+        const evasiveStrength = 0.85 * (this.evasiveTimer / 30); // 8.18.0 — slightly snappier (was 0.8)
         this.vel.x += this.evasiveDirection.x * evasiveStrength;
         this.vel.y += this.evasiveDirection.y * evasiveStrength;
         this.evasiveTimer--;

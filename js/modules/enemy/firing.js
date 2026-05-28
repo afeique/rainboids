@@ -1138,22 +1138,54 @@ export function updateSweepLaserSystem(gameEngine) {
     if (!this.targetPlayer) return;
     const now = frameClock.now;
 
+    // 8.18.0 — durations are config-driven so enemy-data tunes the Titan.
+    const fcfg = (this.config && this.config.firing) || {};
     if (this.sweepState === undefined) {
         this.sweepState = 'cooldown';
-        this.sweepCooldownEnd = now + 4000; // First sweep after 4s
+        this.sweepCooldownEnd = now + (fcfg.sweepInitialDelay ?? 4000); // First sweep
         this.sweepAngle = 0;
         this.sweepStartAngle = 0;
         this.sweepEndAngle = 0;
         this.sweepStartTime = 0;
-        this.sweepDuration = 1600;
+        this.sweepDuration = fcfg.sweepDuration ?? 1600;
         this.sweepWarningStart = 0;
-        this.sweepWarningDuration = 1800;
+        this.sweepWarningDuration = fcfg.telegraphDuration ?? 1800;
         this.sweepLastDamage = 0;
         this.sweepLastBeam = 0;
+        this.sweepMgLastShot = 0;
     }
 
     switch (this.sweepState) {
         case 'cooldown':
+            // 8.18.0 — MACHINE GUN: between sweeps the Titan tracks the player
+            // with its turret and lays down rapid suppressing fire instead of
+            // idling, so it's a constant threat (not just a periodic sweep).
+            {
+                const toPlayer = Math.atan2(
+                    this.targetPlayer.y - this.y,
+                    this.targetPlayer.x - this.x,
+                );
+                let aimDiff = toPlayer - (this.tankTurretAngle || 0);
+                while (aimDiff > Math.PI) aimDiff -= Math.PI * 2;
+                while (aimDiff < -Math.PI) aimDiff += Math.PI * 2;
+                this.tankTurretAngle = (this.tankTurretAngle || 0) + aimDiff * 0.12;
+                const mgInterval = fcfg.mgInterval ?? 150;
+                if (now - (this.sweepMgLastShot || 0) > mgInterval && Math.abs(aimDiff) < 0.5) {
+                    const spread = (Math.random() - 0.5) * 0.14; // light cone
+                    const b = this.createEnemyBullet(
+                        gameEngine, this.tankTurretAngle + spread,
+                        fcfg.mgSpeed ?? 7, '#ff66ff', false, 'aimed',
+                    );
+                    if (b) {
+                        b.radius = 6;
+                        b.glowRadius = 14;
+                        b.color = '#ff77ff';
+                        b.damage = this.getLevelScaledDamage(1);
+                        b.maxLifetimeOverride = 2500;
+                    }
+                    this.sweepMgLastShot = now;
+                }
+            }
             if (now >= this.sweepCooldownEnd) {
                 // Transition to warning
                 this.sweepState = 'warning';
@@ -1221,7 +1253,7 @@ export function updateSweepLaserSystem(gameEngine) {
 
             if (progress >= 1) {
                 this.sweepState = 'cooldown';
-                this.sweepCooldownEnd = now + 8000; // 8s between sweeps
+                this.sweepCooldownEnd = now + (fcfg.sweepRestDelay ?? 8000); // gap between sweeps
             }
             break;
         }

@@ -29,7 +29,7 @@ export const ENEMY_TYPES = {
         points: 120,               // was 75 (faster economy)
         movement: {
             pattern: 'hunter_arc',
-            turnSpeed: 0.12,
+            turnSpeed: 0.16,
             rotationSpeed: { min: -0.01, max: 0.01 },
         },
         firing: {
@@ -56,7 +56,7 @@ export const ENEMY_TYPES = {
         name: 'Guardian',
         color: '#44ff44',
         health: 12,                // 5.74.12 — bumped 7 → 12
-        speed: 1.25,               // was 1.0 (+25%)
+        speed: 1.4,                // 8.18.0 — closes on the player a bit harder (was 1.25)
         size: 48,                  // was 57 (-15%)
         shootPattern: 'guardian_spread',
         shootRate: 0.3,
@@ -64,7 +64,7 @@ export const ENEMY_TYPES = {
         points: 200,
         movement: {
             pattern: 'square',
-            turnSpeed: 0.12,
+            turnSpeed: 0.16,
             rotationSpeed: { min: -0.01, max: 0.01 },
         },
         firing: {
@@ -99,7 +99,7 @@ export const ENEMY_TYPES = {
         points: 100,
         movement: {
             pattern: 'wasp_zigzag',
-            turnSpeed: 0.12,
+            turnSpeed: 0.16,
             rotationSpeed: { min: -0.02, max: 0.02 },
         },
         firing: {
@@ -134,7 +134,7 @@ export const ENEMY_TYPES = {
         points: 130,
         movement: {
             pattern: 'arc',
-            turnSpeed: 0.12,
+            turnSpeed: 0.16,
             rotationSpeed: { min: -0.01, max: 0.01 },
         },
         firing: {
@@ -169,7 +169,7 @@ export const ENEMY_TYPES = {
         points: 180,
         movement: {
             pattern: 'drifter_wave',
-            turnSpeed: 0.12,
+            turnSpeed: 0.16,
             rotationSpeed: { min: -0.01, max: 0.01 },
         },
         firing: {
@@ -196,7 +196,7 @@ export const ENEMY_TYPES = {
         name: 'Prowler',
         color: '#ff00ff',
         health: 14,                // 5.74.12 — bumped 8 → 14
-        speed: 0.75,               // was 0.6
+        speed: 0.9,                // 8.18.0 — repositions faster between volleys (was 0.75)
         size: 45,                  // was 53
         shootPattern: 'missile',
         shootRate: 0.5,
@@ -204,7 +204,7 @@ export const ENEMY_TYPES = {
         points: 240,
         movement: {
             pattern: 'keep_distance',
-            turnSpeed: 0.12,
+            turnSpeed: 0.16,
             rotationSpeed: { min: -0.01, max: 0.01 },
             preferredDistance: 400,
         },
@@ -240,7 +240,7 @@ export const ENEMY_TYPES = {
         points: 160,
         movement: {
             pattern: 'weaver_spinup',
-            turnSpeed: 0.12,
+            turnSpeed: 0.16,
             rotationSpeed: { min: -0.01, max: 0.01 },
             spinUpDuration: 2400,
             arcDashDuration: 3600,
@@ -278,7 +278,7 @@ export const ENEMY_TYPES = {
         points: 220,
         movement: {
             pattern: 'weaver_spinup',
-            turnSpeed: 0.12,
+            turnSpeed: 0.16,
             rotationSpeed: { min: -0.01, max: 0.01 },
             spinUpDuration: 2400,
             arcDashDuration: 3600,
@@ -316,7 +316,7 @@ export const ENEMY_TYPES = {
         points: 160,
         movement: {
             pattern: 'chase',
-            turnSpeed: 0.12,
+            turnSpeed: 0.16,
             rotationSpeed: { min: -0.01, max: 0.01 },
         },
         firing: {
@@ -344,7 +344,7 @@ export const ENEMY_TYPES = {
         name: 'Titan',
         color: '#ff44ff',
         health: 20,                // 5.74.12 — bumped 12 → 20 (Titan)
-        speed: 1.5,                // was 1.2
+        speed: 1.65,               // 8.18.0 — grinds toward the player (was 1.5)
         size: 64,                  // was 75 — still the biggest, but smaller
         shootPattern: 'sweep_laser',
         shootRate: 0.15,
@@ -352,7 +352,7 @@ export const ENEMY_TYPES = {
         points: 320,
         movement: {
             pattern: 'boulder',
-            turnSpeed: 0.06,       // was 0.04 — still slow for a boss
+            turnSpeed: 0.10,       // 8.18.0 — was 0.06; tracks faster
             rotationSpeed: { min: -0.005, max: 0.005 },
         },
         firing: {
@@ -360,9 +360,17 @@ export const ENEMY_TYPES = {
             burstCount: 1,
             burstDelay: 0,
             cooldown: { min: 900, max: 4000 },
-            telegraphDuration: 1800,
+            // 8.18.0 — Titan deadliness pass. Far less heads-up before the
+            // sweep, the sweep comes sooner and recurs faster, and between
+            // sweeps the Titan rakes the player with suppressing MACHINE-GUN
+            // fire (self-managed in firing.js updateSweepLaserSystem).
+            telegraphDuration: 1000,   // was 1800
             sweepAngle: 60,
             sweepDuration: 1600,
+            sweepInitialDelay: 2500,   // first sweep (was 4000)
+            sweepRestDelay: 4500,      // gap between sweeps (was 8000)
+            mgInterval: 150,           // ms between machine-gun rounds
+            mgSpeed: 7,
         },
         visual: {
             shape: 'titan_tank',
@@ -399,7 +407,7 @@ export const ENEMY_TYPES = {
         shootRate: 0.7,
         movePattern: 'wasp_zigzag',
         points: 110,
-        movement: { pattern: 'wasp_zigzag', turnSpeed: 0.12, rotationSpeed: { min: -0.02, max: 0.02 } },
+        movement: { pattern: 'wasp_zigzag', turnSpeed: 0.16, rotationSpeed: { min: -0.02, max: 0.02 } },
         firing: { pattern: 'wasp_machinegun', burstCount: 1, burstDelay: 0, cooldown: { min: 500, max: 2200 } },
         visual: { shape: 'cinder_ember', glowColor: '#ffaa44', trailLength: 15 },
         ai: { evasion: 0.6, preferredRange: 180, dodgeBullets: true, microMovements: true, fishMotion: true },
@@ -418,7 +426,7 @@ export const ENEMY_TYPES = {
         shootRate: 0.3,
         movePattern: 'square',
         points: 250,
-        movement: { pattern: 'square', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
+        movement: { pattern: 'square', turnSpeed: 0.16, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'guardian_spread', burstCount: 3, burstDelay: 105, cooldown: { min: 2500, max: 8000 } },
         visual: { shape: 'ice_crystal', glowColor: '#bbf0ff', trailLength: 15 },
         ai: { evasion: 0.2, preferredRange: 320, dodgeBullets: false, microMovements: true, fishMotion: true },
@@ -437,7 +445,7 @@ export const ENEMY_TYPES = {
         shootRate: 0.3,
         movePattern: 'arc',
         points: 150,
-        movement: { pattern: 'arc', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
+        movement: { pattern: 'arc', turnSpeed: 0.16, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'charged_laser', burstCount: 1, burstDelay: 0, cooldown: { min: 1500, max: 6000 } },
         visual: { shape: 'icicle_lance', glowColor: '#bbf0ff', trailLength: 15 },
         ai: { evasion: 0.6, preferredRange: 220, dodgeBullets: true, microMovements: true, fishMotion: true },
@@ -458,7 +466,7 @@ export const ENEMY_TYPES = {
         movePattern: 'hunter_arc',
         points: 160,
         deathFlare: { radius: 130, damage: 12 },
-        movement: { pattern: 'hunter_arc', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
+        movement: { pattern: 'hunter_arc', turnSpeed: 0.16, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'hunter_single', burstCount: 2, burstDelay: 90, cooldown: { min: 900, max: 3500 } },
         visual: { shape: 'cracked_bomb', glowColor: '#ffaa66', trailLength: 15 },
         ai: { evasion: 0.4, preferredRange: 220, dodgeBullets: true, microMovements: true, fishMotion: true },
@@ -480,7 +488,7 @@ export const ENEMY_TYPES = {
         shootRate: 0.2,
         movePattern: 'hunter_arc',
         points: 150,
-        movement: { pattern: 'hunter_arc', turnSpeed: 0.12, rotationSpeed: { min: -0.02, max: 0.02 } },
+        movement: { pattern: 'hunter_arc', turnSpeed: 0.16, rotationSpeed: { min: -0.02, max: 0.02 } },
         firing: { pattern: 'arc_lightning', burstCount: 1, burstDelay: 0, cooldown: { min: 1500, max: 5500 } },
         visual: { shape: 'arc_node', glowColor: '#c890ff', trailLength: 15 },
         ai: { evasion: 0.65, preferredRange: 260, dodgeBullets: true, microMovements: true, fishMotion: true },
@@ -502,7 +510,7 @@ export const ENEMY_TYPES = {
         points: 200,
         // A.E10-U3 — leaves a Toxic acid trail (S2 HazardField) as it moves.
         trailHazard: { element: 'TOXIC', radius: 70, dps: 6, lifeMs: 3500, intervalMs: 600 },
-        movement: { pattern: 'chase', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 } },
+        movement: { pattern: 'chase', turnSpeed: 0.16, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'lay_mine', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 7000 }, mineLifetime: 18000 },
         visual: { shape: 'plague_sac', glowColor: '#aaff66', trailLength: 15 },
         ai: { evasion: 0.2, preferredRange: 150, dodgeBullets: false, microMovements: true, fishMotion: true },
@@ -526,7 +534,7 @@ export const ENEMY_TYPES = {
         movePattern: 'keep_distance',
         points: 280,
         adaptive: true,
-        movement: { pattern: 'keep_distance', turnSpeed: 0.12, rotationSpeed: { min: -0.01, max: 0.01 }, preferredDistance: 400 },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.16, rotationSpeed: { min: -0.01, max: 0.01 }, preferredDistance: 400 },
         firing: { pattern: 'missile', burstCount: 1, burstDelay: 0, cooldown: { min: 900, max: 3500 } },
         visual: { shape: 'prism_facet', glowColor: '#e0c8ff', trailLength: 15 },
         ai: { evasion: 0.3, preferredRange: 400, dodgeBullets: false, microMovements: true, fishMotion: true },
@@ -645,7 +653,7 @@ export const ENEMY_TYPES = {
         movePattern: 'arc',
         points: 150,
         cloak: true,                // → initializeEnemy attaches createCloak()
-        movement: { pattern: 'arc', turnSpeed: 0.12, rotationSpeed: { min: -0.015, max: 0.015 } },
+        movement: { pattern: 'arc', turnSpeed: 0.16, rotationSpeed: { min: -0.015, max: 0.015 } },
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1200, max: 4500 } },
         visual: { shape: 'stalker_sword', glowColor: '#bb99ff', trailLength: 15 },
         ai: { evasion: 0.6, preferredRange: 240, dodgeBullets: true, microMovements: true, fishMotion: true },
@@ -751,7 +759,7 @@ export const ENEMY_TYPES = {
         maw: true,                 // → initializeEnemy attaches the maw config
         // ~60° half-angle (120° mouth), 140px reach, +3 shield/bullet up to 40.
         mawOpts: { halfAngleRad: Math.PI / 3, range: 140, shieldPerBullet: 3, maxShield: 40 },
-        movement: { pattern: 'keep_distance', turnSpeed: 0.06, rotationSpeed: { min: -0.008, max: 0.008 }, preferredDistance: 280 },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.10, rotationSpeed: { min: -0.008, max: 0.008 }, preferredDistance: 280 },
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 5800 } },
         visual: { shape: 'shield_turret', glowColor: '#c08aff', trailLength: 16 },
         ai: { evasion: 0.25, preferredRange: 280, dodgeBullets: false, microMovements: true, fishMotion: true },
@@ -855,7 +863,7 @@ export const ENEMY_TYPES = {
         // damage = counter-damage per pulse; cooldownMs = per-burst throttle so
         // sustained full-auto applies a steady punish-pulse, not damage every tick.
         thornsOpts: { radius: 150, damage: 6, cooldownMs: 260 },
-        movement: { pattern: 'keep_distance', turnSpeed: 0.06, rotationSpeed: { min: -0.01, max: 0.01 } },
+        movement: { pattern: 'keep_distance', turnSpeed: 0.10, rotationSpeed: { min: -0.01, max: 0.01 } },
         firing: { pattern: 'hunter_single', burstCount: 0, burstDelay: 0, cooldown: { min: 99999, max: 99999 } },
         visual: { shape: 'thornback', glowColor: '#ff7d97', trailLength: 8 },
         ai: { evasion: 0.15, preferredRange: 180, dodgeBullets: false, microMovements: false, fishMotion: false },

@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.18.0] - 2026-05-28
+
+### Changed
+- **Enemy aggression pass.** Every enemy now fires noticeably more often —
+  the slow "quiet" end of each firing-cooldown range was pulled in ~30–40%
+  (`ENEMY_FIRING_COOLDOWNS`), with the biggest cuts on the harder/tankier
+  types (Guardian, Prowler, Stalker, Drifter, Sentinel). Enemies also **track
+  the player faster** (`turnSpeed` 0.12 → 0.16 across the roster, slow turret
+  types 0.06 → 0.10) so they land more shots, and they **reposition a touch
+  more often**. The slow tanks now **close on the player** instead of drifting
+  (Guardian 1.25 → 1.4, Prowler 0.75 → 0.9, Titan 1.5 → 1.65).
+- **Titan is deadly now.** Between its sweeping lasers the Titan tracks you
+  with its turret and rakes you with a rapid **machine gun** instead of idling.
+  Its sweep laser strikes with **far less warning** (telegraph 1800 ms →
+  1000 ms), comes **sooner** (first sweep 4 s → 2.5 s), and **recurs almost
+  twice as fast** (8 s → 4.5 s between sweeps). The sweep's durations are now
+  config-driven from `enemy-data.js`.
+
+### Notes
+- 3 pre-existing E2E flakes remain (`AI can kill GUARDIAN/PROWLER/TITAN within
+  20 seconds`) — the reactive test pilot can't reliably one-punch these evasive
+  enemies; verified failing at the clean baseline before this change, so it is
+  not a regression.
+
 ## [8.17.0] - 2026-05-28
 
 ### Changed
