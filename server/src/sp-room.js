@@ -121,6 +121,11 @@ export class SpRoom {
     if (this.ready) this.host.setSlotInput(playerId, sanitizeInput(msg));
   }
 
+  /** Wave-clear powerup pick from a client (C2S.DRAFT_PICK { index }). */
+  draftPick(playerId, msg) {
+    if (this.ready) this.host.applyDraftPick(playerId, (msg && msg.index) | 0);
+  }
+
   _tick() {
     if (!this.ready) return; // host still importing the SP modules
 

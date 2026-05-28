@@ -195,6 +195,42 @@ describe('SpHost — headless wave driver', () => {
     expect(host.enemyPool.activeObjects.length).toBeGreaterThan(0); // wave 2 roster
   });
 
+  it('offers a powerup draft at wave-clear and applies the pick (run progression)', async () => {
+    const host = new SpHost({ seed: 3 });
+    await host.init();
+    host.autoWaves = true;
+    host.frame(); // wave 1
+    const p = host.players[0].player;
+    const before = p.powerups ? p.powerups.size : 0;
+    // Clear the wave → the draft opens on the next frame.
+    for (const e of host.enemyPool.activeObjects) e.active = false;
+    const { events } = host.frame();
+    const offer = events.find((ev) => ev.type === EV.DRAFT_OFFER);
+    expect(offer).toBeTruthy();
+    expect(offer.options.length).toBeGreaterThanOrEqual(1);
+    expect(host.players[0].draft).toBeTruthy();
+    // Pick the first option → it applies via the real addPowerup.
+    expect(host.applyDraftPick(host.players[0].id, 0)).toBe(true);
+    expect(p.powerups.size).toBe(before + 1);
+    // The chosen powerup is one of the offered options.
+    const got = [...p.powerups.keys()];
+    expect(offer.options).toContain(got[got.length - 1]);
+  });
+
+  it('auto-resolves an unpicked draft at the end of the breather', async () => {
+    const host = new SpHost({ seed: 3 });
+    await host.init();
+    host.autoWaves = true;
+    host.frame();
+    const p = host.players[0].player;
+    const before = p.powerups ? p.powerups.size : 0;
+    for (const e of host.enemyPool.activeObjects) e.active = false;
+    // Tick through the breather WITHOUT picking → auto-applies option 0.
+    for (let i = 0; i < 120; i++) host.frame();
+    expect(p.powerups.size).toBeGreaterThanOrEqual(before + 1);
+    expect(host.game.currentWave).toBeGreaterThanOrEqual(2); // advanced after draft
+  });
+
   it('does not self-drive waves when autoWaves is off (default)', async () => {
     const host = new SpHost({ seed: 3 });
     await host.init();

@@ -84,6 +84,30 @@ describe('SpRoom — SpHost-backed authoritative room', () => {
     room.stop();
   });
 
+  it('streams a wave-clear powerup DRAFT_OFFER and routes the pick to the host', async () => {
+    const room = new SpRoom({ id: 'draft', seed: 3 });
+    await room._ready;
+    const conn = makeConn();
+    const pid = room.join(conn, 'a');
+    room._tick(); // wave 1 spawns (autoWaves)
+    // Clear the wave → the draft opens on the next tick.
+    for (const e of room.host.enemyPool.activeObjects) e.active = false;
+    room._tick();
+    const offer = conn.frames
+      .filter((m) => m.t === S2C.EVENT)
+      .flatMap((m) => m.payloads || [])
+      .find((p) => p.type === EV.DRAFT_OFFER);
+    expect(offer).toBeTruthy();
+    expect(offer.playerId).toBe(pid);
+    expect(offer.options.length).toBeGreaterThanOrEqual(1);
+    // A C2S pick routes through draftPick → host.applyDraftPick.
+    const slot = room.host.players.find((s) => s.id === pid);
+    const before = slot.player.powerups.size;
+    room.draftPick(pid, { index: 0 });
+    expect(slot.player.powerups.size).toBe(before + 1);
+    room.stop();
+  });
+
   it('two joiners both get co-op ships in the shared arena', async () => {
     const room = new SpRoom({ id: 'test', seed: 5 });
     await room._ready;

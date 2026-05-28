@@ -13,6 +13,7 @@ export const WIRE_VERSION = 2;
 export const C2S = Object.freeze({
   HELLO: 'hello',
   INPUT: 'input',
+  DRAFT_PICK: 'draft_pick', // {index} — pick a wave-clear powerup option (additive, forward-compatible)
   BYE: 'bye',
 });
 

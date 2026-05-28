@@ -20,6 +20,8 @@ export const EV = Object.freeze({
   DROP_COLLECTED: 'drop_collected',
   WAVE_START: 'wave_start',
   WAVE_CLEAR: 'wave_clear',
+  DRAFT_OFFER: 'draft_offer',   // {playerId, wave, options[]} — wave-clear powerup pick
+  DRAFT_PICK: 'draft_pick',     // {playerId, key, auto?} — a draft resolved
   GAME_OVER: 'game_over',
   RUN_RESTART: 'run_restart',
 });
