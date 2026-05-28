@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.25.0] - 2026-05-28
+
+### Changed
+- **The PASSIVES and ABILITIES pause screens now show the full catalog** (like
+  the KEYSTONES screen): every modular passive / every ability renders as a
+  circle-icon row, with the ones you **own lit + equippable** and the rest
+  **grayed out** as a preview of what's left to unlock — instead of listing only
+  what you currently own.
+
 ## [8.24.0] - 2026-05-28
 
 ### Added

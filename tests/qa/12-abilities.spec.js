@@ -45,10 +45,10 @@ test.describe('QA-12: R6.3 new abilities', () => {
         expect(marked === true || marked === 'no-enemy').toBe(true);
     });
 
-    test('owned abilities appear as circle-icon rows on the in-run ABILITIES screen', async ({ page }) => {
-        // 8.23.0 — abilities are no longer picked pre-run; the dedicated in-run
-        // ABILITIES pause tab shows ONLY owned abilities as circle-icon rows.
-        // Clicking an unequipped one equips it into a free 1-4 slot.
+    test('the in-run ABILITIES screen shows the full catalog — owned lit + equippable, unowned grayed', async ({ page }) => {
+        // 8.25.0 — catalog style (like KEYSTONES): the FULL ability list renders,
+        // with owned ones lit/equippable and unowned ones grayed. Clicking an
+        // owned, unequipped one equips it into a free 1-4 slot.
         const r = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.startNewRun({ primaries: ['PULSE_CANNON'] });
@@ -56,22 +56,22 @@ test.describe('QA-12: R6.3 new abilities', () => {
             ge.player.equippedAbilities = [null, null, null, null];
             ge.uiManager.updateAbilitiesTab();
             const rows = [...document.querySelectorAll('#abilities-tab .pause-equip-row')];
-            const names = rows.map((n) => n.textContent);
             const iconCount = document.querySelectorAll(
                 '#abilities-tab .pause-equip-icon svg, #abilities-tab .pause-equip-icon .icon-fallback').length;
+            const lockedCount = document.querySelectorAll('#abilities-tab .pause-equip-row--locked').length;
             const blink = rows.find((n) => n.textContent.includes('Blink'));
-            blink.click(); // equip into slot 0
+            const blinkLocked = blink.classList.contains('pause-equip-row--locked');
+            blink.click(); // equip the owned one
             return {
-                rowCount: rows.length,
-                iconCount,
-                names,
+                rowCount: rows.length, iconCount, lockedCount, blinkLocked,
                 equipped0: ge.player.equippedAbilities[0],
             };
         });
-        expect(r.rowCount).toBe(3);                 // owned-only
-        expect(r.iconCount).toBe(3);                // a circle icon per row
-        expect(r.names.join(' ')).toContain('Blink');
-        expect(r.equipped0).toBe('BLINK');          // click equipped it
+        expect(r.rowCount).toBeGreaterThan(3);     // full catalog, not owned-only
+        expect(r.iconCount).toBe(r.rowCount);      // a circle icon per row
+        expect(r.lockedCount).toBeGreaterThan(0);  // unowned abilities grayed
+        expect(r.blinkLocked).toBe(false);         // owned = lit
+        expect(r.equipped0).toBe('BLINK');         // owned row equips on click
     });
 
     test('Second Wind cheats death once', async ({ page }) => {

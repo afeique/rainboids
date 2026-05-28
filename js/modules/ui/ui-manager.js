@@ -993,7 +993,7 @@ export class UIManager {
         tab.appendChild(h2);
         const subtitle = document.createElement('div');
         subtitle.className = 'pause-tab-subtitle';
-        subtitle.textContent = `${equippedCount}/${unlocked} slot${unlocked === 1 ? '' : 's'} filled · click to equip / unequip · swap freely`;
+        subtitle.textContent = `${equippedCount}/${unlocked} slot${unlocked === 1 ? '' : 's'} filled · owned are lit · click to equip / unequip`;
         tab.appendChild(subtitle);
 
         const list = document.createElement('div');
@@ -1001,26 +1001,18 @@ export class UIManager {
         list.className = 'pause-tab-list';
         tab.appendChild(list);
 
-        // 8.24.0 — MODULAR (non-keystone) owned passives only; keystones live on
-        // the dedicated Keystone Traits screen.
-        const pool = getModularSlotPassives().filter((p) => owned.has(p.id));
-        if (pool.length === 0) {
-            const empty = document.createElement('div');
-            empty.style.color = '#888';
-            empty.textContent = 'No passives owned yet — they unlock as you level up during a run.';
-            list.appendChild(empty);
-            return;
-        }
-
-        for (const def of pool) {
+        // 8.25.0 — CATALOG: the FULL modular-passive list. Owned ones are lit +
+        // equippable; unowned ones are grayed (they unlock as you level up).
+        // Keystones live on the dedicated Keystone Traits screen.
+        for (const def of getModularSlotPassives()) {
+            const ownedIt = owned.has(def.id);
             const slotIdx = slots.indexOf(def.id);
             const equipped = slotIdx !== -1 && slotIdx < unlocked;
-            const keystone = (def.tags || []).includes('keystone');
-            const row = this._buildPassiveSwapRow(def, equipped, equipped ? slotIdx : -1, keystone, () => {
+            const row = this._buildPassiveSwapRow(def, equipped, equipped ? slotIdx : -1, false, ownedIt, () => {
+                if (!ownedIt) return; // grayed/locked — not earned yet
                 if (equipped) {
                     player.equipPassive(slotIdx, null);
                 } else {
-                    // First free unlocked slot, else no-op (unequip one to free room).
                     let free = -1;
                     for (let i = 0; i < unlocked; i++) { if (!slots[i]) { free = i; break; } }
                     if (free !== -1) player.equipPassive(free, def.id);
@@ -1031,10 +1023,10 @@ export class UIManager {
         }
     }
 
-    _buildPassiveSwapRow(def, equipped, slotIdx, keystone, onClick) {
+    _buildPassiveSwapRow(def, equipped, slotIdx, keystone, owned, onClick) {
         const row = document.createElement('button');
         row.type = 'button';
-        row.className = 'pause-equip-row' + (equipped ? ' equipped' : '');
+        row.className = 'pause-equip-row' + (equipped ? ' equipped' : '') + (owned ? '' : ' pause-equip-row--locked');
         // 8.22.0 — the same "circle icon" the pre-run tree used, so the in-run
         // passives screen reads visually (themed slug → star/disc fallback).
         const icon = document.createElement('span');
@@ -1049,7 +1041,7 @@ export class UIManager {
         desc.textContent = (def.desc || '') + (def.downside ? `  ↯ ${def.downside}` : '');
         const status = document.createElement('span');
         status.className = 'pause-equip-status';
-        status.textContent = equipped ? `SLOT ${slotIdx + 1}` : '';
+        status.textContent = equipped ? `SLOT ${slotIdx + 1}` : (owned ? 'OWNED' : 'LOCKED');
         row.append(icon, name, desc, status);
         row.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
         return row;
@@ -1074,7 +1066,7 @@ export class UIManager {
         tab.appendChild(h2);
         const subtitle = document.createElement('div');
         subtitle.className = 'pause-tab-subtitle';
-        subtitle.textContent = `${equippedCount}/4 slots filled · keys 1–4 · click to equip / unequip`;
+        subtitle.textContent = `${equippedCount}/4 slots filled · keys 1–4 · owned are lit · click to equip / unequip`;
         tab.appendChild(subtitle);
 
         const list = document.createElement('div');
@@ -1082,20 +1074,15 @@ export class UIManager {
         list.className = 'pause-tab-list';
         tab.appendChild(list);
 
-        const ownedIds = [...owned].filter((id) => ABILITIES[id]);
-        if (ownedIds.length === 0) {
-            const empty = document.createElement('div');
-            empty.style.color = '#888';
-            empty.textContent = 'No abilities yet — they unlock as you level up during a run.';
-            list.appendChild(empty);
-            return;
-        }
-
-        for (const id of ownedIds) {
+        // 8.25.0 — CATALOG: the FULL ability list. Owned ones are lit +
+        // equippable; unowned ones are grayed (they unlock as you level up).
+        for (const id of Object.keys(ABILITIES)) {
             const def = ABILITIES[id];
+            const ownedIt = owned.has(id);
             const slotIdx = slots.indexOf(id);
             const equipped = slotIdx !== -1;
-            const row = this._buildAbilitySwapRow(def, equipped, slotIdx, () => {
+            const row = this._buildAbilitySwapRow(def, equipped, slotIdx, ownedIt, () => {
+                if (!ownedIt) return; // grayed/locked — not earned yet
                 if (equipped) {
                     player.equippedAbilities[slotIdx] = null; // activeAbility proxies slot 0
                 } else {
@@ -1109,10 +1096,10 @@ export class UIManager {
         }
     }
 
-    _buildAbilitySwapRow(def, equipped, slotIdx, onClick) {
+    _buildAbilitySwapRow(def, equipped, slotIdx, owned, onClick) {
         const row = document.createElement('button');
         row.type = 'button';
-        row.className = 'pause-equip-row' + (equipped ? ' equipped' : '');
+        row.className = 'pause-equip-row' + (equipped ? ' equipped' : '') + (owned ? '' : ' pause-equip-row--locked');
         const icon = document.createElement('span');
         icon.className = 'pause-equip-icon';
         icon.innerHTML = renderIconHTML(def.icon || 'circle-fill',
@@ -1125,7 +1112,7 @@ export class UIManager {
         desc.textContent = def.description || '';
         const status = document.createElement('span');
         status.className = 'pause-equip-status';
-        status.textContent = equipped ? `KEY ${slotIdx + 1}` : '';
+        status.textContent = equipped ? `KEY ${slotIdx + 1}` : (owned ? 'OWNED' : 'LOCKED');
         row.append(icon, name, desc, status);
         row.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
         return row;
