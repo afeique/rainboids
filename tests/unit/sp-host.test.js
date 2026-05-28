@@ -237,3 +237,51 @@ describe('SpHost — snapshot + protocol events (MP wire)', () => {
     expect(snapshot.ships[0].li).toBe(42);
   });
 });
+
+describe('SpHost — co-op (N players)', () => {
+  it('two players move independently under their own inputs', async () => {
+    const host = new SpHost({ seed: 9 });
+    await host.init();
+    const s2 = host.addPlayer(2, 600, 540);
+    const p1 = host.players[0].player;
+    const p2 = s2.player;
+    const x1 = p1.x, x2 = p2.x;
+    host.setSlotInput(host.players[0].id, { right: true });
+    host.setSlotInput(2, { left: true });
+    for (let i = 0; i < 30; i++) host.tick();
+    expect(p1.x).toBeGreaterThan(x1 + 10); // player 1 drifted right
+    expect(p2.x).toBeLessThan(x2 - 5);     // player 2 drifted left
+  });
+
+  it('serializes one ship per player slot with distinct ids', async () => {
+    const host = new SpHost({ seed: 9 });
+    await host.init();
+    host.addPlayer(2, 600, 540);
+    host.tick();
+    const snap = host.buildSnapshot();
+    expect(snap.ships).toHaveLength(2);
+    const ids = snap.ships.map((s) => s.id).sort();
+    expect(ids).toEqual([host.players[0].id, 2].sort());
+  });
+
+  it('enemies aggro the NEAREST living player (co-op targeting)', async () => {
+    const host = new SpHost({ seed: 9 });
+    await host.init();
+    // Player 1 far left, player 2 far right; enemy hugs player 2.
+    host.players[0].player.x = 400; host.players[0].player.y = 540;
+    const s2 = host.addPlayer(2, 1500, 540);
+    const e = host.spawnEnemy(1450, 540, 'HUNTER', 1);
+    host.tick();
+    expect(e.targetPlayer).toBe(s2.player); // chose the nearer ship
+  });
+
+  it('removePlayer drops a slot and keeps this.player valid', async () => {
+    const host = new SpHost({ seed: 9 });
+    await host.init();
+    host.addPlayer(2, 600, 540);
+    host.removePlayer(2);
+    expect(host.players).toHaveLength(1);
+    host.tick();
+    expect(host.buildSnapshot().ships).toHaveLength(1);
+  });
+});

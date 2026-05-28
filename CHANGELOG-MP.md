@@ -7,6 +7,34 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.24.0] - 2026-05-27
+
+### Added
+- **Co-op N players in SpHost** (Path A, P5 — the §4 generalization). SpHost now
+  holds N player slots (`addPlayer` / `removePlayer` / `setSlotInput`) sharing one
+  arena + world. Each tick rebinds `this.player` to the slot being processed (the
+  SP sim code reads `this.player` singular — they're the same object as
+  `window.gameEngine.player`), so the real player/weapons/lifecycle code runs
+  unchanged per player without rewriting it.
+  - **Per-slot movement + firing**: every slot runs the real `player.update` with
+    its own input frame.
+  - **Nearest-living-player aggro**: enemies target the closest active, non-downed
+    ship (`enemy.update(playerRef, …)` already takes the target as a parameter —
+    no enemy-code change).
+  - **Per-player collision passes**: `handleCollisions` runs once per slot
+    (rebinding `this.player`); world collisions (bullet↔enemy, enemy↔asteroid)
+    deactivate their entities on the first pass, so they're effectively processed
+    once while each ship resolves its own body / enemy-bullet / pickup hits.
+  - **Snapshot serializes N ships** (distinct ids + `dn`/`rp` downed/revive fields).
+- Backward compatible: a single slot is identical to the prior single-player path
+  (all existing SpHost/SpRoom tests unchanged). SpRoom still drives slot 0 for now;
+  N-player room wiring + downed/revive is the next step.
+
+### Tests
+- `tests/unit/sp-host.test.js` (+4): two players move independently; one ship per
+  slot with distinct ids; enemies aggro the nearest ship; `removePlayer` keeps the
+  host valid. 20/20 SpHost + 11/11 SpRoom/netcode green.
+
 ## [0.23.0] - 2026-05-27
 
 ### Added

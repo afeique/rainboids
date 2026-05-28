@@ -152,9 +152,15 @@ export class SpHost {
       import('../../../js/modules/performance/spatial-grid.js'),
       import('../../../js/sim/engine-context.js'),
     ]);
+    this._PlayerClass = Player; // for addPlayer() (co-op N slots)
     this.player = new Player();
     this.player.x = this.gameField.width / 2;
     this.player.y = this.gameField.height / 2;
+    // Co-op player slots. `this.player` always points at the slot currently
+    // being updated / collision-resolved (the SP sim code reads `this.player`
+    // singular); it's rebound per-slot in tick() and left on slot 0 at rest.
+    // Slot 0 is the primary (back-compat: single-player tests use host.player).
+    this.players = [{ id: this.playerId, player: this.player, input: { ...NEUTRAL_INPUT }, lastInputTick: 0 }];
     // Real SP pools (entity ctors read window — shimmed).
     this.bulletPool = new PoolManager(Bullet, 64);
     this.enemyPool = new PoolManager(Enemy, 32);
@@ -221,6 +227,56 @@ export class SpHost {
     const e = this.enemyPool.get();
     e.reset(x, y, type, level, this);
     return e;
+  }
+
+  // ── Co-op player slots (P5) ───────────────────────────────────────────────
+
+  /**
+   * Add a co-op player. The primary slot 0 (built in init) already carries
+   * `this.playerId`, so a joiner with that id reuses it — single-player isn't
+   * double-allocated; any other id allocates a fresh slot.
+   */
+  addPlayer(id, spawnX = this.gameField.width / 2, spawnY = this.gameField.height / 2) {
+    const existing = this.players.find((s) => s.id === id);
+    if (existing) return existing;
+    const player = new this._PlayerClass();
+    player.x = spawnX;
+    player.y = spawnY;
+    const slot = { id, player, input: { ...NEUTRAL_INPUT }, lastInputTick: 0 };
+    this.players.push(slot);
+    return slot;
+  }
+
+  /** Remove a co-op player slot. */
+  removePlayer(id) {
+    const i = this.players.findIndex((s) => s.id === id);
+    if (i >= 0) this.players.splice(i, 1);
+    // Keep `this.player` valid (collision/serialization read it at rest).
+    if (this.players.length) this.player = this.players[0].player;
+  }
+
+  /** Store a slot's latest input frame. */
+  setSlotInput(id, input) {
+    const slot = this.players.find((s) => s.id === id);
+    if (slot) {
+      slot.input = input;
+      if (typeof input.clientTick === 'number') slot.lastInputTick = input.clientTick;
+    }
+  }
+
+  /** Nearest living (active, non-downed) player to (x, y), or null. */
+  _nearestLivingPlayer(x, y) {
+    let best = null;
+    let bd = Infinity;
+    for (const s of this.players) {
+      const p = s.player;
+      if (!p || p.active === false || p.downed) continue;
+      const dx = p.x - x;
+      const dy = p.y - y;
+      const d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
   }
 
   // ── Headless wave driver ───────────────────────────────────────────────────
@@ -391,32 +447,63 @@ export class SpHost {
   _setLastHit() {}
   isEntityOnScreen() { return true; } // single shared arena: everything is "on screen"
 
-  /** Advance one fixed (LOGIC_TICK_MS) sim tick with the given input frame. */
-  tick(input = NEUTRAL_INPUT) {
+  /**
+   * Advance one fixed (LOGIC_TICK_MS) sim tick.
+   * @param {object} [input] back-compat: applied to slot 0 (single-player /
+   *   the controller). Co-op callers set per-slot inputs via setSlotInput()
+   *   first; an `input` here still overrides slot 0.
+   */
+  tick(input = null) {
     frameClock.advance();
     this.tickCount += 1;
-    const inp = { ...NEUTRAL_INPUT, ...input };
-    if (typeof input.clientTick === 'number') this._lastInputTick = input.clientTick;
+    if (input) {
+      this.players[0].input = { ...NEUTRAL_INPUT, ...input };
+      if (typeof input.clientTick === 'number') {
+        this.players[0].lastInputTick = input.clientTick;
+        this._lastInputTick = input.clientTick;
+      }
+    }
 
-    // 1. Player movement + firing (spawns real Bullets into bulletPool).
-    this.player.update(inp, noopPool, this.bulletPool, noopAudio, noopPool, false, this.gameField);
+    // 1. Per-slot player movement + firing. Rebind `this.player` to the slot so
+    //    the SP code's `this.player` / `window.gameEngine.player` reads (they're
+    //    the same object) refer to the player being updated.
+    for (const slot of this.players) {
+      this.player = slot.player;
+      const inp = { ...NEUTRAL_INPUT, ...slot.input };
+      slot.player.update(inp, noopPool, this.bulletPool, noopAudio, noopPool, false, this.gameField);
+    }
+    const primary = this.players[0].player;
+    this.player = primary;
 
-    // 2. Entity pools — sim physics (bullets, asteroids, enemies, enemy bullets).
+    // 2. Entity pools — sim physics. Bullets/asteroids/enemy-bullets are world
+    //    state; enemies aggro the NEAREST LIVING player (co-op generalization).
     for (const b of this.bulletPool.activeObjects) {
       b.update(noopPool, this.asteroidPool, this.enemyPool, this, this.gameField);
     }
     this.asteroidPool.updateActive(this.gameField);
-    for (const e of this.enemyPool.activeObjects) e.update(this.player, this, this.gameField);
+    for (const e of this.enemyPool.activeObjects) {
+      e.update(this._nearestLivingPlayer(e.x, e.y) || primary, this, this.gameField);
+    }
     for (const eb of this.enemyBulletPool.activeObjects) eb.update();
 
-    // 3. Collectibles — drift / blink-fade / tractor magnet (no particles).
-    this.colorStarPool.updateActive(this.player.vel, this.player, false, this.gameField, null);
-    this.goldCoinPool.updateActive(this.player, false);
-    this.goldShapePool.updateActive(this.player, false);
-    this.powerupPool.updateActive(this.player, false, null);
+    // 3. Collectibles — drift / blink-fade / tractor magnet (toward the primary
+    //    living player for the bulk update; per-player pickup is resolved in the
+    //    collision passes below).
+    const magnetTo = this._nearestLivingPlayer(this.gameField.width / 2, this.gameField.height / 2) || primary;
+    this.colorStarPool.updateActive(magnetTo.vel, magnetTo, false, this.gameField, null);
+    this.goldCoinPool.updateActive(magnetTo, false);
+    this.goldShapePool.updateActive(magnetTo, false);
+    this.powerupPool.updateActive(magnetTo, false, null);
 
-    // 4. Authoritative collisions — the core sim (damage, deaths, drops, gold).
-    this.handleCollisions();
+    // 4. Authoritative collisions — run once PER PLAYER (rebinding `this.player`)
+    //    so each ship resolves its own body / enemy-bullet / pickup collisions.
+    //    World collisions (bullet↔enemy, enemy↔asteroid) deactivate their
+    //    entities on the first pass, so they're effectively processed once.
+    for (const slot of this.players) {
+      this.player = slot.player;
+      this.handleCollisions();
+    }
+    this.player = primary;
 
     // 5. Reclaim everything the tick deactivated.
     this.bulletPool.cleanupInactive();
@@ -495,15 +582,17 @@ export class SpHost {
 
   /** Full authoritative snapshot in the MP wire shape. */
   buildSnapshot() {
-    const p = this.player;
-    const ships = [{
-      id: this.playerId,
-      x: round(p.x), y: round(p.y), vx: round(p.vel.x), vy: round(p.vel.y), a: round(p.angle, 3),
-      hp: Math.ceil(p.health), mhp: p.maxHealth,
-      al: p.active !== false, dn: false, rp: 0,
-      g: this.game?.money | 0,
-      li: this._lastInputTick,
-    }];
+    const ships = this.players.map((slot) => {
+      const p = slot.player;
+      return {
+        id: slot.id,
+        x: round(p.x), y: round(p.y), vx: round(p.vel.x), vy: round(p.vel.y), a: round(p.angle, 3),
+        hp: Math.ceil(p.health), mhp: p.maxHealth,
+        al: p.active !== false, dn: !!p.downed, rp: p.reviveProgress || 0,
+        g: this.game?.money | 0,
+        li: slot.lastInputTick,
+      };
+    });
     const enemies = this.enemyPool.activeObjects.map((e) => ({
       id: e._netId, x: round(e.x), y: round(e.y), a: round(e.faceAngle ?? e.angle ?? 0, 3),
       r: e.radius, hp: Math.ceil(e.health), mhp: e.maxHealth, ty: e.type,
