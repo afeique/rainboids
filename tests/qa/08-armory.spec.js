@@ -192,7 +192,10 @@ test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (
         expect(r.text).toContain('START RUN');
     });
 
-    test('keyboard cycles BUILD tabs (◂ ▸ / Tab) + shows the pre-run hint & relabeled legend', async ({ page }) => {
+    test('keyboard cycles the BUILD-visible tabs (◂ ▸ / Tab) + shows the pre-run hint & relabeled legend', async ({ page }) => {
+        // 8.x — BUILD opens on GEAR (weapons are equipped here); the visible
+        // cycle is gear → abilities → passiveskills → passive (PRIMARY/POWER are
+        // in-run-shop-only and excluded from the BUILD tab cycle).
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
             const tree = document.getElementById('shop-tree');
@@ -201,8 +204,8 @@ test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (
             const start = tree.dataset.activeTab;
             fire('ArrowRight'); const afterRight = tree.dataset.activeTab;
             fire('ArrowLeft');  const afterLeft = tree.dataset.activeTab;
-            fire('Tab');        const afterTab = tree.dataset.activeTab;        // power
-            fire('ArrowLeft'); fire('ArrowLeft'); const wrapped = tree.dataset.activeTab; // power→primary→gear
+            fire('Tab');        const afterTab = tree.dataset.activeTab;
+            fire('ArrowLeft'); fire('ArrowLeft'); const wrapped = tree.dataset.activeTab; // abilities→gear→passive
             const hint = document.getElementById('shop-prerun-hint');
             const firstLegend = document.querySelector('.shop-tree-legend-label');
             return {
@@ -212,39 +215,35 @@ test.describe('QA-08e: BUILD chrome — Cores readout + readiness/START gating (
                 legend0: firstLegend && firstLegend.textContent,
             };
         });
-        expect(r.start).toBe('primary');
-        expect(r.afterRight).toBe('power');
-        expect(r.afterLeft).toBe('primary');
-        expect(r.afterTab).toBe('power');
-        expect(r.wrapped).toBe('gear');
+        expect(r.start).toBe('gear');
+        expect(r.afterRight).toBe('abilities');
+        expect(r.afterLeft).toBe('gear');
+        expect(r.afterTab).toBe('abilities');
+        expect(r.wrapped).toBe('passive');
         expect(r.hintShown).toBe(true);
         expect(r.hintLen).toBeGreaterThan(10);
         expect(r.legend0).toBe('Locked'); // pre-run legend relabel (was "Too expensive")
     });
 
-    test('deselecting every primary disables START with a SELECT-A-PRIMARY cue', async ({ page }) => {
+    test('START is always enabled — the run primary is equipped gear, not a pre-run pick', async ({ page }) => {
+        // 8.x — there is no weapon picker (and so no SELECT-A-PRIMARY gate): your
+        // primary is whatever weapon you have equipped, so a run is always
+        // startable, even with no ability picks.
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
-            // Click each equipped primary parent to toggle it off (the tree
-            // re-renders on each click, so re-query in a loop).
-            let guard = 0, node;
-            // 7.0.0 — compact list marks the equipped pick with `shop-node--equipped`.
-            while ((node = document.querySelector('#shop-tree-primary .shop-node--parent.shop-node--equipped')) && guard++ < 12) {
-                node.click();
-            }
             const btn = document.getElementById('shop-prerun-start');
             const status = document.getElementById('shop-prerun-status');
             return {
                 disabled: btn.disabled,
                 text: btn.textContent,
-                status: status.textContent,
                 warn: status.classList.contains('shop-prerun-status--warn'),
+                noPrimaryNodes: document.querySelectorAll('#shop-tree-primary .shop-node--parent').length,
             };
         });
-        expect(r.disabled).toBe(true);
-        expect(r.text).toBe('SELECT A PRIMARY');
-        expect(r.warn).toBe(true);
-        expect(r.status).toContain('PRIMARY 0/');
+        expect(r.disabled).toBe(false);
+        expect(r.text).toContain('START RUN');
+        expect(r.warn).toBe(false);
+        expect(r.noPrimaryNodes).toBe(0); // no weapon equip toggles in BUILD
     });
 });
 

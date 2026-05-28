@@ -93,13 +93,19 @@ export function drawHUD() {
             // BOSS-01 — Always-visible boss healthbar. Renders top-center
             // only while a boss-flagged enemy is alive (the hook scans the
             // active enemy pool and no-ops otherwise).
-            drawBossHealthbarHook.call(this);
+            // 8.0.0 — Hidden on MOBILE: the top-center bar overlapped the
+            // player vitals cluster on phone-sized viewports. Desktop keeps it.
+            if (!this.mobile) {
+                drawBossHealthbarHook.call(this);
+            }
             // BOSS-03 — Boss intro/death canvas FX (name-card sweep +
             // death detonation). Co-located with the healthbar hook; the
             // hook scans the pool for a boss playing an intro/death
             // sequence and no-ops otherwise.
             drawBossFxHook.call(this);
-            // CD-16 — Threat-Level meter (top-center); no-ops until the difficulty director is wired live.
+            // CD-16 — Threat-Level meter (top-center). 8.0.0 — DISABLED in all
+            // builds for now (see THREAT_HUD_ENABLED in threat-level.js); the
+            // hook early-returns. Call kept so re-enabling is a one-line flip.
             drawThreatLevelHook.call(this);
         } else {
             // Clear stale rects so input handlers don't act on them.

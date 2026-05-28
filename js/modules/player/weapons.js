@@ -1391,6 +1391,25 @@ export function equipWeaponItem(weapon) {
 
 export function getEquippedWeapon() { return this.equippedWeapon || null; }
 
+// 8.x — equip a POWER weapon ITEM ({ powerId, … }). Mirrors equipWeaponItem:
+// points activePower at the item's power id (so the power dispatch fires the
+// right shot) and stores the item. Pass null to clear back to the default.
+export function equipPowerWeaponItem(item) {
+    this.equippedPowerWeapon = item || null;
+    if (item && item.powerId && POWER_WEAPONS[item.powerId]) {
+        this.activePower = item.powerId;
+        // Reset charge state when the active power changes (mirrors equipPower).
+        this.powerCooldown = 0;
+        this.isCharging = false;
+        this.chargeLevel = 0;
+        this.pausedChargeTime = 0;
+    }
+    this.gameEngine?.markMetaDirty?.();
+    return this.equippedPowerWeapon;
+}
+
+export function getEquippedPowerWeapon() { return this.equippedPowerWeapon || null; }
+
 /** True when the equipped weapon item carries trait `id`. */
 export function hasWeaponTrait(id) {
     const w = this.equippedWeapon;

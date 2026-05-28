@@ -90,6 +90,58 @@ export function unequipSlot(meta, slot) {
     return { ok: true, meta: { ...(meta || {}), stash, equippedItems: equipped } };
 }
 
+// ── Weapons-as-gear (8.x looter pivot) ──────────────────────────────────────
+// Weapons aren't one of the 5 gear slots — the player carries ONE equipped
+// weapon item (meta.equippedWeapon), and changes weapons by equipping a
+// different weapon from the stash (parallel to the gear equip model above:
+// an item lives in exactly ONE place — the stash OR the weapon slot). The
+// equipped weapon's archetype drives the run's primary firing pattern
+// (player.equipWeaponItem), and its traits/level apply on top.
+
+/** The equipped weapon item (meta.equippedWeapon) or null. */
+export function getEquippedWeapon(meta) {
+    return (meta && meta.equippedWeapon) || null;
+}
+
+/** The equipped POWER weapon item (meta.equippedPowerWeapon) or null. */
+export function getEquippedPowerWeapon(meta) {
+    return (meta && meta.equippedPowerWeapon) || null;
+}
+
+/** The stash weapon items (kind === 'weapon') with their original indices. */
+export function stashWeapons(meta) {
+    const stash = (meta && Array.isArray(meta.stash)) ? meta.stash : [];
+    const out = [];
+    for (let i = 0; i < stash.length; i++) {
+        if (stash[i] && stash[i].kind === 'weapon') out.push({ item: stash[i], index: i });
+    }
+    return out;
+}
+
+/**
+ * Equip stash[stashIndex] (a weapon item) into the dedicated weapon slot. Any
+ * currently-equipped weapon is returned to the stash. Returns a NEW meta
+ * (inputs untouched). No-op (ok:false) if the index isn't a weapon item.
+ */
+export function equipWeaponFromStash(meta, stashIndex) {
+    const stash = (meta && Array.isArray(meta.stash)) ? meta.stash.slice() : [];
+    const item = stash[stashIndex];
+    if (!item || item.kind !== 'weapon') return { ok: false, meta };
+    const prev = (meta && meta.equippedWeapon) || null;
+    stash.splice(stashIndex, 1);
+    if (prev) stash.push(prev);
+    return { ok: true, meta: { ...(meta || {}), stash, equippedWeapon: item } };
+}
+
+/** Unequip the weapon, returning it to the stash. */
+export function unequipWeapon(meta) {
+    const item = (meta && meta.equippedWeapon) || null;
+    if (!item) return { ok: false, meta };
+    const stash = (meta && Array.isArray(meta.stash)) ? meta.stash.slice() : [];
+    stash.push(item);
+    return { ok: true, meta: { ...(meta || {}), stash, equippedWeapon: null } };
+}
+
 /**
  * Score delta from equipping `candidate` into `slot` (vs the current item),
  * using a caller-supplied scoreFn. Positive = upgrade.

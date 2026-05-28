@@ -26,6 +26,12 @@
 
 import { getThreatLevel } from '../wave/difficulty-director.js';
 
+// 8.0.0 — Master switch. The threat meter is DISABLED in all builds for now
+// (it crowded the top-center on mobile and was visual noise on desktop). The
+// pure layout/color/anim helpers below stay intact and unit-tested; only the
+// live `drawThreatLevelHook` render is gated. Flip to `true` to bring it back.
+export const THREAT_HUD_ENABLED = false;
+
 /** The threat meter shows 5 pips (matches difficulty-director THREAT_PIPS). */
 export const THREAT_PIP_COUNT = 5;
 
@@ -286,6 +292,10 @@ export function drawThreatLevel(ctx, level, viewW, anim, now) {
  * `this._threatLevelDrawn` as a queryable marker for QA.
  */
 export function drawThreatLevelHook() {
+    // 8.0.0 — Globally disabled for now. Early-out before reading any state so
+    // the meter never renders and `_threatLevelDrawn` stays unset on all builds.
+    if (!THREAT_HUD_ENABLED) return;
+
     // 1. Live director state (several possible mount points).
     const dirState =
         (this.difficultyDirector && this.difficultyDirector.cfg ? this.difficultyDirector : null)

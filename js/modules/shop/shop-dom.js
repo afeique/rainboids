@@ -17,7 +17,7 @@
 //
 // The tree DOM is built into the cluster containers carved out by
 // `static-dom.js::_buildShopOverlay()` — `#shop-tree-primary`,
-// `#shop-tree-power`, `#shop-tree-defense`, `#shop-tree-passives`.
+// `#shop-tree-power`, `#shop-tree-abilities`, `#shop-tree-passives`.
 // Node click → buyShopItem via shop-manager. Node hover → floating
 // tooltip positioned next to the cursor.
 
@@ -358,7 +358,7 @@ export function initShopDom(gameEngine) {
         tabs:           $('shop-tree-tabs'),
         clusterPrimary: $('shop-tree-primary'),
         clusterPower:   $('shop-tree-power'),
-        clusterDefense: $('shop-tree-defense'),
+        clusterAbilities: $('shop-tree-abilities'),
         clusterPassive: $('shop-tree-passives'),
         clusterPassiveSkills: $('shop-tree-passiveskills'),
         clusterGear:    $('shop-tree-gear'),
@@ -385,10 +385,12 @@ export function initShopDom(gameEngine) {
     if (startBtn) {
         startBtn.addEventListener('click', () => {
             if (_engine && typeof _engine.beginPreRunFromTree === 'function') {
+                // 8.x — weapons (primary/power) are no longer picked here: the
+                // primary comes from the equipped weapon item and powers are
+                // auto-granted. Only the ability picks, their attunements, the
+                // rule passives, and the run shape flow through.
                 _engine.beginPreRunFromTree({
-                    ..._preRunSel,
-                    attunements: getPreRunAttunements(),
-                    mods: getPreRunMods(),
+                    abilities: (_preRunSel && _preRunSel.abilities) || [],
                     abilityAttune: getPreRunAbilityAttune(),
                     passives: getPreRunPassives(),
                     runConfig: getPreRunRunConfig(),
@@ -702,19 +704,26 @@ function _applyPreRunChrome() {
         _elements.prerunHint.style.display = _preRun ? '' : 'none';
         if (_preRun) {
             _elements.prerunHint.textContent =
-                'Click a weapon or ability to equip it · click its orbiting bubbles to attune & mod · ◂ ▸ / Q E / Tab switch tabs · review GEAR, then START RUN';
+                'Equip your weapons + gear on the GEAR tab · pick abilities on the ABILITIES tab · ◂ ▸ / Q E / Tab switch tabs, then START RUN';
         }
     }
     // Legend labels read differently pre-run (the same node states mean
     // locked / equip-able / equipped / active rather than shop costs).
     _relabelLegend(_preRun);
-    // GEAR + PASSIVES are BUILD-only — hide them for the in-run shop, and
-    // bounce the active tab off them if we're leaving BUILD mode.
-    for (const t of ['gear', 'passiveskills']) {
+    // 8.x — tab visibility per mode: GEAR + PASSIVES are BUILD-only; PRIMARY +
+    // POWER are in-run-shop-only (weapons are equipped gear now, not picked in
+    // the pre-run menu). Hide the off-mode tabs and bounce the active tab off
+    // any tab that isn't visible in the current mode.
+    const prerunOnly = ['gear', 'passiveskills'];
+    const inrunOnly = ['primary', 'power'];
+    for (const t of [...prerunOnly, ...inrunOnly]) {
         const btn = _elements.tabs ? _elements.tabs.querySelector(`.shop-tree-tab[data-tab="${t}"]`) : null;
-        if (btn) btn.style.display = _preRun ? '' : 'none';
+        if (!btn) continue;
+        const visible = _preRun ? !inrunOnly.includes(t) : !prerunOnly.includes(t);
+        btn.style.display = visible ? '' : 'none';
     }
-    if (!_preRun && (_activeTab === 'gear' || _activeTab === 'passiveskills')) { _activeTab = 'primary'; _syncActiveTab(); }
+    if (_preRun && inrunOnly.includes(_activeTab)) { _activeTab = 'gear'; _syncActiveTab(); }
+    if (!_preRun && prerunOnly.includes(_activeTab)) { _activeTab = 'primary'; _syncActiveTab(); }
     // RUN-06 — the RUN SETUP group is BUILD-only; refresh its displayed state
     // when entering BUILD so it reflects the current/last-chosen run shape.
     if (_elements.runSetup) _elements.runSetup.style.display = _preRun ? '' : 'none';
@@ -724,39 +733,34 @@ function _applyPreRunChrome() {
     }
 }
 
-// Pure readiness summary for a pre-run selection. A run is startable once at
-// least one PRIMARY is equipped (powers/abilities are optional); `complete`
-// means every category has at least one pick. Exported for unit tests.
+// Pure readiness summary for a pre-run selection. 8.x — weapons are equipped
+// gear (your primary is whatever weapon item you have equipped) and powers are
+// auto-granted, so a run is ALWAYS startable from the pre-run menu; only the
+// optional ability picks remain. `complete` = at least one ability picked.
+// Exported for unit tests.
 export function loadoutReadiness(sel, slots = LOADOUT_SLOTS) {
     const n = (k) => (Array.isArray(sel && sel[k]) ? sel[k].length : 0);
-    const primaries = n('primaries');
-    const powers = n('powers');
     const abilities = n('abilities');
-    return {
-        primaries, powers, abilities, slots,
-        ready: primaries >= 1,
-        complete: primaries >= 1 && powers >= 1 && abilities >= 1,
-    };
+    return { abilities, slots, ready: true, complete: abilities >= 1 };
 }
 
-// Refresh the "PRIMARY n/4 · POWER n/4 · ABILITY n/4" status line + the START
-// button's enabled/label state (can't start a run with no primary weapon).
+// Refresh the "ABILITY n/4" status line + the START button. The run is always
+// startable (the weapon is equipped gear), so START is never disabled.
 function _updatePreRunStatus() {
     const status = $('shop-prerun-status');
     const r = loadoutReadiness(_preRunSel);
     if (status) {
-        let text = `PRIMARY ${r.primaries}/${r.slots}   ·   POWER ${r.powers}/${r.slots}   ·   ABILITY ${r.abilities}/${r.slots}`;
-        if (!r.ready) text += '   ·   ⚠ SELECT A PRIMARY';
-        else if (r.complete) text += '   ·   ✓ READY';
+        let text = `ABILITY ${r.abilities}/${r.slots}`;
+        text += r.complete ? '   ·   ✓ READY' : '   ·   abilities optional';
         status.textContent = text;
-        status.classList.toggle('shop-prerun-status--warn', !r.ready);
+        status.classList.remove('shop-prerun-status--warn');
         status.classList.toggle('shop-prerun-status--ready', r.complete);
     }
     const startBtn = _elements && _elements.startBtn;
     if (startBtn) {
-        startBtn.disabled = !r.ready;
-        startBtn.classList.toggle('armory-btn--disabled', !r.ready);
-        startBtn.textContent = r.ready ? 'START RUN →' : 'SELECT A PRIMARY';
+        startBtn.disabled = false;
+        startBtn.classList.remove('armory-btn--disabled');
+        startBtn.textContent = 'START RUN →';
     }
 }
 
@@ -808,9 +812,12 @@ function _renderRunSetup() {
 // U3 — the ordered, currently-VISIBLE tabs. GEAR + PASSIVES are BUILD-only
 // (hidden in the in-run shop), so they're only in the cycle pre-run.
 function _visibleTabs() {
+    // 8.x — weapons are gear: the pre-run menu no longer picks PRIMARY/POWER
+    // weapons (you equip a weapon item in your inventory / the GEAR tab), so
+    // those tabs are hidden in BUILD mode. The in-run shop keeps them.
     return _preRun
-        ? ['gear', 'primary', 'power', 'defense', 'passiveskills', 'passive']
-        : ['primary', 'power', 'defense', 'passive'];
+        ? ['gear', 'abilities', 'passiveskills', 'passive']
+        : ['primary', 'power', 'abilities', 'passive'];
 }
 
 // U3 — pure tab stepper: given an ordered tab list, the current tab, and a
@@ -889,9 +896,16 @@ export function renderShopDom() {
     // 6.30.0 — Weapon/ability clusters are buyable; the PASSIVE cluster is
     // READ-ONLY (passives come from wave-clear cards, not the shop) — it
     // just visualizes what the player has collected.
-    _renderWeaponCluster(_elements.clusterPrimary, _collectPrimaryGroups(), player, 'primaries');
-    _renderWeaponCluster(_elements.clusterPower,   _collectPowerGroups(),   player, 'powers');
-    _renderWeaponCluster(_elements.clusterDefense, _collectDefenseGroups(), player, 'abilities');
+    // 8.x — the PRIMARY/POWER clusters are in-run-shop-only now (weapons are
+    // equipped gear, not picked pre-run); clear them in BUILD mode.
+    if (_preRun) {
+        if (_elements.clusterPrimary) _elements.clusterPrimary.replaceChildren();
+        if (_elements.clusterPower) _elements.clusterPower.replaceChildren();
+    } else {
+        _renderWeaponCluster(_elements.clusterPrimary, _collectPrimaryGroups(), player, 'primaries');
+        _renderWeaponCluster(_elements.clusterPower,   _collectPowerGroups(),   player, 'powers');
+    }
+    _renderWeaponCluster(_elements.clusterAbilities, _collectDefenseGroups(), player, 'abilities');
     _renderPassiveCluster(_elements.clusterPassive, player);
     // P4 — rule-modifier PASSIVES cluster (BUILD-only; equippable bubbles).
     _renderRulePassiveCluster(_elements.clusterPassiveSkills);

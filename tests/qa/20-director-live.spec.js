@@ -144,27 +144,22 @@ test.describe('QA-20: Adaptive Difficulty Director — LIVE', () => {
     });
 
     // ------------------------------------------------------------------
-    // (d) The threat HUD marker is now set (HUD fed live by the director).
+    // (d) 8.0.0 — The threat HUD is DISABLED, so even though the live director
+    //     computes a valid level (proven by (c)), the HUD never surfaces it:
+    //     `_threatLevelDrawn` stays unset. (Re-enable: flip THREAT_HUD_ENABLED.)
     // ------------------------------------------------------------------
 
-    test('threat HUD marker is set live (no debug override needed)', async ({ page }) => {
-        // Ensure there is NO debug override in play — the live director must be
-        // the source of the level.
+    test('threat HUD marker stays unset while the meter is disabled', async ({ page }) => {
         await page.evaluate(() => {
             delete window.gameEngine._debugThreatLevel;
             delete window.gameEngine.game._debugThreatLevel;
             window.gameEngine._threatLevelDrawn = undefined;
         });
         await advanceWaves(page, 4);
-        // Let the live HUD draw path run a few frames now that a director exists.
-        await page.waitForFunction(
-            () => typeof window.gameEngine._threatLevelDrawn === 'number',
-            { timeout: 5000 }
-        );
+        // Many frames pass; the disabled hook must never write the marker.
+        await page.waitForTimeout(400);
         const marker = await page.evaluate(() => window.gameEngine._threatLevelDrawn);
-        expect(Number.isInteger(marker)).toBe(true);
-        expect(marker).toBeGreaterThanOrEqual(1);
-        expect(marker).toBeLessThanOrEqual(5);
+        expect(marker).toBeUndefined();
     });
 
     // ------------------------------------------------------------------

@@ -910,7 +910,7 @@ function _buildShopOverlay() {
         { tab: 'gear',          label: 'GEAR' },
         { tab: 'primary',       label: 'PRIMARY' },
         { tab: 'power',         label: 'POWER' },
-        { tab: 'defense',       label: 'DEFENSE' },
+        { tab: 'abilities',     label: 'ABILITIES' },
         // Phase P — the rule-modifier PASSIVES (equippable). Distinct from the
         // STATS tab below (the numeric wave-clear stat boons; §2 naming).
         { tab: 'passiveskills', label: 'PASSIVES' },
@@ -942,7 +942,7 @@ function _buildShopOverlay() {
         { id: 'shop-tree-gear',          tab: 'gear' },
         { id: 'shop-tree-primary',       tab: 'primary' },
         { id: 'shop-tree-power',         tab: 'power' },
-        { id: 'shop-tree-defense',       tab: 'defense' },
+        { id: 'shop-tree-abilities',     tab: 'abilities' },
         { id: 'shop-tree-passiveskills', tab: 'passiveskills' }, // rule-modifier passives
         { id: 'shop-tree-passives',      tab: 'passive' },       // STATS (stat boons)
     ];

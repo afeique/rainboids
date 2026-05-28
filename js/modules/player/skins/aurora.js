@@ -94,6 +94,16 @@ function paint(ctx, r, t) {
     const engines = parts.enginePods;
     const OUTLINE = 'rgba(2, 0, 10, 0.98)';
 
+    // 8.0.0 — Mobile brightness fix. The hull is a near-black BASE with all of
+    // its colour layered on top via additive `globalCompositeOperation =
+    // 'lighter'`. Some mobile GPUs render 'lighter' so weakly that only the
+    // base shows → the ship looked "very dark" on phones. On mobile we paint
+    // the spectral layers with plain `source-over` (so they ALWAYS show) and
+    // lift the base toward a visible deep blue-violet. Desktop is unchanged.
+    const mob = !!(this.gameEngine && this.gameEngine.mobile);
+    const SHEEN_OP = mob ? 'source-over' : 'lighter';
+    const BASE = mob ? 'rgba(26, 20, 56, 0.96)' : 'rgba(9, 6, 26, 0.97)';
+
     // ── Spectral gradients (rebuilt only when the radius changes) ──
     if (!this._shipGrads || this._shipGrads.r !== r) {
         const wingGrad = ctx.createLinearGradient(0, 0, r * 1.24, r * 0.16);
@@ -119,13 +129,13 @@ function paint(ctx, r, t) {
 
     const paintPart = (path, sheen, edge, edgeW, outlineW) => {
         ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = 'rgba(9, 6, 26, 0.97)';
+        ctx.fillStyle = BASE;
         ctx.fill(path);
         ctx.lineJoin = 'round';
         ctx.strokeStyle = OUTLINE;
         ctx.lineWidth = outlineW;
         ctx.stroke(path);
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalCompositeOperation = SHEEN_OP;
         ctx.fillStyle = sheen;
         ctx.fill(path);
         if (edge) {
@@ -188,7 +198,7 @@ function paint(ctx, r, t) {
     paintPart(parts.fuselage, grads.fuseGrad, rgba(120, 245, 255, 0.9), 1.3, 3.2);
 
     // ── Spine ridge — a bright hairline down the body ──
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = SHEEN_OP;
     ctx.fillStyle = 'rgba(180, 245, 255, 0.55)';
     ctx.fill(parts.spine);
     ctx.strokeStyle = 'rgba(255, 240, 150, 0.7)';
@@ -250,7 +260,7 @@ function paint(ctx, r, t) {
     // ── Cockpit canopy ──
     const cp = parts.cockpit;
     glowSpriteCache.draw(ctx, cp.x, cp.y, '#9fe8ff', cp.ry, 6, 0.6);
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = SHEEN_OP;
     ctx.fillStyle = grads.cockpitGrad;
     ctx.beginPath();
     ctx.ellipse(cp.x, cp.y, cp.rx, cp.ry, 0, 0, Math.PI * 2);

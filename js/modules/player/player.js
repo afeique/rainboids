@@ -168,6 +168,9 @@ export class Player {
         // traits, element}) or null. When set, its archetype drives activePrimary's
         // firing pattern and its traits stamp bullets / scale damage (weapons.js).
         this.equippedWeapon = null;
+        // 8.x — the equipped POWER weapon ITEM ({ powerId, … }) or null; its
+        // power id drives activePower. Equipped pre-run (inventory), like gear.
+        this.equippedPowerWeapon = null;
         this.ownedPrimaries = new Set(['PULSE_CANNON']);
         this.ownedPowers = new Set(['CHARGE_SHOT']);
         // 6.x — Base kit is Pulse + Charge ONLY. Abilities are purchase-locked
@@ -1535,6 +1538,9 @@ export class Player {
     // T30 — Weapon-as-loot: equip/query a rolled weapon ITEM.
     equipWeaponItem(weapon) { return weapons.equipWeaponItem.call(this, weapon); }
     getEquippedWeapon() { return weapons.getEquippedWeapon.call(this); }
+    // 8.x — equip/query the POWER weapon ITEM (drives activePower).
+    equipPowerWeaponItem(item) { return weapons.equipPowerWeaponItem.call(this, item); }
+    getEquippedPowerWeapon() { return weapons.getEquippedPowerWeapon.call(this); }
     hasWeaponTrait(id) { return weapons.hasWeaponTrait.call(this, id); }
     weaponTraitValue(id) { return weapons.weaponTraitValue.call(this, id); }
 

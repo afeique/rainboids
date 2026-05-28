@@ -1,6 +1,7 @@
 // Phase R8.3 — inventory equip/unequip (pure, no DOM).
 import {
     getEquipped, stashForSlot, equipFromStash, unequipSlot, equipDelta,
+    getEquippedWeapon, stashWeapons, equipWeaponFromStash, unequipWeapon,
 } from '../../js/modules/world/inventory.js';
 
 const it = (slot, score) => ({ slot, name: `${slot}-${score}`, affixes: [{ type: 'hp', value: score, label: '' }] });
@@ -65,5 +66,62 @@ describe('Inventory — equip model', () => {
         const meta = { equippedItems: { hull: it('hull', 5) } };
         expect(equipDelta(meta, it('hull', 12), score)).toBe(7);
         expect(equipDelta(meta, it('cockpit', 3), score)).toBe(3); // empty slot
+    });
+});
+
+// 8.x — weapons-as-gear: a single equipped weapon slot (meta.equippedWeapon),
+// equipped from the stash, parallel to the gear equip model above.
+describe('Inventory — weapon equip model', () => {
+    const wpn = (name) => ({ slot: 'weapon', kind: 'weapon', name, archetype: 'PULSE' });
+    const gear = (slot, name) => ({ slot, kind: 'gear', name });
+
+    test('getEquippedWeapon / stashWeapons read the right places', () => {
+        const meta = { stash: [wpn('a'), gear('hull', 'h'), wpn('b')], equippedWeapon: wpn('eq') };
+        expect(getEquippedWeapon(meta).name).toBe('eq');
+        expect(stashWeapons(meta).map((x) => x.index)).toEqual([0, 2]); // only weapons, original indices
+        expect(getEquippedWeapon({})).toBeNull();
+        expect(getEquippedWeapon(null)).toBeNull();
+    });
+
+    test('equipWeaponFromStash moves stash weapon → weapon slot', () => {
+        const meta = { stash: [wpn('a')], equippedWeapon: null };
+        const { ok, meta: next } = equipWeaponFromStash(meta, 0);
+        expect(ok).toBe(true);
+        expect(next.equippedWeapon.name).toBe('a');
+        expect(next.stash).toHaveLength(0);
+        expect(meta.stash).toHaveLength(1); // original untouched
+    });
+
+    test('equipping a weapon returns the displaced weapon to the stash', () => {
+        const meta = { stash: [wpn('new')], equippedWeapon: wpn('old') };
+        const { meta: next } = equipWeaponFromStash(meta, 0);
+        expect(next.equippedWeapon.name).toBe('new');
+        expect(next.stash).toHaveLength(1);
+        expect(next.stash[0].name).toBe('old');
+    });
+
+    test('equipWeaponFromStash is a no-op on a non-weapon or bad index', () => {
+        const meta = { stash: [gear('hull', 'h')], equippedWeapon: null };
+        expect(equipWeaponFromStash(meta, 0).ok).toBe(false); // gear, not a weapon
+        expect(equipWeaponFromStash(meta, 9).ok).toBe(false); // bad index
+    });
+
+    test('unequipWeapon returns the weapon to the stash', () => {
+        const meta = { stash: [], equippedWeapon: wpn('eq') };
+        const { ok, meta: next } = unequipWeapon(meta);
+        expect(ok).toBe(true);
+        expect(next.equippedWeapon).toBeNull();
+        expect(next.stash).toHaveLength(1);
+        expect(unequipWeapon({ equippedWeapon: null }).ok).toBe(false);
+    });
+
+    test('a weapon is never in both stash and slot (swap conserves count)', () => {
+        let meta = { stash: [wpn('a'), wpn('b')], equippedWeapon: null };
+        const total = () => meta.stash.length + (meta.equippedWeapon ? 1 : 0);
+        expect(total()).toBe(2);
+        ({ meta } = equipWeaponFromStash(meta, 0));
+        expect(total()).toBe(2);
+        ({ meta } = equipWeaponFromStash(meta, 0));
+        expect(total()).toBe(2);
     });
 });

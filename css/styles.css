@@ -4188,7 +4188,7 @@ body.mobile-portrait .shop-help-icon {
 .shop-tree-cluster { display: none; }
 .shop-tree[data-active-tab="primary"] .shop-tree-cluster[data-tab="primary"],
 .shop-tree[data-active-tab="power"]   .shop-tree-cluster[data-tab="power"],
-.shop-tree[data-active-tab="defense"] .shop-tree-cluster[data-tab="defense"],
+.shop-tree[data-active-tab="abilities"] .shop-tree-cluster[data-tab="abilities"],
 .shop-tree[data-active-tab="gear"]    .shop-tree-cluster[data-tab="gear"],
 .shop-tree[data-active-tab="passive"] .shop-tree-cluster[data-tab="passive"],
 .shop-tree[data-active-tab="passiveskills"] .shop-tree-cluster[data-tab="passiveskills"] {
@@ -4787,6 +4787,45 @@ body.mobile-portrait .shop-help-icon {
         font-size: 8px;
         max-width: 90px;
     }
+
+    /* 8.0.0 — Pre-run BUILD screen cleanup for phones. The RUN SETUP card
+       packed three control groups + vertical dividers into one horizontal
+       row that overflowed / wrapped raggedly on narrow screens. Stack it all
+       vertically, let the tab strip wrap, and stack the action bar so the
+       START button is a full-width, thumb-friendly target. */
+    .shop-tree-tabs { flex-wrap: wrap; }
+
+    .shop-runsetup {
+        width: 100%;
+        max-width: 100%;
+        padding: 12px 14px 14px;
+    }
+    .shop-runsetup-groups {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 14px;
+    }
+    .shop-runsetup-group { width: 100%; }
+    /* The dividers sit BETWEEN the groups in the DOM; re-orient them from
+       vertical rules into full-width horizontal separators for the stack. */
+    .shop-runsetup-divider {
+        align-self: stretch;
+        width: auto;
+        height: 1px;
+        margin: 2px 0;
+        background: linear-gradient(90deg, transparent, rgba(120, 170, 230, 0.30), transparent);
+    }
+    /* Labels no longer need the two-line reservation when each group owns a row. */
+    .shop-runsetup-label { max-width: none; min-height: 0; }
+
+    .shop-prerun-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    /* Readiness status reads first; BACK then START stack below it (START is
+       the bottom-most, primary, full-width CTA). */
+    .shop-prerun-status { order: -1; }
 }
 
 /* ─── 6.28.0 — TUTORIAL OVERLAY ──────────────────────────────────────── */

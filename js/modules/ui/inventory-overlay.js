@@ -141,6 +141,9 @@ export class InventoryOverlay {
         right.className = 'inv-armory-side';
         shell.appendChild(right);
 
+        // ── WEAPONS ── (8.x — read-only; equipped pre-run, view-only mid-run)
+        left.appendChild(this._buildWeaponSection(player));
+
         // ── EQUIPPED ──
         const eqTitle = document.createElement('div');
         eqTitle.className = 'inv-section-title';
@@ -208,5 +211,36 @@ export class InventoryOverlay {
             list.appendChild(row);
         }
         left.appendChild(list);
+    }
+
+    // 8.x — WEAPONS section: READ-ONLY view of the equipped primary + power
+    // weapons (their ids/traits drive what you fire this run). Like gear, weapons
+    // are equipped PRE-RUN in the GEAR tab and locked for the run — this screen
+    // only shows what you're carrying. Reads the live player state.
+    _buildWeaponSection(player) {
+        const wrap = document.createElement('div');
+
+        const title = document.createElement('div');
+        title.className = 'inv-section-title';
+        title.textContent = 'WEAPONS — equipped pre-run · view-only mid-run';
+        wrap.appendChild(title);
+
+        const primary = (player && player.equippedWeapon) || null;
+        const power = (player && player.equippedPowerWeapon) || null;
+
+        const rowFor = (label, item, fallback) => {
+            const row = document.createElement('div');
+            row.className = 'inv-weapon-equipped';
+            row.style.margin = '2px 0';
+            row.textContent = item
+                ? `${label}: ${item.name || label} (L${item.level || 1})`
+                : `${label}: ${fallback}`;
+            if (item && item.rarityColor) row.style.color = item.rarityColor;
+            return row;
+        };
+
+        wrap.appendChild(rowFor('PRIMARY', primary, 'default Pulse Cannon'));
+        wrap.appendChild(rowFor('POWER', power, 'default Charge Shot'));
+        return wrap;
     }
 }

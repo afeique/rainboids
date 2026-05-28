@@ -41,7 +41,9 @@ import { applyClass, clearClass } from './player/class-system.js';
 import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed, setDebugUnlockResolvers, setAllUnlocked, applyResell, UNLOCK_CATEGORIES } from './shop/armory.js';
 // T31 — Fabricate weapons: the crafting engine rolls, item-system decorates.
 import { fabricate } from './shop/crafting.js';
-import { decorateWeaponItem, decorateGearItem, createWeaponItem, createItem, scoreItem } from './world/item-system.js';
+import { decorateWeaponItem, decorateGearItem, createWeaponItem, createPowerWeaponItem, createItem, scoreItem } from './world/item-system.js';
+// 8.x — weapons-as-gear: resolve/equip the persistent weapon items at run start.
+import { getEquippedWeapon, getEquippedPowerWeapon, stashWeapons, equipWeaponFromStash } from './world/inventory.js';
 import { salvageValue } from './world/cores.js'; // T44 — auto-salvage on commit
 import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
 import { isDebugMode, debugUnlockAllFor } from './core/debug-config.js';
@@ -728,8 +730,13 @@ export class GameEngine {
                 // (everything else is unlocked, T20). Item rolls are best-effort
                 // — a roll failure still grants the wallet seed.
                 try {
+                    // 8.x — weapons are gear: the starter primary + power weapons
+                    // are EQUIPPED (not just stashed) so run one fires them
+                    // immediately, and the player swaps weapons by equipping loot
+                    // in their inventory (pre-run).
+                    seed.equippedWeapon = createWeaponItem(1, 'common', 'PULSE');
+                    seed.equippedPowerWeapon = createPowerWeaponItem('CHARGE_SHOT');
                     seed.stash = [
-                        createWeaponItem(1, 'common', 'PULSE'),
                         createItem('hull', 1, 'common'),
                     ];
                     seed.accountGold = (seed.accountGold | 0) + STARTER_RAINSHARDS;
@@ -2029,6 +2036,36 @@ export class GameEngine {
                 if (meta.equippedItems[slot]) p.equippedItems[slot] = meta.equippedItems[slot];
             }
         }
+        // 8.x — weapons-as-gear: the equipped weapon item drives the run's primary
+        // firing pattern (+ its rolled traits/level). The pre-run menu no longer
+        // picks weapons; the player equips one in their inventory. Pre-pivot
+        // accounts have weapons only in the stash, so migrate the best one into
+        // the weapon slot once (gated on `!meta.equippedWeapon`).
+        if (!meta.equippedWeapon) {
+            const ws = stashWeapons(meta);
+            if (ws.length) {
+                const best = ws.reduce((a, b) => (scoreItem(b.item) > scoreItem(a.item) ? b : a));
+                const res = equipWeaponFromStash(meta, best.index);
+                if (res.ok) {
+                    try { saveMeta({ stash: res.meta.stash, equippedWeapon: res.meta.equippedWeapon }); } catch {}
+                    meta = res.meta;
+                }
+            }
+        }
+        const equippedWeapon = getEquippedWeapon(meta);
+        if (equippedWeapon && typeof p.equipWeaponItem === 'function') {
+            p.equipWeaponItem(equippedWeapon); // sets activePrimary from the archetype
+        }
+        // 8.x — the POWER weapon is equipped gear too: its powerId drives the run's
+        // activePower. Equipped pre-run in the GEAR tab; no in-run swap.
+        const equippedPower = getEquippedPowerWeapon(meta);
+        if (equippedPower && typeof p.equipPowerWeaponItem === 'function') {
+            p.equipPowerWeaponItem(equippedPower); // sets activePower from the powerId
+        }
+        // The owned pools are exactly the equipped weapon's pattern + power — there
+        // is no in-run weapon swap (your weapons are whatever you equipped pre-run).
+        if (PRIMARY_WEAPONS[p.activePrimary]) p.ownedPrimaries = new Set([p.activePrimary]);
+        if (POWER_WEAPONS[p.activePower])     p.ownedPowers    = new Set([p.activePower]);
         // P7 — equipped gear is now set; rebuild activePassives so any gear-borne
         // passive affixes (item.passive) become active without a slot.
         if (typeof p._rebuildActivePassives === 'function') p._rebuildActivePassives();
@@ -4917,9 +4954,9 @@ export class GameEngine {
             this._armoryOverlay.setGameEngine(this);
         }
         const meta = loadMeta() || {};
+        // 8.x — only the ability picks are seeded now (weapons are equipped gear,
+        // and per-weapon attunements/mods are retired in favor of rolled traits).
         shopDom.setPreRunSelection(normalizeLoadout(meta.loadout || {}, meta));
-        shopDom.setPreRunAttunements((meta.loadout && meta.loadout.attunements) || {});
-        shopDom.setPreRunMods((meta.loadout && meta.loadout.mods) || {});
         shopDom.setPreRunAbilityAttune((meta.loadout && meta.loadout.abilityAttune) || {});
         shopDom.setPreRunPassives((meta.loadout && meta.loadout.passives) || []);
         // RUN-06 — seed the RUN SETUP controls from the last-saved run shape
@@ -4936,8 +4973,6 @@ export class GameEngine {
         try {
             const meta = loadMeta() || {};
             shopDom.setPreRunSelection(normalizeLoadout(meta.loadout || {}, meta));
-            shopDom.setPreRunAttunements((meta.loadout && meta.loadout.attunements) || {});
-            shopDom.setPreRunMods((meta.loadout && meta.loadout.mods) || {});
             shopDom.setPreRunAbilityAttune((meta.loadout && meta.loadout.abilityAttune) || {});
             shopDom.setPreRunPassives((meta.loadout && meta.loadout.passives) || []);
             if (typeof shopDom.renderShopDom === 'function') shopDom.renderShopDom();
@@ -5022,31 +5057,14 @@ export class GameEngine {
     beginPreRunFromTree(sel) {
         const meta = loadMeta() || {};
         const loadout = normalizeLoadout(sel || {}, meta);
-        // W5 — carry the chosen per-weapon attunements, validated against owned
-        // (unlocked) + known ids, so a stale/locked id can't leak into the run.
-        const ownedAtt = getUnlockedSet('attunements', meta);
-        const att = {};
-        const rawAtt = (sel && sel.attunements) || {};
-        for (const [wid, ids] of Object.entries(rawAtt)) {
-            if (!Array.isArray(ids)) continue;
-            const keep = ids.filter((id) => ATTUNEMENTS[id] && ATTUNEMENTS[id].weapon === wid && ownedAtt.has(id));
-            if (keep.length) att[wid] = keep;
-        }
-        loadout.attunements = att;
-        // W5 — carry active mechanic mods, validated against owned + known +
-        // weapon-matched ids.
-        const ownedMods = getUnlockedSet('mods', meta);
-        const mods = {};
-        const rawMods = (sel && sel.mods) || {};
-        for (const [wid, ids] of Object.entries(rawMods)) {
-            if (!Array.isArray(ids)) continue;
-            const keep = ids.filter((id) => {
-                const cfg = getWeaponUpgradeConfig(id);
-                return isMechanicMod(id) && cfg && cfg.weapon === wid && ownedMods.has(id);
-            });
-            if (keep.length) mods[wid] = keep;
-        }
-        loadout.mods = mods;
+        // 8.x — weapons are gear: the run's primary comes from the equipped
+        // weapon item (applyPersistentProfile), and powers are auto-granted, so
+        // the pre-run menu no longer picks either. Drop any primaries/powers a
+        // stale meta.loadout might carry so they can't override the equipped
+        // weapon. Per-weapon attunements/mods are likewise retired — weapon
+        // elements/behaviors now come from the weapon item's ROLLED traits.
+        delete loadout.primaries;
+        delete loadout.powers;
         // W6 — carry the chosen per-ability attunement (one element each),
         // validated against owned + known + ability-matched ids.
         const ownedAbilAtt = getUnlockedSet('abilityAttunements', meta);

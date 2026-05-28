@@ -43,10 +43,10 @@
 import { test, expect } from '@playwright/test';
 import { loadGame } from '../helpers/game-helpers.js';
 
-// The six cluster tabs the BUILD screen exposes (static-dom tabDefs), in
-// order. GEAR + PASSIVES (passiveskills) are BUILD-only; STATS (passive) is
-// the read-only stat grid; primary/power/defense are the loadout pickers.
-const BUILD_TABS = ['gear', 'primary', 'power', 'defense', 'passiveskills', 'passive'];
+// 8.x — the tabs VISIBLE in pre-run BUILD mode. Weapons are equipped gear now,
+// so PRIMARY/POWER are hidden in BUILD (they're in-run-shop-only); GEAR (equip
+// weapons + gear), ABILITIES, PASSIVES, and STATS remain.
+const BUILD_TABS = ['gear', 'abilities', 'passiveskills', 'passive'];
 
 // Filter the page-error list down to genuinely fatal JS errors (ignore the
 // known audio/font/network noise other QA specs also filter out).
@@ -68,7 +68,7 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
     // ------------------------------------------------------------------
     // 1. Every tab is reachable and switching them doesn't throw.
     // ------------------------------------------------------------------
-    test('opening BUILD reaches every cluster tab without errors', async ({ page }) => {
+    test('opening BUILD reaches every visible cluster tab; PRIMARY/POWER are hidden', async ({ page }) => {
         const r = await page.evaluate((tabs) => {
             const ge = window.gameEngine;
             ge.openArmory();
@@ -76,32 +76,37 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
             const tree = document.getElementById('shop-tree');
             const tabStrip = document.getElementById('shop-tree-tabs');
             const seen = [];
-            // Click through each visible tab and record the tree's active-tab.
+            // Click through each BUILD-visible tab and record the tree's active-tab.
             for (const tab of tabs) {
                 const btn = tabStrip.querySelector(`.shop-tree-tab[data-tab="${tab}"]`);
                 if (!btn) { seen.push(`MISSING:${tab}`); continue; }
-                // GEAR + PASSIVES are BUILD-only; in BUILD mode all six are shown.
                 const hidden = btn.style.display === 'none';
                 btn.click();
                 seen.push(`${tab}:${tree.dataset.activeTab}:${hidden ? 'hidden' : 'shown'}`);
             }
+            const wepTab = (t) => tabStrip.querySelector(`.shop-tree-tab[data-tab="${t}"]`);
             return {
                 state: ge.game.state,
                 overlayShown: overlay && getComputedStyle(overlay).display === 'flex',
                 clusterCount: document.querySelectorAll('#shop-tree .shop-tree-cluster').length,
                 seen,
+                primaryHidden: wepTab('primary').style.display === 'none',
+                powerHidden: wepTab('power').style.display === 'none',
             };
         }, BUILD_TABS);
 
         // openArmory transitions into the ARMORY (pre-run BUILD) state.
         expect(r.state).toBe('ARMORY');
         expect(r.overlayShown).toBe(true);
-        // Six cluster containers exist (gear/primary/power/defense/passiveskills/passive).
+        // Six cluster containers still exist in the DOM (the in-run shop reuses them).
         expect(r.clusterCount).toBe(6);
-        // Every tab was present, visible in BUILD mode, and drove data-active-tab.
+        // Every BUILD-visible tab was present, shown, and drove data-active-tab.
         for (const tab of BUILD_TABS) {
             expect(r.seen).toContain(`${tab}:${tab}:shown`);
         }
+        // The weapon tabs are hidden — weapons are equipped gear now.
+        expect(r.primaryHidden).toBe(true);
+        expect(r.powerHidden).toBe(true);
         expect(fatalErrors(page._jsErrors)).toEqual([]);
     });
 
@@ -109,32 +114,30 @@ test.describe('QA-31: BUILD / RUN-SETUP end-to-end round-trip', () => {
     // 2. The default BUILD selection reflects BASE_LOADOUT and the base
     //    parents render as selectable equip toggles.
     // ------------------------------------------------------------------
-    test('base loadout parents render selectable and start equipped', async ({ page }) => {
-        // 7.0.0 — base kit is Pulse Cannon + Charge Shot ONLY; abilities are
-        // purchase-locked so none render in the compact owned-only list on a
-        // clean meta. Equipped state is marked with `shop-node--equipped`.
+    test('GEAR tab hosts the WEAPON panel; no PRIMARY/POWER pickers exist in BUILD', async ({ page }) => {
+        // 8.x — weapons are equipped gear: the GEAR tab carries a WEAPON panel
+        // (equipped readout + stash swaps), and the old PRIMARY/POWER equip
+        // toggles are gone from the pre-run BUILD entirely.
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
-            const parent = (id) => document.querySelector(`.shop-node--parent[data-id="${id}"]`);
-            const read = (n) => n && ({
-                category: n.dataset.category,
-                selectable: n.dataset.prerunSelectable,
-                equipped: n.classList.contains('shop-node--equipped'),
-            });
+            const gear = document.getElementById('shop-tree-gear');
             return {
-                pulse: read(parent('PULSE_CANNON')),
-                charge: read(parent('CHARGE_SHOT')),
-                bulwarkPresent: !!parent('BULWARK'),
-                medicPresent: !!parent('FIELD_MEDIC'),
+                gearText: gear ? gear.textContent : '',
+                pulseParent: !!document.querySelector('.shop-node--parent[data-id="PULSE_CANNON"]'),
+                chargeParent: !!document.querySelector('.shop-node--parent[data-id="CHARGE_SHOT"]'),
+                anyPrimaryParent: !!document.querySelector('.shop-node--parent[data-category="primaries"]'),
+                anyPowerParent: !!document.querySelector('.shop-node--parent[data-category="powers"]'),
             };
         });
 
-        // The base primary/power are unlocked (selectable) and equipped by default.
-        expect(r.pulse).toEqual({ category: 'primaries', selectable: '1', equipped: true });
-        expect(r.charge).toEqual({ category: 'powers', selectable: '1', equipped: true });
-        // No ability is owned on a clean meta, so the DEFENSE list is empty.
-        expect(r.bulwarkPresent).toBe(false);
-        expect(r.medicPresent).toBe(false);
+        // The GEAR tab now hosts the weapon-equip UI.
+        expect(r.gearText).toContain('WEAPON');
+        expect(r.gearText).toContain('EQUIPPED:');
+        // No weapon/power equip toggles render in the pre-run BUILD anymore.
+        expect(r.pulseParent).toBe(false);
+        expect(r.chargeParent).toBe(false);
+        expect(r.anyPrimaryParent).toBe(false);
+        expect(r.anyPowerParent).toBe(false);
         expect(fatalErrors(page._jsErrors)).toEqual([]);
     });
 

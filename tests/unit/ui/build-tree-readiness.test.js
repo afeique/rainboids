@@ -1,65 +1,50 @@
-// Phase U2 — pre-run BUILD loadout readiness. Pins the pure helper that drives
-// the BUILD footer status line + START-RUN gating: a run is startable once at
-// least one PRIMARY is equipped; `complete` means all three categories are set.
+// Phase U2 / 8.x — pre-run BUILD loadout readiness. Weapons are equipped gear
+// now (the primary comes from the equipped weapon item, powers are auto-granted),
+// so the pre-run menu no longer picks weapons and a run is ALWAYS startable.
+// The only remaining pick is the optional abilities, which `complete` reflects.
 import { describe, expect, test } from '@jest/globals';
 import { loadoutReadiness, nextTab } from '../../../js/modules/shop/shop-dom.js';
 import { LOADOUT_SLOTS } from '../../../js/modules/shop/armory.js';
 
 describe('loadoutReadiness', () => {
-    test('empty selection is not ready', () => {
+    test('empty selection is still startable (weapons are equipped gear)', () => {
         const r = loadoutReadiness({});
-        expect(r.ready).toBe(false);
+        expect(r.ready).toBe(true);
         expect(r.complete).toBe(false);
-        expect(r.primaries).toBe(0);
+        expect(r.abilities).toBe(0);
         expect(r.slots).toBe(LOADOUT_SLOTS);
     });
 
-    test('a single primary makes it startable but not complete', () => {
-        const r = loadoutReadiness({ primaries: ['PULSE_CANNON'] });
+    test('picking at least one ability marks it complete', () => {
+        const r = loadoutReadiness({ abilities: ['BULWARK'] });
+        expect(r.ready).toBe(true);
+        expect(r.complete).toBe(true);
+        expect(r.abilities).toBe(1);
+    });
+
+    test('primaries/powers in the selection are ignored', () => {
+        const r = loadoutReadiness({ primaries: ['PULSE_CANNON'], powers: ['NOVA_BLAST'] });
         expect(r.ready).toBe(true);
         expect(r.complete).toBe(false);
-        expect(r.primaries).toBe(1);
+        expect(r.abilities).toBe(0);
     });
 
-    test('powers/abilities without a primary are still not ready', () => {
-        const r = loadoutReadiness({ powers: ['NOVA_BLAST'], abilities: ['BULWARK'] });
-        expect(r.ready).toBe(false);
-        expect(r.powers).toBe(1);
-        expect(r.abilities).toBe(1);
-    });
-
-    test('one of each is complete', () => {
-        const r = loadoutReadiness({
-            primaries: ['PULSE_CANNON'],
-            powers: ['NOVA_BLAST'],
-            abilities: ['BULWARK'],
-        });
-        expect(r.ready).toBe(true);
+    test('ability count reflects multi-select up to the slot cap', () => {
+        const r = loadoutReadiness({ abilities: ['A', 'B', 'C', 'D'] });
+        expect(r.abilities).toBe(4);
         expect(r.complete).toBe(true);
     });
 
-    test('counts reflect multi-select up to the slot cap', () => {
-        const r = loadoutReadiness({
-            primaries: ['A', 'B', 'C', 'D'],
-            powers: ['E', 'F'],
-            abilities: ['G'],
-        });
-        expect(r.primaries).toBe(4);
-        expect(r.powers).toBe(2);
-        expect(r.abilities).toBe(1);
-        expect(r.complete).toBe(true);
-    });
-
-    test('tolerates a null/garbage selection', () => {
-        expect(loadoutReadiness(null).ready).toBe(false);
-        expect(loadoutReadiness(undefined).primaries).toBe(0);
-        expect(loadoutReadiness({ primaries: 'nope' }).primaries).toBe(0);
+    test('tolerates a null/garbage selection but stays startable', () => {
+        expect(loadoutReadiness(null).ready).toBe(true);
+        expect(loadoutReadiness(undefined).abilities).toBe(0);
+        expect(loadoutReadiness({ abilities: 'nope' }).abilities).toBe(0);
     });
 });
 
 describe('nextTab (U3 keyboard tab cycling)', () => {
-    const PRERUN = ['gear', 'primary', 'power', 'defense', 'passive'];
-    const INRUN = ['primary', 'power', 'defense', 'passive'];
+    const PRERUN = ['gear', 'primary', 'power', 'abilities', 'passive'];
+    const INRUN = ['primary', 'power', 'abilities', 'passive'];
 
     test('steps forward and wraps at the end', () => {
         expect(nextTab(PRERUN, 'gear', 1)).toBe('primary');

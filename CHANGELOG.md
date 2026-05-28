@@ -11,6 +11,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.1.0] - 2026-05-27
+
+Weapons become equipped gear, and the pre-run BUILD menu becomes equip-and-go —
+no more weapon shopping before a run. (Continues the unshipped 8.0.0 looter
+pivot; not yet deployed.)
+
+### Added
+
+- **Weapons are equipped gear.** Both the PRIMARY and the POWER weapon now come
+  from items you equip, not pre-run pickers. The primary is the equipped weapon
+  item (archetype → firing pattern + rolled traits/level); the power is the
+  equipped power weapon (its `powerId` → activePower). New persistent
+  `meta.equippedWeapon` + `meta.equippedPowerWeapon` slots with inventory
+  helpers; the starter Pulse Cannon + Charge Shot are auto-equipped, and
+  pre-pivot accounts auto-equip their best stash weapon once.
+- **Equip everything in the pre-run GEAR tab** — equip a weapon from your stash
+  and pick your power weapon. The in-game `I` inventory is **view-only**: it
+  shows your equipped weapons + gear so you can check your build mid-run, but
+  all equipping happens pre-run (items are locked once a run starts).
+
+### Changed
+
+- **Pre-run BUILD menu is now equip-and-go.** Removed the PRIMARY and POWER
+  weapon pickers (and their buy/unlock stores); the menu is GEAR · ABILITIES ·
+  PASSIVES · STATS plus RUN SETUP. START RUN is always enabled — there is no
+  SELECT-A-PRIMARY gate and nothing to buy to start a run.
+- **Renamed the DEFENSE tab to ABILITIES** in the pre-run menu.
+- **Threat-Level HUD hidden** in all builds (`THREAT_HUD_ENABLED = false`) — it
+  crowded the top-center on mobile and read as noise on desktop. The director
+  still computes threat; only the readout is gated, and the pure layout/anim
+  helpers stay unit-tested. One-line flip to restore.
+
+### Removed
+
+- **Pre-run weapon Attunements & Mechanic Mods.** A weapon item's *rolled
+  traits* now drive its elements/behaviors, superseding the per-weapon pre-run
+  attunement/mod pickers. (Ability attunements on the ABILITIES tab are unchanged.)
+
+### Fixed
+
+- **Mobile HUD/menu cleanup.** Hid the **boss health bar** on mobile (it
+  overlapped the player vitals cluster on phone viewports; desktop keeps it).
+  Reworked the pre-run **BUILD screen** for phones: the RUN SETUP card's three
+  control groups now **stack vertically** (was an overflowing horizontal row),
+  the tab strip wraps, and the BACK · status · START action bar stacks into a
+  full-width, thumb-friendly column.
+- **Player ship no longer renders near-black on mobile.** The Aurora hull's
+  colour comes entirely from additive (`'lighter'`) passes over a near-black
+  base; some mobile GPUs blend `'lighter'` so weakly that only the base showed.
+  On mobile the spectral hull / spine / cockpit layers now paint with plain
+  `source-over` over a lifted base, so the ship is reliably bright and colourful.
+
 ## [8.0.0] - 2026-05-27
 
 The **Looter-Economy Pivot** — Rainboids becomes a looter-shooter. Per-run power

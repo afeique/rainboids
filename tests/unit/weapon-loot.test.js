@@ -6,11 +6,13 @@
 import { describe, expect, test } from '@jest/globals';
 import {
     applyWeaponTraits, equipWeaponItem, getEquippedWeapon,
+    equipPowerWeaponItem, getEquippedPowerWeapon,
     hasWeaponTrait, weaponTraitValue, getEffectivePrimaryDamage,
     getEffectivePrimaryFireRate, firePrimary,
 } from '../../js/modules/player/weapons.js';
 import { getEffectiveCritChance } from '../../js/modules/player/progression.js';
 import { weaponLevelScale, archetypeToWeaponId } from '../../js/modules/combat/weapon-data.js';
+import { createPowerWeaponItem } from '../../js/modules/world/item-system.js';
 
 function weapon(archetype, traits = []) {
     return { archetype, rarity: 'common', traits, element: 'KINETIC' };
@@ -31,6 +33,27 @@ describe('T30 — equipWeaponItem points activePrimary at the archetype pattern'
         const p = {};
         equipWeaponItem.call(p, null);
         expect(getEquippedWeapon.call(p)).toBeNull();
+    });
+});
+
+describe('8.x — equipPowerWeaponItem points activePower at the power id', () => {
+    test('createPowerWeaponItem builds a power item; equipping sets activePower', () => {
+        const item = createPowerWeaponItem('NOVA_BLAST');
+        expect(item.kind).toBe('powerweapon');
+        expect(item.slot).toBe('power');
+        expect(item.powerId).toBe('NOVA_BLAST');
+        const p = {};
+        equipPowerWeaponItem.call(p, item);
+        expect(p.activePower).toBe('NOVA_BLAST');
+        expect(getEquippedPowerWeapon.call(p).powerId).toBe('NOVA_BLAST');
+    });
+
+    test('an invalid powerId is coerced to CHARGE_SHOT; null clears the slot', () => {
+        expect(createPowerWeaponItem('NOPE').powerId).toBe('CHARGE_SHOT');
+        const p = { activePower: 'NOVA_BLAST' };
+        equipPowerWeaponItem.call(p, null);
+        expect(getEquippedPowerWeapon.call(p)).toBeNull();
+        expect(p.activePower).toBe('NOVA_BLAST'); // null doesn't change the active power
     });
 });
 

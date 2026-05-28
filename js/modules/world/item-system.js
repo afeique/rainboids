@@ -41,7 +41,7 @@ import { rollGear } from './gear-gen.js';
 // flow through the same collection/stash machinery as gear; `kind:'weapon'`
 // lets the gear UIs branch). Shared by drops (combat-manager) + Fabricate.
 import { rollWeapon, describeWeapon } from '../combat/weapon-gen.js';
-import { PRIMARY_WEAPONS, PRIMARY_ARCHETYPES, archetypeToWeaponId } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS, POWER_WEAPONS, PRIMARY_ARCHETYPES, archetypeToWeaponId } from '../combat/weapon-data.js';
 
 // P7 — passive-affix delivery on gear. Top-tier gear can carry a rule-modifier
 // PASSIVE (a discrete `item.passive` id, not a numeric affix). Modular passives
@@ -315,6 +315,27 @@ export function createWeaponItem(level, rarityKey = null, archetype = null) {
     if (!RARITY_TIERS[rarity]) rarity = 'common';
     const arch = archetype || PRIMARY_ARCHETYPES[(Math.random() * PRIMARY_ARCHETYPES.length) | 0];
     return decorateWeaponItem(rollWeapon({ archetype: arch, rarity, rng: Math.random }), level);
+}
+
+// 8.x — a stash/equip-ready POWER weapon ITEM: synthetic `slot:'power'` +
+// `kind:'powerweapon'`, carrying the chosen `powerId` (a POWER_WEAPONS key) that
+// drives the player's activePower when equipped. Powers aren't rolled loot (yet)
+// — they're equipped from the unlocked set in the pre-run GEAR tab — so this is a
+// thin item, not a trait-rolled weapon.
+export function createPowerWeaponItem(powerId, level = 1, rarityKey = 'common') {
+    const cfg = POWER_WEAPONS[powerId] || POWER_WEAPONS.CHARGE_SHOT;
+    const id = POWER_WEAPONS[powerId] ? powerId : 'CHARGE_SHOT';
+    const rarity = RARITY_TIERS[rarityKey] ? rarityKey : 'common';
+    const tier = RARITY_TIERS[rarity];
+    return {
+        slot: 'power',
+        kind: 'powerweapon',
+        powerId: id,
+        level: Math.max(1, level | 0),
+        rarity,
+        name: cfg.name || id,
+        rarityColor: tier.color, rarityLabel: tier.label, rarityGlow: tier.glow,
+    };
 }
 
 // The next rarity up the 8-tier ladder, or null if already at the top.

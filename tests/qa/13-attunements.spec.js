@@ -1,16 +1,18 @@
 /**
- * QA-13: Attunements equippable in the BUILD tree (Phase W5 / W1 payoff).
+ * QA-13: weapon attunements/mods RETIRED from the pre-run BUILD (8.x).
  *
- * Attunements show as orbit bubbles on each weapon in the pre-run BUILD tree;
- * a locked node unlocks with account-gold, an owned node toggles active for the
- * run; START RUN feeds the active set into player.activeAttunements, and the
- * weapon's bullets then carry that element (W1 multi-element stamping).
+ * Weapons are loot now (archetype + ROLLED traits), so the old pre-run
+ * per-weapon attunement/mod pickers are gone — the PRIMARY/POWER clusters
+ * aren't even rendered in BUILD mode, and any attunements/mods handed to
+ * `beginPreRunFromTree` are dropped. Weapon elements/behaviors come from the
+ * equipped weapon item's traits instead. Ability attunements (W6) survive —
+ * abilities are still picked on the DEFENSE tab.
  */
 
 import { test, expect } from '@playwright/test';
 import { loadGame } from '../helpers/game-helpers.js';
 
-test.describe('QA-13: Attunements (BUILD tree)', () => {
+test.describe('QA-13: weapon attunements/mods retired from BUILD', () => {
     test.beforeEach(async ({ page }) => {
         page._jsErrors = [];
         page.on('pageerror', (err) => page._jsErrors.push(err.message));
@@ -18,98 +20,60 @@ test.describe('QA-13: Attunements (BUILD tree)', () => {
         await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
     });
 
-    test('the equipped weapon shows attunement chips in BUILD mode', async ({ page }) => {
-        // 7.0.0 — the pre-run BUILD screen is now a compact owned-only list;
-        // attunements render as `.shop-prerun-chip[data-kind="attunement"]`
-        // dropdown chips under the EQUIPPED weapon (Pulse Cannon by default).
+    test('the PRIMARY/POWER clusters render no equip/attune nodes in BUILD mode', async ({ page }) => {
         const r = await page.evaluate(() => {
             window.gameEngine.openArmory();
-            const nodes = [...document.querySelectorAll('#shop-tree-primary .shop-prerun-chip[data-kind="attunement"]')];
-            return { count: nodes.length, ids: nodes.map((n) => n.dataset.id) };
-        });
-        expect(r.count).toBeGreaterThan(0);
-        // Pulse Cannon's six attunements are present.
-        expect(r.ids).toContain('PULSE_CANNON_PYRO');
-        expect(r.ids).toContain('PULSE_CANNON_VOID');
-    });
-
-    test('unlocking an attunement deducts account-gold and persists', async ({ page }) => {
-        const r = await page.evaluate(() => {
-            const ge = window.gameEngine;
-            ge.openArmory();
-            ge.game.accountGold = 20000;
-            const ok = ge.unlockPreRunItem('attunements', 'PULSE_CANNON_PYRO');
-            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
-            return { ok, gold: ge.game.accountGold, owned: meta.unlockedAttunements || [] };
-        });
-        expect(r.ok).toBe(true);
-        expect(r.gold).toBeLessThan(20000);
-        expect(r.owned).toContain('PULSE_CANNON_PYRO');
-    });
-
-    test('START RUN applies owned active attunements to the player', async ({ page }) => {
-        const r = await page.evaluate(() => {
-            const ge = window.gameEngine;
-            ge.openArmory();
-            ge.game.accountGold = 20000;
-            ge.unlockPreRunItem('attunements', 'PULSE_CANNON_PYRO');
-            ge.beginPreRunFromTree({
-                primaries: ['PULSE_CANNON'],
-                attunements: { PULSE_CANNON: ['PULSE_CANNON_PYRO'] },
-            });
             return {
-                active: ge.player.activeAttunements.PULSE_CANNON || [],
-                state: ge.game.state,
+                primaryNodes: document.querySelectorAll('#shop-tree-primary .shop-node').length,
+                powerNodes: document.querySelectorAll('#shop-tree-power .shop-node').length,
             };
         });
-        expect(r.active).toContain('PULSE_CANNON_PYRO');
-        expect(['WAVE_TRANSITION', 'PLAYING']).toContain(r.state);
+        expect(r.primaryNodes).toBe(0); // weapons are equipped gear — not picked here
+        expect(r.powerNodes).toBe(0);
     });
 
-    test('a non-owned attunement is dropped on START RUN', async ({ page }) => {
+    test('the PRIMARY/POWER tabs are hidden in BUILD mode', async ({ page }) => {
+        const r = await page.evaluate(() => {
+            window.gameEngine.openArmory();
+            const tab = (t) => document.querySelector(`.shop-tree-tab[data-tab="${t}"]`);
+            return {
+                primaryHidden: tab('primary').style.display === 'none',
+                powerHidden: tab('power').style.display === 'none',
+                gearShown: tab('gear').style.display !== 'none',
+                defenseShown: tab('abilities').style.display !== 'none',
+            };
+        });
+        expect(r.primaryHidden).toBe(true);
+        expect(r.powerHidden).toBe(true);
+        expect(r.gearShown).toBe(true);
+        expect(r.defenseShown).toBe(true);
+    });
+
+    test('weapon attunements handed to START RUN are dropped (no longer plumbed)', async ({ page }) => {
         const active = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            // CRYO was never unlocked → must not leak into the run.
-            ge.beginPreRunFromTree({
-                primaries: ['PULSE_CANNON'],
-                attunements: { PULSE_CANNON: ['PULSE_CANNON_CRYO'] },
-            });
-            return ge.player.activeAttunements.PULSE_CANNON || [];
+            ge.beginPreRunFromTree({ attunements: { PULSE_CANNON: ['PULSE_CANNON_PYRO'] } });
+            return ge.player.activeAttunements; // weapon attunements no longer applied
         });
-        expect(active).not.toContain('PULSE_CANNON_CRYO');
-        expect(active).toHaveLength(0);
+        expect(active).toEqual({});
     });
 
-    test('an active attunement makes the weapon fire that element', async ({ page }) => {
-        const els = await page.evaluate(() => {
+    test('weapon mechanic mods handed to START RUN are dropped', async ({ page }) => {
+        const stacks = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            ge.game.accountGold = 20000;
-            ge.unlockPreRunItem('attunements', 'PULSE_CANNON_PYRO');
-            ge.beginPreRunFromTree({
-                primaries: ['PULSE_CANNON'],
-                attunements: { PULSE_CANNON: ['PULSE_CANNON_PYRO'] },
-            });
-            // Stamp a fresh bullet via the live fire-path chokepoint.
-            const bullet = {};
-            ge.player.applyGlobalBulletUpgrades(bullet);
-            return bullet.elements;
+            ge.beginPreRunFromTree({ mods: { PULSE_CANNON: ['PULSE_PIERCING'] } });
+            return ge.player.getPowerupStacks('PULSE_PIERCING');
         });
-        expect(els).toEqual(['PYRO']); // base KINETIC replaced by the attunement
+        expect(stacks).toBe(0);
     });
 
-    test('no fatal JS errors through the attunement flow', async ({ page }) => {
+    test('no fatal JS errors through the BUILD flow', async ({ page }) => {
         await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            ge.game.accountGold = 99999;
-            ge.unlockPreRunItem('attunements', 'PULSE_CANNON_PYRO');
-            ge.unlockPreRunItem('attunements', 'PULSE_CANNON_CRYO');
-            ge.beginPreRunFromTree({
-                primaries: ['PULSE_CANNON'],
-                attunements: { PULSE_CANNON: ['PULSE_CANNON_PYRO', 'PULSE_CANNON_CRYO'] },
-            });
+            ge.beginPreRunFromTree({ abilities: ['BULWARK'] });
         });
         const fatal = page._jsErrors.filter((m) =>
             !m.includes('sfxr') && !m.includes('Audio') && !m.includes('audio') &&
@@ -118,7 +82,7 @@ test.describe('QA-13: Attunements (BUILD tree)', () => {
     });
 });
 
-test.describe('QA-13b: Mechanic mods (BUILD tree, Phase W5)', () => {
+test.describe('QA-13c: Ability attunements survive (Phase W6 plumbing)', () => {
     test.beforeEach(async ({ page }) => {
         page._jsErrors = [];
         page.on('pageerror', (err) => page._jsErrors.push(err.message));
@@ -126,92 +90,12 @@ test.describe('QA-13b: Mechanic mods (BUILD tree, Phase W5)', () => {
         await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
     });
 
-    test('the equipped weapon shows mechanic-mod chips in BUILD mode', async ({ page }) => {
-        // 7.0.0 — mods render as `.shop-prerun-chip[data-kind="mod"]` dropdown
-        // chips under the equipped weapon (compact list replaced the orbit tree).
-        const r = await page.evaluate(() => {
-            window.gameEngine.openArmory();
-            const nodes = [...document.querySelectorAll('#shop-tree-primary .shop-prerun-chip[data-kind="mod"]')];
-            return { count: nodes.length, ids: nodes.map((n) => n.dataset.id) };
-        });
-        expect(r.count).toBeGreaterThan(0);
-        expect(r.ids).toContain('PULSE_PIERCING');
-        expect(r.ids).toContain('PULSE_EXPLODE');
-    });
-
-    test('unlocking a mod deducts account-gold and persists', async ({ page }) => {
-        const r = await page.evaluate(() => {
-            const ge = window.gameEngine;
-            ge.openArmory();
-            ge.game.accountGold = 20000;
-            const ok = ge.unlockPreRunItem('mods', 'PULSE_PIERCING');
-            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
-            return { ok, gold: ge.game.accountGold, owned: meta.unlockedMods || [] };
-        });
-        expect(r.ok).toBe(true);
-        expect(r.gold).toBeLessThan(20000);
-        expect(r.owned).toContain('PULSE_PIERCING');
-    });
-
-    test('START RUN grants an owned active mod as a powerup stack', async ({ page }) => {
-        const stacks = await page.evaluate(() => {
-            const ge = window.gameEngine;
-            ge.openArmory();
-            ge.game.accountGold = 20000;
-            ge.unlockPreRunItem('mods', 'PULSE_PIERCING');
-            ge.beginPreRunFromTree({
-                primaries: ['PULSE_CANNON'],
-                mods: { PULSE_CANNON: ['PULSE_PIERCING'] },
-            });
-            return ge.player.getPowerupStacks('PULSE_PIERCING');
-        });
-        expect(stacks).toBeGreaterThanOrEqual(1);
-    });
-
-    test('a non-owned mod is dropped on START RUN', async ({ page }) => {
-        const stacks = await page.evaluate(() => {
-            const ge = window.gameEngine;
-            ge.openArmory();
-            ge.beginPreRunFromTree({
-                primaries: ['PULSE_CANNON'],
-                mods: { PULSE_CANNON: ['PULSE_EXPLODE'] }, // never unlocked
-            });
-            return ge.player.getPowerupStacks('PULSE_EXPLODE');
-        });
-        expect(stacks).toBe(0);
-    });
-});
-
-test.describe('QA-13c: Ability attunements (Phase W6 plumbing)', () => {
-    test.beforeEach(async ({ page }) => {
-        page._jsErrors = [];
-        page.on('pageerror', (err) => page._jsErrors.push(err.message));
-        await loadGame(page);
-        await page.evaluate(() => { try { localStorage.removeItem('rainboidsMeta'); } catch {} });
-    });
-
-    test('unlocking an ability attunement deducts account-gold + persists', async ({ page }) => {
-        const r = await page.evaluate(() => {
-            const ge = window.gameEngine;
-            ge.openArmory();
-            ge.game.accountGold = 20000;
-            const ok = ge.unlockPreRunItem('abilityAttunements', 'EMP_PULSE_VOLT');
-            const meta = JSON.parse(localStorage.getItem('rainboidsMeta') || '{}');
-            return { ok, gold: ge.game.accountGold, owned: meta.unlockedAbilityAttunements || [] };
-        });
-        expect(r.ok).toBe(true);
-        expect(r.gold).toBeLessThan(20000);
-        expect(r.owned).toContain('EMP_PULSE_VOLT');
-    });
-
-    test('START RUN applies an owned ability attunement to the player', async ({ page }) => {
+    test('an ability attunement chosen in the loadout applies to the player on START', async ({ page }) => {
         const attune = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
-            ge.game.accountGold = 20000;
-            ge.unlockPreRunItem('abilityAttunements', 'EMP_PULSE_VOLT');
             ge.beginPreRunFromTree({
-                abilities: ['BULWARK', 'FIELD_MEDIC', 'EMP_PULSE', null],
+                abilities: ['EMP_PULSE', null, null, null],
                 abilityAttune: { EMP_PULSE: 'EMP_PULSE_VOLT' },
             });
             return ge.player.activeAbilityAttune.EMP_PULSE;
@@ -219,13 +103,13 @@ test.describe('QA-13c: Ability attunements (Phase W6 plumbing)', () => {
         expect(attune).toBe('EMP_PULSE_VOLT');
     });
 
-    test('a non-owned ability attunement is dropped on START RUN', async ({ page }) => {
+    test('an unknown ability attunement id is dropped on START RUN', async ({ page }) => {
         const attune = await page.evaluate(() => {
             const ge = window.gameEngine;
             ge.openArmory();
             ge.beginPreRunFromTree({
                 abilities: ['EMP_PULSE', null, null, null],
-                abilityAttune: { EMP_PULSE: 'EMP_PULSE_CRYO' }, // never unlocked
+                abilityAttune: { EMP_PULSE: 'EMP_PULSE_NONEXISTENT' }, // not a known attunement
             });
             return ge.player.activeAbilityAttune.EMP_PULSE;
         });

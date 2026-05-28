@@ -1,126 +1,132 @@
 # Rainboids — Implementation Plan (active dispatch board)
 
-> **Cleaned 2026-05-27.** ACTIVE WORK = the **Looter-Economy Pivot**. Execute
-> top→bottom. Full task detail: `docs/LOOTER_ECONOMY_IMPLEMENTATION.md`; design
-> rationale: `docs/LOOTER_ECONOMY_PIVOT.md`. Old roadmaps → **Archived** footer + `CHANGELOG.md`.
+> **2026-05-27 — AUDIT CORRECTION.** A full pivot audit found the prior board's
+> "ALL FUNCTIONAL SYSTEMS DONE" claim was **optimistic**. The engine *foundation*
+> (T01–T35, T60–T61) is built+tested, but the looter loop is **not connected to the
+> spawn/combat layer** and the **player-facing BUILD UI is still the old roguelite
+> shop**. Two whole systems the draft/classes depend on do nothing yet. The real
+> remaining work is the **LOOTER COMPLETION** board below.
 >
-> **2026-05-27 — CONSOLIDATED ONTO `master`.** Pivot work T21→T35 (Phases 0–4, 6, 7)
-> was developed on `looter-pivot`; a concurrent task moved HEAD to `mp-nodejs`, so
-> the last commits landed there. Both branches were fully-merged supersets of each
-> other (linear off master) → fast-forwarded into **master** + the two redundant
-> branches deleted. **Work continues directly on `master` now.** NOT pushed to
-> origin (live GitHub-Pages deploy) — the pivot is INCOMPLETE (UI T42–T45, migration
-> T60–T61, tests/balance/ship T70–T72 remain) and the MAJOR version bump is T72.
+> Design: `docs/LOOTER_ECONOMY_PIVOT.md` (+ `…_IMPLEMENTATION.md`). VERSION 8.0.0,
+> on `master`, NOT pushed (live GitHub-Pages deploy). MAJOR ship is gated on this board.
 
 ## Dispatch rules
 - **Exclusive file ownership.** Tags: 🟢 NEW-FILE (zero contention, fan out) · 🟡
   ISOLATED (one rarely-touched file) · 🔴 SHARED (hot orchestration file — run
-  one-at-a-time). Subagents never run git; the orchestrator verifies + commits.
+  one-at-a-time). Effort: CHEAP / MED / EXP. Subagents never run git; the
+  orchestrator verifies + commits.
 - Each task ends green (`npm run test:unit` + `node --check`); write QA when it
-  changes player-facing behavior. **Inert new modules/tests/docs = NO version bump**
-  (no runtime effect yet); **integration that changes the running game = version bump**.
+  changes player-facing behavior. **Inert new modules/tests/docs = NO version bump**;
+  **integration that changes the running game = version bump** (solo → `VERSION`+`CHANGELOG.md`).
 - Status: `[ ]` todo · `[~]` in progress · `[x]` done.
+- **Hot/contended files** (never double-dispatch): `game-engine.js`, `player.js`,
+  `progression.js`, `combat-manager.js`, `wave-manager.js`, `weapons.js`,
+  `shop-dom.js`, `collision-system.js`, `lifecycle.js`, `abilities.js`.
 
 ---
 
-## ▶ WAVE 1 — data & pure-math modules (🟢 all parallel, no deps) ✅ DONE (2026-05-27, +142 unit tests)
-- [x] **T01** 🟢 `shop/income.js` (+test) — Rainshard per-kill + run-income formula (§2.4)
-- [x] **T02** 🟢 `shop/crafting-costs.js` (+test) — fab/reroll/upgrade/combine/salvage cost fns (§2.5)
-- [x] **T03** 🟢 `core/gear-scaling.js` (+test) — `levelRamp` + `amplifySP` (§2.1)
-- [x] **T04** 🟢 `combat/weapon-traits.js` (+test) — Element/Behavior/Powerup/Stat trait pools (§3.1)
-- [x] **T05** 🟢 `world/matrix-data.js` (+test) — 8-Matrix per-slot catalog, tiers, resonance (§2.2)
-- [x] **T06** 🟢 `world/item-templates.js` (+test) — 10 gear templates, affix pools, sets, rarity ladder (§2.3)
-- [x] **T07** 🟢 `player/classes.js` (+test) — ~7 class defs: favored stats + mechanic hook + signature (§Phase 6)
-- [x] **T08** 🟢 `world/bounty-data.js` (+test) — bounty templates + reward tables (§Phase 5)
-- [x] **T09** 🟢 `wave/run-templates.js` (+test) — themes/modifiers/challenges/elite combos/boss frame/role profiles/budget (§4.3–4.4)
+# ▶ LOOTER COMPLETION — post-audit board (2026-05-27)
 
-> **⚠ Integration notes (from Wave 1 — resolve during Phase 2/3 wiring):**
-> (a) the new `RARITY_LADDER` (item-templates) + `traitCountForRarity` (weapon-traits) use **1–8 affixes** per §2.3; the EXISTING `world/item-names.js RARITY_TIERS` uses a compressed **1–5** — reconcile (the pivot's 1–8 is canonical) in T27/T30.
-> (b) doc "REGEN" → real SP id `REGENERATION` (matrix-data + item-templates already map it).
-> (c) 6 new class signature-ability ids (OVERDRIVE_BURST, FORTRESS, HARVEST, SLIPSTREAM, ELEMENTAL_NOVA, JACKPOT) need registering in the ability system in **T16/T33**; ENGINEER reuses existing `SENTRY_DRONE`.
+The two load-bearing epics are **A (make the draft real)** + **D (make the build
+reachable)**. **C (power weapons as gear)** is the new user requirement. B/E add
+depth + polish. Recommended order: D-core → A → C → B → E throughout → F ship.
 
-## ▶ WAVE 2 — logic modules + new UI (🟢 parallel; deps on Wave 1) ✅ DONE (2026-05-27, +152 unit tests; suite 2233)
-- [x] **T10** 🟢 `combat/weapon-gen.js` (+test) — roll a weapon item [T04,T02]
-- [x] **T11** 🟢 `world/gear-gen.js` (+test) — roll a gear item [T06,T03]
-- [x] **T12** 🟢 `world/matrix-system.js` (+test) — socket/combine/resonance/agg [T05]
-- [x] **T13** 🟢 `shop/crafting.js` (+test) — fabricate/reroll/calibrate/target/upgrade/salvage (narrow-types-never-values) [T02,T10,T11,T12]
-- [x] **T14** 🟢 `wave/run-randomizer.js` (+test) — drafted run builder + difficulty budget [T09,T01]
-- [x] **T15** 🟢 `world/bounty-engine.js` (+test) — roll board / track / grant [T08]
-- [x] **T16** 🟢 `player/class-system.js` (+test) — apply class lens/mechanic/signature [T07]
-- [x] **T40** 🟢 `ui/draft-overlay.js` — 2–3 stage draft screen (PWR vs threat) [T14]
-- [x] **T41** 🟢 `ui/bounty-overlay.js` — bounty board UI [T15]
+## EPIC A — Content wiring: make the drafted stage actually spawn
+*The draft picks theme/modifiers/elites; spawns ignore all of it (only R$ payout reads it). `entity.isElite` has no setter → elites never spawn. All 13 modifiers are no-ops.*
+- [ ] **A1** 🟢 CHEAP `wave/stage-overlay.js` (new) + `tests/unit/stage-overlay.test.js` — pure `buildStageOverlay(runStage, wave, wps)` (→ null when no draft = non-regression), `stampStageElement(enemy, element)` (sets `enemy.element` + `resist[el]≥0.5` + counter-weakness), `pickEliteIndices(count, n, seed, wave)` (deterministic from `compositionSeed`). Pre-collapses modifier semantics → `{element, stampElement, countMult, hpMult, dmgMult, eliteIds, elitePack, seed, modifierIds}`.
+- [ ] **A2** 🔴 CHEAP `wave/wave-manager.js` — read `this._stageOverlay = buildStageOverlay(...)` once in `spawnWaveEntities` (~:738); apply `countMult` at the group level in `spawnSubWave` (:814) + `tryAdvanceSubWave` (:922) (never scale bosses); apply `hpMult`+`stampElement` per-enemy in `applyEnemyLevelScaling` (after :1284). Covers SWARM/JUGGERNAUT/GLASS/ELEMENTAL_SURGE/TREASURE + theme element. [A1]
+- [ ] **A3** 🟢+🔴 CHEAP `enemy/elite.js` (new) + wire into `wave-manager.spawnLeveledEnemies` (~:1166, copy the `miniBossIdx` pattern) — `promoteToElite(enemy, eliteIds, wave, wps)` = **the `isElite` setter** (sets `isElite=true`, HP×3–5 by depth, `eliteAffixes`, radius+glow tag) + `applyAffix(enemy, id)` reusing existing config hooks: SHIELDED→`frontalShield`, REFLECTIVE→`reflect`, SPLITTER→`splitOnDeath`, SUMMONER→`spawner`, HAZARDOUS→`trailHazard`, VOLATILE→`deathFlare`, WARDED→`adaptive`, CONDUIT/AURA→`aura`, LEECH→`stripsBuff`, TELEPORTER→`blink`, JUGGERNAUT→knockback-immune+HP. Unmapped affix = no-op that still flips `isElite` (so it still spawns + pays ×3 R$). Verifies the dormant `combat-manager.js:1022/1057/1075` elite reads. [A1, A2]
+- [ ] **A4** 🔴 CHEAP `wave/wave-manager.js` + `combat-manager.js` — cheap modifier injections/gates: CONDUIT_FIELD/MIRROR inject 1 CONDUIT_NODE/PRISM_MIRROR per sub-wave; SUDDEN_DEATH gates `createHealthOrb` (combat-manager:695); LOW_GRAVITY sets a `game._lowGravity` flag read in player physics. [A2]
+- [ ] **A5** 🔴 EXP — new-logic affixes (no existing hook): VAMPIRIC (enemy-side lifesteal in the player-damage path), FRENZIED/BERSERKER (HP/time-keyed speed+fire ramp tick), MAGNETIC (pull-player force), HEXER/ARCANE (debuff bolt). [A3]
+- [ ] **A6** 🔴 EXP — new-system modifiers: METEOR_STORM (periodic asteroid spawner in `updateWaveSystem`), TOXIC_ATMOSPHERE (ambient player DoT tick), FOG (visibility overlay render). Optional cheap nebula theme-tint (single low-alpha fillRect) if it doesn't force a nebula-atlas regen. [A2]
+- [ ] **A7** 🟡 CHEAP `tests/qa/` — new `08-stage-draft.spec.js` (drafted SWARM+eliteIds → more enemies, ≥1 `isElite`, stamped element, elite ×3 R$ payout) + a non-regression baseline guard (`runStage=null` ⇒ WAVE_DATA-identical counts). Version bump when A2/A3 land (player-visible).
 
-> **Wave 2 note:** `crafting-costs.js` keys rarities capitalized (`Common`…); the
-> gen/ladder modules use lowercase ids / tier numbers — `crafting.js` normalizes.
-> Keep this in mind when wiring (T27/T42).
+## EPIC B — Class mechanics: make the 7 classes more than a stat lens
+*The +20% favored-stat lens works; the 7 `classMechanicId` hooks have ZERO consumers; signature abilities are v1 aliases. ~Most map onto existing precedent blocks.*
+- [ ] **B0** 🟢 CHEAP `player/class-mechanics.js` (new) + one-line `initClassMechanic(player)` at `game-engine.js:1167` — seeds per-class state; pure math helpers for unit-testing. Unblocks B1–B9.
+- [ ] **B1** 🔴 CHEAP Elementalist `reaction_amplifier` — clone the CATALYST block (`collision-system.js:3096`): reactions +50%/stronger, chain depth +1; optional status-spread (KINDLING pattern). [B0]
+- [ ] **B2** 🔴 CHEAP Bulwark `regen_overshield` — reuse the `bloodshield` buffer (regen toward cap in the player update timer block) + clone FAILSAFE (`lifecycle.js:389`) for can't-be-one-shot. [B0]
+- [ ] **B3** 🔴 CHEAP Reaper `heal_on_kill_overheal` — clone SANGUINE heal-on-kill (`combat-manager.js:1253`) + bank overheal via `addBloodshield` (BLOODSHIELD overheal path). [B0]
+- [ ] **B4** 🔴 CHEAP Striker `momentum_killstack` — APEX-execute clone (`collision-system.js:2749`) + Bloodlust-style stack/decay (`combat-manager.onEnemyKill` + player update) + fire-rate divisor in `getEffectivePrimaryFireRate` (weapons.js:2516). [B0]
+- [ ] **B5** 🔴 CHEAP Wildcard `loot_gambit` — loot/R$ multipliers in `dropOrbsFromEntity` (combat-manager:898/994/1043) + per-wave random buff at `spawnWaveEntities` (wave-manager ~:754, beside the per-wave recharges). [B0]
+- [ ] **B6** 🔴 CHEAP — Engineer power-cost discount (one line in `getEffectivePowerCost`, progression.js:668) + Tempest free-dash (one line in `_triggerDash`, player.js:1640). [B0]
+- [ ] **B7** 🔴 MED Tempest `free_dash_trail` — `player.dashTrail` entity list, emit on dash, tick+AoE-damage in `updateActiveAbilities` (cryoRings template), render the trail. [B6]
+- [ ] **B8** 🔴 MED Engineer `deploy_construct` — dedicated `player.classConstructs` array (separate from ability-cooldown sentries so it persists), reuse the sentry orbit/fire loop + `spawnSentryDroneBullet`, add a render call. [B0]
+- [ ] **B9** 🔴 CHEAP/MED signature differentiation in `activateAbility` (abilities.js:545) — let signature ids read their own bespoke config (already in weapon-data.js:1615-1656) instead of the alias: FORTRESS (DR 0.6 + root), HARVEST (AoE drain), ELEMENTAL_NOVA (stun + element blast) = CHEAP; OVERDRIVE_BURST (→ real overdrive) = MED; keep SLIPSTREAM/JACKPOT as v1 aliases. [B0]
 
-## ▶ SERIAL INTEGRATION SPINE (🔴 ordered — one owner per file at a time)
-### Phase 0 — rip-out & rename
-- [x] **T21** 🔴 Rename Gold→Rainshards (R$) — **DONE (display-layer)**: HUD readout, pickup feedback, stats/banner labels, shop/armory labels, streak "+N% R$" now show **R$ / Rainshards**. Internal `money`/`accountGold`/`createMoneyOrb` identifiers RETAINED (166 refs + save schema — display-only rename is the right scope; mapped to "Rainshards" at the display layer).
-- [x] **T20** 🔴 Unlock everything + remove milestone gift — **DONE**: `armory.setAllUnlocked(true)` at boot → `getUnlockedSet` returns all (pure fn + unit tests unchanged; runtime layer). Milestone gift + `ability-gift.js` + `clearedStage1` removed. Compact-list store auto-hides (nothing locked); sell button suppressed while all-unlocked. Unit 2233 green + boot smoke 12/12.
->   ⚠ **Deferred QA:** specs `08-armory`/`12-abilities`/`19-run-setup`/`31-build-flow` assert the OLD locked/owned behavior → now stale; reconcile at **T70** (after weapons-as-loot T30 + UI T42/43 settle, to avoid churning them 2-3×).
-- [x] **T22** 🔴 Remove card draft + powerup picks — **DONE**: stage-clear card menu disabled (`fireSurvivorOverlay=false` → stage clear proceeds via the existing next-wave path); recap subtitle no longer promises a powerup. The choose-moment moves to the run DRAFT (T32); powerups become weapon traits (T30). Dead card machinery (`openWaveClearPowerupsMenu`/`#wave-pick-overlay`/`card-draft.js`/shop powerup tab) left inert → cleaned in T30/T70. Unit 2233 green.
-- [x] **T23** 🔴 Eliminate Cores → salvage to R$; crafting costs in R$ — **DONE**: GEAR salvage/reroll/tier-up/target-resist/passive-reroll in `armory-overlay.js` now spend the persistent Rainshard wallet (`accountGold`) instead of `game.cores` (`_cores()` getter repointed; all 6 save sites write `accountGold`). Every ✦/⬢ glyph relabeled to `R$` (header readout, GEAR head, UNLOCK buttons, REROLL/TIER-UP/SALVAGE/TARGET-RESIST/PASSIVE labels, empty-state). The redundant ✦ header readout + the BUILD-screen ✦ box (`shop-dom`) are hidden. Cost fns (`world/cores.js`) unchanged — numbers now read as R$ (recalibrated at T71). Vestigial `game.cores`/`meta.cores` plumbing left for the **T61** banked-Cores→R$ migration. Unit 2233 green. (No version bump — deferred to T72.)
-### Phase 1 — progression + PWR
-- [x] **T24** 🔴 Per-run level/SP + migration (banked→R$) — **DONE**: `progression.initMeta()` now resets the player to **L1 / 0 SP / empty spStats** at every run-start build (was loading persistent account level/SP); `saveMetaState()` is a no-op (level/SP no longer persist to account meta). `savePersistentProfile` drops level/xp/sp/spStats from the meta write. The wave-start run snapshot (`serializeRunState`) now carries the LIVE `level/xp/sp/spStats` (replacing the stale `experience/skillPoints` field names) and `restoreRunState` overlays them so **CONTINUE** resumes the in-run climb. Migration: `game-engine._migrateBankedProgression(meta)` converts banked account level → R$ ONCE (`(level−1) × 1500` R$, tunable@T71), clears level/xp/sp/spStats from meta, stamps `levelMigrated`. Unit 2233 green + boot smoke 12/12. (No version bump — deferred to T72.)
-- [x] **T25** 🟡 PWR recompute: level-scaled inputs + THORNS/SPEED + recompute on level-up — **DONE**: added `thornsFrac` (offense credit = ½·reflect·primaryDPS, mirrors combat-manager) + `speedMult` (survivability EHP credit = ½ the movement bonus, CHILL-excluded) readers to `power-level.js`, folded into `offense()`/`survivability()`. Both read **0 / ×1** for the starter so `calibrateStarterK` still anchors a fresh L1/0-SP build at PWR 100 (verified: K_PWR 4.4610, starter=100, +60% thorns→111, ×1.8 speed→112, both→125). PWR now recomputes on **level-up** (`addXp`) and **SP allocate/deallocate** (`progression.js` → `gameEngine.recomputePlayerPWR()`), so it ramps live within a run as the per-run climb invests SP. The level-scaled GEAR inputs come online when `amplifySP` is wired into the effective-stat getters at **T26**. Unit 2233 green. (No version bump — deferred to T72.)
-### Phase 2 — gear, matrices, income, crafting wiring
-- [x] **T26** 🔴 Gear amplification into effective-stat getters (`amplifySP`) — **DONE**: `progression.js` now folds §2.1 amplification into every SP-driven getter. Added `_gearAmpPct(stat)` (Σ rolled `pct` of equipped `{stat,pct}` affixes /100; Matrices+resonance+sets join at T28) + `_ampSp(stat) = amplifySP(_spVal, ampPct, level)`. Rewired the 9 getters (HEALTH/TOUGHNESS/CRIT_CHANCE/CRIT_DAMAGE/SPEED/REGENERATION/CAPACITOR/REACTOR/EFFICIENCY) from `_spVal + flat getItemAffixTotal` → `_ampSp` (dropped the flat affix terms — gear is %-amp, never flat). `getSpStatValue` (spStatTotal) now returns the amplified value, so **combat-manager (THORNS/VAMPIRISM), lifecycle (DODGE), and power-level (PWR prior)** inherit amplification for free. Default-safe: 0 SP → 0; L1 or no gear → raw SP (starter unchanged). Old flat resist affixes (`{type,value}`) still read via `getItemAffixTotal` (untouched). Updated `cd-sustain-powerups` regen-cap test to drive its >3 HP/s dial through `getPassiveMod` (gear regen is now low-capped SP-amp). +6 new `gear-amplify-getters.test.js`. Unit **2239** green. Gear PRODUCER (new {stat,pct} rolls into inventory) wired at T27. (No version bump — deferred to T72.)
-- [x] **T27** 🔴 Gear roll + crafting wired into inventory/GEAR — **DONE**: `item-system.createItem` now delegates to `gear-gen.rollGear` (the §2.1 `{stat,pct}` %-amplifier model) + a `_decorateGear` decorator that stamps the display/persistence fields (name, level, rarity styling, per-affix labels, `bonus/bonusType/bonusLabel`). `rerollItemAffixes`/`tierUpItem` rewritten to the new model via gear-gen (preserve legacy resist affixes, passive, sockets/signature/matrix, traits, level). `_refreshDerivedFromAffixes` + `scoreItem` handle the mixed amp/resist affix list (amp keyed by `.stat/.pct`, resist by `.type/.value` — disjoint, coexist). Canonical affix counts are now gear-gen's **RARITY_LADDER (1→8)**, superseding the legacy `RARITY_TIERS` (1→5); **dropped gear no longer rolls resists** (resists are TARGET-RESIST-craft-only). End-to-end verified: drop → gear-gen item → stash → equip → T26 amplified getters. Updated `item-tiers`/`cores-craft`/`item-resist-affixes` specs to the canonical ladder + `.stat` matching + no-resist-on-drop. Unit **2239** green + boot smoke 12/12. (Richer Fabricate/Calibrate/Target crafting UI = T42.) No version bump (deferred to T72).
-- [x] **T28** 🔴 Matrix integration (sockets + amp + resonance into getters) — **DONE**: extended `progression._gearAmpPct` to fold socketed-Matrix amplification into the same per-stat amp% as gear affixes (§2.2) via `aggregateMatrixAmp(equipped)` — per-slot Matrix line × tier-factor + per-type resonance bonus — guarded to skip the aggregation when no socket is filled (early-game fast path). gear-gen already stamps `sockets:N`; added `player.socketMatrixAt(slot,matrix)` / `unsocketMatrixAt(slot)` thin wrappers (PURE matrix-system fns → reassign the slot, return displaced/removed Matrix, persist) for the T42 socketing UI. +4 Matrix cases in `gear-amplify-getters.test.js` (per-slot amp, affix+matrix stack, resonance flat +3%/extra piece, empty-socket no-op). Unit **2243** green + boot smoke 12/12. Set-bonus % folding (the last `ampPct` term) remains — small follow-on, fold into T42/polish. No version bump (deferred to T72).
-- [x] **T29** 🔴 Income into drops/pickup (wave/difficulty/streak/find) — **DONE**: combat-manager's per-kill drop now uses `income.perKillRainshards({wave, difficultyMult, killstreakMult, findMult})` (BASE 25 × waveScale × mode-lens × streak × R$-find), REPLACING the 6.x flat model — late/harder kills now pay MORE (verified curve: w1=25→w30=83, HARD/streak boost, full NORMAL run ≈39k = design target). `difficultyMult` reads `runConfig.mode` (MODES align 1:1 with `INCOME.difficultyMult`); `killstreakMult` = `getStreakGoldMult`; `findMult` = `player.getGoldFindMultiplier()` (the revived R$-find axis hook, ×1 until R$-find content lands). Boss bounty = a milestone **multiple** of a normal kill (tiers 1-4 → ×6/9/13/18, scales with the curve); `isElite` flag pays ×3 (wired at T32/T34); asteroids pay a minor fraction (0.12/0.30). Pickup path (collision-system) unchanged — orbs carry the income-scaled value. Unit 2243 green + boot smoke 12/12. No version bump (deferred to T72).
-### Phase 3 — weapons as loot
-- [x] **T30** 🔴 Weapon-as-loot core: archetypes + traits stamp bullets + weapon level-scaling — **DONE** (3 sub-steps): weapons equip as rolled loot ITEMs (`weapon-gen` `{archetype,rarity,traits,element}`). **T30a** — `weapon-data.ARCHETYPE_TO_WEAPON`+`archetypeToWeaponId`+`weaponLevelScale` (+4%/lvl, cap L25); `player.equippedWeapon`+`equipWeaponItem`/`getEquippedWeapon`/`hasWeaponTrait`/`weaponTraitValue`; `applyWeaponTraits` at the `applyGlobalBulletUpgrades` chokepoint — ELEMENT trait overrides bullet element, BEHAVIOR (pierce/explosive/homing/split/ricochet/knockback/stun + chain hook) → same bullet fields the legacy mods used; `getEffectivePrimaryDamage` ×`weaponLevelScale` + DAMAGE_PCT/OVERCHARGE. **T30b** — `getEffectivePrimaryFireRate` folds FIRE_RATE_PCT/RAPIDFIRE; crit getters (progression) fold CRIT_CHANCE_PCT/CRIT_DAMAGE_PCT; per-bullet BIG_BULLETS/LONG_RANGE/PROJECTILE_SPEED_PCT. **T30c** — MULTISHOT/VOLLEY re-fire the weapon at ±angle offsets (silent, TWIN_CANNON idiom). **All four trait classes consumed.** Default-safe: `equippedWeapon` null until a drop (T31)/BUILD (T43) sets it → runtime unchanged. Legacy attunement/mod *stacks* are naturally 0 in the pivot (no shop) so they're inert (removal = T70 cleanup). +13 `weapon-loot.test.js`. Unit **2256** green + boot smoke 12/12. No version bump (deferred to T72).
-  > **▶ T30 INTEGRATION MAP (surveyed 2026-05-27 — execute from this, no re-survey needed):**
-  > **Firing path** (`js/modules/player/weapons.js`): input→`updateChargingSystem`(L195)→`firePrimary`(L470) dispatch→per-weapon `fireX()` (L571-1053) stamps bullet fields directly (damage/color/pierce/range/size + weapon-specific flags) then calls **`applyGlobalBulletUpgrades(bullet)`** (L1105-1262) ONCE — THIS is the single choke point that applies element attunements (L1132 reads `this.activeAttunements[activePrimary]`→`bullet.elements`), mechanic mods (homing L1189, pierce L1202, explosive L1209, stun/knock L1149-1152 via `_PER_WEAPON_*_ID` lookup tables L52-137 → `getPowerupStacks(upgradeId)`), and powerups (BIG_BULLETS L1196). Effective getters: `getEffectivePrimaryDamage` (L2408), `getEffectivePrimaryFireRate` (L2353 — rapid-fire L2376).
-  > **Bullet fields** (`bullet.js reset` L33-144): element/elements, piercing, homing/homingStrength, explosive/explosionRadius, stunChance, knockbackChance — trait values materialize into the SAME fields (no bullet.js change needed). Behavior consumed in `update`(L252)/`applyHoming`(L586)/`explode`(L707)/`onHit`(L762).
-  > **Trait model** (`weapon-traits.js`): trait = `{id,class,name,description,roll?{min,max}}`; classes ELEMENT(6)/BEHAVIOR(8: PIERCE,EXPLOSIVE,HOMING,CHAIN,RICOCHET,SPLIT,KNOCKBACK,STUN)/POWERUP(6: MULTISHOT,RAPIDFIRE,BIG_BULLETS,OVERCHARGE,LONG_RANGE,VOLLEY)/STAT(5: DAMAGE_PCT,FIRE_RATE_PCT,PROJECTILE_SPEED_PCT,CRIT_CHANCE_PCT,CRIT_DAMAGE_PCT). `rollWeapon()` (`weapon-gen.js`)→`{archetype,rarity,traits:[{id,class,value?}],element}`.
-  > **Player storage** (`player.js` L161-167): `activePrimary`(id str), `ownedPrimaries`(Set), `activeAttunements`{weaponId:[ids]}; `getActivePrimaryConfig`(L2496)=`PRIMARY_WEAPONS[activePrimary]`; `equipPrimary`(L2504).
-  > **PLAN:** (1) add `player.equippedWeapon` = a rollWeapon item; archetype→base `PRIMARY_WEAPONS` config (archetype ids map to weapon ids). (2) Add `applyWeaponTraits(bullet)` driven by `equippedWeapon.traits`, called from the `applyGlobalBulletUpgrades` choke point — ELEMENT→bullet.element(s), BEHAVIOR→pierce/explosive/homing/chain/ricochet/split/knock/stun flags, BIG_BULLETS/LONG_RANGE→size/range. (3) POWERUP MULTISHOT/VOLLEY→extra-bullet count at fire dispatch; (4) STAT + RAPIDFIRE → fold into `getEffectivePrimaryDamage`/`getEffectivePrimaryFireRate`/crit getters; weapon base damage ×`weaponLevelScale(player.level)`. (5) Subsume old per-weapon `_PER_WEAPON_*_ID`/attunement reads (gate behind "no equippedWeapon" fallback so legacy still works during transition; full removal at T70). Update weapon QA/e2e specs. **Test incrementally; commit in sub-steps** (trait-stamp core → level-scaling → powerup/stat fold → subsume legacy).
-- [x] **T31** 🔴 Weapon drops + Fabricate weapons — **DONE**: `item-system.createWeaponItem(level,rarity,archetype)` + `decorateWeaponItem` produce stash-ready weapon ITEMs — synthetic `slot:'weapon'` (rides the existing loot-feed/`runCollected`/stash machinery, never auto-equips) + `kind:'weapon'` + name/level/rarity styling + `describeWeapon` summary. `weapon-data.PRIMARY_ARCHETYPES` (11 droppable patterns). **Drops:** combat-manager adds a RARE jackpot weapon roll after the gear rolls (boss 5% / elite 2% / normal 0.6%, ×dropMult×rewardDial, rarity-biased) → `registerItemDrop`. **Fabricate:** `game-engine.fabricateWeapon({archetype,rarity,lean,focus})` — cost-checked `crafting.fabricate` → `decorateWeaponItem` → stash + R$ deduct (engine capability; the Fabricate UI button is T42). **Guards:** armory GEAR stash render + `salvageAllBelowEquipped` exclude `kind:'weapon'` (weapon equip/inventory = T42/T43). No import cycle (weapon-data is pure-data). +5 `weapon-drop.test.js`. Unit **2261** green + boot smoke 12/12. No version bump (deferred to T72).
-  > **▶ T31 NOTES (found during T30):** weapons equip via `player.equipWeaponItem(item)` (T30, weapons.js) where item = `weapon-gen.rollWeapon({archetype,rarity,rng})`. **Drop path:** combat-manager `dropItems`/kill block (~L1002-1012, the `tryRoll(slot,rate)`→`createItem`→`player.registerItemDrop` gear path) — add a RARE weapon-drop roll (jackpot table, rarer than gear; boss/elite higher). Pick an archetype (map keys of `ARCHETYPE_TO_WEAPON` in weapon-data, or restrict to the 11 primary firing patterns) + `rollRarity(...)`. **⚠ Collection/stash wrinkle:** `game-engine.commitRunLootToStash` (L~1709) pushes `runCollected` → `meta.stash` ONLY for items with `it.slot`; weapon items have `archetype`, NO `slot` → they'd be dropped. Options: (a) give weapon items a synthetic `slot:'weapon'` (simplest — flows through the existing stash + the GEAR/inventory list can branch on `it.archetype`), or (b) a parallel `meta.weaponStash` + `player.runCollectedWeapons`. Recommend (a) for minimal surface. Equipping from stash → `equipWeaponItem`. **Fabricate:** `crafting.fabricate` (T13) already rolls weapons; surface a Fabricate-weapon entry in inventory-overlay (full crafting UI is T42 — keep T31 to the drop + a minimal fabricate hook). Update QA weapon/inventory specs as needed.
-### Phase 4 — randomized drafted runs
-- [x] **T32** 🔴 Run randomizer + draft hook into wave flow — **DONE**: the run DRAFT is now the per-STAGE choose-moment that replaced the removed card draft (T22). game-engine owns a lazy `DraftOverlay` + per-run `game.runState`/`game.runStage`/`game.stageThreat` (in the canonical game object); `openStageDraft(onDone)` computes `nextDraft(nextStageDepth, runState)`, opens the overlay with `{pwr: game.playerPWR}` (PWR-vs-threat readout), and on pick runs `applyPick` → `_applyStageSpec` (stores the spec on `game.runStage`, tracks no-repeat `runState.lastModifier`, feeds `stageThreat` to the director) → `onDone`. wave-manager's stage-clear gates the next-stage advance on the draft (pause → draft → STATS interpose → proceed), falling through safely if the overlay can't open (no soft-lock). **Pick payoff wired:** combat-manager per-kill income ×`runStage.reward.rainshardMult` (richer stage pays more R$). No import cycle (run-randomizer/draft-overlay are leaf modules). +4 `stage-draft.test.js` (real nextDraft/applyPick via stubbed overlay). Unit **2265** green + boot smoke 12/12. **Deferred (→ T34/balance):** per-modifier SPAWN effects (Swarm count, Juggernaut HP, Fog, Glass, etc.) + theme-element-on-enemies + composition biasing — the spec is stored + read by income/director, but translating each modifier into spawn/rule changes needs per-modifier logic best done with the gear/level-aware director. Fully-randomized (non-drafted) mode also deferred (drafted is the priority). No version bump (deferred to T72).
-### Phase 6 — classes
-- [x] **T33** 🔴 Class pick wired into run start — **DONE**: (1) Registered the **6 new signature abilities** in ABILITIES (OVERDRIVE_BURST/FORTRESS/HARVEST/SLIPSTREAM/ELEMENTAL_NOVA/JACKPOT — free `cost:0`, `signatureOf` class tag); each **v1-aliases** a thematically-matched base ability's tested effect (`SIGNATURE_ABILITY_ALIAS` in `abilities.js`: →DESIGNATOR/BULWARK/FIELD_MEDIC/BLINK/EMP_PULSE/DESIGNATOR), resolved before dispatch so id-keyed consumers fire; ENGINEER reuses SENTRY_DRONE. (2) game-engine `init()`: `_pendingClass` (BUILD T43 sets it) → `applyClass(player, classId)` (or `clearClass`) → grants `signatureAbility` into `ownedAbilities` + first free equip slot + `activeAbility`. (3) **Lens:** `progression._ampSp` adds `classStatBonus` to the amp% so favored SP stats get +20% (level-ramped like gear; dormant at L1, default-safe with no class). No import cycle (class-system→classes only). +7 `class-pick.test.js`. Unit **2294** green + boot smoke 12/12. **Deferred (content/balance):** the 7 unique per-class **mechanics** (`classMechanicId` momentum_killstack/regen_overshield/…) are stored as hooks but not yet implemented; distinct bespoke signature effects (vs the v1 aliases). The class-PICK UI is **T43** (BUILD). No version bump (deferred to T72).
-### Phase 7 — balance
-- [x] **T34** 🟡 Gear/level-aware director (reads live PWR) — **DONE**: the director already pre-loads off live PWR, which T25/T26 made fold gear/weapons/SP — so "gear/level-aware" falls out automatically. T34 adds the **drafted-stage threat offset**: `difficulty-director` now carries `state.threat` (set by T32's `setDirectorContext({…, threat})` / `recordWave`), and `contextScale` folds a `threatScale(state)` factor into the EFFECTIVE difficulty — when the chosen stage OUT-threatens the build (threat > pwr; both on the PWR scale, `difficultyBudget(1)=100=PWR_REF`) the HP/threat axes bump (gentle √ratio, capped +50%), never easing below 1.0 (reactive loop + mercy own easing). Default-safe: threat 0 (no stage drafted) ⇒ ×1.0. Makes the draft's PWR-vs-threat readout real. +5 `director-stage-threat.test.js`. Unit **2299** green + boot smoke 12/12. No version bump (deferred to T72).
-- [x] **T35** 🔴 Global stat caps (dodge/crit/vampirism) — **DONE**: central `STAT_CAPS` in `core/sp-stats.js` (DODGE 0.60 / VAMPIRISM 0.50 / THORNS 2.0), applied at the effective-value sites — DODGE in `lifecycle.takeDamage` (was flat 0.50), VAMPIRISM in `combat-manager.applyVampirism` (new), THORNS in `applyThorns` (new). CRIT 60% / CRIT-dmg 550% / TOUGHNESS 75% already capped at the progression getters. +5 `stat-caps.test.js`. **Phase 7 complete.** Suite 2304 green.
+## EPIC C — Power weapons as gear/loot (NEW — all weapons are now loot)
+*Primaries became loot (T30/T31); power weapons still use the fixed `activePower`/`POWER_WEAPONS` + charge/energy model. Make power weapons rolled loot ITEMs with rarity + traits/attunements, equippable from the inventory. Per-power payloads (Nova ring/mine/missile/beam) are NOT pooled bullets, so they bypass `applyWeaponTraits` — element/scaling must stamp the payload entity directly.*
+- [ ] **C1** 🟡 CHEAP `combat/weapon-data.js` + `combat/weapon-traits.js` (+tests) — add `POWER_ARCHETYPES` (CHARGE/MINE/NOVA/MISSILE/LANCE/LIGHTNING/SINGULARITY/PRISM/ORBITAL/CRYO/OVERDRIVE) + `POWER_ARCHETYPE_TO_WEAPON` map + `powerArchetypeToWeaponId()`. Extend `ARCHETYPE_TRAIT_EXCLUSIONS` for the new power archetypes (AoE/placed/beam exclude PIERCE/RICOCHET/SPLIT/HOMING/LONG_RANGE; CHARGE/MISSILE keep MULTISHOT/VOLLEY = +projectiles). Power-meaningful traits = ELEMENT (attunement), DAMAGE_PCT, CRIT_*_PCT, BIG_BULLETS→AoE radius, FIRE_RATE_PCT/RAPIDFIRE→cooldown, KNOCKBACK/STUN (Nova/Cryo/Orbital). `rollWeapon` is already archetype-generic — no roller change. *(no behavior change)*
+- [ ] **C2** 🔴 CHEAP `player/player.js` + `player/weapons.js` — add `equippedPowerWeapon` field (parallel to `equippedWeapon`) + `equipPowerWeaponItem(item)` (sets field + `activePower = powerArchetypeToWeaponId(archetype)`, resets charge/cooldown) + `getEquippedPowerWeapon()` + player wrappers. Legacy `activePower`/`ownedPowers`/`equipPower` stay as the no-item fallback. [C1]
+- [ ] **C3** 🔴 MED `player/weapons.js` — fire integration: in `firePower` (:1465) clone+scale `config` via `boostPowerDamage`/`TWIN_CAST_DMG_FIELDS` with `weaponLevelScale(level) × (1+DAMAGE_PCT/100)`; `FIRE_RATE_PCT`→`config.cooldown` scalar (+ optional energy discount); `BIG_BULLETS`→AoE radius; **stamp `equippedPowerWeapon.element` onto the ring/mine/missile/beam payload entity** (and CHARGE_SHOT bullets via the `fireChargedShot` effectMult/element path, since they already hit `applyWeaponTraits`). Element overrides the base `WEAPON_ELEMENTS` table; no ELEMENT trait → base element. Status-apply on payload via the element-system hook. Default-safe: no item ⇒ today's behavior. [C2]
+- [ ] **C4** 🔴 CHEAP `world/item-system.js` + `combat/combat-manager.js` + `game-engine.js`/`shop/crafting.js` — `createPowerWeaponItem(level,rarity,archetype)` + a `weaponKind:'primary'|'power'` discriminator on `decorateWeaponItem` (keep `slot:'weapon'`/`kind:'weapon'` for stash compat); `_weaponArchetypeName` consults `POWER_WEAPONS` for power archetypes; add a power-weapon drop roll in combat-manager (~:1022); Fabricate validates archetype against the correct pool by `weaponKind`. [C1]
+- [ ] **C5** 🔴 CHEAP `player/weapons.js` save schema + `ui/radial-menu.js` + tests — persist `equippedPowerWeapon` + reload routing by `weaponKind`; convert the in-run radial power picker (radial-menu.js:33/88, currently picks static `POWER_WEAPONS`) to choose among **owned power-weapon ITEMs** → `equipPowerWeaponItem`. +`power-weapon-gen`/`power-level-scale`/equip unit specs + QA in 07-weapons. Version bump (player-visible). [C2, C3, C4]
+- *(UI equip-from-stash for power weapons is built in D4.)*
 
-## ▶ UI TRACK
-- [~] **T42** 🔴 Crafting/inventory UI panel (Fabricate/Reroll/Calibrate/Target/Upgrade/Combine/Salvage) — **Fabricate DONE**: armory GEAR tab now has a FABRICATE section (rarity picker → cost; gear-slot + weapon-archetype craft buttons) wired to `game-engine.fabricateGear`/`fabricateWeapon` (cost-checked R$ sink → stash). `item-system.decorateGearItem` added. Reroll/Upgrade(tier)/Salvage/Target-resist already exist in the GEAR tab (R$, T23/T27). +3 `fabricate.test.js`. **Remaining:** Combine matrices + matrix-socket UI (needs a matrix drop/stash path), Calibrate trait-reroll, weapon-item crafting rows (needs T43 weapon inventory). Suite 2313 green.
-- [~] **T43** 🔴 Class-pick + loadout in BUILD — **wiring DONE**: `game-engine.setSelectedClass(id)`/`getSelectedClass()` persist `meta.selectedClass` + arm `_pendingClass`; `init()` reads it so the class (lens + signature + mechanic hook, T33) applies + persists across sessions. +4 `class-select.test.js`. **Remaining (UI polish, best in playtest):** the visual class-picker + weapon/Matrix loadout panels in BUILD (shop-dom/static-dom/css) — they call `setSelectedClass` / `equipWeaponItem` / `socketMatrixAt`. Suite 2324 green.
-- [x] **T44** 🟡 Loot QoL — **DONE (logic)**: lock-aware `partitionBulkSalvage` (locked never salvaged); pure `inventory.sortStash` (recent/rarity/score/slot, locked-pinned); opt-in auto-salvage on commit (`game-engine.setAutoSalvage`/`getAutoSalvage` → below-equipped gear → R$, locked/weapons kept). +10 tests. **Remaining (UI):** lock toggle / sort dropdown / auto-salvage checkbox in the armory + loadout presets (engine hooks ready).
-- [x] **T45** 🔴 Bounty board wiring + progress events — **DONE (wiring)**: game-engine `_bountyBoard()` (persisted `meta.bountyBoard`, rolled lazily) + `recordBountyEvent` + `claimBounty` (reward.rainshards → R$, double-claim-guarded) + `openBountyBoard()` (overlay). combat-manager fires boss/elite/kill events per kill (tagged element+archetype). Draft feeds `activeBountyTags` into runState (§4.2 r6). +5 `bounty-wiring.test.js`. Suite 2348 green. **Remaining UI:** a button to open the board (overlay + `openBountyBoard` ready); matrix/fabricate-token rewards (grant only R$ for now).
+## EPIC D — BUILD / Inventory UI: make the persistent build reachable
+*The live pre-run screen is the OLD `#shop-overlay` UPGRADES ability-tree (`openArmory`→`showShopDom(true)`). Class/weapon-loot/Matrix axes have full engine support, ZERO UI. The modern pattern is the self-contained overlay (draft/bounty); the GEAR tab is the only looter-aware panel and it runs the LEGACY `cores.js` crafting backend.*
+- [ ] **D1** 🟢 MED `ui/build-overlay.js` (new, modeled on `draft-overlay.js`/`bounty-overlay.js`: own DOM + scoped `<style>`, `open/close/isOpen/refresh`) — header (R$ wallet + title + BOUNTIES btn) + tab rail (CLASS/WEAPONS/GEAR/STASH) + reused RUN-SETUP/START footer (call exported `loadoutReadiness`/`runSetupReadout`/`clampRunConfig`). Repoint `game-engine.openArmory` (:4891) to it; keep the shop-tree for the in-run gold path only.
+- [ ] **D2** 🟡 CHEAP CLASS tab — 7 cards from `CLASSES`/`CLASS_ORDER` (+ NO-CLASS) → `setSelectedClass`/`getSelectedClass`; selected highlight. [D1]
+- [ ] **D3** 🟡 MED `ui/item-card.js` upgrade (opt-gated so existing callers unaffected) — 8-tier rarity pill, `{stat,pct}` amp affixes + `INACTIVE ⚠` on 0-SP stats, weapon-trait grouping (Element/Behavior/Powerup/Stat%), socket strip (`◆`/`◇`), set 2/3/5-pc progress, resonance readout. Feeds D4/D5.
+- [ ] **D4** 🟡 MED WEAPONS tab — primary + power slot tiles + the weapon-loot stash (`stash.filter(kind==='weapon')`, **un-filters** what armory-overlay hides); equip via `equipWeaponItem` / feature-detected `equipPowerWeaponItem` (C2). [D1, D3]
+- [ ] **D5** 🔴 MED GEAR tab + Matrix socketing — 5 slots + equip-from-stash (`inventory.equipFromStash`/`stashForSlot`/`equipDelta`); socket strip → `socketMatrixAt`/`unsocketMatrixAt`. **Adds `meta.matrixStash`** (matrices have no drop/stash source today) seeded by Combine + a future drop. [D1, D3]
+- [ ] **D6** 🔴 MED CRAFTING panel + backend swap — add `engine.craftReroll/craftUpgrade/craftSalvage/craftCombine` thin methods over `shop/crafting.js` (mirror existing `fabricateGear/Weapon`); FABRICATE + per-item Reroll/**Calibrate**/**Target**/Upgrade/Salvage/**Combine** in the overlay; **retire the `world/cores.js` crafting path** in armory-overlay. [D5]
+- [ ] **D7** 🟡 CHEAP STASH tab + QoL + BOUNTIES button — sort/filter/lock/auto-salvage/bulk-salvage (`sortStash`/`partitionBulkSalvage`/`setAutoSalvage`); header BOUNTIES button → `openBountyBoard` (fixes the orphaned bounty overlay). [D1, D3]
+- [ ] **D8** 🔴 MED retire legacy + tests — delete `loadout-overlay.js`+`openLoadout`; retire the shop-tree pre-run mode + GEAR/PASSIVES tabs + unlock store (`unlockPreRunItem`/`sellUnlock`) + card-draft/wave-pick/shop-suggest DOM; rewrite the 12 stale pre-pivot QA specs (08-armory/09-loadout/31-build-flow/12/13/19) + new `53-build-overlay.spec.js`; MINOR version bump; README structure (+build-overlay, −loadout-overlay). [D1–D7]
 
-## ▶ COLD-START, MIGRATION & SHIP
-- [x] **T60** 🔴 New-player starter kit — **DONE**: the `!loadMeta` new-account seed (game-engine boot) now grants a basic weapon-loot item (common PULSE) + a gear piece (common hull) into the stash + an 800 R$ stipend (`STARTER_RAINSHARDS`, ~2 common Fabricates), stamps `levelMigrated`. Item rolls best-effort. Boot smoke 12/12 (fresh account boots clean).
-- [x] **T61** 🔴 Account migration — **DONE**: extended `_migrateBankedProgression` to fold banked Cores (1:1) + banked level (×1500/lvl, T24) → R$ in one `levelMigrated`-gated pass, clearing the retired keys (level/xp/sp/spStats/cores). Old `{type,value}` gear left dormant (not broken; manually salvageable). +5 `account-migration.test.js`. Suite 2335 green.
-- [~] **T70** 🟡 Tests pass — **unit suite GREEN (~2373)**; new-module specs all present (Wave1/2). Fixed the QA-08b stash-commit test (T60 starter-kit interaction). **Remaining = UI-gated:** 12 stale PRE-PIVOT QA assertions (08-armory Cores/unlock + 31-build-flow `bulwark/medic absent`) test REMOVED systems — per the original note they await the wholesale QA rewrite once the BUILD UI settles (not churned now; do NOT mass-skip).
-- [ ] **T71** 🟡 Balance pass — **PLAYTEST-GATED.** First-pass constants are coherent by the models (income ≈39k/run vs FAB_BASE 300 / RARITY costs; levelRamp softcap 25; weaponLevelScale +4%/lvl; STARTER_RAINSHARDS 800; PER_LEVEL_RS 1500; THREAT_OFFSET ≤+50%). Real tuning needs play data — flagged tunables are commented `@T71` in source.
-- [~] **T72** 🔴 README/CHANGELOG/VERSION — **DONE (docs/version)**: VERSION 7.1.0→**8.0.0** (MAJOR overhaul); comprehensive `[8.0.0]` CHANGELOG entry; README top banner flagging the in-progress pivot. **PUSH/ship NOT done** — master = live deploy; the user's call (`git push origin master` when ready). Full README prose rewrite → at ship (with the settled UI).
+## EPIC E — HUD + text + dead-code cleanup
+- [ ] **E1** 🔴 CHEAP `hud/combat.js` — gate off the stale powerup pickup label (:269-329) + the timed powerup-indicator column (:331-463) for the looter model.
+- [ ] **E2** 🟡 CHEAP `hud/status.js` — "Coins Earned" (:479) → "Rainshards" / R$; relook the Game Complete "speedrun" framing (TIME/Refresh) as a looter run summary.
+- [ ] **E3** 🔴 CHEAP `wave/wave-manager.js` — remove the phantom `skillPoints += 1` + "+1 SP" toasts (:577,:770 — `skillPoints` is a dead field; real SP is `addXp`→`sp`); delete dead `completeWave` (:1310). PWR mid-run recompute: add `recomputePlayerPWR()` to `equipItem`/`socketMatrixAt`/`addPowerup`.
+- [ ] **E4** 🟡 CHEAP — Rainshards icon: replace the gold-coin sprite (`stats-overlay.js:337`) with an R$ glyph; remove vestigial ✦/⬢ Cores glyphs (`shop-dom.js:1338/1380/1417/1454/1497`) + dead `game.cores`/`meta.cores` plumbing (`updateShopCurrencyDom` :665).
+- [ ] **E5** 🟡 CHEAP `ui/static-dom.js` tutorial — replace "Spend gold in UPGRADES (🛒)" / "+% GOLD" / "survivor-card pick" (:124-136) with looter wording (loot/craft/draft); fix drifted weapon names.
+- [ ] **E6** 🔴 CHEAP dead-module deletion + hygiene — delete `combat/card-draft.js` + `world/run-shop.js` + `#wave-pick-overlay`/`#shop-suggest-overlay` DOM (inert; remove the stuck-wave recovery that can still fire the old card overlay at wave-manager:187-189); rename `world/cores.js` → a `crafting-costs`-style module (its cost math is live, only the name is stale); move `js/modules/autofire-diag.js` under `debug/`. README structure update.
 
-### Parallel dispatch map
-Wave 1 (T01–T09) all at once → Wave 2 (T10–T16, T40, T41) all at once → serial spine
-(T21 alone → T20/T22/T23 → T24→T25→T26→T29 → T27→T28→T30→T31→T32→T33 → T34/T35) →
-UI (T42/T43/T45 serial, T44 parallel) → T60→T61→T70→T71→T72.
-**Contended files** (never double-dispatch): `game-engine.js`, `player.js`,
-`progression.js`, `combat-manager.js`, `wave-manager.js`, `shop-dom.js`,
-`inventory-overlay.js`.
+## EPIC F — Balance & ship (gated)
+- [ ] **F1** 🟡 Balance pass — PLAYTEST-GATED (income vs. crafting sink, `levelRamp` softcap, weapon/power level-scaling shape, draft difficulty budget, elite HP band). Tunables flagged `@T71` in source.
+- [ ] **F2** 🔴 Ship — full README prose rewrite (looter-shooter); CHANGELOG; `git push origin master` (live deploy = USER's call).
 
 ---
 
-# ✅ ARCHIVED — completed roadmaps (detail in CHANGELOG + docs/)
-- **Combat-Depth / Director §14** — FIX-01..04 + DIR-01..10 COMPLETE (verified 2026-05-26);
-  CD no-downsides + energy + blood + sustain kit COMPLETE (6.197→6.221); step-3
-  CD-17 telemetry + RUN-07 balance pass = playtest-gated.
-- **BOSS** (all 10 unique bosses), **ENMY** (enabling systems + 6 trick enemies +
-  Conduit/Juggernaut/Thornback), **RUN** (adaptive director live), **ITEM/META**
-  (tier-gated resists, Cores crafting) — all COMPLETE.
-- **P7 Mobile/Co-Pilot** — AS/FB/MB core COMPLETE (6.216→6.221); remaining MB-4/5/7 +
-  AS deferrals are device/eye-gated.
-- **7.x economy/locking/debug** — built (uncommitted): `?debug` mode, cheat removal,
-  radial gating, compact loadout UI, pause LOADOUT tab, health/tank/regen fixes,
-  1-4 controls. **Being folded into the Looter Pivot** (the locking/flat-gold/card
-  parts are reversed by Phase 0 above; the rest is kept).
+# ✅ ENGINE FOUNDATION — DONE (T01–T35, T60–T61; detail in git + CHANGELOG)
+*Built+tested on `master`, suite ~2348. These are the pure modules + engine hooks the
+COMPLETION board consumes. Inert until wired by the epics above.*
+
+- **Wave 1 data (T01–T09):** `income.js`, `crafting-costs.js`, `gear-scaling.js`,
+  `weapon-traits.js`, `matrix-data.js`, `item-templates.js`, `classes.js`,
+  `bounty-data.js`, `run-templates.js`.
+- **Wave 2 logic+UI (T10–T16, T40, T41):** `weapon-gen.js`, `gear-gen.js`,
+  `matrix-system.js`, `crafting.js`, `run-randomizer.js`, `bounty-engine.js`,
+  `class-system.js`, `draft-overlay.js`, `bounty-overlay.js`.
+- **Serial spine (T20–T35, T60–T61):** unlock-everything at boot
+  (`setAllUnlocked(true)`); Gold→R$ display rename (internal `money`/`accountGold`
+  retained); card-draft disabled (`fireSurvivorOverlay=false`); Cores eliminated at
+  the salvage/craft sites; per-run level/SP reset + banked→R$ migration; PWR
+  level/SP recompute (gear/loadout hook still MISSING → E3); gear `amplifySP`
+  getters + Matrix amp/resonance; income-scaled drops; weapons-as-loot core +
+  drops/Fabricate; stage-draft overlay wired into stage-clear (spawns DON'T read it
+  → EPIC A); class lens + signature aliases (mechanics NOT wired → EPIC B); stat
+  caps; starter kit; account migration.
+- **Partial UI (T42/T43/T45 `[~]`):** GEAR-tab Fabricate exists (on legacy cores
+  backend → D6); class-pick + bounty-board engine hooks exist but **no UI**
+  (→ D2/D7); draft + bounty overlays built (bounty orphaned → D7).
+
+> **Integration gotchas (still live):** (a) canonical rarity = the **1–8** ladder
+> (`RARITY_LADDER`), superseding the legacy 1–5 `RARITY_TIERS`. (b) doc "REGEN" =
+> real SP id `REGENERATION`. (c) `crafting-costs.js` keys rarities Capitalized;
+> gen/ladder modules use lowercase/tier-number — `crafting.js` normalizes.
+> (d) matrices have **no drop/stash source** yet — D5 adds `meta.matrixStash`.
+> (e) `equipPowerWeaponItem` doesn't exist until C2 — D4 feature-detects it.
+
+---
+
+# ✅ ARCHIVED — pre-pivot roadmaps (detail in CHANGELOG + docs/)
+- **Combat-Depth / Director §14** — FIX-01..04 + DIR-01..10 COMPLETE; CD kit
+  (no-downsides, energy, blood, sustain) COMPLETE (6.197→6.221).
+- **BOSS** (10 unique bosses), **ENMY** (6 trick enemies + Conduit/Juggernaut/
+  Thornback + enabling systems), **RUN** (adaptive director), **ITEM/META**
+  (tier-gated resists, Cores crafting — now folded into R$) — COMPLETE.
+- **P7 Mobile/Co-Pilot** — AS/FB/MB core COMPLETE; remaining device/eye-gated.
+- **7.x economy/locking/debug** — folded into the pivot (locking/flat-gold/card
+  parts reversed; `?debug`, compact loadout, 1-4 controls kept).
 - Older plans (multiplayer, WebGL, mobile, refactors, perf) → `docs/` + `CHANGELOG.md`.

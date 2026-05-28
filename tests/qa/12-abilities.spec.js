@@ -45,10 +45,10 @@ test.describe('QA-12: R6.3 new abilities', () => {
         expect(marked === true || marked === 'no-enemy').toBe(true);
     });
 
-    test('owned abilities appear as rows in the BUILD DEFENSE cluster', async ({ page }) => {
+    test('owned abilities appear as rows in the BUILD ABILITIES cluster', async ({ page }) => {
         // 7.0.0 — the compact BUILD list shows ONLY owned abilities (abilities
         // are purchase-locked). Seed them as owned, then they render as
-        // `.shop-node--parent` equip rows in the DEFENSE cluster.
+        // `.shop-node--parent` equip rows in the ABILITIES cluster.
         const ids = await page.evaluate(() => {
             const ge = window.gameEngine;
             localStorage.setItem('rainboidsMeta', JSON.stringify({
@@ -56,7 +56,7 @@ test.describe('QA-12: R6.3 new abilities', () => {
             }));
             ge.game.accountGold = 99999;
             ge.openArmory();
-            return [...document.querySelectorAll('#shop-tree-defense .shop-node--parent')]
+            return [...document.querySelectorAll('#shop-tree-abilities .shop-node--parent')]
                 .map((n) => n.dataset.id);
         });
         expect(ids).toContain('BLINK');
