@@ -17,7 +17,9 @@ async function openAssistsTab(page) {
     await startGame(page);
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
-    await page.click('.pause-tab[data-tab="assists"]');
+    // 8.27.0 — ASSISTS is a SETTINGS sub-tab now.
+    await page.click('.pause-tab[data-tab="settings"]');
+    await page.click('.settings-subtab[data-subtab="assists"]');
     await expect(page.locator('#assists-tab')).toHaveClass(/active/);
 }
 

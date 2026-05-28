@@ -1712,6 +1712,45 @@ button:not([disabled]),
     display: block;
 }
 
+/* 8.27.0 — SETTINGS sub-tabs + sub-panels (Controls/Gamepad/Assists/Display/
+   Music/SFX consolidated under one SETTINGS pause tab). A lighter, smaller
+   strip than the top-level pause tabs. */
+.settings-subtabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.settings-subtab {
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #cfd6e6;
+    cursor: pointer;
+    font-family: var(--font-header);
+    font-size: calc(13px * var(--font-header-scale, 1));
+    border-radius: 5px;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.settings-subtab:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+.settings-subtab.active {
+    background: rgba(120, 180, 255, 0.22);
+    border-color: #66b0ff;
+    color: #fff;
+    box-shadow: 0 0 10px rgba(102, 176, 255, 0.35);
+}
+.settings-subcontent { width: 100%; }
+.settings-subpanel { display: none; }
+.settings-subpanel.active { display: block; }
+
 /* 5.79.40 — Detailed pause-tab h2 styling moved up to the
    `.pause-tab-content > h2` rule (gold-gradient + tapered
    underline). This stub stays only to preserve the

@@ -255,61 +255,75 @@ function _buildPauseMenu() {
     // re-hides it on disconnect — see game-engine._refreshGamepadTabVisibility().
     const mobile = isMobile();
     const tabs = el('div', { className: 'pause-tabs' });
+    // 8.27.0 — declutter: gameplay tabs stay top-level; the six settings panels
+    // (Controls/Gamepad/Assists/Display/Music/SFX) collapse under one SETTINGS
+    // tab (built below). INVENTORY opens the overlay (handled specially).
     const tabDefs = [
+        { key: 'stats',     label: 'STATS', active: true },
+        { key: 'abilities', label: 'ABILITIES' },
+        { key: 'passives',  label: 'PASSIVES' },
+        { key: 'keystones', label: 'KEYSTONES' },
+        { key: 'inventory', label: 'INVENTORY' },
+        { key: 'settings',  label: 'SETTINGS' },
+    ];
+    for (const t of tabDefs) {
+        const b = el('button', { className: 'pause-tab' + (t.active ? ' active' : ''), text: t.label });
+        b.dataset.tab = t.key;
+        tabs.appendChild(b);
+    }
+    menu.appendChild(tabs);
+
+    // ── Top-level tab content stubs ──
+    // STATS tab — populated by ui-manager.updateStatsTab() (SP-allocation card).
+    menu.appendChild(el('div', { id: 'stats-tab',    className: 'pause-tab-content active' }));
+    // ABILITIES / PASSIVES / KEYSTONES — circle-icon catalogs (ui-manager).
+    menu.appendChild(el('div', { id: 'abilities-tab', className: 'pause-tab-content' }));
+    menu.appendChild(el('div', { id: 'passives-tab', className: 'pause-tab-content' }));
+    menu.appendChild(el('div', { id: 'keystones-tab', className: 'pause-tab-content' }));
+
+    // ── SETTINGS tab (8.27.0) — Controls / Gamepad / Assists / Display / Music
+    // / SFX as SUB-tabs. Each sub-panel keeps its original id so ui-manager's
+    // getElementById wiring is untouched, but uses `.settings-subpanel` so the
+    // global pause-tab switch ignores it; the sub-strip toggles which shows.
+    const settingsTab = el('div', { id: 'settings-tab', className: 'pause-tab-content' });
+    const subStrip = el('div', { id: 'settings-subtabs', className: 'settings-subtabs' });
+    const subDefs = [
         { key: 'controls', label: 'CONTROLS', active: true },
         { key: 'gamepad',  label: 'GAMEPAD' },
-        { key: 'stats',    label: 'STATS' },
-        // 8.25.0 — the LOADOUT tab was removed; weapons are equipped via the
-        // INVENTORY now (button below opens that overlay).
-        { key: 'abilities', label: 'ABILITIES' },
-        { key: 'passives', label: 'PASSIVES' },
-        // 8.24.0 — build-defining KEYSTONE TRAITS, picked at L10/L20.
-        { key: 'keystones', label: 'KEYSTONES' },
-        // 8.25.0 — opens the full INVENTORY overlay (handled specially, not a
-        // content tab). The 'I' key opens the same screen in-game.
-        { key: 'inventory', label: 'INVENTORY' },
         { key: 'assists',  label: 'ASSISTS' },
         { key: 'display',  label: 'DISPLAY' },
         { key: 'music',    label: 'MUSIC' },
         { key: 'sfx',      label: 'SFX' },
     ];
-    for (const t of tabDefs) {
-        const b = el('button', { className: 'pause-tab' + (t.active ? ' active' : ''), text: t.label });
-        b.dataset.tab = t.key;
-        // Hide the ASSISTS button by default on mobile; the engine reveals
-        // it when a gamepad connects (and re-hides on disconnect).
-        if (t.key === 'assists' && mobile) b.style.display = 'none';
-        // The GAMEPAD button is always hidden until a pad is detected.
-        if (t.key === 'gamepad') b.style.display = 'none';
-        tabs.appendChild(b);
+    for (const s of subDefs) {
+        const b = el('button', { className: 'settings-subtab' + (s.active ? ' active' : ''), text: s.label });
+        b.dataset.subtab = s.key;
+        // Same gating as before, now on the sub-tab buttons (game-engine's
+        // refreshers target these): ASSISTS hidden on mobile until a pad
+        // connects; GAMEPAD hidden until a pad is detected.
+        if (s.key === 'assists' && mobile) b.style.display = 'none';
+        if (s.key === 'gamepad') b.style.display = 'none';
+        subStrip.appendChild(b);
     }
-    menu.appendChild(tabs);
+    settingsTab.appendChild(subStrip);
 
-    // ── Tab content stubs ──
-    menu.appendChild(el('div', { id: 'controls-tab', className: 'pause-tab-content active' }));
-    // GAMEPAD tab — static control reference, shown only while a pad is
-    // connected (button visibility gates access).
-    menu.appendChild(_buildGamepadTab());
-    // STATS tab — populated by ui-manager.updateStatsTab() with the
-    // shared SP-allocation card (passive stat icons + [−]/[+] controls).
-    menu.appendChild(el('div', { id: 'stats-tab',    className: 'pause-tab-content' }));
-    // 8.25.0 — LOADOUT tab removed (weapons equipped via the INVENTORY overlay).
-    // ABILITIES tab — populated by ui-manager.updateAbilitiesTab(): owned-only
-    // abilities as circle-icon rows, equip into the 4 slots (8.23.0).
-    menu.appendChild(el('div', { id: 'abilities-tab', className: 'pause-tab-content' }));
-    // PASSIVES tab — populated by ui-manager.updatePassivesTab(): the in-run
-    // swap panel (assign owned MODULAR passives to unlocked slots; P5b).
-    menu.appendChild(el('div', { id: 'passives-tab', className: 'pause-tab-content' }));
-    // KEYSTONES tab — populated by ui-manager.updateKeystoneTab(): the keystone
-    // TRAITS catalog; pick one at L10/L20, equip/unequip (budget 2). 8.24.0.
-    menu.appendChild(el('div', { id: 'keystones-tab', className: 'pause-tab-content' }));
-    // Assists tab content is always built (the toggles are needed for the
-    // mobile-with-gamepad case); the tab button's visibility is what gates
-    // access on mobile.
-    menu.appendChild(_buildAssistsTab());
-    menu.appendChild(_buildDisplayTab());
-    menu.appendChild(_buildMusicTab());
-    menu.appendChild(_buildSfxTab());
+    const subContent = el('div', { className: 'settings-subcontent' });
+    // Controls stub (populated by updateControlsTab) + the built setting panels.
+    // Reclass each to `.settings-subpanel` (built as `.pause-tab-content`).
+    const panels = [
+        el('div', { id: 'controls-tab' }),
+        _buildGamepadTab(),
+        _buildAssistsTab(),
+        _buildDisplayTab(),
+        _buildMusicTab(),
+        _buildSfxTab(),
+    ];
+    panels.forEach((p, i) => {
+        p.className = 'settings-subpanel' + (i === 0 ? ' active' : '');
+        subContent.appendChild(p);
+    });
+    settingsTab.appendChild(subContent);
+    menu.appendChild(settingsTab);
 }
 
 // DISPLAY tab — font (typography) settings. Reuses the shared font-picker

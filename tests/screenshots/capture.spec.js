@@ -299,8 +299,9 @@ test.describe('Blog article screenshots', () => {
         });
         await tick(page, 20);
         await page.evaluate(() => {
-            const btn = document.querySelector('.pause-tab[data-tab="music"]');
-            if (btn) btn.click();
+            // 8.27.0 — MUSIC is a SETTINGS sub-tab now.
+            document.querySelector('.pause-tab[data-tab="settings"]')?.click();
+            document.querySelector('.settings-subtab[data-subtab="music"]')?.click();
         });
         await tick(page, 30);
         await page.screenshot({ path: shot('10-music-player'), fullPage: false });

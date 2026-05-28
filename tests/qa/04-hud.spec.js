@@ -89,13 +89,15 @@ test.describe('QA-04: HUD and UI', () => {
     // Pause menu content
     // ------------------------------------------------------------------
 
-    test('pause menu has CONTROLS tab', async ({ page }) => {
+    // 8.27.0 — Controls/Music/SFX are SETTINGS sub-tabs now (declutter). Open
+    // the SETTINGS tab, then the sub-tab buttons are visible.
+    test('the SETTINGS tab holds the CONTROLS sub-tab', async ({ page }) => {
         await startGame(page);
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
 
-        const tab = page.locator('.pause-tab', { hasText: 'CONTROLS' });
-        await expect(tab).toBeVisible();
+        await page.click('.pause-tab[data-tab="settings"]');
+        await expect(page.locator('.settings-subtab[data-subtab="controls"]')).toBeVisible();
     });
 
     // NOTE: the POWERUPS pause-menu tab was removed in 6.1.0 — powerups are
@@ -103,22 +105,22 @@ test.describe('QA-04: HUD and UI', () => {
     // "pause menu has POWERUPS tab" / "clicking POWERUPS tab" tests were
     // removed as obsolete.
 
-    test('pause menu has MUSIC tab', async ({ page }) => {
+    test('the SETTINGS tab holds the MUSIC sub-tab', async ({ page }) => {
         await startGame(page);
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
 
-        const tab = page.locator('.pause-tab', { hasText: 'MUSIC' });
-        await expect(tab).toBeVisible();
+        await page.click('.pause-tab[data-tab="settings"]');
+        await expect(page.locator('.settings-subtab[data-subtab="music"]')).toBeVisible();
     });
 
-    test('pause menu has SFX tab', async ({ page }) => {
+    test('the SETTINGS tab holds the SFX sub-tab', async ({ page }) => {
         await startGame(page);
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
 
-        const tab = page.locator('.pause-tab', { hasText: 'SFX' });
-        await expect(tab).toBeVisible();
+        await page.click('.pause-tab[data-tab="settings"]');
+        await expect(page.locator('.settings-subtab[data-subtab="sfx"]')).toBeVisible();
     });
 
     test('RESUME button in pause menu resumes the game', async ({ page }) => {
@@ -142,7 +144,9 @@ test.describe('QA-04: HUD and UI', () => {
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
 
-        await page.click('.pause-tab[data-tab="music"]');
+        // 8.27.0 — MUSIC is a SETTINGS sub-tab now.
+        await page.click('.pause-tab[data-tab="settings"]');
+        await page.click('.settings-subtab[data-subtab="music"]');
         const content = page.locator('#music-tab');
         await expect(content).toHaveClass(/active/);
     });

@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.27.0] - 2026-05-28
+
+### Changed
+- **Pause menu decluttered into a SETTINGS tab.** Controls, Gamepad, Assists,
+  Display, Music, and SFX are no longer six separate top-level tabs — they're
+  now **sub-tabs under a single SETTINGS tab**, leaving a clean top-level row of
+  STATS · ABILITIES · PASSIVES · KEYSTONES · INVENTORY · SETTINGS. Each settings
+  sub-panel keeps its id/wiring; a sub-tab strip switches between them, and the
+  gamepad/assists visibility gating now targets the sub-tab buttons.
+
 ## [8.26.0] - 2026-05-28
 
 ### Added

@@ -23,7 +23,9 @@ test.describe('E2E-04: Music player', () => {
             () => window.gameEngine?.game?.state === 'PAUSED',
             { timeout: 5_000 }
         );
-        await page.click('.pause-tab[data-tab="music"]');
+        // 8.27.0 — MUSIC is a SETTINGS sub-tab now.
+        await page.click('.pause-tab[data-tab="settings"]');
+        await page.click('.settings-subtab[data-subtab="music"]');
         // Give the tab content time to render
         await page.waitForTimeout(200);
     }

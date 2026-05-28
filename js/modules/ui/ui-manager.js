@@ -1841,6 +1841,12 @@ export class UIManager {
             });
         });
 
+        // 8.27.0 — SETTINGS sub-tab buttons (Controls/Gamepad/Assists/Display/
+        // Music/SFX). Separate class from `.pause-tab`, so wire them here.
+        document.querySelectorAll('.settings-subtab').forEach((b) => {
+            b.addEventListener('click', () => this.setSettingsSubTab(b.dataset.subtab));
+        });
+
         // Assists toggles (5.74) — read initial state from the engine and
         // persist changes back through setAssist (which writes localStorage).
         const wireAssist = (el, key) => {
@@ -2092,11 +2098,12 @@ export class UIManager {
     // hidden while it's the active tab, fall back to CONTROLS so the menu
     // doesn't show an empty body.
     setAssistsTabVisible(visible) {
-        const btn = document.querySelector('.pause-tab[data-tab="assists"]');
+        // 8.27.0 — ASSISTS is a SETTINGS sub-tab now.
+        const btn = document.querySelector('.settings-subtab[data-subtab="assists"]');
         if (!btn) return;
         btn.style.display = visible ? '' : 'none';
         if (!visible && btn.classList.contains('active')) {
-            this.switchTab('controls');
+            this.setSettingsSubTab('controls');
         }
     }
 
@@ -2105,11 +2112,12 @@ export class UIManager {
     // game-engine._refreshGamepadTabVisibility(). Falls back to CONTROLS if
     // it's hidden while active so the menu never shows an empty body.
     setGamepadTabVisible(visible) {
-        const btn = document.querySelector('.pause-tab[data-tab="gamepad"]');
+        // 8.27.0 — GAMEPAD is a SETTINGS sub-tab now.
+        const btn = document.querySelector('.settings-subtab[data-subtab="gamepad"]');
         if (!btn) return;
         btn.style.display = visible ? '' : 'none';
         if (!visible && btn.classList.contains('active')) {
-            this.switchTab('controls');
+            this.setSettingsSubTab('controls');
         }
     }
 
@@ -2170,27 +2178,35 @@ export class UIManager {
             content.classList.toggle('active', content.id === `${tabName}-tab`);
         });
         
-        if (tabName === 'music') {
-            this.syncMusicPlayerState();
-        }
-
         // Refresh equip lists when their tabs are opened.
         if (tabName === 'abilities') this.updateAbilitiesTab();
         if (tabName === 'passives') this.updatePassivesTab();
         if (tabName === 'keystones') this.updateKeystoneTab();
         if (tabName === 'stats') this.updateStatsTab();
-        if (tabName === 'assists') this.syncAssistsTab();
-        if (tabName === 'gamepad' && this.gameEngine) {
-            this.updateControlSchemeSelector(this.gameEngine.controlScheme, this.gameEngine.altControlScheme);
-            this.refreshGamepadGlyphs(); // GP-3 — show glyphs for the connected pad's family
+        // 8.27.0 — opening SETTINGS re-syncs whichever sub-tab is active
+        // (Controls/Gamepad/Assists/Display/Music/SFX live under it now).
+        if (tabName === 'settings') {
+            const activeSub = document.querySelector('.settings-subtab.active');
+            this.setSettingsSubTab(activeSub ? activeSub.dataset.subtab : 'controls');
         }
+    }
 
-        // 6.1.0 — Powerups tab moved to the shop overlay; no
-        // pause-menu powerups-tab to re-render.
-
-        // 6.225.4 — RUN TIMER tab removed from the pause menu. The
-        // speedrun-tier scoring still drives the Game Complete screen;
-        // it just isn't surfaced as a mid-run pause panel anymore.
+    // 8.27.0 — switch the active SETTINGS sub-tab (Controls/Gamepad/Assists/
+    // Display/Music/SFX). Mirrors switchTab but scoped to `.settings-subpanel`,
+    // and fires the same per-panel syncs the top-level tabs used to.
+    setSettingsSubTab(name) {
+        if (!name) return;
+        document.querySelectorAll('.settings-subtab').forEach((b) =>
+            b.classList.toggle('active', b.dataset.subtab === name));
+        document.querySelectorAll('.settings-subpanel').forEach((p) =>
+            p.classList.toggle('active', p.id === `${name}-tab`));
+        if (name === 'controls') this.updateControlsTab();
+        if (name === 'music') this.syncMusicPlayerState();
+        if (name === 'assists') this.syncAssistsTab();
+        if (name === 'gamepad' && this.gameEngine) {
+            this.updateControlSchemeSelector(this.gameEngine.controlScheme, this.gameEngine.altControlScheme);
+            this.refreshGamepadGlyphs();
+        }
     }
 
     startMusic() {

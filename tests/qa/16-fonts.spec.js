@@ -152,9 +152,10 @@ test.describe('QA-16: font system + SETTINGS', () => {
         expect(r.saved).toBe('roboto');
     });
 
-    test('the pause menu has a DISPLAY tab with the font pickers', async ({ page }) => {
+    test('the pause menu has a DISPLAY settings sub-tab with the font pickers', async ({ page }) => {
+        // 8.27.0 — DISPLAY is a sub-tab under the SETTINGS pause tab now.
         const r = await page.evaluate(() => {
-            const tabBtn = document.querySelector('.pause-tab[data-tab="display"]');
+            const tabBtn = document.querySelector('.settings-subtab[data-subtab="display"]');
             const content = document.getElementById('display-tab');
             const selects = content ? content.querySelectorAll('.font-select') : [];
             return { tab: !!tabBtn, content: !!content, selects: selects.length };

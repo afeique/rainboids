@@ -76,20 +76,24 @@ test.describe('E2E-01: Title screen and pause menu', () => {
             await expect(page.locator('#pause-resume-button')).toBeVisible();
         });
 
-        test('CONTROLS tab is visible', async ({ page }) => {
-            await expect(page.locator('.pause-tab[data-tab="controls"]')).toBeVisible();
+        test('CONTROLS sub-tab is visible under SETTINGS', async ({ page }) => {
+            // 8.27.0 — Controls is a SETTINGS sub-tab now.
+            await page.click('.pause-tab[data-tab="settings"]');
+            await expect(page.locator('.settings-subtab[data-subtab="controls"]')).toBeVisible();
         });
 
         test('POWERUPS tab is visible', async ({ page }) => {
             await expect(page.locator('.pause-tab[data-tab="powerups"]')).toBeVisible();
         });
 
-        test('MUSIC tab is visible', async ({ page }) => {
-            await expect(page.locator('.pause-tab[data-tab="music"]')).toBeVisible();
+        test('MUSIC sub-tab is visible under SETTINGS', async ({ page }) => {
+            await page.click('.pause-tab[data-tab="settings"]');
+            await expect(page.locator('.settings-subtab[data-subtab="music"]')).toBeVisible();
         });
 
-        test('SFX tab is visible', async ({ page }) => {
-            await expect(page.locator('.pause-tab[data-tab="sfx"]')).toBeVisible();
+        test('SFX sub-tab is visible under SETTINGS', async ({ page }) => {
+            await page.click('.pause-tab[data-tab="settings"]');
+            await expect(page.locator('.settings-subtab[data-subtab="sfx"]')).toBeVisible();
         });
     });
 
@@ -118,20 +122,23 @@ test.describe('E2E-01: Title screen and pause menu', () => {
             await expect(page.locator('#powerups-tab')).toHaveClass(/active/);
         });
 
-        test('clicking MUSIC tab activates music content panel', async ({ page }) => {
-            await page.click('.pause-tab[data-tab="music"]');
+        test('clicking the MUSIC sub-tab activates the music content panel', async ({ page }) => {
+            // 8.27.0 — Music/SFX/Controls are SETTINGS sub-tabs now.
+            await page.click('.pause-tab[data-tab="settings"]');
+            await page.click('.settings-subtab[data-subtab="music"]');
             await expect(page.locator('#music-tab')).toHaveClass(/active/);
         });
 
-        test('clicking SFX tab activates sfx content panel', async ({ page }) => {
-            await page.click('.pause-tab[data-tab="sfx"]');
+        test('clicking the SFX sub-tab activates the sfx content panel', async ({ page }) => {
+            await page.click('.pause-tab[data-tab="settings"]');
+            await page.click('.settings-subtab[data-subtab="sfx"]');
             await expect(page.locator('#sfx-tab')).toHaveClass(/active/);
         });
 
-        test('clicking CONTROLS tab re-activates controls panel', async ({ page }) => {
-            // Switch away first
-            await page.click('.pause-tab[data-tab="music"]');
-            await page.click('.pause-tab[data-tab="controls"]');
+        test('clicking the CONTROLS sub-tab re-activates the controls panel', async ({ page }) => {
+            await page.click('.pause-tab[data-tab="settings"]');
+            await page.click('.settings-subtab[data-subtab="music"]'); // switch away first
+            await page.click('.settings-subtab[data-subtab="controls"]');
             await expect(page.locator('#controls-tab')).toHaveClass(/active/);
         });
     });
@@ -187,7 +194,9 @@ test.describe('E2E-01: Title screen and pause menu', () => {
             await startGame(page);
             await page.keyboard.press('Escape');
             await page.waitForFunction(() => window.gameEngine?.game?.state === 'PAUSED', { timeout: 5_000 });
-            await page.click('.pause-tab[data-tab="music"]');
+            // 8.27.0 — MUSIC is a SETTINGS sub-tab now.
+            await page.click('.pause-tab[data-tab="settings"]');
+            await page.click('.settings-subtab[data-subtab="music"]');
         });
 
         test('music player element is present', async ({ page }) => {
