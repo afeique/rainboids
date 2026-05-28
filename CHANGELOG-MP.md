@@ -7,6 +7,16 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.41.0] - 2026-05-28
+
+### Added
+- **Beautiful drops + collection sparkle (look-like-SP step).** The flat pickup
+  shapes (a green cross / a gold square) are replaced by single-player-style
+  collectibles: **health** is a pulsing green glass orb with an additive glow and
+  a white "+", **gold** is a spinning gem with a gold facet gradient and an
+  additive glow. Collecting a drop bursts a short sparkle (green for health, gold
+  for credits) from the pickup point (`DROP_COLLECTED` carries the position).
+
 ## [0.40.0] - 2026-05-28
 
 ### Added

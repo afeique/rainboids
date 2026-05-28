@@ -270,6 +270,25 @@ async function main() {
     }
   }
 
+  // Sparkle burst when a drop is collected — green for health, gold for credits.
+  function spawnCollectSparkle(x, y, kind) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const hue = kind === 'gold' ? 46 + Math.random() * 10 : 128 + Math.random() * 18;
+    const n = 8 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 0.06 + Math.random() * 0.18;
+      particles.push({
+        x, y,
+        vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd - 0.03,
+        born: performance.now(),
+        life: 260 + Math.random() * 240,
+        size: 1.0 + Math.random() * 1.4,
+        hue,
+      });
+    }
+  }
+
   // Floating "-N" damage number at a hit (world space, drifts up + fades).
   function spawnDamageNumber(x, y, amount) {
     if (!Number.isFinite(x) || !Number.isFinite(y) || amount <= 0) return;
@@ -424,6 +443,7 @@ async function main() {
               audio.playPowerup();
               break;
             case EV.DROP_COLLECTED:
+              spawnCollectSparkle(p.x, p.y, p.kind);
               if (p.kind === 'gold') audio.playCoin(); else audio.playPowerup();
               break;
             case EV.WAVE_START:

@@ -315,17 +315,47 @@ function drawEnemy(ctx, e, now, hit = 0) {
   }
 }
 
-function drawDrop(ctx, d) {
+function drawDrop(ctx, d, now) {
+  const t = (now || 0) / 1000;
   if (d.kind === 'health') {
-    ctx.fillStyle = '#73e08a';
-    ctx.fillRect(d.x - 7, d.y - 2, 14, 4);
-    ctx.fillRect(d.x - 2, d.y - 7, 4, 14);
-  } else { // gold
+    // Pulsing green glass orb with a white "+" — SP health pickup.
+    const pulse = 0.85 + 0.15 * Math.sin(t * 4 + d.x * 0.05);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const gl = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, 13 * pulse);
+    gl.addColorStop(0, 'rgba(120,255,160,0.55)');
+    gl.addColorStop(1, 'rgba(80,220,120,0)');
+    ctx.fillStyle = gl;
+    ctx.beginPath(); ctx.arc(d.x, d.y, 13 * pulse, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    const core = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, 6);
+    core.addColorStop(0, 'rgba(235,255,240,0.95)');
+    core.addColorStop(1, 'rgba(80,210,120,0.9)');
+    ctx.fillStyle = core;
+    ctx.beginPath(); ctx.arc(d.x, d.y, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fillRect(d.x - 4, d.y - 1.2, 8, 2.4);
+    ctx.fillRect(d.x - 1.2, d.y - 4, 2.4, 8);
+  } else { // gold — spinning gem with an additive glow
+    const spin = t * 1.8 + d.x * 0.05;
+    const pulse = 0.85 + 0.15 * Math.sin(t * 5 + d.y * 0.05);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const gl = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, 12 * pulse);
+    gl.addColorStop(0, 'rgba(255,220,90,0.55)');
+    gl.addColorStop(1, 'rgba(255,180,40,0)');
+    ctx.fillStyle = gl;
+    ctx.beginPath(); ctx.arc(d.x, d.y, 12 * pulse, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
     ctx.save();
     ctx.translate(d.x, d.y);
-    ctx.rotate(Math.PI / 4);
-    ctx.fillStyle = '#ffd23f';
-    ctx.fillRect(-6, -6, 12, 12);
+    ctx.rotate(spin);
+    const g = ctx.createLinearGradient(0, -7, 0, 7);
+    g.addColorStop(0, '#fff3b0'); g.addColorStop(0.5, '#ffd23f'); g.addColorStop(1, '#b8860b');
+    ctx.fillStyle = g; ctx.strokeStyle = '#fff7cc'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -7); ctx.lineTo(6, 0); ctx.lineTo(0, 7); ctx.lineTo(-6, 0); ctx.closePath();
+    ctx.fill(); ctx.stroke();
     ctx.restore();
   }
 }
@@ -379,7 +409,7 @@ export function render(ctx, canvas, { localShip, remoteShips, asteroids, enemies
 
   // Drops (interpolated).
   if (drops) {
-    for (const [, d] of drops) drawDrop(ctx, d);
+    for (const [, d] of drops) drawDrop(ctx, d, now);
   }
 
   // Bullets — interpolated, with a tapered motion trail + clean colored glow.
