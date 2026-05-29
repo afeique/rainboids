@@ -17,6 +17,7 @@ import {
     RARITY_LADDER,
     ITEM_TEMPLATES,
     affixPoolForSlot,
+    ALL_GEAR_STATS,
 } from './item-templates.js';
 import { SLOT_ORDER } from './item-names.js';
 
@@ -165,12 +166,29 @@ export function rollGear({
     const pool = affixPoolForSlot(resolvedTemplate, resolvedSlot);
     const drawStat = _makeStatDrawer(rng, pool, lean, focus);
 
-    // Roll `affixCount` affixes — each draws a stat type then a pct in band.
+    // Roll `affixCount` affixes, each a UNIQUE stat (no item ever carries two of
+    // the same stat). 8.31.0: the FIRST affix is the biased draw (focus / lean
+    // headline / weighted) so item identity is preserved; the rest fill from an
+    // ordered set — the curated slot pool first (stays on-theme), then the
+    // broader ALL_GEAR_STATS overflow — skipping anything already used. This
+    // keeps the affixCount contract AND uniqueness even when the slot's curated
+    // pool is tiny (e.g. hull = just HEALTH → high-rarity hull spills into
+    // TOUGHNESS/REGEN/… rather than stacking duplicate HEALTH).
     const affixes = [];
-    for (let i = 0; i < row.affixCount; i++) {
-        const stat = drawStat();
-        if (stat === undefined) continue; // empty pool — emit nothing
-        affixes.push({ stat, pct: _rollPct(rng, row.pctMin, row.pctMax) });
+    const usedStats = new Set();
+    const first = drawStat();
+    if (first !== undefined) {
+        usedStats.add(first);
+        affixes.push({ stat: first, pct: _rollPct(rng, row.pctMin, row.pctMax) });
+    }
+    if (first !== undefined) {
+        const orderedPool = [...pool, ...ALL_GEAR_STATS.filter((s) => !pool.includes(s))];
+        for (const stat of orderedPool) {
+            if (affixes.length >= row.affixCount) break;
+            if (usedStats.has(stat)) continue;
+            usedStats.add(stat);
+            affixes.push({ stat, pct: _rollPct(rng, row.pctMin, row.pctMax) });
+        }
     }
 
     const item = {

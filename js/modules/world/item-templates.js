@@ -167,6 +167,22 @@ export const SLOT_PERSONALITY = {
     nanites:   ['REGENERATION', 'CAPACITOR', 'REACTOR', 'EFFICIENCY', 'VAMPIRISM'],
 };
 
+// 8.31.0 — the union of every slot-personality stat: the broad "gear-reasonable"
+// stat set. High rarities (affixCount up to 8) overflow into this once their
+// small curated pool is exhausted, so an item can carry `affixCount` UNIQUE-stat
+// affixes (no duplicates) without inventing un-gear-like stats. Order is stable
+// for deterministic overflow.
+export const ALL_GEAR_STATS = (() => {
+    const seen = new Set();
+    const out = [];
+    for (const slot of Object.keys(SLOT_PERSONALITY)) {
+        for (const stat of SLOT_PERSONALITY[slot]) {
+            if (!seen.has(stat)) { seen.add(stat); out.push(stat); }
+        }
+    }
+    return out;
+})();
+
 // The template's affix pool ∩ the slot's personality stats. Falls back to the
 // full pool when the intersection is empty (so a slot never has nothing to
 // roll — §2.1 "keep it simple"). Unknown template/slot → [].

@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.31.0] - 2026-05-28
+
+### Fixed
+- **Gear affixes are now always unique stats** — no item ever rolls two of the
+  same stat (double Crit%, double Speed, …). `rollGear` rolls the headline affix
+  with its usual bias (focus / lean), then fills the remaining slots with
+  *distinct* stats — the curated slot pool first (stays on-theme), overflowing
+  into the broader gear-stat set (`ALL_GEAR_STATS`) only when a high rarity
+  needs more affixes than its small pool holds. The `affixCount` per rarity and
+  the per-affix % band are unchanged, so item power is preserved; this flows
+  through every path (drops, fabrication, Cores reroll, tier-up). `focus`/`Pure`
+  now pin the *headline* affix rather than cloning one stat across all of them.
+
 ## [8.30.0] - 2026-05-28
 
 ### Changed

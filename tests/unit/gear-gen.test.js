@@ -23,6 +23,7 @@ import {
     RARITY_LADDER,
     ITEM_TEMPLATES,
     affixPoolForSlot,
+    ALL_GEAR_STATS,
 } from '../../js/modules/world/item-templates.js';
 import { SLOT_ORDER } from '../../js/modules/world/item-names.js';
 
@@ -128,19 +129,21 @@ describe('rollGear — pct band', () => {
 // rollGear — affixes come from the slot-appropriate pool
 // ---------------------------------------------------------------------------
 describe('rollGear — slot-appropriate affix pool', () => {
-    test('every affix stat is in affixPoolForSlot(template, slot)', () => {
+    test('every affix is a valid gear stat (curated pool → broader overflow) and all stats are UNIQUE', () => {
+        // 8.31.0 — high rarities can carry more affixes than the small curated
+        // pool holds, so they overflow into ALL_GEAR_STATS; every affix must
+        // still be a real gear stat AND no stat repeats on one item.
         for (const slot of SLOT_ORDER) {
             for (const tpl of ITEM_TEMPLATES) {
-                const pool = affixPoolForSlot(tpl.id, slot);
                 const item = rollGear({
                     slot,
                     rarity: 'epic', // 5 affixes — good coverage
                     template: tpl.id,
                     rng: seqRng([0.05, 0.2, 0.45, 0.7, 0.95, 0.15, 0.35, 0.55, 0.75]),
                 });
-                item.affixes.forEach((a) => {
-                    expect(pool).toContain(a.stat);
-                });
+                const stats = item.affixes.map((a) => a.stat);
+                stats.forEach((s) => expect(ALL_GEAR_STATS).toContain(s));
+                expect(new Set(stats).size).toBe(stats.length); // no duplicate stat
             }
         }
     });
@@ -150,8 +153,10 @@ describe('rollGear — slot-appropriate affix pool', () => {
 // rollGear — lean / focus biasing ("narrow types, never values")
 // ---------------------------------------------------------------------------
 describe('rollGear — focus pins the stat type', () => {
-    test('focus on a pool stat yields that stat on every affix', () => {
-        // cockpit + assassin pool = [CRIT_CHANCE, CRIT_DAMAGE, SPEED]
+    test('focus pins the HEADLINE (first) affix to that stat; the rest fill UNIQUE', () => {
+        // 8.31.0 — focus no longer clones one stat across every affix (that made
+        // duplicate-stat items). It guarantees the focus stat is PRESENT as the
+        // first/headline affix; the remaining affixes are distinct stats.
         const item = rollGear({
             slot: 'cockpit',
             rarity: 'epic',
@@ -159,10 +164,9 @@ describe('rollGear — focus pins the stat type', () => {
             focus: 'SPEED',
             rng: seqRng([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]),
         });
-        item.affixes.forEach((a) => expect(a.stat).toBe('SPEED'));
-        // pct still varies across the affixes (values still roll).
-        const pcts = new Set(item.affixes.map((a) => a.pct));
-        expect(pcts.size).toBeGreaterThan(1);
+        expect(item.affixes[0].stat).toBe('SPEED'); // focus = headline
+        const stats = item.affixes.map((a) => a.stat);
+        expect(new Set(stats).size).toBe(stats.length); // all unique
     });
 
     test('focus on a stat NOT in the pool is ignored (falls back to lean draw)', () => {
@@ -181,10 +185,11 @@ describe('rollGear — focus pins the stat type', () => {
 });
 
 describe('rollGear — lean biases selection', () => {
-    test("lean: 'Pure' collapses to the template headline stat", () => {
-        // assassin headline (pool[0] after slot filter) for cockpit = CRIT_CHANCE
+    test("lean: 'Pure' pins the HEADLINE (first) affix to the template headline; rest fill UNIQUE", () => {
+        // 8.31.0 — Pure focuses the headline stat as the first affix (not every
+        // affix — that produced duplicates); remaining affixes are distinct.
         const pool = affixPoolForSlot('assassin', 'cockpit');
-        const headline = pool[0];
+        const headline = pool[0]; // CRIT_CHANCE
         const item = rollGear({
             slot: 'cockpit',
             rarity: 'epic',
@@ -192,7 +197,9 @@ describe('rollGear — lean biases selection', () => {
             lean: 'Pure',
             rng: seqRng([0.1, 0.9, 0.3, 0.7, 0.5, 0.2, 0.8, 0.4, 0.6]),
         });
-        item.affixes.forEach((a) => expect(a.stat).toBe(headline));
+        expect(item.affixes[0].stat).toBe(headline);
+        const stats = item.affixes.map((a) => a.stat);
+        expect(new Set(stats).size).toBe(stats.length); // all unique
     });
 
     test("lean: 'None' allows variety across the pool", () => {
