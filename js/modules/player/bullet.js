@@ -941,15 +941,20 @@ export class Bullet {
         ctx.globalCompositeOperation = 'screen';
         ctx.fillStyle = visualData.glowColor;
 
+        // 8.32.0 — gorgeous comet trail: a quadratic-eased head reads as a
+        // bright, crisp core tapering smoothly into the tail, and the whole
+        // trail fades with the bullet's death (fadeFactor). Same number of
+        // fills as before — perf-neutral. (Visual polish; needs eyeball confirm.)
+        const death = this.fadeFactor !== undefined ? this.fadeFactor : 1;
         // OPT: iterate ring buffer oldest→newest
         for (let i = 0; i < this.trailCount - 1; i++) {
             const idx = (this.trailHead - this.trailCount + i + this.maxTrailLength) % this.maxTrailLength;
             const segment = this.trail[idx];
             if (!segment) continue;
-            const alpha = (i + 1) / this.trailCount;
-            const size = visualData.size * alpha * 0.6;
+            const t = (i + 1) / this.trailCount; // 0 (tail) → ~1 (head)
+            const size = visualData.size * (0.22 + 0.6 * t);
 
-            ctx.globalAlpha = alpha * 0.7;
+            ctx.globalAlpha = (0.12 + 0.62 * t * t) * death;
             ctx.beginPath();
             ctx.arc(segment.x, segment.y, size, 0, 2 * Math.PI);
             ctx.fill();

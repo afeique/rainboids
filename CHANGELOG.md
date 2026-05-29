@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.32.0] - 2026-05-28
+
+### Changed
+- **Prettier player bullet trails.** The comet trail now uses a quadratic-eased
+  taper — a brighter, crisper head fading smoothly into the tail — and the whole
+  trail fades out with the bullet's death instead of cutting off. Same number of
+  draws (perf-neutral). (Conservative visual polish; the WebGL bullet body glow
+  and a fuller "gorgeous" pass — incl. enemy bullets — still want an in-game
+  visual review.)
+
 ## [8.31.0] - 2026-05-28
 
 ### Fixed
