@@ -843,6 +843,10 @@ export class SpHost {
       // the scalar tumble seed the client expands into its wireframe spin (the
       // client generates its own verts, exactly like the toy-sim path).
       a: round(a.rot3D ? a.rot3D.x : 0, 3), r: round(a.radius, 1),
+      // `hp` lets the client spark impact feedback when a shot damages a rock
+      // (SP sparks at the hit; the snapshot otherwise only shows the split). It
+      // changes only on hit, so the delta codec sends it sparsely.
+      hp: Math.ceil(a.health),
     }));
     // `c` = the SP bullet's weapon colour (constant per bullet, so the delta
     // codec only sends it on the bullet's first frame) — lets the client tint

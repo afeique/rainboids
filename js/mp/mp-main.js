@@ -232,6 +232,7 @@ async function main() {
   let flashWhite = 0; // 0..1
   let flashRed = 0;   // 0..1
   const prevEnemyHp = new Map(); // id → last-seen hp, for positioned hit sparks
+  const prevAstHp = new Map();   // asteroid id → last-seen hp, for impact sparks
 
   // Floating feedback (SP-style): world-space damage numbers + gold "+N" popups
   // that drift up and fade, plus a screen-space LEVEL UP! announce. All derived
@@ -407,6 +408,20 @@ async function main() {
             const live = new Set(full.enemies.map((e) => e.id));
             for (const id of prevEnemyHp.keys()) if (!live.has(id)) prevEnemyHp.delete(id);
             for (const id of enemyHitFlash.keys()) if (!live.has(id)) enemyHitFlash.delete(id);
+          }
+        }
+        // Asteroid impact sparks: a rock whose HP dropped this snapshot took a
+        // hit → spark at it (SP sparks at the bullet impact; the snapshot only
+        // otherwise shows the eventual split). Makes shooting rocks feel solid.
+        if (full.asteroids) {
+          for (const a of full.asteroids) {
+            const prev = prevAstHp.get(a.id);
+            if (prev != null && a.hp < prev - 0.01) spawnSpark(a.x, a.y);
+            prevAstHp.set(a.id, a.hp);
+          }
+          if (prevAstHp.size > full.asteroids.length + 32) {
+            const live = new Set(full.asteroids.map((a) => a.id));
+            for (const id of prevAstHp.keys()) if (!live.has(id)) prevAstHp.delete(id);
           }
         }
         if (predictor) {

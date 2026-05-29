@@ -7,6 +7,24 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.49.0] - 2026-05-28
+
+### Changed
+- **Asteroid colours match single-player (parity plan P2).** The client fabricated
+  full-rainbow asteroid hues; SP's palette is **20% warm gold (40–60°) / 80%
+  teal→violet (150–280°)** (the other hue params — spread / saturation / lightness
+  / cycle speed — already matched SP's formulas, and both sides share
+  `render/shapes.js` for the tumbling-wireframe silhouette). MP rocks now use SP's
+  hue distribution, so they read as the same colour family.
+
+### Added
+- **Asteroid impact sparks.** Shooting a rock now sparks at the hit (like SP),
+  instead of showing nothing until it finally splits — so damage feels solid and
+  the break-apart reads as a build-up, not a sudden "more asteroids." The asteroid
+  snapshot carries `hp` (changes only on hit → sent sparsely by the delta codec);
+  the client sparks on any asteroid whose HP dropped between snapshots, the same
+  way enemy hit-sparks work. (The split itself was always correct server-side.)
+
 ## [0.48.0] - 2026-05-28
 
 ### Changed

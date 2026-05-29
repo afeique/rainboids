@@ -164,7 +164,9 @@ function asteroidCosmetics(ast) {
     c = {
       verts: generateAsteroidVertices(rng, ast.r),
       projected: null, // reused projection buffer
-      baseHue: rng() * 360,
+      // SP asteroid palette (asteroid.js reset): 20% warm gold, 80% teal→violet
+      // — NOT a full rainbow, so MP rocks match SP's colour family.
+      baseHue: rng() < 0.2 ? 40 + rng() * 20 : 150 + rng() * 130,
       hueSpread: 30 + rng() * 70,
       hueCycleSpeed: 10 + rng() * 20,
       saturation: 80 + rng() * 15,
