@@ -1442,9 +1442,9 @@ export function drawLevelUpText() {
             colorSpeed: 0.45,
         });
 
-        // 6.148.0 — subtitle announces the Stat Point award + how many are
-        // now available to spend (was the stale "Ability Point Gained!").
-        const sp = (this.player && this.player.sp | 0) || 0;
+        // 6.148.0 — subtitle confirms the Stat Point award (was the stale
+        // "Ability Point Gained!"). 8.32.3 dropped the running spend count;
+        // the inventory/stats screens own the SP-to-spend total.
         const spText = '+1 STAT POINT';
         this.drawWavyText(spText, 0, 15, {
             fontSize: subFS,
