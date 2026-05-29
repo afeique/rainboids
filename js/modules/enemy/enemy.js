@@ -504,14 +504,14 @@ export class Enemy {
     }
     
     // Get level-scaled damage for enemy attacks.
-    // 5.79.0 — bumped to +0.30/level (was +0.18, +0.25 originally)
-    //   since player damage no longer scales with level. The player
-    //   has to invest in shop upgrades + powerups (CRIT, RAPID_FIRE,
-    //   MULTI_SHOT, BIG_BULLETS, etc.) to keep up — enemy damage
-    //   should make that investment feel mandatory.
-    //   L20 = 6.7× base, L10 = 3.7×, L5 = 2.2× — steep but reachable.
+    // 8.28.0 — DRASTICALLY steepened to +0.55/level (was +0.30) so deep waves
+    //   punish a glass build hard: the player MUST pour SP into survivability
+    //   (HEALTH / TOUGHNESS / DODGE / REGEN) to keep up. Enemy level rises with
+    //   the wave (getEnemyLevel), so this is the per-wave damage ramp.
+    //   L10 = 5.95× base, L20 = 11.45×, L30 = 16.95× — brutal but survivable
+    //   with stat investment (HP cap 600 + DR cap 75%).
     getLevelScaledDamage(baseDamage) {
-        const levelMultiplier = 1 + (this.level - 1) * 0.30;
+        const levelMultiplier = 1 + (this.level - 1) * 0.55;
         return Math.round(baseDamage * levelMultiplier);
     }
 

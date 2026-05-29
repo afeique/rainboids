@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.28.0] - 2026-05-28
+
+### Changed
+- **Enemy damage scaling per wave is drastically steeper.** `getLevelScaledDamage`
+  now ramps at **+0.55/level** (was +0.30) — since enemy level rises with the
+  wave, deep waves hit *much* harder (L10 5.95× base, L20 11.45×, L30 16.95×).
+  A glass build gets punished hard; the player must invest SP in survivability
+  (HEALTH / TOUGHNESS / DODGE / REGEN) to keep up. Survivable with investment
+  (HP cap 600 + damage-reduction cap 75%).
+
 ## [8.27.1] - 2026-05-28
 
 ### Fixed
