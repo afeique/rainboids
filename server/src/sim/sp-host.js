@@ -450,6 +450,29 @@ export class SpHost {
     this.startWave(this.game.currentWave + 1);
   }
 
+  // Cull the oldest gold + health drops past a generous concurrent cap so the
+  // arena can't fill with uncollected loot. Deactivated drops are reclaimed by
+  // the cleanupInactive pass later this same tick.
+  _capDrops() {
+    const GOLD_CAP = 40;   // combined goldShape + goldCoin
+    const ORB_CAP = 24;    // collectible color-stars (health/money orbs)
+    const cull = (pools, cap) => {
+      let total = 0;
+      for (const p of pools) total += p.activeObjects.length;
+      let over = total - cap;
+      if (over <= 0) return;
+      for (const p of pools) {
+        const act = p.activeObjects;
+        for (let i = 0; i < act.length && over > 0; i++) {
+          if (act[i].active) { act[i].active = false; over--; }
+        }
+        if (over <= 0) break;
+      }
+    };
+    cull([this.goldShapePool, this.goldCoinPool], GOLD_CAP);
+    cull([this.colorStarPool], ORB_CAP);
+  }
+
   // ── Real SIM systems, bound exactly as game-engine.js delegates them ───────
   // Collision-system (the authoritative damage/kill/pickup core).
   handleCollisions() { return col.handleCollisions.call(this); }
@@ -665,6 +688,14 @@ export class SpHost {
       this.handleCollisions();
     }
     this.player = primary;
+
+    // 4b. Bound the concurrent loot population. SP players roam the whole field
+    //   collecting, so drops rarely pile up; in the zoomed co-op view players
+    //   can't sweep everything, and under a heavy death rate the gold pools can
+    //   grow until the field fills with uncollected gold ("endless gold"). Cull
+    //   the oldest drops past a generous cap (they'd expire soon anyway), the
+    //   same bounding idea as the asteroid cap. Drops still ONLY spawn on death.
+    this._capDrops();
 
     // 5. Reclaim everything the tick deactivated.
     this.bulletPool.cleanupInactive();

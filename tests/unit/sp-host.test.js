@@ -205,6 +205,18 @@ describe('SpHost — headless wave driver', () => {
     expect(host.asteroidPool.activeObjects.length).toBeLessThanOrEqual(GAME_CONFIG.MAX_ASTEROIDS);
   });
 
+  it('caps concurrent loot drops (no "endless gold" pile-up)', async () => {
+    const host = new SpHost({ seed: 3 });
+    await host.init();
+    // Flood the gold pools far past the cap (simulates a heavy death rate with
+    // nobody collecting), then a single tick culls the oldest back under the cap.
+    for (let i = 0; i < 120; i++) host.goldShapePool.get(100 + i, 200, 5);
+    expect(host.goldShapePool.activeObjects.length).toBeGreaterThan(40);
+    host.tick();
+    const gold = host.goldShapePool.activeObjects.length + host.goldCoinPool.activeObjects.length;
+    expect(gold).toBeLessThanOrEqual(40);
+  });
+
   it('does not self-drive waves when autoWaves is off (default)', async () => {
     const host = new SpHost({ seed: 3 });
     await host.init();

@@ -7,6 +7,23 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.46.1] - 2026-05-28
+
+### Fixed
+- **"Endless gold" pile-up.** Loot was already death-gated and expiring, but in
+  the zoomed co-op view players can't sweep the whole field, so under a heavy
+  death rate uncollected drops accumulated (the gold pools grew until the arena
+  filled). `SpHost` now culls the oldest drops past a generous concurrent cap
+  (40 gold + 24 health orbs) each tick — the same bounding idea as the asteroid
+  cap — so the field can't fill with loot. Drops still spawn **only on death**.
+
+### Notes
+- Investigation confirmed the MP server's asteroid behavior matches SP exactly:
+  bullets collide + damage rocks, and destruction **splits** (one r≈85 rock →
+  1→2→4→8 shrinking shards, halting at `MIN_AST_RAD`). What reads as "spawns more
+  asteroids" is SP's intended break-apart cascade. See `docs/MP_PARITY_PLAN.md`
+  for the full parity strategy + plan (P1 loot-look + this cap, then P2/P3).
+
 ## [0.46.0] - 2026-05-28
 
 ### Changed
