@@ -28,9 +28,69 @@
     #status { color: #a6e3a1; }
     #hud { color: #89b4fa; }
     .tag { color: #f38ba8; font-weight: bold; }
+
+    /* ── Branded loading / title splash ─────────────────────────────────────
+       SP greets the player with a polished title; MP used to drop straight to a
+       black canvas behind a dev bar. This overlay shows the RAINBOIDS branding +
+       a live connection status while the client connects, then fades out once
+       the in-game HUD populates (see the inline observer at the bottom of body).
+       Pure HTML/CSS/observer — no changes to the game modules. */
+    #mp-splash {
+      position: fixed; inset: 0; z-index: 30;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 20px; text-align: center; padding: 24px;
+      background:
+        radial-gradient(ellipse 78% 56% at 50% 40%, rgba(46,34,96,0.55), rgba(4,4,10,0) 70%),
+        radial-gradient(circle at 50% 124%, rgba(22,64,128,0.42), rgba(4,4,10,0) 60%),
+        #04040a;
+      opacity: 1; transition: opacity 0.7s ease;
+      -webkit-user-select: none; user-select: none;
+    }
+    #mp-splash.hidden { opacity: 0; pointer-events: none; }
+    .mp-title {
+      margin: 0;
+      font-family: 'Press Start 2P', monospace;
+      font-size: clamp(26px, 8vw, 78px); line-height: 1.12; letter-spacing: 2px;
+      background: linear-gradient(90deg,
+        #ff5c8a, #ffb454, #f9f871, #5cff8a, #5ce0ff, #8a7bff, #ff5cf0, #ff5c8a);
+      background-size: 200% 100%;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+      animation: mp-hue 6s linear infinite;
+      filter: drop-shadow(0 0 18px rgba(120,140,255,0.35));
+    }
+    @keyframes mp-hue { to { background-position: 200% 0; } }
+    .mp-subtitle {
+      font-family: 'Press Start 2P', monospace;
+      font-size: clamp(11px, 2.6vw, 19px); letter-spacing: 9px; text-indent: 9px;
+      color: #89dceb; text-shadow: 0 0 12px rgba(137,220,235,0.5);
+    }
+    .mp-sub2 {
+      font-family: monospace; font-size: 12px; letter-spacing: 3px;
+      color: #6c7086; text-transform: uppercase;
+    }
+    .mp-conn {
+      display: flex; align-items: center; gap: 11px; margin-top: 10px; min-height: 20px;
+    }
+    .mp-spinner {
+      width: 15px; height: 15px; border-radius: 50%;
+      border: 2px solid rgba(137,180,250,0.22); border-top-color: #89b4fa;
+      animation: mp-spin 0.8s linear infinite;
+    }
+    @keyframes mp-spin { to { transform: rotate(360deg); } }
+    .mp-conn-text { font-family: monospace; font-size: 13px; color: #a6e3a1; letter-spacing: 1px; }
   </style>
 </head>
 <body>
+  <div id="mp-splash">
+    <h1 class="mp-title">RAINBOIDS</h1>
+    <div class="mp-subtitle">MULTIPLAYER</div>
+    <div class="mp-sub2">· experimental co-op ·</div>
+    <div class="mp-conn">
+      <span class="mp-spinner"></span>
+      <span class="mp-conn-text" id="mp-conn">starting…</span>
+    </div>
+  </div>
   <div id="bar">
     <span class="tag">RAINBOIDS · MP</span>
     <label>room <input id="room" type="text" maxlength="24" placeholder="(public)" style="width:90px;background:#11131f;color:#cdd6f4;border:1px solid #333;font-family:monospace;" /></label>
@@ -39,5 +99,33 @@
   </div>
   <canvas id="game"></canvas>
   <script type="module" src="js/mp/mp-main.js"></script>
+  <script>
+    // Drive the splash off the DOM the game module already writes — no module
+    // changes. Mirror #status into the splash, and fade the splash out once the
+    // in-game #hud line populates (= connected + in a live game). A hard timeout
+    // guarantees the splash never traps the player behind it on a failed connect.
+    (function () {
+      var splash = document.getElementById('mp-splash');
+      if (!splash) return;
+      var connText = document.getElementById('mp-conn');
+      var statusEl = document.getElementById('status');
+      var hudEl = document.getElementById('hud');
+      var hidden = false;
+      function hide() { if (!hidden) { hidden = true; splash.classList.add('hidden'); } }
+      function syncStatus() { if (connText && statusEl) connText.textContent = statusEl.textContent || ''; }
+      var obsOpts = { childList: true, characterData: true, subtree: true };
+      syncStatus();
+      if (statusEl && window.MutationObserver) new MutationObserver(syncStatus).observe(statusEl, obsOpts);
+      if (hudEl && window.MutationObserver) {
+        var hudObs = new MutationObserver(function () {
+          if ((hudEl.textContent || '').trim().length > 0) { hide(); hudObs.disconnect(); }
+        });
+        hudObs.observe(hudEl, obsOpts);
+      }
+      // Safety net: reveal the game after 15s no matter what (the dev bar's
+      // status line still surfaces any connection error once the splash is gone).
+      setTimeout(hide, 15000);
+    })();
+  </script>
 </body>
 </html>

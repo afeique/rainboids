@@ -7,6 +7,19 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.50.0] - 2026-05-28
+
+### Added
+- **Branded loading / title screen.** MP used to drop straight to a black canvas
+  behind a dev bar while connecting; it now shows a single-player-styled splash —
+  the rainbow-gradient **RAINBOIDS** wordmark (Press Start 2P) + a **MULTIPLAYER**
+  subtitle + an "experimental co-op" tag + a live connection-status line with a
+  spinner. The overlay mirrors the dev bar's status text and fades out on its own
+  once the in-game HUD populates (= connected + in a live game), with a 15 s safety
+  timeout so a failed connect never traps the player behind it. Implemented purely
+  in `mp.html` (HTML/CSS + a small DOM observer driven off the status/HUD elements
+  the client already writes) — no changes to any game module.
+
 ## [0.49.0] - 2026-05-28
 
 ### Changed
