@@ -212,9 +212,13 @@ describe('SpHost — headless wave driver', () => {
     // nobody collecting), then a single tick culls the oldest back under the cap.
     for (let i = 0; i < 120; i++) host.goldShapePool.get(100 + i, 200, 5);
     expect(host.goldShapePool.activeObjects.length).toBeGreaterThan(40);
+    // Flood health orbs too ("health shapes everywhere").
+    for (let i = 0; i < 60; i++) host.colorStarPool.get(300 + i, 400, 'health');
+    expect(host.colorStarPool.activeObjects.length).toBeGreaterThan(8);
     host.tick();
     const gold = host.goldShapePool.activeObjects.length + host.goldCoinPool.activeObjects.length;
     expect(gold).toBeLessThanOrEqual(40);
+    expect(host.colorStarPool.activeObjects.length).toBeLessThanOrEqual(8); // health orbs capped low
   });
 
   it('does not self-drive waves when autoWaves is off (default)', async () => {

@@ -455,7 +455,8 @@ export class SpHost {
   // the cleanupInactive pass later this same tick.
   _capDrops() {
     const GOLD_CAP = 40;   // combined goldShape + goldCoin
-    const ORB_CAP = 24;    // collectible color-stars (health/money orbs)
+    const ORB_CAP = 8;     // health orbs — kept low so they don't carpet the field
+                           // ("health shapes everywhere"); SP players roam + collect
     const cull = (pools, cap) => {
       let total = 0;
       for (const p of pools) total += p.activeObjects.length;

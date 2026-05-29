@@ -62,6 +62,28 @@ export class Interpolator {
   }
 
   /**
+   * Sample ONE ship's interpolated render state by id (used for the LOCAL ship —
+   * rendering the authoritative interpolated position is drift-free, vs predicting
+   * with a physics model that no longer matches the server's real SP Player).
+   * @returns {{x,y,angle,vx,vy}|null}
+   */
+  sampleShipById(now, id) {
+    const br = this._bracket(now);
+    if (!br) return null;
+    const { a, b, f } = br;
+    const sb = b.ships.get(id);
+    if (!sb) return null;
+    const sa = a.ships.get(id) || sb;
+    return {
+      x: lerp(sa.x, sb.x, f),
+      y: lerp(sa.y, sb.y, f),
+      angle: lerpAngle(sa.a, sb.a, f),
+      vx: sb.vx || 0,
+      vy: sb.vy || 0,
+    };
+  }
+
+  /**
    * Sample interpolated remote-ship render states at `now`, excluding `localId`.
    * @returns {Map<number, {x,y,angle,hp,mhp}>}
    */

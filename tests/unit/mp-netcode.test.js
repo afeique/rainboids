@@ -69,6 +69,18 @@ describe('Interpolator', () => {
     expect(out.has(2)).toBe(true);
   });
 
+  it('sampleShipById returns the interpolated authoritative state for ANY id (incl. local)', () => {
+    // The local ship is rendered from this (drift-free) rather than predicted —
+    // so the camera follows the server's truth and the world can't drift/jitter.
+    const interp = new Interpolator();
+    interp.add(snap(1, [{ id: 1, x: 0, y: 0, a: 0, vx: 0, vy: 0 }]), 1000);
+    interp.add(snap(2, [{ id: 1, x: 100, y: 0, a: 0, vx: 0, vy: 0 }]), 1100);
+    const local = interp.sampleShipById(1150, 1); // local id 1, t=1050 halfway
+    expect(local).not.toBeNull();
+    expect(local.x).toBeCloseTo(50, 3);
+    expect(interp.sampleShipById(1150, 99)).toBeNull(); // unknown id → null
+  });
+
   it('snaps to the latest snapshot when there is no history yet', () => {
     const interp = new Interpolator();
     interp.add(snap(1, [{ id: 2, x: 42, y: 7, a: 0 }]), 1000);

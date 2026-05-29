@@ -53,14 +53,13 @@ async function main() {
     document.fonts.load("12px 'Press Start 2P'").catch(() => {});
   }
 
-  // Camera follows the local ship (SP framing: the arena is larger than the
-  // viewport, the player stays centered, the camera is clamped to the field).
-  // zoom>1 keeps the framing tight on large monitors so the action reads
-  // "zoomed in on the player" the way SP does on a smaller window.
+  // Camera follows the local ship exactly like single-player: canvas = the
+  // window, the world (1920×1080) is larger than the viewport, the player stays
+  // centered, and the camera is clamped to the field. zoom = 1 to MATCH SP's
+  // desktop scale (a >1 zoom made everything — asteroids especially — render
+  // bigger than SP).
   const camera = { x: FIELD_WIDTH / 2, y: FIELD_HEIGHT / 2, zoom: 1 };
   let cameraInit = false; // first valid follow target snaps; afterwards it eases
-  const VIEW_TARGET_W = 1366;  // cap visible world width → guaranteed zoom-in
-  const MAX_ZOOM = 2.2;
   function resize() {
     canvas.width = Math.max(640, window.innerWidth);
     canvas.height = Math.max(360, window.innerHeight);
@@ -69,7 +68,7 @@ async function main() {
   window.addEventListener('resize', resize);
   function updateCamera(tx, ty) {
     const cw = canvas.width, ch = canvas.height;
-    const zoom = Math.max(1, Math.min(MAX_ZOOM, cw / VIEW_TARGET_W));
+    const zoom = 1; // SP desktop scale
     camera.zoom = zoom;
     const visW = cw / zoom, visH = ch / zoom;
     // Center the player; clamp so the visible window stays inside the field
@@ -130,6 +129,10 @@ async function main() {
   let lastEnemies = new Map();
   let latestBullets = [];
   let latestEbullets = [];
+  // Latest interpolated authoritative local-ship state (set each frame). FX
+  // helpers (muzzle / gold popup / blast feedback) position off this so they sit
+  // on the RENDERED ship, not the drifting predictor.
+  let lastLocalShip = null;
   let localHp = null;
   let localMaxHp = null;
   let localDowned = false;
@@ -246,7 +249,7 @@ async function main() {
   // Blast feedback scaled by radius + proximity to the local ship (distant
   // explosions shouldn't rock the camera). Adds a kick pushing AWAY from it.
   function blastFeedback(x, y, r = 24) {
-    const s = predictor && predictor.ship;
+    const s = lastLocalShip || (predictor && predictor.ship);
     if (!s) return;
     const dx = s.x - x, dy = s.y - y;
     const dist = Math.hypot(dx, dy);
@@ -281,7 +284,7 @@ async function main() {
 
   // Muzzle flash at the local ship's nose when a shot leaves the barrel.
   function spawnMuzzle() {
-    const s = predictor && predictor.ship;
+    const s = lastLocalShip || (predictor && predictor.ship);
     if (!s) return;
     const nx = s.x + Math.cos(s.angle) * SHIP_RADIUS * 1.1;
     const ny = s.y + Math.sin(s.angle) * SHIP_RADIUS * 1.1;
@@ -332,7 +335,7 @@ async function main() {
   }
   // Floating "+N" gold popup over the local ship (world space).
   function spawnGoldPopup(amount) {
-    const s = predictor && predictor.ship;
+    const s = lastLocalShip || (predictor && predictor.ship);
     if (!s || amount <= 0) return;
     worldFloaters.push({
       x: s.x + (Math.random() - 0.5) * 18, y: s.y - SHIP_RADIUS - 14,
@@ -607,14 +610,21 @@ async function main() {
     const drops = interp.sampleDrops(now);
     const bullets = interp.sampleBullets(now); // smooth + trail-able (was raw snapshot points)
     const ebullets = interp.sampleEbullets(now); // enemy fire (now visible client-side)
+    // LOCAL ship: render + follow the INTERPOLATED authoritative position, NOT the
+    // predictor's. The predictor steps with the toy js/sim/ship.js model while the
+    // server moves the ship with the real SP Player.update — so prediction drifts
+    // and reconcile snaps it every snapshot, which (since the camera follows it)
+    // made the WHOLE world jitter/drift. Interpolating the authoritative ship is
+    // drift-free. Falls back to the predictor only until the first snapshot.
+    const localShip = (predictor && interp.sampleShipById(now, playerId)) || (predictor ? predictor.ship : null);
+    lastLocalShip = localShip;
     lastRemote = remote;
     lastAsteroids = asteroids;
     lastEnemies = enemies;
     lastDrops = drops;
-    // Engine trails for moving ships (local predicted + remote interpolated).
-    if (predictor && !localDowned) {
-      const s = predictor.ship;
-      emitThrust(s.x, s.y, s.angle, s.vx, s.vy);
+    // Engine trails for moving ships (local + remote, both interpolated).
+    if (localShip && !localDowned) {
+      emitThrust(localShip.x, localShip.y, localShip.angle, localShip.vx, localShip.vy);
     }
     for (const [, s] of remote) {
       if (!s.downed) emitThrust(s.x, s.y, s.angle, s.vx, s.vy);
@@ -658,9 +668,9 @@ async function main() {
       fl.vy += 0.00012 * dtMs; // gentle gravity → arc
     }
 
-    // Camera tracks the local predicted ship (falls back to arena center until
-    // we have a ship — e.g. while connecting or fully downed).
-    if (predictor) updateCamera(predictor.ship.x, predictor.ship.y);
+    // Camera tracks the interpolated authoritative local ship (drift-free; was
+    // the predicted ship, which drifted — see localShip above).
+    if (localShip) updateCamera(localShip.x, localShip.y);
 
     // Decay the camera-feel FX (frame-rate independent) and roll a fresh shake
     // offset. Shake + kick are passed to the renderer as a render-only camera
@@ -680,7 +690,7 @@ async function main() {
     };
 
     bridge.present({
-      localShip: predictor ? predictor.ship : null,
+      localShip,
       remoteShips: remote,
       asteroids,
       enemies,

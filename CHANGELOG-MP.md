@@ -7,6 +7,36 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.51.0] - 2026-05-29
+
+### Fixed
+- **The whole world drifting / glitching.** The client predicted the local ship
+  with the toy `js/sim/ship.js` model, but the server moves it with the **real SP
+  `Player.update`** (Path A) — two different physics, so the prediction constantly
+  diverged and reconcile snapped it every snapshot. Because the **camera follows
+  the local ship**, that mis-prediction made the *entire world* appear to jitter
+  and drift. The local ship is now **rendered + followed from the interpolated
+  authoritative position** (`Interpolator.sampleShipById`), exactly like remote
+  ships — drift-free by construction. (This also fixes the "asteroid collisions
+  don't work" feel: with the camera on the true position, your aim maps to where
+  the rock actually is.) Trade-off: the local ship now has interpolation latency
+  like co-op peers; tighter local control would require porting SP movement into
+  the predictor (future).
+- **"Asteroids too big" / everything oversized.** The camera applied a zoom up to
+  2.2× (to read "zoomed in"), which rendered *everything* — asteroids most
+  noticeably — larger than single-player. The camera is now **zoom = 1**, matching
+  SP's desktop scale (canvas = window, world larger than the viewport, camera
+  follows + clamps to the field). Asteroid geometry was already SP-identical.
+- **"Health shapes everywhere."** The concurrent health-orb cap was 24 (a lot of
+  big 3D orbs when uncollected in the zoomed co-op view); lowered to **8** so the
+  field can't carpet with them. (Drops are still death-gated; `colorStarPool`
+  only ever holds health orbs in the headless sim — no decorative leak.)
+
+### Tests
+- `mp-netcode.test.js`: `sampleShipById` returns the interpolated authoritative
+  state for any id (incl. local) / null for unknown — the drift-fix mechanism.
+- `sp-host.test.js`: flooding the health-orb pool is culled to ≤ 8 each tick.
+
 ## [0.50.0] - 2026-05-28
 
 ### Added
