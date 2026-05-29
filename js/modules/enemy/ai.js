@@ -351,8 +351,11 @@ export function avoidAsteroids(gameEngine) {
 
     // Buffer in addition to both bodies' radii — enemy starts steering
     // away when its hull is within BUFFER px of the asteroid's surface.
-    const BUFFER = 70;
-    const avoidanceForce = 0.14; // Decisive enough to actually clear
+    // 8.30.0 — enemies are RECKLESS now: asteroid contact deals them no
+    // damage, so they barely avoid rocks (tiny buffer + a gentle nudge) and
+    // happily knife through contested space chasing the player.
+    const BUFFER = 18;
+    const avoidanceForce = 0.05; // just enough to slide off, not to detour
 
     let sumX = 0;
     let sumY = 0;
@@ -413,41 +416,45 @@ export function updateEvasiveManeuvers(gameEngine) {
     //   between reactive evasions. The cadence is per-enemy randomized
     //   so a group doesn't all sidestep in lockstep.
     if (this._dodgeCooldown === undefined) {
-        // Stagger initial cadence so a fresh wave doesn't all dodge
+        // Stagger initial cadence so a fresh wave doesn't all maneuver
         // at once on the same frame.
-        // 8.18.0 — a modest cadence tighten so enemies reposition a bit more
-        // often without becoming un-hittable (the bigger aggression bump is in
-        // their FIRING, not their dodge weave).
-        this._dodgeCooldown = 550 + Math.random() * 850;
+        this._dodgeCooldown = 400 + Math.random() * 600;
     }
     const cooldownExpired = now - this.lastEvasiveManeuver > this._dodgeCooldown;
-    if ((playerSpeed > 2 || cooldownExpired) && now - this.lastEvasiveManeuver > 550) {
+    if ((playerSpeed > 2 || cooldownExpired) && now - this.lastEvasiveManeuver > 400) {
         this.lastEvasiveManeuver = now;
-        this.evasiveTimer = 30; // 30 frames of evasion
-        // Re-roll cadence for the next reposition (0.9 - 1.7s).
-        this._dodgeCooldown = 900 + Math.random() * 800;
+        this.evasiveTimer = 30; // 30 frames of maneuvering
+        // 8.30.0 — much busier repositioning (0.65 - 1.3s between maneuvers).
+        this._dodgeCooldown = 650 + Math.random() * 650;
 
-        // Choose random evasive direction; bias slightly perpendicular
-        // to the player so enemies sidestep the line of fire instead
-        // of strafing toward the player.
+        // 8.30.0 — pick a MANEUVER, not just a sidestep: ~28% DIVEBOMB (charge
+        // straight at the player), ~62% STRAFE perpendicular (reads as circling
+        // the player), ~10% a random jink. Divebombs close distance hard so
+        // enemies stay aggressive + catchable instead of just orbiting.
+        const toPlayer = Math.atan2(
+            this.targetPlayer.y - this.y,
+            this.targetPlayer.x - this.x,
+        );
         let baseAngle;
-        if (this.targetPlayer && Math.random() < 0.6) {
-            const toPlayer = Math.atan2(
-                this.targetPlayer.y - this.y,
-                this.targetPlayer.x - this.x,
-            );
+        const roll = Math.random();
+        this._evasiveDive = roll < 0.28;
+        if (this._evasiveDive) {
+            baseAngle = toPlayer + (Math.random() - 0.5) * 0.25; // charge in
+        } else if (roll < 0.9) {
             const sign = Math.random() < 0.5 ? 1 : -1;
-            baseAngle = toPlayer + sign * (Math.PI / 2 + (Math.random() - 0.5) * 0.6);
+            baseAngle = toPlayer + sign * (Math.PI / 2 + (Math.random() - 0.5) * 0.5); // circle
         } else {
-            baseAngle = random(0, Math.PI * 2);
+            baseAngle = random(0, Math.PI * 2); // random jink
         }
         this.evasiveDirection.x = Math.cos(baseAngle);
         this.evasiveDirection.y = Math.sin(baseAngle);
     }
 
-    // Apply evasive movement if timer is active
+    // Apply the maneuver while the timer is active. Divebombs push HARD (they're
+    // committing to the charge); strafes are a touch snappier than before.
     if (this.evasiveTimer > 0) {
-        const evasiveStrength = 0.85 * (this.evasiveTimer / 30); // 8.18.0 — slightly snappier (was 0.8)
+        const peak = this._evasiveDive ? 1.6 : 0.95;
+        const evasiveStrength = peak * (this.evasiveTimer / 30);
         this.vel.x += this.evasiveDirection.x * evasiveStrength;
         this.vel.y += this.evasiveDirection.y * evasiveStrength;
         this.evasiveTimer--;

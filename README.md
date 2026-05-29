@@ -77,7 +77,7 @@ Your **weapons are equipped gear** — equip your **primary + power** weapons an
 
 **🚀 Ship skins** — a cosmetic-only **HANGAR** (opened from the title screen) lets you pick from **12 ship hulls** with a live animated preview: the default spectral interceptor, the restored classic fighter, a detailed flagship, and homages to genre favorites (a forked-prow saucer, a split-S-foil strike fighter, a Yamato-charging capital ship, and more). Every hull shares the same fixed collision size, so the choice is **purely visual** and never affects gameplay.
 
-> **20+ enemy types** with distinct movement, attacks, and elemental identities — from the orbiting **Hunter** and the freeze-shattering **Wasp** swarm to the anti-meta **Warden** that adapts its resistance to whatever element you keep using, forcing you to switch. Enemies are **aggressive**: they track you faster, fire far more often, the tanky ones grind toward you instead of drifting, and the hulking **Titan** rakes you with a **machine gun** between its sweeping lasers — which now strike with **much less warning**.
+> **20+ enemy types** with distinct movement, attacks, and elemental identities — from the orbiting **Hunter** and the freeze-shattering **Wasp** swarm to the anti-meta **Warden** that adapts its resistance to whatever element you keep using, forcing you to switch. Enemies are **aggressive**: they track you faster, fire far more often, never sit still — they **circle** you, **divebomb** in to close distance, and **knife through asteroids** (rocks don't damage them) rather than detour — and the tanky ones grind toward you instead of drifting. The hulking **Titan** rakes you with a **machine gun** between its sweeping lasers — which now strike with **much less warning**.
 
 ---
 

@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.30.0] - 2026-05-28
+
+### Changed
+- **Enemy AI v2 — busier, recklesser, more aggressive.** Enemies now reposition
+  far more often (every ~0.65–1.3s, was ~0.9–1.7s) and each maneuver is a real
+  intent: ~28% **divebomb** straight at the player (a hard committed charge),
+  ~62% perpendicular **strafe** that reads as circling, ~10% a random jink.
+  They're also **reckless near asteroids** — since rock contact deals them no
+  damage, the avoidance buffer dropped 70→18px and the steer force 0.14→0.05,
+  so they knife through contested space chasing the player instead of detouring.
+
 ## [8.29.0] - 2026-05-28
 
 ### Changed
