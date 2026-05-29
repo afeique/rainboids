@@ -409,10 +409,94 @@ function drawEnemyHealthBar(ctx, e) {
   ctx.restore();
 }
 
+// ── SP loot gem paths (ported verbatim from game-engine.js _gemPath helpers) ──
+function _nStarPath(ctx, r, points, innerRatio) {
+  const verts = points * 2;
+  for (let i = 0; i < verts; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / points;
+    const rr = (i % 2 === 0) ? r : r * innerRatio;
+    if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    else ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  ctx.closePath();
+}
+function _polyPath(ctx, r, points) {
+  for (let i = 0; i < points; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI * 2) / points;
+    if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath();
+}
+function _gemPath(ctx, shape, r) {
+  ctx.beginPath();
+  switch (shape) {
+    case 'star4': _nStarPath(ctx, r, 4, 0.45); break;
+    case 'star5': _nStarPath(ctx, r, 5, 0.42); break;
+    case 'star6': _nStarPath(ctx, r, 6, 0.50); break;
+    case 'star8': _nStarPath(ctx, r, 8, 0.50); break;
+    case 'hexagon': _polyPath(ctx, r, 6); break;
+    case 'diamond':
+      ctx.moveTo(0, -r); ctx.lineTo(r * 0.85, 0); ctx.lineTo(0, r); ctx.lineTo(-r * 0.85, 0); ctx.closePath(); break;
+    case 'triangle':
+      ctx.moveTo(0, -r); ctx.lineTo(r * 0.866, r * 0.5); ctx.lineTo(-r * 0.866, r * 0.5); ctx.closePath(); break;
+    default: ctx.arc(0, 0, r, 0, Math.PI * 2);
+  }
+}
+
 function drawDrop(ctx, d, now) {
   const t = (now || 0) / 1000;
-  if (d.kind === 'health') {
-    // Pulsing green glass orb with a white "+" — SP health pickup.
+  if (d.kind === 'gem') {
+    // SP gold gem (ported from _drawGoldShapesCanvas2D): jewel-shaped, jewel
+    // colour, black border, white sheen. Rotation/twinkle derived per-id so each
+    // gem animates independently like SP (the wire only carries shape/colour/r).
+    const seed = (d.id || 0);
+    const rotSpeed = ((seed % 2) ? 1 : -1) * (0.4 + (seed % 5) * 0.13);
+    const rotBase = (seed % 17) * 0.37;
+    const twPhase = (seed % 13) * 0.48;
+    const twSpeed = 2.0 + (seed % 7) * 0.21;
+    const wave = 0.5 + 0.5 * Math.sin(t * twSpeed + twPhase);
+    const r = Math.max(3, (d.r || 10) * (0.95 + 0.10 * wave));
+    const rot = rotBase + t * rotSpeed;
+    ctx.save();
+    ctx.translate(Math.round(d.x), Math.round(d.y));
+    ctx.rotate(rot);
+    _gemPath(ctx, d.sh, r);
+    ctx.fillStyle = d.color || '#ff44aa';
+    ctx.fill();
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = Math.max(1.5, r * 0.14);
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    const sheen = ctx.createRadialGradient(-r * 0.25, -r * 0.4, 0, -r * 0.25, -r * 0.4, r * 0.7);
+    sheen.addColorStop(0, 'rgba(255,255,255,0.55)');
+    sheen.addColorStop(0.5, 'rgba(255,240,255,0.18)');
+    sheen.addColorStop(1, 'rgba(255,240,255,0)');
+    ctx.fillStyle = sheen;
+    ctx.fill();
+    ctx.restore();
+  } else if (d.kind === 'coin') {
+    // SP gold coin / treasure-dust sparkle: a sharp pixel body + a twinkle bloom.
+    const seed = (d.id || 0);
+    const twSpeed = 2.4 + (seed % 6) * 0.3;
+    const twPhase = (seed % 11) * 0.57;
+    const wave = 0.5 + 0.5 * Math.sin(t * twSpeed + twPhase);
+    const px = Math.max(2, (d.r || 2.5));
+    ctx.save();
+    if (wave > 0.7) {
+      ctx.globalCompositeOperation = 'lighter';
+      const gl = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, px * 3);
+      gl.addColorStop(0, `rgba(255,240,150,${0.5 * wave})`);
+      gl.addColorStop(1, 'rgba(255,210,60,0)');
+      ctx.fillStyle = gl;
+      ctx.beginPath(); ctx.arc(d.x, d.y, px * 3, 0, Math.PI * 2); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(Math.round(d.x - px), Math.round(d.y - px), px * 2, px * 2);
+    ctx.restore();
+  } else { // health — green glass orb with a white "+"
     const pulse = 0.85 + 0.15 * Math.sin(t * 4 + d.x * 0.05);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
@@ -430,27 +514,6 @@ function drawDrop(ctx, d, now) {
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
     ctx.fillRect(d.x - 4, d.y - 1.2, 8, 2.4);
     ctx.fillRect(d.x - 1.2, d.y - 4, 2.4, 8);
-  } else { // gold — spinning gem with an additive glow
-    const spin = t * 1.8 + d.x * 0.05;
-    const pulse = 0.85 + 0.15 * Math.sin(t * 5 + d.y * 0.05);
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const gl = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, 12 * pulse);
-    gl.addColorStop(0, 'rgba(255,220,90,0.55)');
-    gl.addColorStop(1, 'rgba(255,180,40,0)');
-    ctx.fillStyle = gl;
-    ctx.beginPath(); ctx.arc(d.x, d.y, 12 * pulse, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    ctx.save();
-    ctx.translate(d.x, d.y);
-    ctx.rotate(spin);
-    const g = ctx.createLinearGradient(0, -7, 0, 7);
-    g.addColorStop(0, '#fff3b0'); g.addColorStop(0.5, '#ffd23f'); g.addColorStop(1, '#b8860b');
-    ctx.fillStyle = g; ctx.strokeStyle = '#fff7cc'; ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, -7); ctx.lineTo(6, 0); ctx.lineTo(0, 7); ctx.lineTo(-6, 0); ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.restore();
   }
 }
 

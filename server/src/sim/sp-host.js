@@ -772,11 +772,18 @@ export class SpHost {
   /** Active drops in wire shape: { id, x, y, k } (k ∈ health|gold). */
   _drops() {
     const drops = [];
+    // Loot wire shape mirrors SP's three drop types so the client can render
+    // them with SP's exact look. `sh`/`c`/`r` (gem shape / jewel colour / radius)
+    // are constant per drop → the delta codec sends them only on the first frame.
     for (const s of this.colorStarPool.activeObjects) {
-      drops.push({ id: s._netId, x: round(s.x), y: round(s.y), k: s.starType === 'money' ? 'gold' : 'health' });
+      drops.push({ id: s._netId, x: round(s.x), y: round(s.y), k: s.starType === 'money' ? 'coin' : 'health' });
     }
-    for (const c of this.goldCoinPool.activeObjects) drops.push({ id: c._netId, x: round(c.x), y: round(c.y), k: 'gold' });
-    for (const g of this.goldShapePool.activeObjects) drops.push({ id: g._netId, x: round(g.x), y: round(g.y), k: 'gold' });
+    for (const c of this.goldCoinPool.activeObjects) {
+      drops.push({ id: c._netId, x: round(c.x), y: round(c.y), k: 'coin', r: round(c.radius, 1) });
+    }
+    for (const g of this.goldShapePool.activeObjects) {
+      drops.push({ id: g._netId, x: round(g.x), y: round(g.y), k: 'gem', sh: g.shape, c: g.color, r: round(g.radius, 1) });
+    }
     return drops;
   }
 

@@ -150,7 +150,7 @@ export class Interpolator {
     const { a, b, f } = br;
     for (const [id, sb] of b.drops) {
       const sa = a.drops.get(id) || sb;
-      out.set(id, { x: lerp(sa.x, sb.x, f), y: lerp(sa.y, sb.y, f), kind: sb.k });
+      out.set(id, { id, x: lerp(sa.x, sb.x, f), y: lerp(sa.y, sb.y, f), kind: sb.k, sh: sb.sh, color: sb.c, r: sb.r });
     }
     return out;
   }

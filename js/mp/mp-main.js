@@ -301,7 +301,7 @@ async function main() {
   // Sparkle burst when a drop is collected — green for health, gold for credits.
   function spawnCollectSparkle(x, y, kind) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    const hue = kind === 'gold' ? 46 + Math.random() * 10 : 128 + Math.random() * 18;
+    const hue = kind === 'health' ? 128 + Math.random() * 18 : 46 + Math.random() * 10; // green heal / gold gem+coin
     const n = 8 + Math.floor(Math.random() * 5);
     for (let i = 0; i < n; i++) {
       const ang = Math.random() * Math.PI * 2;
@@ -476,7 +476,7 @@ async function main() {
               break;
             case EV.DROP_COLLECTED:
               spawnCollectSparkle(p.x, p.y, p.kind);
-              if (p.kind === 'gold') audio.playCoin(); else audio.playPowerup();
+              if (p.kind === 'health') audio.playPowerup(); else audio.playCoin();
               break;
             case EV.WAVE_START:
               banner = { text: `WAVE ${p.wave}`, born: performance.now() };

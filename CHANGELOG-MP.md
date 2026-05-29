@@ -7,6 +7,18 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.47.0] - 2026-05-28
+
+### Changed
+- **Loot looks like single-player (parity plan P1).** Gold now renders as SP's
+  jewel **gem shapes** (`_gemPath` ported verbatim: star4/5/6/8, hexagon, diamond,
+  triangle, circle) in the gem's actual jewel colour, with a black border + white
+  sheen — and gold **coins** as sharp pixel sparkles with a twinkle bloom — instead
+  of MP's single spinning yellow diamond. The drop wire now carries each gem's
+  `sh` (shape) / `c` (colour) / `r` (radius) (constant per drop → the delta codec
+  sends them once); per-drop rotation + twinkle are derived from the drop id so
+  each animates independently like SP. Health orbs keep their green glass look.
+
 ## [0.46.1] - 2026-05-28
 
 ### Fixed
