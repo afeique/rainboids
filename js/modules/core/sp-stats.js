@@ -11,7 +11,10 @@
 // item affixes inside the effective-stat getters (player/progression.js).
 
 export const MAX_LEVEL = 100;
-export const SP_STAT_MAX_POINTS = 20;
+// 8.29.0 — each stat caps at 10 points (was 20). `perPoint` = max / 10, so a
+// single point is worth ~2× as much; the fully-invested `max` total is
+// unchanged (you just reach it in half the points → every point matters more).
+export const SP_STAT_MAX_POINTS = 10;
 
 // T35 — Global EFFECTIVE-stat caps. Gear amplification (T26) + the class
 // favored-stat lens (T33) can now pile onto a single SP stat, so these ceilings

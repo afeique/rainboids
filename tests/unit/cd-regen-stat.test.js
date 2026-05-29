@@ -34,8 +34,8 @@ describe('CD-08 — REGENERATION stat definition', () => {
         expect(typeof def.label).toBe('function');
     });
 
-    test('scales linearly with points (10 pts → +1 HP/s)', () => {
-        expect(spStatValue('REGENERATION', 10)).toBe(1);
+    test('scales linearly with points (5 pts → +1 HP/s, half the 10-pt cap)', () => {
+        expect(spStatValue('REGENERATION', 5)).toBe(1);
     });
 });
 
@@ -51,8 +51,8 @@ describe('CD-08 — getEffectiveRegen folds in the REGENERATION stat', () => {
         expect(progression.getEffectiveRegen.call(makePlayer({ REGENERATION: FULL }))).toBe(2 + BASE);
     });
 
-    test('partial REGENERATION (10 pts) + baseline → 1.5 HP/s', () => {
-        expect(progression.getEffectiveRegen.call(makePlayer({ REGENERATION: 10 }))).toBe(1 + BASE);
+    test('partial REGENERATION (5 pts, half the 10-pt cap) + baseline → 1.5 HP/s', () => {
+        expect(progression.getEffectiveRegen.call(makePlayer({ REGENERATION: 5 }))).toBe(1 + BASE);
     });
 
     test('stacks with the REGEN powerup, sharing the 3 HP/s cap', () => {

@@ -48,25 +48,25 @@ describe('T33 — signature abilities are registered', () => {
 
 describe('T33 — favored-stat lens amplifies the class stats', () => {
     test('a class that favors HEALTH amplifies it (+20%, level-ramped)', () => {
-        const p = makePlayer({ spStats: { HEALTH: 10 }, level: LEVEL_SOFTCAP }); // SP HEALTH = 200
+        const p = makePlayer({ spStats: { HEALTH: 5 }, level: LEVEL_SOFTCAP }); // SP HEALTH = 200
         applyClass(p, 'BULWARK'); // favoredStats include HEALTH
         // base 40 + 200 × (1 + 0.20) = 40 + 240 = 280
         expect(getEffectiveMaxHealth.call(p)).toBe(280);
     });
 
     test('a non-favored stat gets no lens', () => {
-        const p = makePlayer({ spStats: { HEALTH: 10 }, level: LEVEL_SOFTCAP });
+        const p = makePlayer({ spStats: { HEALTH: 5 }, level: LEVEL_SOFTCAP });
         applyClass(p, 'STRIKER'); // favors CRIT, not HEALTH
         expect(getEffectiveMaxHealth.call(p)).toBe(40 + 200); // raw SP, no lens
     });
 
     test('no class → no lens (default-safe)', () => {
-        const p = makePlayer({ spStats: { HEALTH: 10 }, level: LEVEL_SOFTCAP });
+        const p = makePlayer({ spStats: { HEALTH: 5 }, level: LEVEL_SOFTCAP });
         expect(getEffectiveMaxHealth.call(p)).toBe(40 + 200);
     });
 
     test('the lens is dormant at level 1 (ramps with the run, like gear)', () => {
-        const p = makePlayer({ spStats: { HEALTH: 10 }, level: 1 });
+        const p = makePlayer({ spStats: { HEALTH: 5 }, level: 1 }); // 5 pts (half 10-cap) → 200 raw HP
         applyClass(p, 'BULWARK');
         // levelRamp(1) = 0 → lens contributes nothing yet
         expect(getEffectiveMaxHealth.call(p)).toBe(40 + 200);

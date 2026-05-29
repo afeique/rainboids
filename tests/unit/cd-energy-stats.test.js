@@ -54,8 +54,8 @@ describe('CD-06 — getEffectiveMaxEnergy (CAPACITOR)', () => {
         expect(progression.getEffectiveMaxEnergy.call(makePlayer({ CAPACITOR: FULL }))).toBe(200);
     });
 
-    test('scales linearly with points (10 pts → 150)', () => {
-        expect(progression.getEffectiveMaxEnergy.call(makePlayer({ CAPACITOR: 10 }))).toBe(150);
+    test('scales linearly with points (5 pts → 150, half the 10-pt cap)', () => {
+        expect(progression.getEffectiveMaxEnergy.call(makePlayer({ CAPACITOR: 5 }))).toBe(150);
     });
 });
 
@@ -68,8 +68,8 @@ describe('CD-06 — getEffectiveEnergyRegenMult (REACTOR)', () => {
         expect(progression.getEffectiveEnergyRegenMult.call(makePlayer({ REACTOR: FULL }))).toBe(2);
     });
 
-    test('scales linearly with points (10 pts → 1.5×)', () => {
-        expect(progression.getEffectiveEnergyRegenMult.call(makePlayer({ REACTOR: 10 }))).toBe(1.5);
+    test('scales linearly with points (5 pts → 1.5×, half the 10-pt cap)', () => {
+        expect(progression.getEffectiveEnergyRegenMult.call(makePlayer({ REACTOR: 5 }))).toBe(1.5);
     });
 });
 
@@ -83,8 +83,8 @@ describe('CD-06/CD-05 — getEffectivePowerCost (EFFICIENCY, capped at −50%)',
         expect(progression.getEffectivePowerCost.call(makePlayer({ EFFICIENCY: FULL }), 60)).toBe(30);
     });
 
-    test('partial EFFICIENCY scales the discount (10 pts → −25% → 0.75×)', () => {
-        expect(progression.getEffectivePowerCost.call(makePlayer({ EFFICIENCY: 10 }), 40)).toBe(30);
+    test('partial EFFICIENCY scales the discount (5 pts → −25% → 0.75×)', () => {
+        expect(progression.getEffectivePowerCost.call(makePlayer({ EFFICIENCY: 5 }), 40)).toBe(30);
     });
 
     test('CD-05 cap: even past full investment the discount never exceeds 50%', () => {

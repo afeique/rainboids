@@ -70,9 +70,9 @@ describe('getEffectiveEnergyRegenMult — FLUX bonus (DEFAULT-SAFE)', () => {
     });
 
     test('default-safe: 0 Flux stacks → 1 + REACTOR% only (Flux is +0)', () => {
-        // 10 REACTOR pts → +0.5; no Flux → still exactly 1.5.
+        // 5 REACTOR pts (half the 10-pt cap) → +0.5; no Flux → still exactly 1.5.
         expect(progression.getEffectiveEnergyRegenMult.call(
-            makePlayer({ spStats: { REACTOR: 10 } }))).toBe(1.5);
+            makePlayer({ spStats: { REACTOR: 5 } }))).toBe(1.5);
     });
 
     test('with Flux stacks → adds stacks × FLUX_PER_STACK on top of REACTOR', () => {

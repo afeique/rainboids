@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.29.0] - 2026-05-28
+
+### Changed
+- **SP stats now cap at 10 points (was 20).** Each point is worth ~2× as much,
+  so a single point matters far more; the fully-invested value is unchanged
+  (you just reach the cap in half the points). `SP_STAT_MAX_POINTS = 10` drives
+  the per-point value, the allocation clamp, and the `/10` readout in the STATS
+  allocation UI. (Stat-effect unit tests re-pointed to the new half-cap.)
+
 ## [8.28.0] - 2026-05-28
 
 ### Changed

@@ -33,7 +33,7 @@ function gear(stat, pct) {
 
 describe('T26 — gear amplifies invested SP, level-ramped', () => {
     // HEALTH SP: 10 pts × (400/20) = 200 raw max-HP from SP.
-    const spHealth10 = { HEALTH: 10 };
+    const spHealth10 = { HEALTH: 5 };
 
     test('level 1 → gear DORMANT (levelRamp 0): effective = raw SP only', () => {
         const p = makePlayer({
@@ -67,7 +67,7 @@ describe('T26 — gear amplifies invested SP, level-ramped', () => {
 
     test('amp stacks across multiple equipped affixes on the same stat', () => {
         const p = makePlayer({
-            spStats: { TOUGHNESS: 8 }, // 8 × (50/20) = 20 raw % DR
+            spStats: { TOUGHNESS: 4 }, // 4 × (50/10) = 20 raw % DR (8.29.0 cap=10)
             equippedItems: {
                 a: gear('TOUGHNESS', 30),
                 b: gear('TOUGHNESS', 20), // total +50% amp
@@ -80,7 +80,7 @@ describe('T26 — gear amplifies invested SP, level-ramped', () => {
 
     test('a different stat is unaffected by the gear amp (stat-scoped)', () => {
         const p = makePlayer({
-            spStats: { HEALTH: 10 },
+            spStats: { HEALTH: 5 },
             equippedItems: { hull: gear('CRIT_CHANCE', 90) }, // amps CRIT, not HEALTH
             level: LEVEL_SOFTCAP,
         });
@@ -90,7 +90,7 @@ describe('T26 — gear amplifies invested SP, level-ramped', () => {
 
     test('getSpStatValue (external consumers) returns the gear-amplified value', () => {
         const p = makePlayer({
-            spStats: { THORNS: 10 }, // 10 × (100/20) = 50 raw %
+            spStats: { THORNS: 5 }, // 5 × (100/10) = 50 raw % (8.29.0 cap=10)
             equippedItems: { a: gear('THORNS', 40) }, // +40% amp
             level: LEVEL_SOFTCAP,
         });
@@ -101,7 +101,7 @@ describe('T26 — gear amplifies invested SP, level-ramped', () => {
 
 describe('T28 — socketed Matrices amplify SP stats (+ resonance)', () => {
     // vital@hull@t1 = +12% HEALTH; vital@cockpit@t1 = +8% HEALTH.
-    const spHealth10 = { HEALTH: 10 }; // 200 raw max-HP from SP
+    const spHealth10 = { HEALTH: 5 }; // 200 raw max-HP from SP
 
     test('a socketed Matrix adds its per-slot %-amp to the stat', () => {
         const p = makePlayer({
