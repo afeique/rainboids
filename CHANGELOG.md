@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.27.1] - 2026-05-28
+
+### Fixed
+- **Settings sub-tab headers are gold + centered again.** When the settings
+  panels moved under the SETTINGS tab (8.27.0) they stopped being direct
+  `.pause-tab-content` children, so the `> h2` gold-sheen/centered title styling
+  no longer matched. Extended the rule (and its underline) to
+  `.settings-subpanel > h2`.
+
 ## [8.27.0] - 2026-05-28
 
 ### Changed

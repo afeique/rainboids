@@ -1024,10 +1024,14 @@ button:not([disabled]),
    shared across ALL pause-menu tabs (5.79.40) so the menu feels
    visually cohesive. */
 
-.pause-tab-content > h2 {
+.pause-tab-content > h2,
+.settings-subpanel > h2 {
     /* 6.225.2 — pause-tab page titles use the HEADER font (Press Start 2P by
        default), not the body font. They were inheriting --font-body, so a
-       modern body-font pick (e.g. Helvetica Neue) leaked into the headers. */
+       modern body-font pick (e.g. Helvetica Neue) leaked into the headers.
+       8.27.x — `.settings-subpanel > h2` re-includes the SETTINGS sub-tab
+       panel titles, which stopped being direct `.pause-tab-content` children
+       when they moved under the SETTINGS tab. */
     font-family: var(--font-header);
     font-size: calc(24px * var(--font-header-scale, 1));
     letter-spacing: 5px;
@@ -1056,7 +1060,8 @@ button:not([disabled]),
     0%, 100% { background-position: 0% 0%; }
     50%      { background-position: 100% 0%; }
 }
-.pause-tab-content > h2::after {
+.pause-tab-content > h2::after,
+.settings-subpanel > h2::after {
     content: '';
     position: absolute;
     left: 50%;
