@@ -1016,6 +1016,7 @@ export function fireBoomerang(bulletPool, audioManager, config) {
         bullet.piercing = config.piercing;
         bullet.boomerang = true;
         bullet.boomerangOutFrames = Math.round(config.boomerangOutFrames * throwMul);
+        bullet.boomerangOutDecel = config.boomerangOutDecel;
         bullet.boomerangReturnAccel = config.boomerangReturnAccel;
         bullet.boomerangOwner = this;
         bullet.razorEdge = razor;

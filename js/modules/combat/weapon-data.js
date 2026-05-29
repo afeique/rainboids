@@ -242,7 +242,7 @@ export const PRIMARY_WEAPONS = {
     BOOMERANG: {
         id: 'BOOMERANG',
         name: 'Boomerang Discs',
-        description: 'Discs fly out and return — they cut coming and going',
+        description: 'Discs sail far out and return — they cut coming and going',
         icon: 'loop',
         color: '#ffd633',
         fireRate: 600,
@@ -257,8 +257,9 @@ export const PRIMARY_WEAPONS = {
         unlockWave: 9,
         // Boomerang tuning (read in bullet.update):
         boomerang: true,
-        boomerangOutFrames: 28,   // frames flying outward before the turn
-        boomerangReturnAccel: 0.55, // homing-to-player accel on the return leg
+        boomerangOutFrames: 64,    // frames flying outward before the turn (long reach)
+        boomerangOutDecel: 0.975,  // out-leg drag/frame — closer to 1 = travels much farther
+        boomerangReturnAccel: 0.62, // homing-to-player accel on the return leg
         upgrades: ['BOOMERANG_MULTI', 'BOOMERANG_RAPID', 'BOOMERANG_BIG', 'BOOMERANG_PIERCING', 'BOOMERANG_STUN', 'BOOMERANG_KNOCK', 'LONG_THROW', 'RAZOR_EDGE'],
     },
 

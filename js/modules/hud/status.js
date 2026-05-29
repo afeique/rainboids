@@ -88,7 +88,13 @@ export function drawHUD() {
                 this.analogStick.draw(this.ctx);
             }
             // 6.x — Left-edge item loot feed (replaces world pickup orbs).
-            drawItemFeed.call(this, this.ctx);
+            // 8.x — Suppressed while PAUSED: opening the inventory / pause /
+            // stats overlays pauses the game but leaves the canvas frozen
+            // behind a semi-transparent backdrop, so the feed's slot-icon
+            // cards otherwise show through at the screen's top-left corner.
+            if (this.game.state !== GAME_STATES.PAUSED) {
+                drawItemFeed.call(this, this.ctx);
+            }
             // BOSS-01 — Always-visible boss healthbar. Renders top-center
             // only while a boss-flagged enemy is alive (the hook scans the
             // active enemy pool and no-ops otherwise).
@@ -1439,9 +1445,7 @@ export function drawLevelUpText() {
         // 6.148.0 — subtitle announces the Stat Point award + how many are
         // now available to spend (was the stale "Ability Point Gained!").
         const sp = (this.player && this.player.sp | 0) || 0;
-        const spText = sp > 0
-            ? `+1 STAT POINT  ·  ${sp} SP TO SPEND`
-            : '+1 STAT POINT';
+        const spText = '+1 STAT POINT';
         this.drawWavyText(spText, 0, 15, {
             fontSize: subFS,
             colors: WAVY_PALETTES.orange,

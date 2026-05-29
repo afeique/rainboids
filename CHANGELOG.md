@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [8.32.3] - 2026-05-29
+
+### Changed
+- **Level-up banner is cleaner.** The "+1 STAT POINT" subtitle no longer
+  appends a running "· N SP TO SPEND" count — the announcement just confirms
+  the award, leaving the spend total to the inventory/stats screens where it
+  belongs.
+
+## [8.32.2] - 2026-05-29
+
+### Changed
+- **Boomerang Discs reach much farther.** The out-leg now flies for 64 frames
+  (was 28) with a far gentler per-frame drag (0.975, was a hardcoded 0.93), so a
+  disc sails roughly 2.6× its old distance (~100px → ~270px) before turning. The
+  return leg accelerates a touch faster (0.62, was 0.55) so the longer round-trip
+  still feels snappy. The out-leg drag is now a `boomerangOutDecel` weapon-data
+  field (LONG_THROW still scales reach on top). Verified the disc still turns and
+  returns to the ship within its lifetime.
+
+## [8.32.1] - 2026-05-29
+
+### Fixed
+- **Inventory screen no longer shows stray slot icons piled in the top-left
+  corner.** Opening the inventory (or pause / stats) overlay pauses the game but
+  leaves the canvas frozen behind a semi-transparent backdrop — the left-edge
+  loot feed kept painting its slot-icon cards (cockpit, hull, …) through the
+  corner, looking like overlapping icons. The loot feed is now suppressed while
+  `PAUSED`, so menus open over a clean corner.
+
 ## [8.32.0] - 2026-05-28
 
 ### Changed

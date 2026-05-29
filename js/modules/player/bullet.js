@@ -114,6 +114,7 @@ export class Bullet {
         // Boomerang Discs: fly out, then return to the owner.
         this.boomerang = false;
         this.boomerangOutFrames = 0;
+        this.boomerangOutDecel = 0;
         this.boomerangReturnAccel = 0;
         this.boomerangReturning = false;
         this.boomerangOwner = null;
@@ -308,8 +309,11 @@ export class Bullet {
         // cut the SAME enemies again on the return leg (the double-hit).
         if (this.boomerang) {
             if (!this.boomerangReturning) {
-                this.vel.x *= 0.93;
-                this.vel.y *= 0.93;
+                // Out-leg drag — softer (closer to 1) reaches much farther
+                // before the disc slows enough to turn. Falls back to 0.93.
+                const outDecel = this.boomerangOutDecel || 0.93;
+                this.vel.x *= outDecel;
+                this.vel.y *= outDecel;
                 if (this.life >= this.boomerangOutFrames) {
                     this.boomerangReturning = true;
                     this.hitTargets.clear();
