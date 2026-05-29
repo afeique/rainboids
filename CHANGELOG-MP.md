@@ -7,6 +7,22 @@ attempt is archived under `multiplayer/` and is unrelated to these versions).
 The format is based on [Keep a Changelog](https://keepachangelog.com/); MP stays
 in `0.x` while experimental.
 
+## [0.48.0] - 2026-05-28
+
+### Changed
+- **Health orbs render as single-player's 3D solids (parity plan P1, cont.).**
+  0.47.0 brought gold loot to SP parity but left health orbs as a flat green
+  glass blob; they now render as SP's tumbling blue **polyhedra** (tetrahedron /
+  cube / octahedron / dodecahedron) with the exact additive cyan bloom + inner
+  core + orbiting sparkle motes + glossy specular sheen. The recipe is a faithful
+  port of `GameEngine._drawHealthShapesCanvas2D` / `_drawHealthShape3D` (painter's
+  algorithm over each polyhedron's faces) in a new `js/mp/mp-loot-render.js`. The
+  drop wire now carries each health orb's polyhedron `sh` + colour `c` + radius
+  `r` (constant per orb → the delta codec sends them once); per-orb rotation,
+  tumble, and twinkle are derived from the drop id so each orb animates
+  independently without any per-frame wire state. Loot (gold + health) now looks
+  identical to single-player.
+
 ## [0.47.0] - 2026-05-28
 
 ### Changed

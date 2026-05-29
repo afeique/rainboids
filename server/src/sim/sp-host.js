@@ -776,7 +776,18 @@ export class SpHost {
     // them with SP's exact look. `sh`/`c`/`r` (gem shape / jewel colour / radius)
     // are constant per drop → the delta codec sends them only on the first frame.
     for (const s of this.colorStarPool.activeObjects) {
-      drops.push({ id: s._netId, x: round(s.x), y: round(s.y), k: s.starType === 'money' ? 'coin' : 'health' });
+      if (s.starType === 'money') {
+        // Stray money orb (orbs migrated to the gold pools long ago) — keep it
+        // gold-coloured as a sparkle pixel rather than a blue health orb.
+        drops.push({ id: s._netId, x: round(s.x), y: round(s.y), k: 'coin', r: round(s.radius, 1) });
+      } else {
+        // 3D health orb: send the polyhedron shape + colour + radius so the
+        // client renders SP's exact tumbling blue solid (see mp-loot-render.js).
+        drops.push({
+          id: s._netId, x: round(s.x), y: round(s.y), k: 'health',
+          sh: s.shape, c: s.color, r: round(s.radius * (s.sizeVariation || 1), 1),
+        });
+      }
     }
     for (const c of this.goldCoinPool.activeObjects) {
       drops.push({ id: c._netId, x: round(c.x), y: round(c.y), k: 'coin', r: round(c.radius, 1) });

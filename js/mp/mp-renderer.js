@@ -18,6 +18,8 @@ import { FIELD_WIDTH, FIELD_HEIGHT } from '../sim/constants.js';
 // MP HUD matches single-player rather than re-deriving them.
 import { drawCachedMoneyIcon, drawCachedHeartIcon } from '../modules/core/utils.js';
 import { xpForLevel, MAX_LEVEL } from '../modules/core/sp-stats.js';
+// SP-parity health-orb renderer (tumbling 3D blue polyhedron + cyan glow).
+import { drawHealthOrb } from './mp-loot-render.js';
 // Real SP ship-skin art (drawn by the same paint() the SP renderer uses) + the
 // chosen skin from settings, so the MP ship looks exactly like single-player.
 import { getSkin, SKIN_IDS } from '../modules/player/skins/index.js';
@@ -496,24 +498,8 @@ function drawDrop(ctx, d, now) {
     ctx.fillStyle = '#ffd700';
     ctx.fillRect(Math.round(d.x - px), Math.round(d.y - px), px * 2, px * 2);
     ctx.restore();
-  } else { // health — green glass orb with a white "+"
-    const pulse = 0.85 + 0.15 * Math.sin(t * 4 + d.x * 0.05);
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const gl = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, 13 * pulse);
-    gl.addColorStop(0, 'rgba(120,255,160,0.55)');
-    gl.addColorStop(1, 'rgba(80,220,120,0)');
-    ctx.fillStyle = gl;
-    ctx.beginPath(); ctx.arc(d.x, d.y, 13 * pulse, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    const core = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, 6);
-    core.addColorStop(0, 'rgba(235,255,240,0.95)');
-    core.addColorStop(1, 'rgba(80,210,120,0.9)');
-    ctx.fillStyle = core;
-    ctx.beginPath(); ctx.arc(d.x, d.y, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
-    ctx.fillRect(d.x - 4, d.y - 1.2, 8, 2.4);
-    ctx.fillRect(d.x - 1.2, d.y - 4, 2.4, 8);
+  } else { // health — SP's tumbling 3D blue polyhedron + cyan glow + sheen
+    drawHealthOrb(ctx, d, now);
   }
 }
 
