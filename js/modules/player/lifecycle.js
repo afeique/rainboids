@@ -239,31 +239,10 @@ export function takeDamage(damageAmount = this.baseDamage, opts = {}) {
         return burnDmg;
     }
 
-    // 6.28.0 — DODGE: flat % chance to ignore a hit entirely. Rolls
-    // before REFLEXES so a lucky dodge doesn't burn the 30s REFLEXES
-    // free-dodge cooldown. 6.32.0 — chance = passive stacks (5%/stack)
-    // + item dodge affixes (rolled %), capped at 50%.
-    const dodgeStacks = this.player.getPowerupStacks ? this.player.getPowerupStacks('DODGE') : 0;
-    const itemDodge = this.player.getItemAffixTotal ? this.player.getItemAffixTotal('dodge') : 0;
-    const spDodge = this.player.getSpStatValue ? this.player.getSpStatValue('DODGE') : 0;
-    // P6 — Last Bastion passive: +20% dodge while below 30% max HP.
-    let passiveDodge = 0;
-    if (this.player.hasPassive && this.player.hasPassive('LAST_BASTION')) {
-        const maxHp = (typeof this.player.getEffectiveMaxHealth === 'function')
-            ? this.player.getEffectiveMaxHealth() : this.player.maxHealth;
-        if (maxHp > 0 && this.player.health <= maxHp * 0.30) passiveDodge = 0.20;
-    }
-    const dodgeChance = Math.min(0.5, dodgeStacks * 0.05 + (itemDodge + spDodge) / 100 + passiveDodge);
-    if (dodgeChance > 0 && Math.random() < dodgeChance) {
-        if (typeof this.events?.emit === 'function') this.events.emit('audio:shield');
-        // P6 — Backlash: a dodge retaliates with a strike at the attacker.
-        if (this.player.hasPassive && this.player.hasPassive('BACKLASH')
-            && typeof this.damageEnemy === 'function') {
-            const atk = backlashTarget(opts.source);
-            if (atk) this.damageEnemy(atk, BACKLASH_DAMAGE);
-        }
-        return;
-    }
+    // 9.0.0 (reboot) — player DODGE / evasion removed. There is no chance to
+    // ignore a hit; survivability comes from the DEFENSE draft pool (life /
+    // regen / vampirism / toughness / move speed). (Enemy dodge AI is unrelated
+    // and stays.)
 
     // 5.75.0 — REFLEXES: one free dodge per 30s.
     if (this.player.getPowerupStacks && this.player.getPowerupStacks('REFLEXES') > 0) {

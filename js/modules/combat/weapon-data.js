@@ -1702,7 +1702,7 @@ export const STATS = {
     SHIELD_BOOST:  { id: 'SHIELD_BOOST',  name: 'Toughness',          description: '+8% damage reduction (cap 75%)',       maxStacks: 8,  passive: true, icon: 'shield' },
     VAMPIRISM:     { id: 'VAMPIRISM',     name: 'Vampirism',          description: 'Heal 5% of damage dealt',              maxStacks: 5,  passive: true, icon: 'skull'  },
     THORNS:        { id: 'THORNS',        name: 'Thorns',             description: 'Reflect 25% of damage taken',          maxStacks: 4,  passive: true, icon: 'anger'  },
-    DODGE:         { id: 'DODGE',         name: 'Evasion',            description: '+5% dodge chance (cap 50%)',           maxStacks: 10, passive: true, icon: 'wind'   },
+    // 9.0.0 (reboot) — DODGE powerup removed (player evasion stat gone).
     SPEED_BOOST:   { id: 'SPEED_BOOST',   name: 'Speed',              description: '+65% thrust & top speed',              maxStacks: 4,  passive: true, icon: 'wind',  gradientColors: ['#aaffff', '#0099cc'], color: '#66ddff' },
 };
 
