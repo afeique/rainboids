@@ -103,6 +103,7 @@ import { HangarOverlay } from './ui/hangar-overlay.js';
 import { SettingsOverlay } from './ui/settings-overlay.js';
 import { LoadoutOverlay } from './ui/loadout-overlay.js';
 import { DraftOverlay } from './ui/draft-overlay.js';
+import { NewGameOverlay } from './ui/newgame-overlay.js';
 import { applyDraftCard, rollDraft } from './combat/draft-engine.js';
 import { DRAFT_CATEGORIES } from './combat/draft-data.js';
 import { AnalogStick } from './ui/analog-stick.js';
@@ -1083,7 +1084,13 @@ export class GameEngine {
                 this.player.equippedAbilities = [abil[0] || null, abil[1] || null, abil[2] || null, abil[3] || null];
             }
         } else if (loadout) {
-            // Legacy single-form { primary, power, ability }.
+            // Single-form { primary, power, ability } — the 9.0.0 new-game
+            // picker uses this. Mark _loadoutChosen so the legacy path doesn't
+            // re-widen the owned pool.
+            if ((loadout.primary && PRIMARY_WEAPONS[loadout.primary])
+                || (loadout.power && POWER_WEAPONS[loadout.power])) {
+                this._loadoutChosen = true;
+            }
             if (loadout.primary && PRIMARY_WEAPONS[loadout.primary]) {
                 this.player.activePrimary = loadout.primary;
                 this.player.ownedPrimaries = new Set([loadout.primary]);
@@ -4583,44 +4590,29 @@ export class GameEngine {
     // ARMORY → run); the screen's START RUN button calls startNewRun().
     // Loads the persistent account-gold so the wallet shows before a run.
     openArmory() {
-        // Seed game.accountGold + cores from meta so the screen + the
-        // upcoming run agree (init()→applyPersistentProfile re-reads them).
-        try {
-            const meta = loadMeta();
-            this.game.accountGold = resolveAccountGold(meta);
-            this.game.cores = (meta && typeof meta.cores === 'number') ? Math.max(0, meta.cores | 0) : 0;
-        } catch {}
+        // 9.0.0 (reboot) — pre-run is a simple "back to basics" picker: pick
+        // a primary + power weapon (no inventory, no gear, no unlock gating).
+        // The old BUILD-tree pre-run is retired here.
         this.game.state = GAME_STATES.ARMORY;
+        if (!this._newGameOverlay) this._newGameOverlay = new NewGameOverlay();
+        this._newGameOverlay.open({
+            onStart: (sel) => this.beginNewGameRun(sel),
+            onBack: () => {
+                this.game.state = GAME_STATES.TITLE_SCREEN;
+            },
+        });
+    }
 
-        // 2026-05-23 — The start-of-run screen now uses the bubble UPGRADE
-        // TREE (the same #shop-overlay tree) in pre-run BUILD mode, where
-        // the player selects weapons + abilities (and browses their
-        // attunements). The legacy flat-list ArmoryOverlay is preserved
-        // below (commented) in case we want to revert or repurpose it.
-        //
-        //   if (!this._armoryOverlay) {
-        //       this._armoryOverlay = new ArmoryOverlay();
-        //       this._armoryOverlay.setGameEngine(this);
-        //   }
-        //   this._armoryOverlay.open();
-        //
-        // We still instantiate ArmoryOverlay (without opening it) as the
-        // gear-logic host for the GEAR tab + tests.
-        if (!this._armoryOverlay) {
-            this._armoryOverlay = new ArmoryOverlay();
-            this._armoryOverlay.setGameEngine(this);
-        }
-        const meta = loadMeta() || {};
-        shopDom.setPreRunSelection(normalizeLoadout(meta.loadout || {}, meta));
-        shopDom.setPreRunAttunements((meta.loadout && meta.loadout.attunements) || {});
-        shopDom.setPreRunMods((meta.loadout && meta.loadout.mods) || {});
-        shopDom.setPreRunAbilityAttune((meta.loadout && meta.loadout.abilityAttune) || {});
-        shopDom.setPreRunPassives((meta.loadout && meta.loadout.passives) || []);
-        // RUN-06 — seed the RUN SETUP controls from the last-saved run shape
-        // (falls back to the default 10×3 when none has been chosen yet).
-        shopDom.setPreRunRunConfig((meta.loadout && meta.loadout.runConfig) || DEFAULT_RUN_CONFIG);
-        this._preRunTreeOpen = true;
-        shopDom.showShopDom(true);
+    // 9.0.0 (reboot) — begin an endless run from the new-game picker's selection
+    // ({ primary, power }). Finalizes the title-screen teardown then starts the
+    // run with a { primary, power } loadout (applied in loadLoadout).
+    beginNewGameRun(sel) {
+        sel = sel || {};
+        try { if (typeof this._finalizeTitleExit === 'function') this._finalizeTitleExit(); } catch (_e) {}
+        const loadout = {};
+        if (sel.primary) loadout.primary = sel.primary;
+        if (sel.power) loadout.power = sel.power;
+        this.startNewRun(loadout);
     }
 
     // 6.157.0 — open the HANGAR cosmetic ship-skin selector (from the title
