@@ -57,7 +57,18 @@ export function assistAbilityName(id) {
 }
 
 export function drawHUD() {
-        if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.SHOP) {
+        // 9.0.0 (reboot) — also skip the in-game HUD (triforce + spheres +
+        // PRM/PWR squares + survival timer) on the pre-run screens (ARMORY /
+        // LOADOUT / SETTINGS). The new-game picker is a full-screen DOM
+        // overlay, but the canvas still draws the starfield behind it; without
+        // this guard a default "▲ / ▲▲" triforce flashes top-left through it.
+        const _s = this.game.state;
+        const _skipHud = _s === GAME_STATES.TITLE_SCREEN
+            || _s === GAME_STATES.SHOP
+            || _s === GAME_STATES.ARMORY
+            || _s === GAME_STATES.LOADOUT
+            || _s === GAME_STATES.SETTINGS;
+        if (!_skipHud) {
             // Draw health bar and UI elements
             this.updateHUD();
             // 5.79.2 — DOM hud-shop button is replaced by canvas-rendered
