@@ -348,20 +348,10 @@ export function getPowerupStacks(type) {
 // 6.32.0 — Sum the rolled affix values of a given type across all
 // equipped inventory items. Items mirror the passive stat set, so the
 // effective-stat getters add this on top of the passive-stack bonus.
-export function getItemAffixTotal(type) {
-    let total = 0;
-    if (this.equippedItems) {
-        for (const slot of Object.keys(this.equippedItems)) {
-            const it = this.equippedItems[slot];
-            if (it && Array.isArray(it.affixes)) {
-                for (const a of it.affixes) {
-                    if (a.type === type) total += (a.value || 0);
-                }
-            }
-        }
-    }
-    return total;
-}
+// 9.0.0 (reboot) — inventory/gear removed; no equipped-item affixes ever exist
+// now, so this returns 0 and every effective-stat getter collapses to base +
+// powerup stacks + SP + passive mods.
+export function getItemAffixTotal(/* type */) { return 0; }
 
 // ── Effective stat calculations ───────────────────────────────────────────
 

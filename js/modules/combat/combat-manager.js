@@ -5,8 +5,7 @@ import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, ABILITIES } from './weapon-data.js';
 import { DEFENSE_CONFIGS } from './defense-data.js';
 import { POWERUP_TYPES } from '../world/powerup.js';
-import { createItem } from '../world/item-system.js';
-import { rollRarity } from '../world/item-names.js';
+// 9.0.0 (reboot) — item drops removed; createItem / rollRarity imports dropped.
 import { rewardMultiplier } from '../world/reward-dial.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
@@ -997,41 +996,8 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         this.lastHealthOrbDropAt = now;
     }
 
-    // ── Item drops (6.x — left-edge loot feed) ──
-    // Five slots across HP (cockpit/hull), toughness (shielding/chassis),
-    // and trinket (nanites). Three independent rolls per enemy kill. Boss
-    // kills bias rarity toward rare+ and bump base rates. Drops no longer
-    // spawn world-space pickup orbs — each roll is registered into the
-    // player's left-edge loot feed (player.registerItemDrop), which
-    // auto-equips it if it beats the slot. ALL drops are kept (not just
-    // upgrades) so the 'I' inventory can re-equip a past one.
-    if (isEnemy && player && typeof player.registerItemDrop === 'function') {
-        const boss = !!(entity && entity.isBoss);
-        // P6 — Scavenger passive: +50% item (gear) drop rate.
-        const dropMult = (player.hasPassive && player.hasPassive('SCAVENGER')) ? 1.5 : 1;
-        // RUN-03 — Reward Dial scales gear-drop CHANCE (each rate clamped
-        // ≤ 1.0 in tryRoll) and nudges the RARITY BIAS upward. For the
-        // default run runRewardMult === 1.0 → both are exact no-ops.
-        const hpRate     = (boss ? 0.085 : 0.025) * dropMult * runRewardMult;
-        const toughRate  = (boss ? 0.075 : 0.020) * dropMult * runRewardMult;
-        const trinkRate  = (boss ? 0.060 : 0.015) * dropMult * runRewardMult;
-        // Conservative rarity-bias nudge: half the dial's "extra" folds into
-        // the rollRarity bossBias (0..1). +0 on default runs.
-        const rewardRarityBias = Math.max(0, (runRewardMult - 1) * 0.5);
-        const bonusRare  = (boss ? 0.10  : 0) + rewardRarityBias;
-        const bonusEpic  = boss ? 0.08  : 0;
-
-        const tryRoll = (slot, rate) => {
-            if (Math.random() >= Math.min(1.0, rate)) return;
-            const rarity = rollRarity(bonusRare, bonusEpic);
-            const item = createItem(slot, wave, rarity);
-            player.registerItemDrop(item);
-        };
-
-        tryRoll(Math.random() < 0.5 ? 'cockpit' : 'hull', hpRate);
-        tryRoll(Math.random() < 0.5 ? 'shielding' : 'chassis', toughRate);
-        tryRoll('nanites', trinkRate);
-    }
+    // 9.0.0 (reboot) — inventory/gear LOOT DROPS removed. Enemies no longer
+    // drop items; power now comes only from the between-wave boon draft.
 
     // ── Money orbs ── no cooldown.
     if (Math.random() < moneyDropRate) {

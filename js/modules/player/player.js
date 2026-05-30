@@ -8,7 +8,7 @@ import * as passives from './passives.js';
 import * as playerRenderer from './renderer.js';
 import { loadSettings } from '../core/storage.js';
 import { DEFAULT_SKIN_ID } from './skins/index.js';
-import { scoreItem } from '../world/item-system.js';
+// 9.0.0 (reboot) — inventory/gear removed; scoreItem import dropped.
 // Mobile auto-fire (5.92.0): when running in mobile mode the player
 // has no spare hand to tap a power-weapon button — the spec auto-
 // fires the equipped power weapon the moment it's ready (off
@@ -482,60 +482,11 @@ export class Player {
     // ARMORY inventory screen and locked for the run; mid-run pickups just
     // accrue to the loot feed (display) + the run collection, which is
     // committed to the persistent stash at run end. Returns the feed entry.
-    registerItemDrop(item) {
-        if (!item || !item.slot) return null;
-        if (!this.lootFeed) this.lootFeed = [];
-        const entry = {
-            id: ++this._lootFeedSeq,
-            item,
-            equipped: false, // never auto-equipped (R8.2)
-            born: (typeof performance !== 'undefined' ? performance.now() : Date.now()),
-        };
-        this.lootFeed.unshift(entry);
-        const MAX_FEED = 7;
-        if (this.lootFeed.length > MAX_FEED) this.lootFeed.length = MAX_FEED;
-        // Phase R8.1 — keep the full run collection for the run-end stash
-        // commit (the lootFeed above is display-only and capped).
-        if (!this.runCollected) this.runCollected = [];
-        this.runCollected.push(item);
-        // 6.226.0 — loot is yours the moment you grab it: mark the account
-        // dirty so the coalesced flush commits it to the persistent stash
-        // within ~1s, surviving a mid-run close even before run-end.
-        this.gameEngine?.markMetaDirty?.();
-        return entry;
-    }
-
-    equipItem(item, opts = {}) {
-        if (!item || !item.slot) return { equipped: false, current: null };
-        if (!this.equippedItems) {
-            this.equippedItems = {
-                cockpit: null, hull: null, shielding: null, chassis: null, nanites: null,
-            };
-        }
-        const prev = this.equippedItems[item.slot] || null;
-        // `force` (manual re-equip from the 'I' inventory) bypasses the
-        // equip-if-better gate so the player can deliberately choose a
-        // lower-scored item. Auto-equip from drops omits force.
-        if (!opts.force && prev && scoreItem(item) <= scoreItem(prev)) {
-            return { equipped: false, current: prev };
-        }
-        if (prev === item) return { equipped: false, current: prev };
-        // 6.32.0 — items are multi-affix now. Bump current HP by the net
-        // max-HP gain (new item's hp affixes minus the replaced item's)
-        // so equipping an HP roll heals the delta, like before.
-        const affixHp = (it) => (it && Array.isArray(it.affixes))
-            ? it.affixes.filter((a) => a.type === 'hp').reduce((s, a) => s + a.value, 0)
-            : 0;
-        const hpGain = affixHp(item) - affixHp(prev);
-        this.equippedItems[item.slot] = item;
-        if (hpGain > 0) {
-            const newMax = this.getEffectiveMaxHealth();
-            this.health = Math.min(newMax, this.health + hpGain);
-        }
-        // 6.226.0 — persist the equip swap (equippedItems live in the profile).
-        this.gameEngine?.markMetaDirty?.();
-        return { equipped: true, replaced: prev };
-    }
+    // 9.0.0 (reboot) — inventory/gear removed. No item drops, no equip; power
+    // comes from the between-wave boon draft. Stubs kept so any lingering caller
+    // is harmless.
+    registerItemDrop(/* item */) { return null; }
+    equipItem(/* item, opts */) { return { equipped: false, current: null }; }
 
     gainExperience(amount) {
         return progression.gainExperience.call(this, amount);
