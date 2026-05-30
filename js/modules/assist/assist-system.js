@@ -1,4 +1,4 @@
-import { ABILITIES, POWER_WEAPONS } from '../combat/weapon-data.js';
+import { POWER_WEAPONS } from '../combat/weapon-data.js';
 import { triggerHapticFeedback } from '../core/utils.js';
 import { HAPTIC } from '../platform/haptic.js';
 
@@ -121,26 +121,10 @@ function roleScore(role, situation, config) {
     }
 }
 
-export function decideCast(situation, equipped, cooldowns = [], config = DEFAULT_ASSIST_CONFIG, lastCast = {}) {
-    if (!config.autoCastAbilities) return null;
-    let best = null;
-    const now = situation.now || Date.now();
-    for (let slot = 0; slot < (equipped || []).length; slot++) {
-        const id = equipped[slot];
-        const cfg = ABILITIES[id];
-        if (!cfg || cooldowns[slot] > 0) continue;
-        const meta = cfg.autoCast || {};
-        if ((meta.minThreatLevel || 0) > situation.threatLevel) continue;
-        if (situation.player?.activeAbilityEffects?.has?.(id)) continue;
-        let score = roleScore(meta.role, situation, config);
-        if (situation.minTTI < 0.3 && ['heal', 'mitigate', 'escape', 'cc'].includes(meta.role)) score += 35;
-        if (score <= 0) continue;
-        if ((now - (lastCast.bigCastAt || 0)) < BIG_CAST_GAP_MS && !['heal', 'mitigate', 'escape'].includes(meta.role)) continue;
-        if (!best || score > best.score) {
-            best = { type: 'ability', slot, id, score, target: meta.targeting === 'cluster' ? situation.clusterCentroid : null };
-        }
-    }
-    return best;
+// 9.0.0 (reboot) — defense abilities removed; the Co-Pilot has no abilities to
+// auto-cast. Always returns null. (Power-weapon auto-cast in decidePower stays.)
+export function decideCast(/* situation, equipped, cooldowns, config, lastCast */) {
+    return null;
 }
 
 export function decidePower(situation, powerId, ready, config = DEFAULT_ASSIST_CONFIG, lastCast = {}) {

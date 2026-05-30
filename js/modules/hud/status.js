@@ -4,7 +4,7 @@
 
 import { GAME_STATES } from '../core/constants.js';
 import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '../core/utils.js';
-import { ABILITIES, PRIMARY_WEAPONS } from '../combat/weapon-data.js';
+import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 // 9.0.0 (reboot) — leveling/XP removed; xpForLevel/MAX_LEVEL no longer used.
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
@@ -50,11 +50,10 @@ export function isNewAssistCast(cast, lastSeenT) {
 // Resolve an ability id (e.g. 'BULWARK') to its display name (e.g. 'Bulwark').
 // Falls back to the raw id when the ability has no `name`, and returns '' for a
 // missing/unknown id so the toast can be skipped gracefully (no NPE).
+// 9.0.0 (reboot) — abilities removed; no Co-Pilot ability casts fire, so this
+// is only reached by dead paths. Return the raw id (ABILITIES lookup gone).
 export function assistAbilityName(id) {
-    if (!id) return '';
-    const cfg = ABILITIES[id];
-    if (cfg && cfg.name) return cfg.name;
-    return String(id);
+    return id ? String(id) : '';
 }
 
 export function drawHUD() {
@@ -1794,7 +1793,7 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
 
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
     const powerCfg = this.player.getActivePowerConfig?.() || {};
-    const abilityCfg = this.player.getActiveAbilityConfig?.() || {};
+    // 9.0.0 (reboot) — abilityCfg dropped (ability system removed).
 
     // Animation: brief scale + glow pulse on whichever square just
     // cycled. State lives on the game engine. anim.slot is one of
@@ -1842,13 +1841,7 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
         powerGlow,
     );
 
-    // ── Ability bar (B.S3) — 4 adjacent slots above the PRM/PWR row ───
-    // The ability system is a 4-slot model: player.equippedAbilities[0..3]
-    // with parallel abilityCooldowns / abilityCooldownsMax arrays. Slots
-    // are slightly smaller than the loadout squares and sit in their
-    // own row directly above PRM/PWR (anchored at the same left edge),
-    // each labeled with its keybind (1–4).
-    drawAbilitySlotBar.call(this, ctx, groupX, groupY - 8);
+    // 9.0.0 (reboot) — defense abilities removed; ability HUD bar gone.
 
     // 5.101.0 — Defensive ABILITY square suspended. Defensive abilities are
     // retired (game is primary + power weapons only); defensive picks
@@ -1915,174 +1908,7 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
 // (the same dark-overlay clip the old single-ability HUD used). Empty
 // slots render a dim placeholder so the player can see all four slots.
 // Exported so the unit smoke test can drive it with a mock ctx/player.
-export function drawAbilitySlotBar(ctx, leftX, bottomY) {
-    if (!this.player) return;
-    const equipped = this.player.equippedAbilities || [];
-    const cooldowns = this.player.abilityCooldowns || [];
-    const cooldownsMax = this.player.abilityCooldownsMax || [];
-
-    const slotSize = 38;            // smaller than the 50px loadout squares
-    const slotGap = 8;
-    const radius = 9;
-    const top = bottomY - slotSize; // bar grows upward from bottomY
-
-    // SYS-9 / ENMY-10 — NULL_DRONE suppress cue. While the player stands in a
-    // drone's aura, tint the slot bar violet + tag it so the slowed recharge is
-    // legible. isSuppressed defaults false (no stamp) ⇒ this whole block is
-    // skipped for a player not in an aura.
-    const suppressed = isSuppressed(this.player, Date.now());
-
-    // FB-1 (P7) — Co-Pilot auto-cast pip flash. detectAssistCast arms
-    // this._assistCastFlash = { slot, until }; we read it here, compute a 0→1
-    // fade for the lit slot, and clear it once expired. No flash armed (no
-    // Co-Pilot) ⇒ flashSlot stays -1 and the loop's flash block is skipped.
-    let flashSlot = -1;
-    let flashPulse = 0;
-    if (this._assistCastFlash) {
-        const nowF = Date.now();
-        if (nowF < this._assistCastFlash.until) {
-            flashSlot = this._assistCastFlash.slot;
-            const remain = this._assistCastFlash.until - nowF;
-            flashPulse = Math.max(0, Math.min(1, remain / ASSIST_FLASH_MS));
-        } else {
-            this._assistCastFlash = null;
-        }
-    }
-
-    for (let slot = 0; slot < 4; slot++) {
-        const sx = leftX + slot * (slotSize + slotGap);
-        const cx = sx + slotSize / 2;
-        const cy = top + slotSize / 2;
-        const half = slotSize / 2;
-
-        const abilityId = equipped[slot];
-        const cfg = (abilityId && ABILITIES[abilityId]) || null;
-
-        ctx.save();
-
-        // Background panel.
-        _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-        ctx.fill();
-
-        if (cfg) {
-            // Border in the ability's accent color.
-            ctx.strokeStyle = cfg.color || '#ff88dd';
-            ctx.lineWidth = 2;
-            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
-            ctx.stroke();
-
-            // Icon — reuse the cached-SVG mechanism from drawWeaponSquare.
-            const slug = resolveIconSlug(cfg.icon);
-            const iconPx = Math.round(slotSize * 0.55);
-            if (slug) {
-                const img = getIconImage(slug, iconPx, '#ffffff');
-                if (img) ctx.drawImage(img, cx - iconPx / 2, cy - iconPx / 2, iconPx, iconPx);
-            } else {
-                ctx.font = `${iconPx}px Arial`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#ffffff';
-                ctx.fillText(cfg.icon || '?', cx, cy + 1);
-            }
-
-            // Cooldown overlay — bottom-up dark fill clipped to the slot,
-            // identical visual to the retired single-ability cooldown HUD.
-            const cdRemaining = cooldowns[slot] || 0;
-            const cdTotal = cooldownsMax[slot] || cfg.cooldown || 1;
-            const cdRatio = cdRemaining > 0 && cdTotal > 0
-                ? Math.min(1, cdRemaining / cdTotal)
-                : 0;
-            if (cdRatio > 0) {
-                ctx.save();
-                _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
-                ctx.clip();
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                ctx.fillRect(sx, top + slotSize * (1 - cdRatio), slotSize, slotSize * cdRatio);
-                ctx.restore();
-                // Seconds remaining, centered.
-                const secs = Math.ceil(cdRemaining / 1000);
-                ctx.font = "bold 9px 'Press Start 2P', monospace";
-                ctx.fillStyle = '#FF8888';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(`${secs}`, cx, cy);
-            }
-        } else {
-            // Empty slot — dim dashed placeholder.
-            ctx.globalAlpha = 0.35;
-            ctx.strokeStyle = '#778899';
-            ctx.lineWidth = 1.5;
-            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
-            ctx.stroke();
-            ctx.globalAlpha = 1;
-        }
-
-        // SYS-9 / ENMY-10 — suppress tint: a translucent violet wash + outline
-        // over the slot while suppressed (the NULL_DRONE accent color).
-        if (suppressed) {
-            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
-            ctx.fillStyle = 'rgba(122, 95, 255, 0.28)';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(169, 138, 255, 0.85)';
-            ctx.lineWidth = 1.5;
-            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
-            ctx.stroke();
-        }
-
-        // FB-1 (P7) — auto-cast pip flash: a bright cyan fill pulse + glowing
-        // outline on the slot the Co-Pilot just cast, fading over ASSIST_FLASH_MS.
-        // Only the lit slot draws this; flashSlot is -1 when no cast is armed.
-        if (slot === flashSlot && flashPulse > 0) {
-            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
-            ctx.fillStyle = `rgba(122, 240, 255, ${0.45 * flashPulse})`;
-            ctx.fill();
-            ctx.save();
-            ctx.shadowColor = '#7af0ff';
-            ctx.shadowBlur = 12 * flashPulse;
-            ctx.strokeStyle = `rgba(190, 250, 255, ${0.95 * flashPulse})`;
-            ctx.lineWidth = 2.5;
-            _roundedRectPath(ctx, sx, top, slotSize, slotSize, radius);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        ctx.restore();
-
-        // Keybind label (1–4) in the slot's top-left corner. Drawn after
-        // the cooldown overlay so it stays legible while on cooldown.
-        ctx.save();
-        ctx.font = "8px 'Press Start 2P', monospace";
-        ctx.fillStyle = cfg ? '#ffffff' : 'rgba(255, 255, 255, 0.45)';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        const keyLabel = `${slot + 1}`;
-        ctx.strokeText(keyLabel, sx + 3, top + 3);
-        ctx.fillText(keyLabel, sx + 3, top + 3);
-        ctx.restore();
-    }
-
-    // SYS-9 / ENMY-10 — a tiny "SUPPRESSED" tag above the bar while in a
-    // NULL_DRONE aura. Canvas-drawn (DOM ui:show-message is dead). Skipped
-    // entirely when not suppressed.
-    if (suppressed) {
-        ctx.save();
-        ctx.font = "7px 'Press Start 2P', monospace";
-        ctx.fillStyle = '#c9b6ff';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'bottom';
-        const tag = 'SUPPRESSED';
-        ctx.strokeText(tag, leftX + 1, top - 5);
-        ctx.fillText(tag, leftX + 1, top - 5);
-        ctx.restore();
-    }
-}
+export function drawAbilitySlotBar() { /* 9.0.0 (reboot) — defense abilities removed; ability bar gone */ }
 
 function _roundedRectPath(ctx, x, y, w, h, r) {
     const rr = Math.min(r, w / 2, h / 2);

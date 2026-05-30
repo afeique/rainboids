@@ -194,28 +194,8 @@ export class InputHandler {
                 this.input.fireSecondary = true;
                 e.preventDefault();
                 break;
-            // B.S2 — number keys 1–4 activate the four equipped ability
-            // slots (Digit1→0 … Digit4→3, Numpad1..4 mirrored). Each sets
-            // a one-shot rising-edge pulse consumed by Player.update; the
-            // per-slot cooldown guard lives in Player.activateAbility(slot).
-            // Auto-repeat (e.repeat) is ignored so holding a number key
-            // doesn't spam re-activations. Replaces the retired TAB binding.
-            case 'Digit1':
-            case 'Numpad1':
-                if (!e.repeat) this.input.activateAbilitySlot[0] = true;
-                break;
-            case 'Digit2':
-            case 'Numpad2':
-                if (!e.repeat) this.input.activateAbilitySlot[1] = true;
-                break;
-            case 'Digit3':
-            case 'Numpad3':
-                if (!e.repeat) this.input.activateAbilitySlot[2] = true;
-                break;
-            case 'Digit4':
-            case 'Numpad4':
-                if (!e.repeat) this.input.activateAbilitySlot[3] = true;
-                break;
+            // 9.0.0 (reboot) — defense abilities removed; the number-key 1–4
+            // ability-slot bindings are gone (Shift dash kept below).
             // 5.93.0 — SHIFT triggers the core dash movement primitive.
             // Set `shift` (continuous-state mirror) so callers can read
             // the held state if needed, plus a one-shot `dashPulse` on

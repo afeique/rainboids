@@ -2,7 +2,7 @@
 import { GAME_CONFIG, BLOODSHIELD_CAP_FRAC, BLOODSHIELD_DECAY_PER_SEC, BLOODSHIELD_DECAY_DELAY_MS, BLOODLUST_DECAY_MS, FLUX_WINDOW_MS, CAPACITOR_BANK_DECAY_PER_SEC, HEAT_SINK_DECAY_PER_SEC, HEAT_SINK_MAX } from '../core/constants.js';
 import { random, wrap } from '../core/utils.js';
 import * as weapons from './weapons.js';
-import * as abilities from './abilities.js';
+// 9.0.0 (reboot) — defense abilities removed; abilities.js import dropped.
 import * as progression from './progression.js';
 import * as passives from './passives.js';
 import * as playerRenderer from './renderer.js';
@@ -1149,27 +1149,9 @@ export class Player {
             this.spawnChargeBeamParticles(particlePool);
         }
 
-        // Defense abilities — B.S2 number keys 1–4 activate the four
-        // equipped ability slots. Each input.activateAbilitySlot[i] is a
-        // one-shot rising-edge pulse from input-handler.js; consume each
-        // true pulse and clear it (the per-slot cooldown / empty-slot
-        // guard lives in Player.activateAbility(slot)).
-        const abilitySlots = input.activateAbilitySlot;
-        if (abilitySlots) {
-            for (let slot = 0; slot < abilitySlots.length; slot++) {
-                if (abilitySlots[slot]) {
-                    this.activateAbility(slot);
-                    abilitySlots[slot] = false; // consume one-shot pulse
-                }
-            }
-        }
-        // Back-compat slot-0 pulse: the gamepad path (gamepad-handler.js,
-        // BTN_CIRCLE) still raises the legacy input.activateAbility flag.
-        // Map it to slot 0 until the gamepad gains a 4-slot mapping.
-        if (input.activateAbility) {
-            this.activateAbility(0);
-            input.activateAbility = false; // consume one-shot pulse
-        }
+        // 9.0.0 (reboot) — defense abilities removed. Number keys 1-4 /
+        // gamepad slot pulses no longer activate anything. The SHIFT dash
+        // below is a core movement primitive (kept) — it's not an ability.
 
         // 5.93.0 — SHIFT-key dash. One-shot pulse from input-handler.js
         // fires the dash through _triggerDash, which honors the cooldown
@@ -1210,14 +1192,10 @@ export class Player {
         // the weapons.js update loop. The legacy timer is preserved but
         // no longer drives state.
 
-        // Update active ability effects (regen, dash, etc.)
-        this.updateActiveAbilities(1000 / GAME_CONFIG.LOGIC_HZ);
-
+        // 9.0.0 (reboot) — defense-ability effects removed; nothing to update.
     }
 
-    updateActiveAbilities(dt) {
-        return abilities.updateActiveAbilities.call(this, dt);
-    }
+    updateActiveAbilities(/* dt */) { /* removed (9.0.0) */ }
     
     draw(ctx) {
         return playerRenderer.draw.call(this, ctx);
@@ -1453,17 +1431,10 @@ export class Player {
         return weapons.buyPower.call(this, weaponId);
     }
 
-    equipAbility(abilityId, slot = 0) {
-        return abilities.equipAbility.call(this, abilityId, slot);
-    }
-
-    cycleAbility(slot = 0) {
-        return abilities.cycleAbility.call(this, slot);
-    }
-
-    activateAbility(slot = 0) {
-        return abilities.activateAbility.call(this, slot);
-    }
+    // 9.0.0 (reboot) — defense abilities removed; no-op stubs.
+    equipAbility(/* abilityId, slot */) { return false; }
+    cycleAbility(/* slot */) { return false; }
+    activateAbility(/* slot */) { return false; }
 
     // ── SHIFT-key dash (5.93.0) ─────────────────────────────────────────
     // Core movement primitive — no longer a defense ability. Pure player
@@ -1600,15 +1571,9 @@ export class Player {
         return !!this.isDashing && this.dashTimer > 0;
     }
 
-    getActiveAbilityConfig(slot = 0) {
-        return abilities.getActiveAbilityConfig.call(this, slot);
-    }
-
-    // Phase B.S1 — alias matching the refactor's intended name. Returns the
-    // ABILITIES config for the ability in `slot` (default 0).
-    getEquippedAbility(slot = 0) {
-        return abilities.getActiveAbilityConfig.call(this, slot);
-    }
+    // 9.0.0 (reboot) — defense abilities removed; no equipped-ability config.
+    getActiveAbilityConfig(/* slot */) { return null; }
+    getEquippedAbility(/* slot */) { return null; }
 
     getEffectivePrimaryFireRate() {
         return weapons.getEffectivePrimaryFireRate.call(this);
@@ -1675,8 +1640,20 @@ export class Player {
         return { healed, overflow };
     }
 
+    // 9.0.0 (reboot) — defense-ability slot cooldowns are gone, but this same
+    // per-frame tick still drives:
+    //   • powerCooldown — power-weapon anti-spam floor, gates isPowerReady()
+    //     (without this tick power weapons fire ONCE per run and then never
+    //     refill — the cooldown is set on fire but never decremented).
+    //   • dashCooldown  — SHIFT-dash movement primitive cooldown.
+    // Both must keep ticking.
     updateAbilityCooldowns(dt) {
-        return abilities.updateAbilityCooldowns.call(this, dt);
+        if (this.powerCooldown > 0) {
+            this.powerCooldown = Math.max(0, this.powerCooldown - dt);
+        }
+        if (this.dashCooldown > 0) {
+            this.dashCooldown = Math.max(0, this.dashCooldown - dt);
+        }
     }
 
     // Wave bonus shield system removed - replaced with shop system
