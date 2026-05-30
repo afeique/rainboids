@@ -99,7 +99,7 @@ import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './c
 import { StatsOverlay } from './ui/stats-overlay.js';
 import { InventoryOverlay } from './ui/inventory-overlay.js';
 import { ArmoryOverlay } from './ui/armory-overlay.js';
-import { HangarOverlay } from './ui/hangar-overlay.js';
+// 9.0.0 (reboot) — HANGAR (skin picker) removed; HangarOverlay import dropped.
 import { SettingsOverlay } from './ui/settings-overlay.js';
 import { LoadoutOverlay } from './ui/loadout-overlay.js';
 import { DraftOverlay } from './ui/draft-overlay.js';
@@ -4615,16 +4615,10 @@ export class GameEngine {
         this.startNewRun(loadout);
     }
 
-    // 6.157.0 — open the HANGAR cosmetic ship-skin selector (from the title
-    // screen). Full-screen DOM overlay; its BACK button returns to the title.
-    openHangar() {
-        if (!this._hangarOverlay) {
-            this._hangarOverlay = new HangarOverlay();
-            this._hangarOverlay.setGameEngine(this);
-        }
-        this.game.state = GAME_STATES.HANGAR;
-        this._hangarOverlay.open();
-    }
+    // 9.0.0 (reboot) — HANGAR (skin picker) removed; the title-screen button
+    // is gone and player.skinId is pinned to DEFAULT_SKIN_ID. Kept as a no-op
+    // stub in case any guarded caller (debug menu / gamepad nav) still pings it.
+    openHangar() { /* removed (9.0.0) */ }
 
     isHangarOpen() {
         return !!(this._hangarOverlay && this._hangarOverlay.isOpen());

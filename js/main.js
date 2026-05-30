@@ -206,7 +206,7 @@ class RainboidsGame {
             if (rects.newGame  && hit(rects.newGame))  return 'newGame';
             if (rects.continue && hit(rects.continue) && !rects.continue.disabled) return 'continue';
             if (rects.tutorial && hit(rects.tutorial)) return 'tutorial';
-            if (rects.hangar   && hit(rects.hangar))   return 'hangar';
+            // 9.0.0 (reboot) — HANGAR removed (no skins).
             if (rects.settings && hit(rects.settings)) return 'settings';
             return null;
         };
@@ -263,12 +263,7 @@ class RainboidsGame {
                 try { this.audioManager.playSound?.('coin'); } catch {}
                 return;
             }
-            // 6.157.0 — HANGAR button opens the cosmetic ship-skin selector.
-            if (id === 'hangar') {
-                try { this.audioManager.playSound?.('coin'); } catch {}
-                ge().openHangar?.();
-                return;
-            }
+            // 9.0.0 (reboot) — HANGAR button removed (no skin system).
             // 6.158.0 — SETTINGS button opens the fonts/display settings.
             if (id === 'settings') {
                 try { this.audioManager.playSound?.('coin'); } catch {}

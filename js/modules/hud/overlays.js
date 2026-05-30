@@ -267,14 +267,15 @@ export function drawTitleScreen() {
         // 6.28.0 — Multiplayer button replaced by an always-present
         // TUTORIAL button, so there's always one extra row below the
         // NEW GAME / CONTINUE pair.
-        const mpRows = 1;
+        // 9.0.0 (reboot) — HANGAR removed (no skins); secondary stack is
+        // TUTORIAL + SETTINGS only.
         let buttonsBlockH;
         if (mobilePortrait) {
-            // Vertical stack: NEW GAME + CONTINUE + TUTORIAL + HANGAR + SETTINGS.
-            buttonsBlockH = buttonH * (4 + mpRows) + buttonGap * (3 + mpRows);
+            // Vertical stack: NEW GAME + CONTINUE + TUTORIAL + SETTINGS.
+            buttonsBlockH = buttonH * 4 + buttonGap * 3;
         } else {
-            // Side-by-side primary row + TUTORIAL + HANGAR + SETTINGS rows below.
-            buttonsBlockH = buttonH * (3 + mpRows) + (mpRows ? 18 * 3 : 0);
+            // Side-by-side primary row + TUTORIAL + SETTINGS rows below.
+            buttonsBlockH = buttonH * 3 + 18 * 2;
         }
         // 5.99.1 — recordH shrinks on mobile to match the smaller record
         // font (10/12 px) so the layout block computes the correct
@@ -367,28 +368,18 @@ export function drawTitleScreen() {
                     h: buttonH,
                     disabled: false,
                 };
-                rects.hangar = {
-                    id: 'hangar',
+                // 9.0.0 (reboot) — HANGAR removed (no skins).
+                rects.settings = {
+                    id: 'settings',
                     x: x0,
                     y: yTop + 3 * (buttonH + buttonGap),
                     w: buttonW,
                     h: buttonH,
                     disabled: false,
                 };
-                rects.settings = {
-                    id: 'settings',
-                    x: x0,
-                    y: yTop + 4 * (buttonH + buttonGap),
-                    w: buttonW,
-                    h: buttonH,
-                    disabled: false,
-                };
             } else {
                 // Landscape / desktop — side-by-side NEW GAME + CONTINUE
-                // with optional MULTIPLAYER row beneath. This is the
-                // original pre-5.92 layout, just with the dimensions
-                // computed above (so landscape mobile gets a slightly
-                // smaller version of the same shape).
+                // with TUTORIAL + SETTINGS rows beneath.
                 const totalW = buttonW * 2 + buttonGap;
                 const yTop = buttonsTop;
                 const x0 = centerX - totalW / 2;
@@ -403,18 +394,11 @@ export function drawTitleScreen() {
                     h: buttonH,
                     disabled: false,
                 };
-                rects.hangar = {
-                    id: 'hangar',
-                    x: x0,
-                    y: tutY + buttonH + 18,
-                    w: totalW,
-                    h: buttonH,
-                    disabled: false,
-                };
+                // 9.0.0 (reboot) — HANGAR removed (no skins).
                 rects.settings = {
                     id: 'settings',
                     x: x0,
-                    y: tutY + 2 * (buttonH + 18),
+                    y: tutY + buttonH + 18,
                     w: totalW,
                     h: buttonH,
                     disabled: false,
@@ -488,9 +472,6 @@ export function drawTitleScreen() {
             drawButton(rects.continue, labels[1]);
             if (rects.tutorial) {
                 drawButton(rects.tutorial, 'TUTORIAL');
-            }
-            if (rects.hangar) {
-                drawButton(rects.hangar, 'HANGAR');
             }
             if (rects.settings) {
                 drawButton(rects.settings, 'SETTINGS');

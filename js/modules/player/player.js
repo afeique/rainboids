@@ -87,14 +87,10 @@ export class Player {
         this.glidePhase = 0;          // ever-advancing idle "breathing" phase
         this._prevAimAngle = -Math.PI / 2;
 
-        // 6.157.0 — Cosmetic ship skin (drawn by js/modules/player/skins/).
-        // Loaded from settings so the chosen skin persists across runs.
-        // PURELY visual: every skin shares the same fixed collision radius,
-        // so the choice never affects gameplay.
-        this.skinId = (() => {
-            try { return loadSettings().selectedSkin || DEFAULT_SKIN_ID; }
-            catch { return DEFAULT_SKIN_ID; }
-        })();
+        // 9.0.0 (reboot) — skin picker (HANGAR) removed; every run uses the
+        // DEFAULT skin. The skin module is still imported by renderer.js to
+        // draw the ship.
+        this.skinId = DEFAULT_SKIN_ID;
         
         // Auto-firing system
         this.autoFireTimer = 0;
