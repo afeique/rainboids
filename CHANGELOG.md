@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.2.1] - 2026-05-30
+
+### Fixed
+- **Boot break from the 9.1.1 cleanup.** Deleting `combat/defense-data.js` left a
+  dangling `DEFENSE_CONFIGS` import in `combat/combat-manager.js`, which 404'd at
+  module load and aborted the whole ES-module graph — the game would not start at
+  all. Removed the dead import + its now-unreachable powerup-banner fallback branch.
+
+---
+
 ## [9.2.0] - 2026-05-30
 
 ### Added

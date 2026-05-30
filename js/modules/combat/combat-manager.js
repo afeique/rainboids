@@ -3,7 +3,7 @@ import { GAME_CONFIG, GAME_STATES, getEnemyDropProfile, BLOODLUST_MAX_STACKS, RE
 import { random } from '../core/utils.js';
 import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, ABILITIES } from './weapon-data.js';
-import { DEFENSE_CONFIGS } from './defense-data.js';
+// 9.0.0 (reboot) — defense-data.js removed with the gear/defense-items system.
 import { POWERUP_TYPES } from '../world/powerup.js';
 // 9.0.0 (reboot) — item drops removed; createItem / rollRarity imports dropped.
 import { rewardMultiplier } from '../world/reward-dial.js';
@@ -1088,22 +1088,9 @@ export function getPowerupConfig(type) {
             gradientColors: cfg.gradientColors,
         };
     }
-    // 2) DEFENSE_CONFIGS — defense items (HEALTH_BOOST, SHIELD_BOOST,
-    //    SPEED_BOOST, HEALTH_DROP_FREQUENCY, REFLEXES, LAST_STAND,
-    //    STATIC_FIELD, SPARE_SHIP). Same source the DEFENSE shop tab
-    //    pulls from when active, so the pickup banner and the shop
-    //    tile read the exact same metadata.
-    const dcfg = DEFENSE_CONFIGS[type];
-    if (dcfg) {
-        return {
-            name: dcfg.name,
-            description: dcfg.description,
-            duration: Infinity,
-            icon: dcfg.icon,
-            gradientColors: dcfg.gradientColors,
-        };
-    }
-    // 3) Weapon / ability upgrades from weapon-data.js — pass through
+    // (9.0.0 reboot) — the DEFENSE_CONFIGS fallback lookup is gone with the
+    // gear/defense-items system; defense boons are powerup stacks now.
+    // 2) Weapon / ability upgrades from weapon-data.js — pass through
     //    the upgrade's description so the pickup blurb shows the same
     //    one-liner used in the shop.
     const allUpgrades = { ...PRIMARY_UPGRADES, ...POWER_UPGRADES, ...ABILITY_UPGRADES };
