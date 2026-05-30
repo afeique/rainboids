@@ -278,43 +278,27 @@ export function updateWaveSystem() {
 
         this.showWaveComplete();
 
-        // 5.74.2 — wave clear no longer auto-opens the shop. Instead the
-        // survivor-card overlay (on card stages — see isCardStage) opens for
-        // the pick. 2.7s gap lets the WAVE COMPLETE banner read first.
-        // 5.101.0 — Off-cadence waves auto-advance into the next wave
-        // without interrupting the player. The pause-menu POWERUPS tab
-        // is still reachable any time via ESC for SP spending.
-        const fireSurvivorOverlay = survivorWave;
+        // 9.0.0 (reboot) — every wave clear interposes the between-wave DRAFT:
+        // pick OFFENSE or DEFENSE, then 1 of 3 randomized boon cards. Replaces
+        // the legacy survivor-card overlay + STATS interpose (SP/leveling gone).
+        // 2.7s gap lets the WAVE COMPLETE banner read first.
         setTimeout(() => {
             if (this.game.state !== GAME_STATES.WAVE_TRANSITION) return;
-            if (fireSurvivorOverlay) {
-                this.openWaveClearPowerupsMenu();
-            } else {
-                // No card this wave. Mimic the resume-from-wave-clear path.
-                const proceed = () => {
-                    this._pausedFromWaveClear = false;
-                    if (typeof this.startNextWave === 'function') this.startNextWave();
-                };
-                // R7.3 — on a non-card STAGE clear where the player leveled up,
-                // interpose the STATS screen so freshly-earned SP is spent
-                // before the next wave (restores the pre-R3 every-stage-clear
-                // prompt; the card stages still prompt via closeWavePickOverlay).
-                // Pause first so the deferred STATS mode holds gameplay. Mid-
-                // stage waves bank the SP silently (spend it next stage clear).
-                if (stageClear && this.player && this.player._leveledUpPending
-                    && typeof this.openStatsForLevelUp === 'function') {
-                    this.player._leveledUpPending = false;
-                    this.game.state = GAME_STATES.PAUSED;
-                    if (this.player.pauseChargeShot) this.player.pauseChargeShot();
-                    const opened = this.openStatsForLevelUp(() => {
-                        if (this.player && this.player.resumeChargeShot) this.player.resumeChargeShot();
-                        proceed();
-                    });
-                    if (opened) return;            // proceed() fires on close
-                    this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → undo pause
-                }
-                proceed();
+            const proceed = () => {
+                this._pausedFromWaveClear = false;
+                if (typeof this.startNextWave === 'function') this.startNextWave();
+            };
+            if (typeof this.openDraft === 'function') {
+                this.game.state = GAME_STATES.PAUSED;
+                if (this.player && this.player.pauseChargeShot) this.player.pauseChargeShot();
+                const opened = this.openDraft(() => {
+                    if (this.player && this.player.resumeChargeShot) this.player.resumeChargeShot();
+                    proceed();
+                });
+                if (opened) return;
+                this.game.state = GAME_STATES.WAVE_TRANSITION; // open failed → undo pause
             }
+            proceed();
         }, 2700);
     }
 

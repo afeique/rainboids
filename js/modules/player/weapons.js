@@ -136,6 +136,26 @@ const _PER_WEAPON_KNOCK_ID = {
     FLAK_CANNON: 'FLAK_KNOCK',
 };
 
+// 9.0.0 (reboot draft) — map a generic offense-draft trait to the active
+// weapon's per-weapon upgrade id, so the between-wave draft can grant
+// multishot / rapid fire / pierce / etc. to whatever primary the player chose
+// (the firing path already reads these per-weapon stacks). Returns null when
+// the weapon doesn't support that trait (the card is then ineligible).
+const _TRAIT_TO_TABLE = {
+    MULTI:    _PER_WEAPON_MULTI_ID,
+    RAPID:    _PER_WEAPON_RAPID_ID,
+    PIERCING: _PER_WEAPON_PIERCING_ID,
+    BIG:      _PER_WEAPON_BIG_ID,
+    HOMING:   _PER_WEAPON_HOMING_ID,
+    EXPLODE:  _PER_WEAPON_EXPLODE_ID,
+    STUN:     _PER_WEAPON_STUN_ID,
+    KNOCK:    _PER_WEAPON_KNOCK_ID,
+};
+export function perWeaponUpgradeId(weaponId, trait) {
+    const table = _TRAIT_TO_TABLE[trait];
+    return (table && table[weaponId]) || null;
+}
+
 // Per-stack mechanic constants for the new shared traits.
 const RAPID_FIRE_PER_STACK = 0.12;   // -12% fire-rate interval per stack (compounding)
 const STUN_CHANCE_PER_STACK = 0.12;  // +12% chance to stun on hit

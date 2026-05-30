@@ -102,6 +102,9 @@ import { ArmoryOverlay } from './ui/armory-overlay.js';
 import { HangarOverlay } from './ui/hangar-overlay.js';
 import { SettingsOverlay } from './ui/settings-overlay.js';
 import { LoadoutOverlay } from './ui/loadout-overlay.js';
+import { DraftOverlay } from './ui/draft-overlay.js';
+import { applyDraftCard, rollDraft } from './combat/draft-engine.js';
+import { DRAFT_CATEGORIES } from './combat/draft-data.js';
 import { AnalogStick } from './ui/analog-stick.js';
 
 // 5.100.0 — localStorage key for the analog-stick side preference.
@@ -808,6 +811,10 @@ export class GameEngine {
         //   (`gameEngine.cheats.onePunchMan = true`) for dev work.
         this.cheats = {
             onePunchMan: false,
+            // 9.0.0 — when set, the between-wave draft auto-picks a card instead
+            // of pausing for the overlay (so AI playtesters / multi-wave tests
+            // don't hang at every wave clear). Never enabled in normal play.
+            autoDraft: false,
         };
 
         // Powerup HUD DOM ref cache
@@ -4818,6 +4825,38 @@ export class GameEngine {
             this._statsOverlay.setGameEngine(this);
         }
         return this._statsOverlay.openForLevelUp(onClose);
+    }
+
+    // 9.0.0 (reboot) — open the between-wave draft. Rolls + applies a chosen
+    // boon to the player, then fires onClose so the wave loop can advance.
+    // Returns true if the overlay opened (mirrors openStatsForLevelUp's contract).
+    openDraft(onClose) {
+        if (!this.player) return false;
+        // 9.0.0 — autoDraft (AI playtester / tests): pick a random eligible card
+        // without showing the overlay, so multi-wave runs don't hang on the pause.
+        if (this.cheats && this.cheats.autoDraft) {
+            const cat = Math.random() < 0.5 ? DRAFT_CATEGORIES.OFFENSE : DRAFT_CATEGORIES.DEFENSE;
+            let cards = rollDraft(this.player, cat, 3);
+            if (!cards.length) {
+                const other = cat === DRAFT_CATEGORIES.OFFENSE ? DRAFT_CATEGORIES.DEFENSE : DRAFT_CATEGORIES.OFFENSE;
+                cards = rollDraft(this.player, other, 3);
+            }
+            if (cards.length) applyDraftCard(this.player, cards[Math.floor(Math.random() * cards.length)]);
+            if (onClose) onClose();
+            return true;
+        }
+        if (typeof document === 'undefined') { if (onClose) onClose(); return false; }
+        if (!this._draftOverlay) this._draftOverlay = new DraftOverlay();
+        return this._draftOverlay.open(this.player, {
+            waveNumber: this.game ? this.game.currentWave : 0,
+            onComplete: (card) => {
+                if (card) {
+                    applyDraftCard(this.player, card);
+                    try { this.events.emit('audio:powerup'); } catch (_e) {}
+                }
+                if (onClose) onClose();
+            },
+        });
     }
 
     togglePause() {
