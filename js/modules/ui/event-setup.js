@@ -45,44 +45,9 @@ export function setupEventListeners() {
     // Handle pause and test keys
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Escape') {
-            // 5.79.0 — Esc closes the stats screen first if it's open.
-            if (this.isStatsScreenOpen && this.isStatsScreenOpen()) {
-                this.toggleStatsScreen();
-                return;
-            }
-            // 6.x — Esc closes the inventory screen first too.
-            if (this.isInventoryScreenOpen && this.isInventoryScreenOpen()) {
-                this.toggleInventoryScreen();
-                return;
-            }
+            // 9.0.0 (reboot) — the inventory ('I') + stats ('`') screens and
+            // their key bindings are removed; Esc routes straight to pause.
             this.togglePause();
-        }
-        // 6.x — 'I' opens the inventory management screen (review equipped
-        // gear + re-equip a recent drop). Same allowed states as stats.
-        if (e.code === 'KeyI' && !e.repeat) {
-            const allowed =
-                this.game.state === GAME_STATES.PLAYING ||
-                this.game.state === GAME_STATES.WAVE_TRANSITION ||
-                this.game.state === GAME_STATES.PAUSED;
-            if (allowed && this.toggleInventoryScreen) {
-                this.toggleInventoryScreen();
-                e.preventDefault();
-                return;
-            }
-        }
-        // 5.79.0 — backtick (`) opens the Diablo-style stats screen.
-        // Allowed in PLAYING / WAVE_TRANSITION / PAUSED. Pressing it
-        // again closes the screen and resumes whatever state was prior.
-        if (e.code === 'Backquote' && !e.repeat) {
-            const allowed =
-                this.game.state === GAME_STATES.PLAYING ||
-                this.game.state === GAME_STATES.WAVE_TRANSITION ||
-                this.game.state === GAME_STATES.PAUSED;
-            if (allowed && this.toggleStatsScreen) {
-                this.toggleStatsScreen();
-                e.preventDefault();
-                return;
-            }
         }
         // Keybind layout:
         //   E (hold)  — radial menu: PRIMARY weapon (mouse picks, click commits)
@@ -314,15 +279,10 @@ export function setupEventListeners() {
         if (hudHit) {
             e.preventDefault();
             e.stopPropagation();
-            if (hudHit === 'shop') {
-                if (this.game.state === GAME_STATES.SHOP) this.closeShopAndReturn();
-                else this.openShop();
-            } else if (hudHit === 'stats') {
-                if (this.toggleStatsScreen) this.toggleStatsScreen();
-            } else if (hudHit === 'pause') {
+            if (hudHit === 'pause') {
                 // 5.79.14 — Pause button moved from DOM to the canvas
                 //   button bar. Same togglePause() entry point as the
-                //   ESC key.
+                //   ESC key. (9.0.0: SHOP + STATS buttons removed.)
                 if (this.togglePause) this.togglePause();
             }
             this._hudPressedButton = null;

@@ -132,8 +132,6 @@ export class MobileTouchHandler {
             } else if (ge.openShop) {
                 ge.openShop();
             }
-        } else if (id === 'stats') {
-            if (ge.toggleStatsScreen) ge.toggleStatsScreen();
         } else if (id === 'pause') {
             if (ge.togglePause) ge.togglePause();
         }

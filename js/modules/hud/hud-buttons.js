@@ -74,14 +74,13 @@ export function getHudButtonRects(canvasW, canvasH) {
     // commented out — the gold upgrade-tree shop is retired in favor of the
     // per-run CARD draft + the pre-run ARMORY. shop-dom.js / openShop are kept
     // intact for reuse; the shop is just no longer reachable from the HUD.)
-    const totalW = 2 * bw + 1 * bg;
+    // 9.0.0 (reboot) — STATS button removed with the SP-allocation overlay;
+    // only PAUSE remains. Centered on canvas.
+    const totalW = bw;
     const startX = Math.round((canvasW - totalW) / 2);
     const y = canvasH - BOTTOM_MARGIN - bh;
-    const slot = (i) => startX + i * (bw + bg);
     const rects = {
-        // shop:  { id: 'shop',  x: slot(0), y, w: bw, h: bh, icon: 'cart',  label: 'UPGRADES' }, // legacy shop — commented out
-        stats: { id: 'stats', x: slot(0), y, w: bw, h: bh, icon: 'chart', label: 'STATS' },
-        pause: { id: 'pause', x: slot(1), y, w: bw, h: bh, icon: 'pause', label: 'PAUSE' },
+        pause: { id: 'pause', x: startX, y, w: bw, h: bh, icon: 'pause', label: 'PAUSE' },
     };
 
     // 5.100.0 — PRM / PWR side buttons retired on mobile. The new

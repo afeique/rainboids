@@ -2150,18 +2150,7 @@ export function closeWavePickOverlay() {
         }
     };
 
-    // 6.36.0 — If the player leveled up during the wave just cleared,
-    // interpose the STATS screen so they can spend the freshly-earned SP
-    // before the next wave begins. Closing it continues into proceed().
-    // The game is still PAUSED here, which the deferred STATS mode relies
-    // on (it must not touch togglePause).
-    if (this.player && this.player._leveledUpPending
-        && typeof this.openStatsForLevelUp === 'function') {
-        this.player._leveledUpPending = false;
-        const opened = this.openStatsForLevelUp(proceed);
-        if (opened) return; // proceed() fires when the STATS screen closes
-    }
-
+    // 9.0.0 (reboot) — STATS / level-up interpose removed (XP/leveling gone).
     proceed();
 }
 
