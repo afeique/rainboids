@@ -1231,6 +1231,10 @@ export class GameEngine {
 
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
+        // 9.0.0 (reboot) — every run is endless survival: waves cycle forever
+        // and only death ends the run (guards the completeRun paths in
+        // wave-manager + combat-manager).
+        this.game.endless = true;
         // RUN-06 — honor the RUN SETUP choice when the BUILD screen passed one
         // (loadout.runConfig, already validated + clamped in
         // beginPreRunFromTree). Absent (direct restart / CONTINUE / tests) →
@@ -1486,6 +1490,7 @@ export class GameEngine {
         if (!p) return false;
         // Engine-side
         this.game.currentWave = Math.max(1, snap.wave | 0);
+        this.game.endless = true; // 9.0.0 — restored runs are endless too
         // RUN-01a — restore the run shape. Pre-RUN-01a saves have no
         // runConfig → default to the canonical 10 × 3 so CONTINUE still
         // works for existing saves. Guard stages/wavesPerStage to ≥ 1.

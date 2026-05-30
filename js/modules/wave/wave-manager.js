@@ -269,7 +269,9 @@ export function updateWaveSystem() {
         // D_hp because spawnWaveEntities (post-tick) recomputes enemy stats.
         feedDirectorOnWaveClear.call(this);
 
-        if (this.game.currentWave >= runMaxWaves(this.game)) {
+        // 9.0.0 (endless) — survival has no finish line: only death ends the run.
+        // The wave-count completeRun gate fires only for explicitly-finite runs.
+        if (!this.game.endless && this.game.currentWave >= runMaxWaves(this.game)) {
             this.completeRun();
             return;
         }

@@ -1312,11 +1312,11 @@ export function onEnemyKill(enemy) {
             catch (err) { console.error('boss death sequence failed', err); }
         }
         if (this.game && this.game.stats) this.game.stats.bossesKilled = (this.game.stats.bossesKilled | 0) + 1;
-        if (enemy.isFinalBoss && !this._finalBossDefeated) {
+        // 9.0.0 (endless) — in an endless run the "final" boss (Prismarch) is
+        // just another boss in the cycled roster; killing it must NOT end the run.
+        // Only an explicitly-finite run routes to GAME_COMPLETE here.
+        if (enemy.isFinalBoss && !this.game.endless && !this._finalBossDefeated) {
             this._finalBossDefeated = true;
-            // Mirror the wave-clear→run-complete flow so the GAME_COMPLETE
-            // state + gold banking fire even though the boss died mid-wave
-            // rather than on the wave-clear gate.
             this.game.waveComplete = true;
             this.game.state = GAME_STATES.WAVE_TRANSITION;
             if (typeof this.completeRun === 'function') this.completeRun();

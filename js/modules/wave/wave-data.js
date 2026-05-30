@@ -404,10 +404,12 @@ function _configKeyForWave(waveNumber) {
 }
 
 export function getWaveConfig(waveNumber, maxWaves = MAX_WAVES) {
-    const mw = Math.max(1, maxWaves | 0);
-    // Clamp the wave to the real run length, THEN map to an authored-table key
-    // (identity for ≤30, cycled for the synthesized late game).
-    const clamped = Math.max(1, Math.min(mw, waveNumber | 0));
+    // 9.0.0 (endless) — map straight off the ABSOLUTE wave so endless runs keep
+    // cycling the authored 1..MAX_WAVES groups (_configKeyForWave cycles past 30).
+    // The old `min(maxWaves, wave)` clamp was a no-op for finite runs (the wave
+    // never exceeded maxWaves) — dropping it leaves finite runs byte-for-byte
+    // unchanged and only affects waves past the cap. `maxWaves` kept for sig compat.
+    const clamped = Math.max(1, waveNumber | 0);
     const key = _configKeyForWave(clamped);
     const base = WAVE_DATA[key] || WAVE_DATA[1];
     if (!isMobile()) return base;

@@ -59,9 +59,13 @@ export function getBossForStage(stage) {
     const s = stage | 0;
     if (s < 1) return null;
     if (BOSS_BY_STAGE[s]) return BOSS_BY_STAGE[s];
-    // Clamp past the last defined stage to the final boss.
+    // 9.0.0 (endless) — CYCLE the roster past the last defined stage (stage 11 →
+    // boss 1, …, stage 20 → boss 10, stage 21 → boss 1, …) so an endless run
+    // keeps rotating all ten bosses instead of repeating only the finale.
     const lastStage = BOSS_DESCRIPTORS.length;
-    return BOSS_BY_STAGE[lastStage] || null;
+    if (lastStage < 1) return null;
+    const cycled = ((s - 1) % lastStage) + 1;
+    return BOSS_BY_STAGE[cycled] || BOSS_BY_STAGE[lastStage] || null;
 }
 
 /** Boss descriptor by id ('HARBINGER', 'PRISMARCH', …), or null. */
