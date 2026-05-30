@@ -5,8 +5,7 @@ import { loadSettings, saveSettings } from '../core/storage.js';
 import { renderIconHTML, detectControllerFamily, bindingGlyph } from './icons.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { setRumbleEnabled, isRumbleEnabled } from '../platform/rumble.js';
-import { renderSpAllocation } from './sp-allocation.js';
-import { getPassive, getSlotPassives } from '../combat/passive-data.js';
+// 9.0.0 (reboot) — sp-allocation + passive-data removed; imports dropped.
 
 // 5.79.3 — Beam-aware powerup description swap. When the equipped
 //   primary is a continuous-tether beam (Lance Beam, Arc Lightning),
@@ -327,9 +326,7 @@ export class UIManager {
             //   stub showed for a frame before innerHTML repopulated.
             //   Removed — no per-open update needed.
 
-            // Refresh weapon-equip tabs so the EQUIPPED badge stays current.
-            this.updatePrimaryTab();
-            this.updatePowerTab();
+            // 9.0.0 (reboot) — PRIMARY / POWER pause tabs removed.
         }
         return !isPaused;
     }
@@ -812,274 +809,64 @@ export class UIManager {
         wrap.appendChild(svg);
         return wrap;
     }
+    // 9.0.0 (reboot) — STATS / PRIMARY / POWER / PASSIVES / LOADOUT pause tabs
+    // are removed (those systems are gone). Their updateXxxTab + _build*Row
+    // helpers were deleted; only updateDebugTab remains below.
 
-    // ── Pause-menu PRIMARY tab ─────────────────────────────────────────────
-    // Lists every primary weapon. Click a row to equip it. Primaries are
-    // free and always available — no `ownedPrimaries` gating.
-    //
-    // All DOM is built with createElement / textContent (no innerHTML) to
-    // keep XSS risk impossible even if a future weapon-data entry contains
-    // markup-flavored characters.
-    // 6.x — Pause-menu STATS tab. Reuses the shared SP-allocation card
-    // (passive stat icons + [−]/[+] controls) so the player can spend and
-    // freely redistribute stat points without leaving the pause menu.
-    // The backtick stats overlay renders the same card.
-    updateStatsTab() {
-        const tab = document.getElementById('stats-tab');
+    // 9.0.0 — DEBUG tab populator. Only visible when ?debug=1 is in the URL
+    // (the tab BUTTON is hidden in static-dom.js otherwise). Lazy-rendered
+    // when the tab opens. Lists every boss in the registry as a button that,
+    // when clicked, instantly spawns that boss for testing.
+    updateDebugTab() {
+        const tab = document.getElementById('debug-tab');
         if (!tab) return;
-        const player = this.gameEngine && this.gameEngine.player;
+        const ge = this.gameEngine;
         tab.replaceChildren();
         const h2 = document.createElement('h2');
-        h2.textContent = 'STATS';
+        h2.textContent = 'DEBUG';
         tab.appendChild(h2);
-        const subtitle = document.createElement('div');
-        subtitle.className = 'pause-tab-subtitle';
-        subtitle.textContent = 'Spend & freely redistribute passive stat points';
-        tab.appendChild(subtitle);
-        if (!player) return;
-        renderSpAllocation(tab, player, { onChange: () => this.updateStatsTab() });
-    }
+        const sub = document.createElement('div');
+        sub.className = 'pause-tab-subtitle';
+        sub.textContent = 'Developer tools. ?debug=1 only.';
+        tab.appendChild(sub);
 
-    updatePrimaryTab() {
-        // 5.79.59 — Owns the entire #primary-tab now (h2 + subtitle +
-        //   list). Was scoped to the inner #primary-weapon-list
-        //   container with the heading hardcoded in index.html, which
-        //   meant the tab couldn't be pre-rendered without leaving
-        //   stale static markup behind. Now the function builds
-        //   everything from scratch via createElement so a single
-        //   stub `<div id="primary-tab">` in index.html is enough.
-        const tab = document.getElementById('primary-tab');
-        if (!tab) return;
-        const player = this.gameEngine && this.gameEngine.player;
-        if (!player) {
-            tab.replaceChildren();
-            return;
+        // BOSS PICKER — instant boss spawn for testing.
+        const bossHead = document.createElement('h3');
+        bossHead.textContent = 'SPAWN BOSS';
+        bossHead.style.cssText = 'margin: 14px 0 6px; font-size: 11px; color: #ffcc44; letter-spacing: 1px;';
+        tab.appendChild(bossHead);
+        const bossSub = document.createElement('div');
+        bossSub.className = 'pause-tab-subtitle';
+        bossSub.style.fontSize = '8px';
+        bossSub.textContent = 'Drains the field and warps in the chosen boss. Resumes from the pause menu.';
+        tab.appendChild(bossSub);
+        const bossGrid = document.createElement('div');
+        bossGrid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 8px;';
+        const list = (ge && typeof ge.getBossList === 'function') ? ge.getBossList() : [];
+        if (!list.length) {
+            const none = document.createElement('div');
+            none.style.cssText = 'font-size: 9px; color: #6b7a96; padding: 8px 0;';
+            none.textContent = 'No bosses registered.';
+            bossGrid.appendChild(none);
         }
-
-        tab.replaceChildren();
-        const h2 = document.createElement('h2');
-        h2.textContent = 'PRIMARY WEAPON';
-        tab.appendChild(h2);
-        const subtitle = document.createElement('div');
-        subtitle.className = 'pause-tab-subtitle';
-        subtitle.textContent = 'Click a weapon to equip it';
-        tab.appendChild(subtitle);
-
-        const list = document.createElement('div');
-        list.id = 'primary-weapon-list';
-        list.className = 'pause-tab-list';
-        tab.appendChild(list);
-
-        const PRIMARY = this.gameEngine.PRIMARY_WEAPONS_LIST;
-        if (!PRIMARY) {
-            const placeholder = document.createElement('div');
-            placeholder.style.color = '#888';
-            placeholder.textContent = 'Weapon list unavailable.';
-            list.appendChild(placeholder);
-            return;
-        }
-        for (const id of Object.keys(PRIMARY)) {
-            const equipped = player.activePrimary === id;
-            list.appendChild(this._buildWeaponRow(PRIMARY[id], id, equipped, '#00ccff', () => {
-                if (player.ownedPrimaries && !player.ownedPrimaries.has(id)) {
-                    player.ownedPrimaries.add(id);
-                }
-                player.equipPrimary(id);
-                this.updatePrimaryTab();
-            }));
-        }
-    }
-
-    // ── Pause-menu POWER tab ───────────────────────────────────────────────
-    // Lists every power weapon. Click a row to equip it. Powers are now
-    // free and always available — same model as primaries. Upgrades are
-    // still purchased in the shop's POWER tab (which surfaces the upgrades
-    // for whichever power is currently equipped).
-    updatePowerTab() {
-        // 5.79.59 — Owns the entire #power-tab now (h2 + subtitle +
-        //   list). Same refactor pattern as updatePrimaryTab: a single
-        //   stub `<div id="power-tab">` in index.html is enough; the
-        //   function builds everything from scratch on each call.
-        const tab = document.getElementById('power-tab');
-        if (!tab) return;
-        const player = this.gameEngine && this.gameEngine.player;
-        if (!player) {
-            tab.replaceChildren();
-            return;
-        }
-
-        tab.replaceChildren();
-        const h2 = document.createElement('h2');
-        h2.textContent = 'POWER WEAPON';
-        tab.appendChild(h2);
-        const subtitle = document.createElement('div');
-        subtitle.className = 'pause-tab-subtitle';
-        subtitle.textContent = 'Click a weapon to equip it';
-        tab.appendChild(subtitle);
-
-        const list = document.createElement('div');
-        list.id = 'power-weapon-list';
-        list.className = 'pause-tab-list';
-        tab.appendChild(list);
-
-        const POWER = this.gameEngine.POWER_WEAPONS_LIST;
-        if (!POWER) return;
-        for (const id of Object.keys(POWER)) {
-            const equipped = player.activePower === id;
-            list.appendChild(this._buildWeaponRow(POWER[id], id, equipped, '#ffaa00', () => {
-                // Auto-add to ownedPowers (set still gates equipPower).
-                if (player.ownedPowers && !player.ownedPowers.has(id)) {
-                    player.ownedPowers.add(id);
-                }
-                player.equipPower(id);
-                this.updatePowerTab();
-            }));
-        }
-    }
-
-    // ── Pause-menu PASSIVES tab (P5b) ──────────────────────────────────────
-    // The in-run swap panel: assign any OWNED, slot-deliverable passive into any
-    // currently-UNLOCKED slot, and unequip, at any time. Clicking an unequipped
-    // passive drops it into the first free unlocked slot; clicking an equipped
-    // one removes it. player.equipPassive enforces the keystone budget (≤2) +
-    // resets ramp accrual on the swap.
-    updatePassivesTab() {
-        const tab = document.getElementById('passives-tab');
-        if (!tab) return;
-        const player = this.gameEngine && this.gameEngine.player;
-        tab.replaceChildren();
-        if (!player) return;
-
-        const slots = Array.isArray(player.equippedPassives) ? player.equippedPassives : [];
-        const unlocked = Math.max(0, player.passiveSlotsUnlocked | 0);
-        const owned = (player.ownedPassives instanceof Set) ? player.ownedPassives : new Set();
-        const equippedCount = slots.slice(0, unlocked).filter(Boolean).length;
-        const keystoneCount = slots.slice(0, unlocked)
-            .filter((id) => id && getPassive(id) && (getPassive(id).tags || []).includes('keystone')).length;
-
-        const h2 = document.createElement('h2');
-        h2.textContent = 'PASSIVES';
-        tab.appendChild(h2);
-        const subtitle = document.createElement('div');
-        subtitle.className = 'pause-tab-subtitle';
-        subtitle.textContent = `${equippedCount}/${unlocked} slot${unlocked === 1 ? '' : 's'} filled · ${keystoneCount}/2 keystones · click to equip / unequip · swap freely`;
-        tab.appendChild(subtitle);
-
-        const list = document.createElement('div');
-        list.id = 'passives-swap-list';
-        list.className = 'pause-tab-list';
-        tab.appendChild(list);
-
-        // Owned, slot-deliverable passives (the run's pool ∩ slot channel).
-        const pool = getSlotPassives().filter((p) => owned.has(p.id));
-        if (pool.length === 0) {
-            const empty = document.createElement('div');
-            empty.style.color = '#888';
-            empty.textContent = 'No passives owned for this run. Unlock + pick them on the BUILD screen.';
-            list.appendChild(empty);
-            return;
-        }
-
-        for (const def of pool) {
-            const slotIdx = slots.indexOf(def.id);
-            const equipped = slotIdx !== -1 && slotIdx < unlocked;
-            const keystone = (def.tags || []).includes('keystone');
-            const row = this._buildPassiveSwapRow(def, equipped, equipped ? slotIdx : -1, keystone, () => {
-                if (equipped) {
-                    player.equipPassive(slotIdx, null);
-                } else {
-                    // First free unlocked slot, else no-op (unequip one to free room).
-                    let free = -1;
-                    for (let i = 0; i < unlocked; i++) { if (!slots[i]) { free = i; break; } }
-                    if (free !== -1) player.equipPassive(free, def.id);
-                }
-                this.updatePassivesTab();
+        for (const { id, name } of list) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = name || id;
+            btn.style.cssText = 'font-family: inherit; font-size: 9px; padding: 10px 8px; cursor: pointer; background: #1b2536; color: #e8eefc; border: 1px solid #3a4a66; line-height: 1.3;';
+            btn.addEventListener('mouseenter', () => { btn.style.borderColor = '#5fd0ff'; btn.style.background = '#243349'; });
+            btn.addEventListener('mouseleave', () => { btn.style.borderColor = '#3a4a66'; btn.style.background = '#1b2536'; });
+            btn.addEventListener('click', () => {
+                try {
+                    if (ge && typeof ge.debugSpawnBoss === 'function') ge.debugSpawnBoss(id);
+                    if (typeof this.togglePause === 'function') this.togglePause();
+                } catch (err) { console.error('debug spawn boss failed:', err); }
             });
-            list.appendChild(row);
+            bossGrid.appendChild(btn);
         }
+        tab.appendChild(bossGrid);
     }
 
-    _buildPassiveSwapRow(def, equipped, slotIdx, keystone, onClick) {
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'pause-equip-row' + (equipped ? ' equipped' : '');
-        const name = document.createElement('span');
-        name.className = 'pause-equip-name';
-        name.textContent = (keystone ? '★ ' : '') + (def.name || def.id);
-        const desc = document.createElement('span');
-        desc.className = 'pause-equip-desc';
-        desc.textContent = (def.desc || '') + (def.downside ? `  ↯ ${def.downside}` : '');
-        const status = document.createElement('span');
-        status.className = 'pause-equip-status';
-        status.textContent = equipped ? `SLOT ${slotIdx + 1}` : '';
-        row.append(name, desc, status);
-        row.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
-        return row;
-    }
-
-    // Shared row builder for both PRIMARY and POWER tabs.
-    // No innerHTML anywhere — every text node is set via textContent.
-    // The click listener wraps `onClick` with stopPropagation BEFORE calling
-    // it, because `onClick` typically re-renders the tab via replaceChildren
-    // — which detaches the clicked row. The bubbling click then reaches the
-    // pause-overlay's dismissOnBackdrop handler, which calls
-    // `e.target.closest('#pause-menu')`. On a detached node closest() walks
-    // a null parent chain and returns null, so the backdrop misclassifies
-    // the click as "outside menu" and toggles pause off. stopPropagation
-    // prevents the bubble entirely.
-    _buildWeaponRow(weaponDef, weaponId, equipped, defaultBorder, onClick) {
-        const accent = (equipped && weaponDef.color) ? weaponDef.color : defaultBorder;
-        const row = document.createElement('div');
-        row.className = 'weapon-row';
-        row.dataset.weaponId = weaponId;
-        row.style.cssText = `
-            display: flex; align-items: center; gap: 14px;
-            padding: 12px 14px; border-radius: 8px; cursor: pointer;
-            background: ${equipped ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.05)'};
-            border: 2px solid ${equipped ? accent : 'rgba(255, 255, 255, 0.15)'};
-            transition: background 0.15s, border-color 0.15s, transform 0.1s;
-        `;
-
-        const iconEl = document.createElement('span');
-        iconEl.style.cssText = 'font-size: 28px; min-width: 36px; text-align: center; display: inline-flex; align-items: center; justify-content: center; color: inherit;';
-        iconEl.innerHTML = renderIconHTML(weaponDef.icon, { size: 28, fallback: '?' });
-        row.appendChild(iconEl);
-
-        const body = document.createElement('div');
-        body.style.cssText = 'flex: 1; text-align: left;';
-
-        const nameRow = document.createElement('div');
-        nameRow.style.cssText = `font-size: 14px; color: ${equipped ? accent : '#FFF'}; font-weight: bold;`;
-        nameRow.textContent = weaponDef.name || weaponId;
-        if (equipped) {
-            const badge = document.createElement('span');
-            badge.style.cssText = 'font-size: 10px; color: #00ff88; margin-left: 8px;';
-            badge.textContent = 'EQUIPPED';
-            nameRow.appendChild(badge);
-        }
-        body.appendChild(nameRow);
-
-        const descEl = document.createElement('div');
-        descEl.style.cssText = 'font-size: 11px; color: #aaa; margin-top: 4px; line-height: 1.4;';
-        descEl.textContent = weaponDef.description || '';
-        body.appendChild(descEl);
-
-        row.appendChild(body);
-
-        row.addEventListener('mouseenter', () => {
-            if (!equipped) row.style.background = 'rgba(255, 255, 255, 0.12)';
-            row.style.transform = 'translateY(-1px)';
-        });
-        row.addEventListener('mouseleave', () => {
-            if (!equipped) row.style.background = 'rgba(255, 255, 255, 0.05)';
-            row.style.transform = 'none';
-        });
-        row.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onClick();
-        });
-        return row;
-    }
     
     // showTitleScreen() {
     //     this.elements.titleScreen.style.display = 'flex';
@@ -1308,10 +1095,7 @@ export class UIManager {
         //   across ALL dynamic pause tabs.
         this.syncAssistsTab();
         this.updateControlsTab();
-        this.updatePrimaryTab();
-        this.updatePowerTab();
-        // 6.1.0 — Powerups pre-render removed (POWERUPS tab moved to
-        // the shop; pause-menu powerups-tab DOM was deleted).
+        // 9.0.0 (reboot) — PRIMARY / POWER pre-render removed (tabs gone).
     }
 
     // Reflect engine-side assists state in the tab checkboxes.
@@ -1983,12 +1767,10 @@ export class UIManager {
             this.syncMusicPlayerState();
         }
 
-        // Refresh equip lists when their tabs are opened.
-        if (tabName === 'primary') this.updatePrimaryTab();
-        if (tabName === 'power') this.updatePowerTab();
-        if (tabName === 'passives') this.updatePassivesTab();
-        if (tabName === 'stats') this.updateStatsTab();
+        // Refresh dynamic tabs when opened.
+        // 9.0.0 (reboot) — PRIMARY / POWER / PASSIVES / STATS tabs removed.
         if (tabName === 'assists') this.syncAssistsTab();
+        if (tabName === 'debug') this.updateDebugTab();
         if (tabName === 'gamepad' && this.gameEngine) {
             this.updateControlSchemeSelector(this.gameEngine.controlScheme, this.gameEngine.altControlScheme);
             this.refreshGamepadGlyphs(); // GP-3 — show glyphs for the connected pad's family

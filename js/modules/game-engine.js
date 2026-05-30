@@ -34,9 +34,9 @@ import { LineDebris } from './world/line-debris.js';
 import { AsteroidShard } from './world/asteroid-shard.js';
 import { Powerup, POWERUP_TYPES } from './world/powerup.js';
 import { HazardField } from './world/hazard-field.js';
-import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS, ATTUNEMENTS, ABILITY_ATTUNEMENTS, isMechanicMod, getWeaponUpgradeConfig } from './combat/weapon-data.js';
-import { getUnlockedSet, bankRunGold, resolveAccountGold, normalizeLoadout, newAccountSeed } from './shop/armory.js';
-import { PASSIVES, maxPassiveSlots } from './combat/passive-data.js';
+import { ABILITIES, PRIMARY_WEAPONS, POWER_WEAPONS } from './combat/weapon-data.js';
+import { getUnlockedSet, bankRunGold, resolveAccountGold, newAccountSeed } from './shop/armory.js';
+// 9.0.0 (reboot) — passives removed; passive-data import dropped.
 import { MAX_STAGES, WAVES_PER_STAGE, DEFAULT_RUN_CONFIG, runMaxWaves, getRunMode } from './core/constants.js';
 // DIR-03 — canonical difficulty mode list + fallback (the DIR-02 table is the
 // single source of truth; imported directly so game-engine doesn't depend on a
@@ -96,12 +96,10 @@ import { mergeStoredAssists } from './assist/assist-config.js';
 import { isMobile, isPortrait } from './platform/platform-detect.js';
 import { requestWakeLock, releaseWakeLock, attachAutoReacquireHandler } from './platform/wake-lock.js';
 import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './core/storage.js';
-import { StatsOverlay } from './ui/stats-overlay.js';
-import { InventoryOverlay } from './ui/inventory-overlay.js';
-import { ArmoryOverlay } from './ui/armory-overlay.js';
+// 9.0.0 (reboot) — StatsOverlay / InventoryOverlay / ArmoryOverlay removed.
 // 9.0.0 (reboot) — HANGAR (skin picker) removed; HangarOverlay import dropped.
 import { SettingsOverlay } from './ui/settings-overlay.js';
-import { LoadoutOverlay } from './ui/loadout-overlay.js';
+// 9.0.0 (reboot) — LoadoutOverlay removed.
 import { DraftOverlay } from './ui/draft-overlay.js';
 import { NewGameOverlay } from './ui/newgame-overlay.js';
 import { applyDraftCard, rollDraft } from './combat/draft-engine.js';
@@ -1104,46 +1102,12 @@ export class GameEngine {
                 this.player.ownedAbilities = new Set([loadout.ability]);
             }
         }
-        // W5 — apply the chosen per-weapon attunements (validated against the
-        // known table) so bullets carry their elements this run.
+        // 9.0.0 (reboot) — legacy BUILD-tree attunement/mod/abilityAttune
+        // application removed. The draft system now records attunements onto
+        // player.draftElements at pick time (see combat/draft-engine.js).
         this.player.activeAttunements = {};
-        if (loadout && loadout.attunements && typeof loadout.attunements === 'object') {
-            for (const [wid, ids] of Object.entries(loadout.attunements)) {
-                if (!Array.isArray(ids)) continue;
-                const valid = ids.filter((id) => ATTUNEMENTS[id] && ATTUNEMENTS[id].weapon === wid);
-                if (valid.length) this.player.activeAttunements[wid] = valid;
-            }
-        }
-        // W5 — grant the chosen per-weapon mechanic mods as powerup stacks
-        // (one stack each) so the existing fire/hit paths read them via
-        // getPowerupStacks. Validated against the known upgrade table.
-        if (loadout && loadout.mods && typeof loadout.mods === 'object'
-            && typeof this.player.addPowerup === 'function') {
-            for (const ids of Object.values(loadout.mods)) {
-                if (!Array.isArray(ids)) continue;
-                for (const id of ids) {
-                    const cfg = getWeaponUpgradeConfig(id);
-                    if (cfg) this.player.addPowerup(id, cfg);
-                }
-            }
-        }
-        // W6 — apply the chosen per-ability attunement (one element each),
-        // validated against the known table. Read at activation time
-        // (player/abilities.js) to flavor the ability with its element.
         this.player.activeAbilityAttune = {};
-        // W6 — also cache the chosen element per ability so the runtime verb
-        // sites (abilities.js / lifecycle.js / deflector reflect) can stamp it
-        // without re-reading the table each frame.
         this.player.activeAbilityAttuneElement = {};
-        if (loadout && loadout.abilityAttune && typeof loadout.abilityAttune === 'object') {
-            for (const [aid, attId] of Object.entries(loadout.abilityAttune)) {
-                const cfg = ABILITY_ATTUNEMENTS[attId];
-                if (cfg && cfg.ability === aid) {
-                    this.player.activeAbilityAttune[aid] = attId;
-                    this.player.activeAbilityAttuneElement[aid] = cfg.element;
-                }
-            }
-        }
         // 5.88.3 — energy tanks unified with the triforce. healthTanks is
         // now the SPARE count (each triangle = 1 spare); the active tank
         // is the healthbar. Start at 3 spares = full triforce; total
@@ -1229,19 +1193,7 @@ export class GameEngine {
         // the CONTINUE path overlays its exact run snapshot afterward.
         this.applyPersistentProfile();
 
-        // P4 — equip the run's chosen rule-modifier passives into the player's
-        // slots. ownedPassives was just seeded; place the chosen ids directly
-        // (init bypasses the per-slot unlock gate so a passive pre-assigned to a
-        // slot that unlocks later activates when its slot opens — the
-        // _rebuildActivePassives below respects passiveSlotsUnlocked).
-        if (this.player && loadout && Array.isArray(loadout.passives)
-            && typeof this.player._rebuildActivePassives === 'function') {
-            const owned = this.player.ownedPassives instanceof Set ? this.player.ownedPassives : new Set();
-            const chosen = loadout.passives.filter((id) => owned.has(id) && PASSIVES[id] && PASSIVES[id].slot);
-            const slots = this.player.equippedPassives;
-            for (let i = 0; i < slots.length; i++) slots[i] = chosen[i] || null;
-            this.player._rebuildActivePassives();
-        }
+        // 9.0.0 (reboot) — passives removed; legacy loadout.passives block gone.
 
         // Initialize first wave with intro message and delay
         this.game.currentWave = 1;
@@ -2903,6 +2855,10 @@ export class GameEngine {
     //     `gameEngine.spawnBoss('HARBINGER')` or `gameEngine.spawnBoss(1)`.
     spawnModularBoss(which, opts) { return wave.spawnModularBoss.call(this, which, opts); }
     spawnStageBoss() { return wave.spawnStageBoss.call(this); }
+    // 9.0.0 — DEBUG tab (pause → DEBUG, ?debug=1) bindings: list every boss and
+    // confront one instantly (drains the field, warps the boss in).
+    getBossList() { return wave.getBossList.call(this); }
+    debugSpawnBoss(id) { return wave.debugSpawnBoss.call(this, id); }
     spawnBoss(idOrStage, opts = {}) { return wave.spawnModularBoss.call(this, idOrStage, { warp: false, ...opts }); }
 
     // ENMY-03 — DEBUG HOOK. Force-spawn a PHANTOM (cloaking enemy) on demand for
@@ -4564,27 +4520,13 @@ export class GameEngine {
     // 5.79.0 — backtick-key Diablo-style stats screen. Pauses the game
     //   while open; closing resumes (unless the player paused via ESC
     //   while the stats screen was up — then closing restores pause).
-    toggleStatsScreen() {
-        if (!this._statsOverlay) {
-            this._statsOverlay = new StatsOverlay(this.uiManager);
-            this._statsOverlay.setGameEngine(this);
-        }
-        return this._statsOverlay.toggle();
-    }
-
-    isStatsScreenOpen() { return !!(this._statsOverlay && this._statsOverlay.isOpen()); }
-
-    // 6.x — Inventory management screen ('I' key). Lazy-constructed like
-    // the stats screen; pauses while open.
-    toggleInventoryScreen() {
-        if (!this._inventoryOverlay) {
-            this._inventoryOverlay = new InventoryOverlay();
-            this._inventoryOverlay.setGameEngine(this);
-        }
-        return this._inventoryOverlay.toggle();
-    }
-
-    isInventoryScreenOpen() { return !!(this._inventoryOverlay && this._inventoryOverlay.isOpen()); }
+    // 9.0.0 (reboot) — SP stats + inventory overlays removed. No-op stubs so
+    // any guarded leftover caller stays harmless; their key bindings + canvas
+    // buttons are gone.
+    toggleStatsScreen() { return false; }
+    isStatsScreenOpen() { return false; }
+    toggleInventoryScreen() { return false; }
+    isInventoryScreenOpen() { return false; }
 
     // Phase R2 — pre-run ARMORY screen. NEW GAME routes here first (TITLE →
     // ARMORY → run); the screen's START RUN button calls startNewRun().
@@ -4647,96 +4589,8 @@ export class GameEngine {
     // U3 — cycle the BUILD/shop tab (gamepad D-pad). No-op unless the tree
     // overlay is visible, so the gamepad handler can call it unconditionally.
     cycleShopTab(dir) { return shopDom.cycleShopTabIfVisible(dir); }
-
-    // START RUN from the BUILD tree — mirrors LoadoutOverlay.begin(): persist
-    // the chosen loadout, finalize the title exit, and start the run.
-    beginPreRunFromTree(sel) {
-        const meta = loadMeta() || {};
-        const loadout = normalizeLoadout(sel || {}, meta);
-        // W5 — carry the chosen per-weapon attunements, validated against owned
-        // (unlocked) + known ids, so a stale/locked id can't leak into the run.
-        const ownedAtt = getUnlockedSet('attunements', meta);
-        const att = {};
-        const rawAtt = (sel && sel.attunements) || {};
-        for (const [wid, ids] of Object.entries(rawAtt)) {
-            if (!Array.isArray(ids)) continue;
-            const keep = ids.filter((id) => ATTUNEMENTS[id] && ATTUNEMENTS[id].weapon === wid && ownedAtt.has(id));
-            if (keep.length) att[wid] = keep;
-        }
-        loadout.attunements = att;
-        // W5 — carry active mechanic mods, validated against owned + known +
-        // weapon-matched ids.
-        const ownedMods = getUnlockedSet('mods', meta);
-        const mods = {};
-        const rawMods = (sel && sel.mods) || {};
-        for (const [wid, ids] of Object.entries(rawMods)) {
-            if (!Array.isArray(ids)) continue;
-            const keep = ids.filter((id) => {
-                const cfg = getWeaponUpgradeConfig(id);
-                return isMechanicMod(id) && cfg && cfg.weapon === wid && ownedMods.has(id);
-            });
-            if (keep.length) mods[wid] = keep;
-        }
-        loadout.mods = mods;
-        // W6 — carry the chosen per-ability attunement (one element each),
-        // validated against owned + known + ability-matched ids.
-        const ownedAbilAtt = getUnlockedSet('abilityAttunements', meta);
-        const abilityAttune = {};
-        const rawAbilAtt = (sel && sel.abilityAttune) || {};
-        for (const [aid, attId] of Object.entries(rawAbilAtt)) {
-            const cfg = ABILITY_ATTUNEMENTS[attId];
-            if (cfg && cfg.ability === aid && ownedAbilAtt.has(attId)) abilityAttune[aid] = attId;
-        }
-        loadout.abilityAttune = abilityAttune;
-        // P4 — carry the chosen rule-modifier passives (ordered = slot order),
-        // validated against owned + known + slot-deliverable, capped at the
-        // run's maxSlots, keystone budget ≤2.
-        const ownedPass = getUnlockedSet('passives', meta);
-        const totalStages = (this.game.runConfig && this.game.runConfig.stages) || MAX_STAGES;
-        const slotCap = maxPassiveSlots(totalStages);
-        const passivesOut = [];
-        let keystoneCount = 0;
-        for (const id of ((sel && sel.passives) || [])) {
-            const def = PASSIVES[id];
-            if (!def || !def.slot || !ownedPass.has(id) || passivesOut.includes(id)) continue;
-            const isKey = Array.isArray(def.tags) && def.tags.includes('keystone');
-            if (isKey && keystoneCount >= 2) continue;
-            if (passivesOut.length >= slotCap) break;
-            passivesOut.push(id);
-            if (isKey) keystoneCount++;
-        }
-        loadout.passives = passivesOut;
-        // RUN-06 — carry the chosen RUN SHAPE so the run honors it. Validate +
-        // clamp here so a malformed selection can never produce a NaN-length
-        // run; absent / invalid → undefined, and init() keeps the default 10×3.
-        // DIR-03 — also carry the chosen difficulty MODE (valid MODES member,
-        // case-normalized; else NORMAL). Mode is resolved independently of the
-        // run shape so a player can pick a non-default mode on the default 10×3
-        // shape (and vice-versa).
-        const rawRc = sel && sel.runConfig;
-        const rawMode = rawRc && typeof rawRc.mode === 'string' ? rawRc.mode.toUpperCase() : '';
-        const mode = MODES.includes(rawMode) ? rawMode : DEFAULT_MODE;
-        if (rawRc
-            && typeof rawRc.stages === 'number' && isFinite(rawRc.stages)
-            && typeof rawRc.wavesPerStage === 'number' && isFinite(rawRc.wavesPerStage)) {
-            const stages = Math.max(10, Math.min(100, Math.round(rawRc.stages / 10) * 10));
-            const wps = [3, 6, 9].reduce((b, o) =>
-                Math.abs(o - rawRc.wavesPerStage) < Math.abs(b - rawRc.wavesPerStage) ? o : b, 3);
-            loadout.runConfig = { stages, wavesPerStage: wps, mode };
-        } else if (mode !== DEFAULT_MODE) {
-            // Non-default mode on the default run shape: carry it through so
-            // init() applies it (init()'s loadout branch supplies the default
-            // stages/wps clamps when a mode is present).
-            loadout.runConfig = { stages: MAX_STAGES, wavesPerStage: WAVES_PER_STAGE, mode };
-        }
-        try { saveMeta({ loadout }); } catch {}
-        this._preRunTreeOpen = false;
-        shopDom.hideShopDom();
-        if (typeof this._finalizeTitleExit === 'function') {
-            try { this._finalizeTitleExit(); } catch {}
-        }
-        if (typeof this.startNewRun === 'function') this.startNewRun(loadout);
-    }
+    // 9.0.0 (reboot) — BUILD-tree pre-run removed; shop-dom is dead.
+    beginPreRunFromTree(/* sel */) { /* removed (9.0.0) */ }
 
     // RUN-06 — peakThreatReached persistence scaffolding (localStorage-backed
     // meta). `_loadPeakThreatReached` reads the stored peak (default 0) at
@@ -4767,51 +4621,14 @@ export class GameEngine {
         this.game.state = GAME_STATES.TITLE_SCREEN;
     }
 
-    // Render the gear (equipment + stash) panels into the BUILD tree's GEAR
-    // tab. Reuses ArmoryOverlay purely as the gear-logic host (equip/salvage/
-    // reroll/tier-up) — it is no longer opened as a full-screen overlay.
-    renderPreRunGear(container) {
-        if (!this._armoryOverlay) {
-            this._armoryOverlay = new ArmoryOverlay();
-            this._armoryOverlay.setGameEngine(this);
-        }
-        this._armoryOverlay.renderGearInto(container);
-    }
-
-    // Buy a weapon/ability unlock with account-gold from the BUILD tree
-    // (clicking a LOCKED parent bubble). Returns true on success.
-    unlockPreRunItem(category, id) {
-        if (!this._armoryOverlay) {
-            this._armoryOverlay = new ArmoryOverlay();
-            this._armoryOverlay.setGameEngine(this);
-        }
-        return !!this._armoryOverlay.buy(category, id);
-    }
-
-    // Phase R5 — pre-run LOADOUT screen (ARMORY → LOADOUT → run). Pick the
-    // chosen ≤4 per category; its BEGIN button calls startNewRun(loadout).
-    openLoadout() {
-        if (this._armoryOverlay && this._armoryOverlay.isOpen()) this._armoryOverlay.close();
-        if (!this._loadoutOverlay) {
-            this._loadoutOverlay = new LoadoutOverlay();
-            this._loadoutOverlay.setGameEngine(this);
-        }
-        this.game.state = GAME_STATES.LOADOUT;
-        this._loadoutOverlay.open();
-    }
-
-    isLoadoutOpen() { return !!(this._loadoutOverlay && this._loadoutOverlay.isOpen()); }
-
-    // 6.36.0 — Open the STATS screen as a wave-clear level-up step. The
-    // game is already paused by the wave-clear flow; `onClose` continues
-    // into the next wave once the player finishes spending SP.
-    openStatsForLevelUp(onClose) {
-        if (!this._statsOverlay) {
-            this._statsOverlay = new StatsOverlay(this.uiManager);
-            this._statsOverlay.setGameEngine(this);
-        }
-        return this._statsOverlay.openForLevelUp(onClose);
-    }
+    // 9.0.0 (reboot) — the legacy BUILD-tree / armory / loadout / level-up
+    // STATS interpose pre-run flow is replaced by NewGameOverlay. These are
+    // no-op stubs for any guarded leftover caller (shop-dom, armory-overlay).
+    renderPreRunGear() { /* removed (9.0.0) */ }
+    unlockPreRunItem() { return false; }
+    openLoadout() { /* removed (9.0.0) */ }
+    isLoadoutOpen() { return false; }
+    openStatsForLevelUp() { return false; }
 
     // 9.0.0 (reboot) — open the between-wave draft. Rolls + applies a chosen
     // boon to the player, then fires onClose so the wave loop can advance.

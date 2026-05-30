@@ -10,7 +10,7 @@ import { passiveSlotsUnlockedAfter } from '../combat/passive-data.js';
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
 import { linkBosses } from '../enemy/boss-rage.js';
-import { getBossForStage, getBossById } from '../enemy/bosses/index.js';
+import { getBossForStage, getBossById, BOSS_DESCRIPTORS } from '../enemy/bosses/index.js';
 import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getEnemySpeedMultiplier, getEnemyBulletSpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, BOSS_TIER_STATS, isBossWave } from './wave-data.js';
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
@@ -959,6 +959,24 @@ export function requestEnemySpawn(type, x, y, opts = {}) {
     else { enemy.x = x; enemy.y = y; }
     if (typeof opts.onSpawn === 'function') opts.onSpawn(enemy);
     return enemy;
+}
+
+// 9.0.0 — DEBUG boss roster for the pause-menu DEBUG tab (?debug=1). Returns a
+// lightweight [{ id, name }] for every registered boss; no engine deps.
+export function getBossList() {
+    return BOSS_DESCRIPTORS.map(d => ({ id: d.id, name: d.name }));
+}
+
+// 9.0.0 — DEBUG boss confrontation (pause → DEBUG tab → SPAWN BOSS). Drains the
+// active field (enemies, asteroids, enemy fire) so the tester faces the boss
+// alone, clears the once-per-wave spawn guard, then warps the chosen boss in by
+// id. Returns the boss enemy, or null on failure.
+export function debugSpawnBoss(id) {
+    if (this.enemyPool && typeof this.enemyPool.drainActive === 'function') this.enemyPool.drainActive();
+    if (this.asteroidPool && typeof this.asteroidPool.drainActive === 'function') this.asteroidPool.drainActive();
+    if (this.enemyBulletPool && typeof this.enemyBulletPool.drainActive === 'function') this.enemyBulletPool.drainActive();
+    this._modularBossSpawnedWave = null;
+    return spawnModularBoss.call(this, id, { warp: true });
 }
 
 // BOSS-04 — spawn ONE modular boss from a descriptor. Additive + gated: this is

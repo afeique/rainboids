@@ -11,6 +11,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.1.1] - 2026-05-30
+
+### Removed
+- **Top-center boss HP bar.** The wide always-on boss healthbar (drawn at the
+  top of the screen, element-tinted — which rendered near-white for the KINETIC
+  bosses Harbinger and Aegis) is removed. Boss rage-flash FX, attack telegraphs,
+  and the intro name-card are unaffected.
+
+---
+
+## [9.1.0] - 2026-05-30
+
+### Added
+- **DEBUG menu** — append `?debug=1` to the URL to reveal a **DEBUG** tab in the
+  pause menu. Its **SPAWN BOSS** picker lists every boss in the registry; tapping
+  one drains the field (enemies, asteroids, enemy fire), warps the chosen boss in,
+  and resumes — so any boss can be confronted instantly for testing. Invisible
+  without the `?debug=1` flag.
+
+---
+
+## [9.0.1] - 2026-05-30
+
+### Fixed
+- **Health-tank overfill.** Collecting a health orb while already at full HP now
+  reliably restores **one** spare tank (up to the cap of 3) — the single, only
+  mechanic for converting overfilled health into a tank. Removed the interfering
+  fractional "overflow accumulator" (40 HP of banked overflow per tank, fed by
+  orbs **and** passive regen-at-max) and the BLOODSHIELD over-heal buffer that
+  sat in front of it, both of which diluted or blocked tank refills. The health
+  bar's cyan "overflow progress" overlay (which visualized that accumulator) is
+  gone with it.
+
+---
+
 ## [9.0.0] - 2026-05-30
 
 ### "Back to Basics" — Hades-style survival roguelite reboot

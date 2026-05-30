@@ -9,7 +9,6 @@ import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
 import { drawItemFeed } from './item-feed.js';
-import { drawBossHealthbarHook } from './boss-healthbar.js';
 import { drawThreatLevelHook } from './threat-level.js';
 import { drawBossFxHook } from '../enemy/boss-fx.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
@@ -100,10 +99,9 @@ export function drawHUD() {
             }
             // 6.x — Left-edge item loot feed (replaces world pickup orbs).
             drawItemFeed.call(this, this.ctx);
-            // BOSS-01 — Always-visible boss healthbar. Renders top-center
-            // only while a boss-flagged enemy is alive (the hook scans the
-            // active enemy pool and no-ops otherwise).
-            drawBossHealthbarHook.call(this);
+            // 9.1.1 — top-center boss HP bar removed (was drawBossHealthbarHook
+            // here; its import is dropped too). Boss FX / telegraph / intro hooks
+            // below still run.
             // BOSS-03 — Boss intro/death canvas FX (name-card sweep +
             // death detonation). Co-located with the healthbar hook; the
             // hook scans the pool for a boss playing an intro/death
@@ -1549,26 +1547,11 @@ export function updateHUD() {
             ctx.restore();
         }
 
-        // 6.149.0 — overflow → tank progress, made VISIBLE. Healing past max HP
-        // banks toward the next spare tank (accumulateOverflowToTank); show that
-        // surplus as a bright pulsing cyan fill layered over the full bar, so the
-        // player literally sees the health bar "overflow and fill with the
-        // surplus" as it builds toward regaining a tank.
-        const tankProg = Math.max(0, Math.min(1, (this.player._tankProgress) || 0));
-        if (tankProg > 0) {
-            const ovW = barWidth * tankProg;
-            const pulse = 0.55 + 0.45 * Math.abs(Math.sin(Date.now() * 0.006));
-            ctx.save();
-            createHealthBarPath(barWidth);
-            ctx.clip();
-            ctx.globalAlpha = pulse;
-            const og = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
-            og.addColorStop(0, 'rgba(200, 255, 255, 0.95)');
-            og.addColorStop(1, 'rgba(0, 220, 255, 0.85)');
-            ctx.fillStyle = og;
-            ctx.fillRect(barX, barY, Math.max(0, ovW), barHeight);
-            ctx.restore();
-        }
+        // 9.0.0 — the old fractional "overflow → tank progress" cyan fill bar
+        // was removed alongside the accumulator it visualized. Overfilling a
+        // health orb now restores a full spare tank outright (see
+        // lifecycle.applyHealthOrbToTanks), so there is no partial progress to
+        // show on the health bar.
 
         // Remove segmentation lines for cleaner look
 

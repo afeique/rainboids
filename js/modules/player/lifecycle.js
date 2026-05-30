@@ -525,72 +525,34 @@ export function _consumeTank() {
 const HUD_TRIFORCE_LEFT_X = 36;
 const HUD_BAR_CENTER_Y = 35;
 
-// 5.88.0 — health-pickup overflow → tank progress.
-// 6.35.0 — Threshold lowered 100 → 40 HP of overflow per tank. At 100
-//   HP, regaining a triforce tank after losing one took ~10+ overheals
-//   and felt like it "did nothing" / the excess was ignored. 40 HP
-//   makes a regain land in ~2-4 overheals so the triforce-appearance
-//   animation (spawnTankRecharge) actually fires and reads as a reward.
-//   NOTE: tanks cap at MAX_HEALTH_TANKS (3 = the triforce slots), so
-//   while the triforce is full the overflow is intentionally inert —
-//   it only rebuilds tanks the player has LOST.
+// 9.0.0 — Overfill → tank (the SINGLE overfill mechanic). Collecting a health
+// orb whose heal is (partly or fully) WASTED because HP is already at the cap
+// restores ONE lost spare tank, capped at MAX_HEALTH_TANKS. No fractional
+// accumulator, no Bloodshield buffer, no other source: one overfilling pickup
+// = one tank back. This is the ONLY way overfilled health converts into tanks.
 //
-// `amountHealed` is the actual HP delta (post-cap); `orbAmount` is the
-// original orb value before cap.
-const TANK_OVERFLOW_HP = 40;
+// `amountHealed` is the actual HP delta (post-cap); `orbAmount` is the original
+// orb value before cap. overflow > 0 ⟺ the pickup overfilled.
 export function applyHealthOrbToTanks(orbAmount, amountHealed) {
     const overflow = Math.max(0, orbAmount - amountHealed);
-    if (overflow <= 0 && this.player.health < this.player.getEffectiveMaxHealth()) return;
+    if (overflow <= 0) return;                          // orb fully used to heal HP
+    if (this.healthTanks >= MAX_HEALTH_TANKS) return;   // triforce already full
 
-    // Picking up health while ALREADY at max HP credits the full orb;
-    // otherwise just the unused portion.
-    const credit = overflow > 0 ? overflow : orbAmount;
-    accumulateOverflowToTank.call(this, credit);
-}
-
-// 5.114.0 — Shared accumulator. Any HP "wasted" past the cap (orb
-// overflow, regen ticks at max, etc.) feeds in here. Every 100 HP of
-// accumulated overflow grants +1 tank up to MAX_HEALTH_TANKS, fires
-// the sparkling spawnTankRecharge animation, and emits an audio cue.
-export function accumulateOverflowToTank(credit) {
-    if (!(credit > 0) || !this.player) return;
-
-    // CD-10 — BLOODSHIELD feed (passive-gated). This is the SINGLE over-heal
-    // funnel — orb overflow AND regen-ticks-at-max both arrive here — so banking
-    // the buffer here covers every heal-overflow source from one place. The
-    // buffer cushions FIRST (up to its 35%-max-HP cap); only the REMAINDER falls
-    // through to the triforce-tank accumulator below, keeping tank behavior
-    // coherent once the buffer is topped off. Default-safe: without the
-    // BLOODSHIELD passive the buffer is untouched and the full credit feeds tanks
-    // exactly as before.
-    if (this.player.hasPassive && this.player.hasPassive('BLOODSHIELD')
-        && typeof this.player.addBloodshield === 'function') {
-        const banked = this.player.addBloodshield(credit);
-        credit -= banked;
-        if (!(credit > 0)) return; // buffer absorbed all of it; nothing for tanks
-    }
-
-    if (this.player._tankProgress === undefined) this.player._tankProgress = 0;
-    // 6.0.0 — BLOOD_BANK doubles overflow→tank credit.
-    const bloodBankStacks = this.player.getPowerupStacks
-        ? this.player.getPowerupStacks('BLOOD_BANK') : 0;
-    const effectiveCredit = bloodBankStacks > 0 ? credit * 2 : credit;
-    this.player._tankProgress += effectiveCredit / TANK_OVERFLOW_HP;
-
-    while (this.player._tankProgress >= 1 && this.healthTanks < MAX_HEALTH_TANKS) {
-        this.healthTanks++;
-        this.player._tankProgress -= 1;
-        this.events.emit('audio:powerup');
-        this.events.emit('ui:update-tanks', { tanks: this.healthTanks });
-        if (typeof this.spawnTankRecharge === 'function') {
-            this.spawnTankRecharge(this.healthTanks);
-        }
-    }
-    // Cap progress at <1 once at max tanks so overflow doesn't sit forever.
-    if (this.healthTanks >= MAX_HEALTH_TANKS && this.player._tankProgress > 1) {
-        this.player._tankProgress = 1;
+    this.healthTanks++;
+    this.events.emit('audio:powerup');
+    this.events.emit('ui:update-tanks', { tanks: this.healthTanks });
+    if (typeof this.spawnTankRecharge === 'function') {
+        this.spawnTankRecharge(this.healthTanks);
     }
 }
+
+// 9.0.0 — Overfill→tank is now ONLY the health-orb pickup path
+// (applyHealthOrbToTanks). Continuous heal-overflow sources (regen at max HP,
+// gainHealth over-heal) no longer bank toward spare tanks — that fractional
+// accumulator was the "other mechanic" that diluted/blocked tank refills.
+// Kept as an exported no-op so the existing regen/gainHealth call sites stay
+// valid without edits (they invoke this harmlessly).
+export function accumulateOverflowToTank(credit) { /* no-op — see applyHealthOrbToTanks */ }
 
 export function handlePlayerDeath() {
     // P6 — Second Heart passive: survive a lethal hit once PER STAGE at 30% HP

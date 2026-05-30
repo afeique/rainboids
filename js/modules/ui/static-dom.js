@@ -257,50 +257,41 @@ function _buildPauseMenu() {
     // re-hides it on disconnect — see game-engine._refreshGamepadTabVisibility().
     const mobile = isMobile();
     const tabs = el('div', { className: 'pause-tabs' });
+    // 9.0.0 (reboot) — STATS / PRIMARY / POWER / PASSIVES tabs removed.
+    // DEBUG tab is appended below (gated to ?debug=1 only).
     const tabDefs = [
         { key: 'controls', label: 'CONTROLS', active: true },
         { key: 'gamepad',  label: 'GAMEPAD' },
-        { key: 'stats',    label: 'STATS' },
-        { key: 'primary',  label: 'PRIMARY' },
-        { key: 'power',    label: 'POWER' },
-        { key: 'passives', label: 'PASSIVES' },
         { key: 'assists',  label: 'ASSISTS' },
         { key: 'display',  label: 'DISPLAY' },
         { key: 'music',    label: 'MUSIC' },
         { key: 'sfx',      label: 'SFX' },
+        { key: 'debug',    label: 'DEBUG' },
     ];
+    // Is ?debug=1 in the URL? (Same flag debug-config.js uses.)
+    let debugMode = false;
+    try { debugMode = new URLSearchParams(location.search).get('debug') === '1'; } catch (_) {}
     for (const t of tabDefs) {
         const b = el('button', { className: 'pause-tab' + (t.active ? ' active' : ''), text: t.label });
         b.dataset.tab = t.key;
-        // Hide the ASSISTS button by default on mobile; the engine reveals
-        // it when a gamepad connects (and re-hides on disconnect).
         if (t.key === 'assists' && mobile) b.style.display = 'none';
-        // The GAMEPAD button is always hidden until a pad is detected.
         if (t.key === 'gamepad') b.style.display = 'none';
+        // 9.0.0 — DEBUG tab is invisible unless ?debug=1.
+        if (t.key === 'debug' && !debugMode) b.style.display = 'none';
         tabs.appendChild(b);
     }
     menu.appendChild(tabs);
 
     // ── Tab content stubs ──
     menu.appendChild(el('div', { id: 'controls-tab', className: 'pause-tab-content active' }));
-    // GAMEPAD tab — static control reference, shown only while a pad is
-    // connected (button visibility gates access).
     menu.appendChild(_buildGamepadTab());
-    // STATS tab — populated by ui-manager.updateStatsTab() with the
-    // shared SP-allocation card (passive stat icons + [−]/[+] controls).
-    menu.appendChild(el('div', { id: 'stats-tab',    className: 'pause-tab-content' }));
-    menu.appendChild(el('div', { id: 'primary-tab',  className: 'pause-tab-content' }));
-    menu.appendChild(el('div', { id: 'power-tab',    className: 'pause-tab-content' }));
-    // PASSIVES tab — populated by ui-manager.updatePassivesTab(): the in-run
-    // swap panel (assign owned passives to unlocked slots; P5b).
-    menu.appendChild(el('div', { id: 'passives-tab', className: 'pause-tab-content' }));
-    // Assists tab content is always built (the toggles are needed for the
-    // mobile-with-gamepad case); the tab button's visibility is what gates
-    // access on mobile.
     menu.appendChild(_buildAssistsTab());
     menu.appendChild(_buildDisplayTab());
     menu.appendChild(_buildMusicTab());
     menu.appendChild(_buildSfxTab());
+    // 9.0.0 — DEBUG tab: empty stub. Populated by ui-manager.updateDebugTab()
+    // when the tab is opened (gated by ?debug=1 visibility on the button).
+    menu.appendChild(el('div', { id: 'debug-tab', className: 'pause-tab-content' }));
 }
 
 // DISPLAY tab — font (typography) settings. Reuses the shared font-picker
