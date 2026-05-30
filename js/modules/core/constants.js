@@ -12,6 +12,27 @@ export const GAME_CONFIG = {
     FIELD_WIDTH: 1920,
     FIELD_HEIGHT: 1080,
 
+    // ── 9.1.0 Boss redesign — massive maneuver-around bosses ──────────────────
+    // Boss fights enlarge the play field (so there's room to fly AROUND a
+    // screen-filling boss) and pull the camera back via DYNAMIC FRAMING (zoom
+    // eased from player↔boss distance). See world/boss-camera.js + camera-manager.
+    BOSS_ARENA_SCALE: 1.6,        // linear scale → ~2.5× area on a boss wave
+    BOSS_ZOOM_MIN: 0.72,          // desktop: most zoomed-out (reading the whole body)
+    BOSS_ZOOM_MAX: 1.0,           // desktop: closed-in (full dodge fidelity)
+    BOSS_ZOOM_NEAR_R: 220,        // ≤ this px from the boss → ease toward MAX (1.0)
+    BOSS_ZOOM_FAR_R: 900,         // ≥ this px from the boss → ease toward MIN
+    BOSS_ZOOM_EASE: 0.05,         // per-frame lerp of camera.zoom toward target
+    // Mobile: don't stack the boss zoom-out on top of the platform zoom-out into
+    // oblivion. The boss framing is gentle and the EFFECTIVE zoom is hard-floored.
+    BOSS_ZOOM_MOBILE_FACTOR: 0.94,
+    MIN_EFFECTIVE_ZOOM: 0.62,     // absolute floor (ship never becomes a speck)
+    MIN_SHIP_SCREEN_R: 12,        // ship-size guardrail: rendered ship radius floor (px)
+    // Platform base zoom (mirrors game-engine._refreshCameraZoom; centralized so
+    // the dynamic-framing easing converges to the same rest value).
+    BASE_ZOOM_DESKTOP: 1.0,
+    BASE_ZOOM_PORTRAIT: 0.78,
+    BASE_ZOOM_LANDSCAPE: 0.88,
+
     SHIP_SIZE: 30,
     SHIP_THRUST: 0.12,
     SHIP_FRICTION: 0.993,

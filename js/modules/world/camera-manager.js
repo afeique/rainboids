@@ -5,6 +5,39 @@
  * via `.call(gameEngine)`. This is Phase 3 strangler-fig extraction.
  */
 
+import { isPortrait } from '../platform/platform-detect.js';
+import { GAME_CONFIG } from '../core/constants.js';
+import { platformBaseZoom, computeBossFraming, guardShipZoom } from './boss-camera.js';
+
+// The active modular boss (carries `bossId`), or null. Scans the small active
+// enemy list — cheap (few enemies, ≤1 boss).
+function _activeModularBoss(ge) {
+    const pool = ge && ge.enemyPool;
+    const list = pool && pool.activeObjects;
+    if (!Array.isArray(list)) return null;
+    for (let i = 0; i < list.length; i++) {
+        const e = list[i];
+        if (e && e.active && e.isBoss && e.bossId && !e.warping) return e;
+    }
+    return null;
+}
+
+// 9.1.0 — grow the play field on a boss wave (room to fly AROUND a screen-
+// filling boss), restore it otherwise. Idempotent; updates the starfield wrap.
+function _reconcileBossArena(ge, boss) {
+    if (!ge.gameField) return;
+    const baseW = GAME_CONFIG.FIELD_WIDTH, baseH = GAME_CONFIG.FIELD_HEIGHT;
+    const scale = GAME_CONFIG.BOSS_ARENA_SCALE || 1.6;
+    const w = boss ? Math.round(baseW * scale) : baseW;
+    const h = boss ? Math.round(baseH * scale) : baseH;
+    if (ge.gameField.width === w && ge.gameField.height === h) return;
+    ge.gameField.width = w;
+    ge.gameField.height = h;
+    if (ge.starfieldRenderer && typeof ge.starfieldRenderer.setFieldSize === 'function') {
+        ge.starfieldRenderer.setFieldSize(w, h);
+    }
+}
+
 export function updateCamera() {
     if (!this.player || !this.player.active) return;
 
@@ -13,6 +46,26 @@ export function updateCamera() {
     // scales around the canvas center).
     this.camera.targetX = this.player.x - this.width / 2;
     this.camera.targetY = this.player.y - this.height / 2;
+
+    // 9.1.0 — Dynamic boss framing + enlarged boss arena. While a modular boss
+    // is active, ease the zoom from player↔boss distance (pull back to read the
+    // whole body, ease in to thread tight patterns); off-boss, converge to the
+    // platform base (desktop 1.0 / mobile 0.78–0.88) so there's no fight with
+    // _refreshCameraZoom. Mobile composes-but-clamps (see boss-camera.js).
+    const boss = _activeModularBoss(this);
+    _reconcileBossArena(this, boss);
+    const isMob = !!this.mobile;
+    const baseZoom = platformBaseZoom(isMob, isPortrait());
+    let targetZoom = baseZoom;
+    if (boss) {
+        targetZoom = computeBossFraming({
+            px: this.player.x, py: this.player.y,
+            bx: boss.x, by: boss.y, baseZoom, isMobile: isMob,
+        });
+        targetZoom = guardShipZoom(targetZoom, this.player.radius || GAME_CONFIG.SHIP_SIZE / 2);
+    }
+    const ease = GAME_CONFIG.BOSS_ZOOM_EASE || 0.05;
+    this.camera.zoom = (this.camera.zoom || baseZoom) + (targetZoom - (this.camera.zoom || baseZoom)) * ease;
 
     // 5.96.0 — Clamp camera to game field boundaries with zoom awareness.
     //   The visible world window has size `width/zoom × height/zoom`

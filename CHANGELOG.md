@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.2.0] - 2026-05-30
+
+### Added
+- **Massive maneuver-around bosses — foundation + Aegis prototype.** First slice
+  of the boss redesign (full design: `docs/Boss Redesign — Massive Maneuver-Around
+  Bosses – 2026-05-30.md`): screen-filling bosses you fly *around*.
+  - **Dynamic boss camera** (`world/boss-camera.js`, `world/camera-manager.js`) —
+    `camera.zoom` eases from player↔boss distance: pull back to read the whole
+    body, ease toward 1.0 to thread tight patterns. Mobile composes-but-clamps so
+    the ship never shrinks past readability; a ship-size guardrail backs it up.
+    Off-boss play is unchanged (converges to the platform base zoom).
+  - **Enlarged boss arenas** — the play field grows ~2.5× on a boss wave
+    (`setFieldSize`) and restores afterward, giving room to orbit a giant boss.
+  - **Per-boss renderer architecture** — a `draw` hook on each descriptor
+    (`enemy.js` calls it, falling back to the generic disc) + a shared canvas
+    toolkit (`enemy/bosses/render/boss-gfx.js`): layered cores, additive glow,
+    beveled panels, telegraph arcs, shockwaves, safe particle emit.
+  - **THE AEGIS, redesigned** (`bosses/aegis.js` + `render/aegis-render.js`) — a
+    340px rotating bastion: a reactor core sealed behind a **tracking** armor-petal
+    dome, vulnerable only from **behind** (flank it past its capped turn rate, or
+    grind the petals down). Three phases shed-and-harden into an exposed **charging
+    brawler**; a telegraphed **shield-bash shockwave** punctuates the early phases.
+    Custom render: layered reactor gradients, beveled metal petals with scorch, a
+    rear plasma vent that flares when flanked, force-field shimmer, spark motes.
+  - Reachable now via `?debug=1` → pause → DEBUG → **SPAWN BOSS** → THE AEGIS.
+  - 17 new unit tests (`boss-aegis` rewritten for the new mechanic; `boss-camera`).
+
+### Changed
+- **THE AEGIS is no longer element-gated.** Its old Toxic/CORRODE-bypass +
+  KINETIC-resist armor mechanic is removed; the fight is now pure positioning.
+  (The other nine bosses keep their existing mechanics until each is reworked.)
+
+---
+
 ## [9.1.1] - 2026-05-30
 
 ### Removed

@@ -1,39 +1,34 @@
-// THE AEGIS — stage 2-6 boss (BOSS-06).
+// THE AEGIS — stage 2 boss (9.1.0 "massive maneuver-around" redesign).
 //
-// The armor boss. KINETIC element (no dedicated "armor" id in elements.js, so
-// KINETIC is the chassis element + the plates carry a strong KINETIC resist to
-// SELL the "armored" identity). A patient, defensive fight: a heavy core sealed
-// behind a wall of rotating ARMOR PLATES (weak-point parts, `shieldsCore:true`).
-// The plates carry a ROTATING GAP — one ring index per phase is left empty — so
-// the gap sweeps around the core and periodically exposes a brief damage window
-// even before the plates are shed. Destroy the plates to permanently expose the
-// core; or exploit CORRODE (Toxic) to chew through the armor's resist.
+// A screen-filling rotating BASTION. A deep reactor core is sealed behind a dome
+// of beveled armor petals on its FRONT arc — the side it keeps turned toward the
+// player. The shield-face is impenetrable; the reactor is only vulnerable from
+// BEHIND. Because the dome TRACKS the player (at a capped turn rate), the safe
+// angle is always moving: you must out-maneuver its rotation and strike the
+// exposed rear. No element gating whatsoever — this is a pure POSITIONING fight.
 //
-// THREE signature mechanics on top of the Harbinger template:
-//   • ROTATING PLATE-GAP — the plate ring omits one slot (`GAP_INDEX`), so the
-//     core is reachable through the gap as it sweeps (a positional weak window
-//     the AI/aim code reads, distinct from the all-plates-down core open).
-//   • CORRODE-BYPASS — plates have a high KINETIC `resist` (armor) AND a
-//     `corrodeBypass` flag. A CORRODE/Toxic source ignores the resist and can
-//     even reach the CORE through living plates: `coreDamageableBy(boss, src)`
-//     is true when the hit carries CORRODE, regardless of plates. This is the
-//     element-counterplay the boss DoD asks for.
-//   • PLATE-SHED — every phase enter re-arms a FRESH plate set that is SMALLER
-//     (fewer plates) but TOUGHER (more HP + more resist) than the last, so the
-//     wall thins-but-hardens as the fight escalates. Final phase enrages.
+// Mechanic, implemented entirely over the shipped chassis (boss-phases /
+// boss-parts / boss-intro) with ZERO collision-system changes:
+//   • Petals are `shieldsCore` parts on the front arc (offset + rotateWithBoss,
+//     where boss.angle = the dome facing). enemy.takeDamage already no-ops core
+//     damage while any shielding part lives (boss-parts.coreBlocksDamage).
+//   • Each frame we test whether the player sits in the REAR arc relative to the
+//     facing. If so → flip every living petal to `shieldsCore:false` (reactor
+//     OPEN, core takes damage) + raise `boss._reactorOpen` for the renderer.
+//     Otherwise the petals shield the core. Grinding the petals down individually
+//     is a valid alternate opening (livingParts → 0 also opens the core).
+//   • PHASES shed-and-harden: P0 full dome → P1 fewer/faster → P2 sheds the
+//     shield ENTIRELY and the exposed reactor becomes a fast CHARGING brawler
+//     (enrage). A telegraphed SHIELD-BASH shockwave punctuates P0/P1.
 //
-// SELF-CONTAINED + PURE: data + a thin driver over the SHIPPED boss chassis
-// cores (boss-phases / boss-parts / boss-intro). It never touches them and adds
-// no engine deps. Driven through the chassis public API with an explicit `now`,
-// so the whole boss is headless + deterministic for unit tests (no DOM, no RAF).
-//
-// Spawn wiring (registry + wave hook) is BOSS-04's job; this file deliberately
-// does NOT register itself anywhere.
+// Pure-ish: the descriptor + helpers are deterministic given an explicit `now`
+// and a ctx carrying `player`. Safe to drive headless (the chassis helpers are).
 
 import {
     initBossPhases,
     updateBossPhases,
     currentPhase,
+    currentPhaseIndex,
     isFinalPhase,
 } from '../boss-phases.js';
 import {
@@ -49,100 +44,93 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawAegis } from './render/aegis-render.js';
 
-// The element a CORRODE source carries (Toxic). Plates resist KINETIC but
-// CORRODE bypasses that resist — the boss's intended counterplay element.
-export const BYPASS_ELEMENT = 'TOXIC';
+export const AEGIS_MAX_HEALTH = 2600;
+export const AEGIS_SIZE = 340; // radius 170 — fills a large slice of the screen
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// Core HP is large but most of the fight is spent grinding the armored plates
-// (core is gated while they live, and the plates resist KINETIC), so wall-clock
-// kill time lands in the 45–120s boss band. Conservative + easy to retune.
-export const AEGIS_MAX_HEALTH = 1100;
-
-// Armor-plate ring per phase: FEWER plates but TOUGHER + more RESISTANT each
-// phase (the wall thins-but-hardens). `speed` is rad/s (boss-parts orbit math),
-// alternating sign reads as a heavy ring grinding into a fast counter-spin at
-// enrage. `kineticResist` (0..1) is the armor: 1 = immune, 0 = neutral. CORRODE
-// always bypasses it. `slots` is how many ring positions exist; ONE of them is
-// left empty (the rotating GAP), so `count` plates fill `slots - 1` positions.
-const PHASE_PLATES = [
-    // Phase 0 — opening: a thick, slow 6-slot wall (5 plates + 1 gap).
-    { slots: 6, radius: 140, hp: 90,  speed: 0.45, partRadius: 26, kineticResist: 0.55 },
-    // Phase 1 — mid: 5-slot wall (4 plates + gap), tighter + tougher.
-    { slots: 5, radius: 120, hp: 130, speed: 0.75, partRadius: 26, kineticResist: 0.70 },
-    // Phase 2 — enrage: 4-slot wall (3 plates + gap), fast counter-spin, near-immune.
-    { slots: 4, radius: 100, hp: 180, speed: 1.25, partRadius: 28, kineticResist: 0.85 },
+// Per-phase config. `count` petals span the FRONT arc (facing ± frontHalf where
+// frontHalf = PI - rearHalfArc, so the petals visually fill everything EXCEPT
+// the rear opening). `turnRate` = how fast the dome re-aims at the player
+// (rad/s) — low enough that a committed orbit can flank it. `rearHalfArc` = half
+// the rear opening (bigger = easier to keep the reactor exposed).
+const PHASE_CFG = [
+    { count: 7, hp: 120, ringR: 150, partRadius: 34, turnRate: 0.85, rearHalfArc: 0.85 },
+    { count: 5, hp: 170, ringR: 145, partRadius: 36, turnRate: 1.30, rearHalfArc: 0.72 },
+    { count: 0, hp: 0,   ringR: 0,   partRadius: 0,  turnRate: 1.70, rearHalfArc: Math.PI }, // shield shed → core open everywhere
 ];
-
-// HP fractions at which each phase opens (descending — boss-phases convention).
 const PHASE_GATES = [1.0, 0.6, 0.3];
 
-// Which ring slot is left empty (the rotating GAP). Index 0 keeps the gap at the
-// ring's phase-anchor; the whole ring orbits, so the gap sweeps with it.
-const GAP_INDEX = 0;
+// Shield-bash shockwave tuning.
+const SHOCK_FIRST = 3000;     // ms after spawn before the first bash
+const SHOCK_INTERVAL = 4500;  // ms between bashes
+const SHOCK_TELEGRAPH = 0.8;  // s wind-up
+const SHOCK_EXPAND = 0.45;    // s for the ring to reach maxR
+const SHOCK_DMG = 8;
 
-// Build the rotating armor-plate parts-script for a given phase index. Plates
-// fill every ring slot EXCEPT `GAP_INDEX` (the rotating gap). Each plate shields
-// the core, orbits the core centre, carries the phase's KINETIC armor resist,
-// and is flagged `corrodeBypass` so the damage pipeline knows Toxic ignores it.
+// Charge tuning (P2 exposed brawler).
+const CHARGE_SPEED = 130;     // px/s toward the player
+
+// ── angle helpers ────────────────────────────────────────────────────────────
+function angleDelta(a, b) {
+    let d = (a - b) % (Math.PI * 2);
+    if (d > Math.PI) d -= Math.PI * 2;
+    if (d < -Math.PI) d += Math.PI * 2;
+    return d;
+}
+function easeAngleToward(cur, target, maxStep) {
+    const d = angleDelta(target, cur);
+    if (Math.abs(d) <= maxStep) return target;
+    return cur + Math.sign(d) * maxStep;
+}
+
+// Build the front-arc petal parts-script for a phase. Petals use offset +
+// rotateWithBoss so they ride the dome facing (boss.angle).
 function plateScriptForPhase(phaseIdx) {
-    const cfg = PHASE_PLATES[phaseIdx] || PHASE_PLATES[PHASE_PLATES.length - 1];
-    const dir = (phaseIdx % 2 === 0) ? 1 : -1; // alternate spin direction per phase
+    const cfg = PHASE_CFG[phaseIdx] || PHASE_CFG[PHASE_CFG.length - 1];
+    const n = cfg.count;
+    if (n <= 0) return [];
+    const frontHalf = Math.PI - cfg.rearHalfArc;
     const plates = [];
-    for (let slot = 0; slot < cfg.slots; slot++) {
-        if (slot === GAP_INDEX) continue; // leave the gap empty
+    for (let i = 0; i < n; i++) {
+        const tloc = (n === 1) ? 0 : (i / (n - 1)) * 2 * frontHalf - frontHalf;
         plates.push({
-            id: `p${phaseIdx}-plate-${slot}`,
-            name: `Armor Plate ${slot + 1}`,
+            id: `p${phaseIdx}-plate-${i}`,
+            name: `Armor Plate ${i + 1}`,
             maxHealth: cfg.hp,
             radius: cfg.partRadius,
             shieldsCore: true,
-            element: 'KINETIC',
-            // Armor: high KINETIC resist. CORRODE (Toxic) bypasses it — see
-            // resolvePlateMultiplier / the `corrodeBypass` flag below.
-            resist: { KINETIC: cfg.kineticResist },
-            corrodeBypass: true,
-            // Rotating weak-point: evenly spaced around the ring, orbiting; the
-            // empty GAP_INDEX slot sweeps with the ring as a positional window.
-            orbit: {
-                radius: cfg.radius,
-                speed: cfg.speed * dir,
-                phase: (Math.PI * 2 * slot) / cfg.slots,
-            },
+            offset: { x: Math.cos(tloc) * cfg.ringR, y: Math.sin(tloc) * cfg.ringR },
+            rotateWithBoss: true,
         });
     }
     return plates;
 }
 
-// Re-arm (or RE-PLACE) the plate wall for a phase = the PLATE-SHED. Wrapped so
-// phase onEnter handlers and the initial spawn share one code path. `now` flows
-// through to boss-parts so the orbit clock restarts cleanly at each phase.
 function armPhasePlates(boss, phaseIdx, ctx, now) {
-    initBossParts(boss, plateScriptForPhase(phaseIdx), ctx, now);
+    const script = plateScriptForPhase(phaseIdx);
+    if (script.length === 0) {
+        // P2 — shed the shield entirely: drop any existing parts so the core is
+        // open from every angle (coreBlocksDamage → false).
+        if (boss._partsState) for (const p of boss._partsState.parts) p.alive = false;
+        boss._petalsInitial = 0;
+        return;
+    }
+    initBossParts(boss, script, ctx, now);
+    boss._petalsInitial = script.length;
 }
 
-// ── Phase script (consumed by boss-phases.js) ───────────────────────────────
-// onEnter re-arms (sheds + replaces) that phase's plate wall; the final phase
-// additionally flips the enrage flag. Each handler reads `now` off the boss so
-// the orbit clock stays deterministic in tests (boss-phases passes no `now`).
+// ── Phase script ─────────────────────────────────────────────────────────────
 export function buildPhaseScript() {
     return [
+        { id: 'aegis-p0', name: 'Bulwark', onEnter: () => {} },
         {
-            id: 'aegis-p0',
-            name: 'Bulwark',
-            // Phase 0 is the spawn phase; armed by initAegis, not here.
-            onEnter: () => {},
-        },
-        {
-            id: 'aegis-p1',
-            name: 'Shed',
+            id: 'aegis-p1', name: 'Reinforce',
             enterAtHpFraction: PHASE_GATES[1],
             onEnter: (boss, ctx) => armPhasePlates(boss, 1, ctx, boss._now || Date.now()),
         },
         {
-            id: 'aegis-p2',
-            name: 'Last Wall',
+            id: 'aegis-p2', name: 'Exposed Core',
             enterAtHpFraction: PHASE_GATES[2],
             onEnter: (boss, ctx) => {
                 armPhasePlates(boss, 2, ctx, boss._now || Date.now());
@@ -152,25 +140,16 @@ export function buildPhaseScript() {
     ];
 }
 
-// ── Enrage (final-phase escalation) ─────────────────────────────────────────
-// Latched so it fires exactly once. Bumps fire rate + flags homing so the
-// engine-side AI/firing (wired later) can read it; the flag itself is the
-// contract the rest of the game keys off.
-export function triggerEnrage(boss, _ctx = null) {
+export function triggerEnrage(boss) {
     if (!boss || boss._enraged) return false;
     boss._enraged = true;
     boss._enragedAt = boss._now || Date.now();
-    // Hooks the engine firing path will honor once spawning lands (BOSS-04+).
     boss.firingCooldownMul = 0.5;
-    boss.enableHomingBullets = true;
     return true;
 }
+export function isEnraged(boss) { return !!(boss && boss._enraged); }
 
-export function isEnraged(boss) {
-    return !!(boss && boss._enraged);
-}
-
-// ── Intro / death sequences (consumed by boss-intro.js) ─────────────────────
+// ── Intro / death sequences ──────────────────────────────────────────────────
 export function buildIntroScript() {
     return [
         { id: 'warp-in', name: 'Warp-In', durationMs: 1400 },
@@ -178,45 +157,16 @@ export function buildIntroScript() {
         { id: 'fight-start', name: 'Engage', durationMs: 0 },
     ];
 }
-
 export function buildDeathScript() {
     return [
-        { id: 'plates-shatter', name: 'Plates Shatter', durationMs: 900 },
+        { id: 'shield-fail', name: 'Shield Failure', durationMs: 900 },
         { id: 'core-breach', name: 'Core Breach', durationMs: 1100 },
         { id: 'supernova', name: 'Supernova', durationMs: 1200 },
         { id: 'victory', name: 'Victory', durationMs: 0 },
     ];
 }
 
-// ── Descriptor (what BOSS-04's registry will read) ──────────────────────────
-export const AEGIS = {
-    id: 'AEGIS',
-    name: 'THE AEGIS',
-    stage: 2,           // appears from stage 2 (tier 2-6 band)
-    tierBand: [2, 6],
-    element: 'KINETIC',
-    maxHealth: AEGIS_MAX_HEALTH,
-    size: 108,
-    color: '#dfe7f0',   // KINETIC tint (matches ELEMENTS.KINETIC.color)
-    glowColor: '#aebed4',
-    isBoss: true,
-    isFinalBoss: false,
-    phaseCount: PHASE_GATES.length,
-    bypassElement: BYPASS_ELEMENT,
-    gapIndex: GAP_INDEX,
-    // Factory hooks the chassis + (later) the spawner use.
-    buildPhaseScript,
-    buildIntroScript,
-    buildDeathScript,
-    plateScriptForPhase,
-    initBoss: initAegis,
-    updateBoss: updateAegis,
-};
-
-// ── Driver: wire a freshly-spawned boss object to the shipped chassis ───────
-// `boss` is any object the engine treats as a boss (the unit test uses a plain
-// stub). Establishes core stats, the phase script, the phase-0 plate wall, and
-// the intro sequence. Death is armed lazily by tickAegisDeath / armAegisDeath.
+// ── Driver ───────────────────────────────────────────────────────────────────
 export function initAegis(boss, ctx = null, now = Date.now()) {
     if (!boss) return false;
     boss.isBoss = true;
@@ -228,94 +178,126 @@ export function initAegis(boss, ctx = null, now = Date.now()) {
     boss.size = boss.size || AEGIS.size;
     boss._enraged = false;
     boss._now = now;
+    boss._aegisPrevNow = now;
+    boss._reactorOpen = false;
+    boss._shockwave = { active: false, telegraph: 0, radius: 0, maxR: 0, hitPlayer: false, nextAt: now + SHOCK_FIRST };
     if (boss.active === undefined) boss.active = true;
     if (boss._deathFlash === undefined) boss._deathFlash = 0;
     if (boss.warping === undefined) boss.warping = false;
     if (boss.x === undefined) boss.x = 0;
     if (boss.y === undefined) boss.y = 0;
+    boss._anchorX = boss.x;
+    boss._anchorY = boss.y;
     if (boss.angle === undefined) boss.angle = 0;
 
     initBossPhases(boss, buildPhaseScript(), ctx, now);
-    armPhasePlates(boss, 0, ctx, now);          // phase-0 plate wall
+    armPhasePlates(boss, 0, ctx, now);
     initBossIntro(boss, buildIntroScript(), ctx, now);
     return true;
 }
 
-// Per-frame tick: advance intro, parts, and phases (in that order) with one
-// shared `now`. Stashes `now` on the boss so phase onEnter handlers can restart
-// the orbit clock deterministically. Returns whether the core is currently
-// killable by a plain (non-CORRODE) hit — i.e. all this phase's plates are down.
 export function updateAegis(boss, ctx = null, now = Date.now()) {
     if (!boss) return false;
     boss._now = now;
+    const prevNow = (boss._aegisPrevNow != null) ? boss._aegisPrevNow : now;
+    let dt = (now - prevNow) / 1000;
+    boss._aegisPrevNow = now;
+    if (!(dt > 0)) dt = 0;
+    if (dt > 0.1) dt = 0.1; // clamp tab-out / first-frame spikes
+
     updateBossIntro(boss, ctx, now);
+
+    const player = ctx && ctx.player;
+    const phaseIdx = currentPhaseIndex(boss);
+    const cfg = PHASE_CFG[phaseIdx] || PHASE_CFG[0];
+
+    // Hold position (don't let the base enemy AI drift the boss); charge in P2.
+    boss.vx = 0; boss.vy = 0;
+    if (boss.velocity) { boss.velocity.x = 0; boss.velocity.y = 0; }
+    if (boss.vel) { boss.vel.x = 0; boss.vel.y = 0; }
+
+    if (player && player.active) {
+        // Dome tracks the player at a capped turn rate; rate drops as petals are
+        // chipped (so grinding the shield also helps you flank) and rises on enrage.
+        const destroyed = Math.max(0, (boss._petalsInitial || 0) - livingPartCount(boss));
+        let turn = cfg.turnRate - 0.06 * destroyed;
+        if (boss._enraged) turn *= 1.5;
+        turn = Math.max(0.2, turn);
+        const toPlayer = Math.atan2(player.y - boss.y, player.x - boss.x);
+        boss.angle = easeAngleToward(boss.angle || 0, toPlayer, turn * dt);
+
+        // Reactor-open test: is the player in the rear arc (behind the facing)?
+        const rear = (boss.angle || 0) + Math.PI;
+        const behind = Math.abs(angleDelta(toPlayer, rear)) < cfg.rearHalfArc;
+        boss._reactorOpen = behind;
+        // Flip the petal shield: open → none shield (core takes damage); else all shield.
+        for (const p of livingParts(boss)) p.shieldsCore = !behind;
+
+        if (phaseIdx >= 2) {
+            // Exposed brawler — charge the player. Contact uses the enemy collider.
+            const a = toPlayer;
+            boss.x += Math.cos(a) * CHARGE_SPEED * dt;
+            boss.y += Math.sin(a) * CHARGE_SPEED * dt;
+        } else {
+            // Hold near the spawn anchor.
+            boss.x += ((boss._anchorX ?? boss.x) - boss.x) * 0.05;
+            boss.y += ((boss._anchorY ?? boss.y) - boss.y) * 0.05;
+            updateShockwave(boss, player, dt, now);
+        }
+    } else {
+        boss._reactorOpen = livingPartCount(boss) === 0;
+    }
+
     updateBossParts(boss, ctx, now);
     updateBossPhases(boss, ctx, now);
     return !coreBlocksDamage(boss);
 }
 
-// True when a PLAIN (non-CORRODE) player hit should reach the CORE — all this
-// phase's plates are down. Mirrors boss-parts' coreBlocksDamage but framed
-// positively for the firing/HUD code.
-export function coreVulnerable(boss) {
-    return !coreBlocksDamage(boss);
+// Telegraphed shield-bash: a wind-up, then an expanding ring that damages the
+// player as it passes them. Self-contained (no enemy-bullet pool dependency).
+function updateShockwave(boss, player, dt, now) {
+    const sw = boss._shockwave;
+    if (!sw) return;
+    const R = boss.radius || (boss.size ? boss.size / 2 : 170);
+    if (!sw.active) {
+        if (now >= sw.nextAt) {
+            sw.active = true;
+            sw.telegraph = SHOCK_TELEGRAPH;
+            sw.radius = 0;
+            sw.maxR = R * 3.2;
+            sw.hitPlayer = false;
+        }
+        return;
+    }
+    if (sw.telegraph > 0) {
+        sw.telegraph = Math.max(0, sw.telegraph - dt);
+        return;
+    }
+    sw.radius += (sw.maxR / SHOCK_EXPAND) * dt;
+    // Damage when the ring band passes the player (once per bash).
+    if (!sw.hitPlayer && player && player.active && typeof player.takeDamage === 'function') {
+        const pd = Math.hypot(player.x - boss.x, player.y - boss.y);
+        const band = R * 0.35;
+        if (Math.abs(pd - sw.radius) < band) {
+            try { player.takeDamage(SHOCK_DMG, { source: 'boss', bossId: AEGIS.id }); } catch (e) { /* defensive */ }
+            sw.hitPlayer = true;
+        }
+    }
+    if (sw.radius >= sw.maxR) {
+        sw.active = false;
+        sw.nextAt = now + SHOCK_INTERVAL;
+    }
 }
 
-// ── CORRODE-bypass: the armor counterplay ───────────────────────────────────
-// A damaging source's element id. Tolerant of either a bare string, a
-// `{ element }` shape, or an array of elements (W1 multi-element attunements) —
-// the boss only cares whether CORRODE/Toxic is present.
-function _carriesBypass(src) {
-    if (!src) return false;
-    if (typeof src === 'string') return src === BYPASS_ELEMENT;
-    if (Array.isArray(src)) return src.includes(BYPASS_ELEMENT);
-    if (Array.isArray(src.elements)) return src.elements.includes(BYPASS_ELEMENT);
-    return src.element === BYPASS_ELEMENT;
-}
+export function coreVulnerable(boss) { return !coreBlocksDamage(boss); }
 
-// True if a hit carrying `src`'s element is CORRODE (and so bypasses armor).
-export function isCorrodeBypass(src) {
-    return _carriesBypass(src);
-}
+// Chassis read-throughs (HUD / spawner).
+export function aegisCurrentPhase(boss) { return currentPhase(boss); }
+export function aegisLivingPlates(boss) { return livingPartCount(boss); }
+export function aegisPlateList(boss) { return livingParts(boss); }
+export function aegisIsFinalPhase(boss) { return isFinalPhase(boss); }
 
-// The CORE can be DAMAGED by `src` when EITHER the plates are all down (plain
-// path) OR the hit carries CORRODE (bypass path — Toxic chews through armor and
-// reaches the core even while plates live). This is the contract the damage
-// pipeline ORs into its core-gate, and the test asserts directly.
-export function coreDamageableBy(boss, src) {
-    if (!coreBlocksDamage(boss)) return true;   // plates down → core open to anyone
-    return _carriesBypass(src);                 // plates up → only CORRODE gets through
-}
-
-// Effective damage multiplier for a hit of `amount` against a plate, honoring
-// its armor resist UNLESS the hit carries CORRODE (which bypasses the resist
-// entirely → full damage). Pure helper the collision pipeline can call before
-// damageBossPart; returned so the test can assert "CORRODE ignores armor".
-export function resolvePlateDamage(plate, amount, src) {
-    if (!plate || !(amount > 0)) return 0;
-    if (_carriesBypass(src)) return amount;     // CORRODE bypasses armor → full
-    const resist = plate.resist && plate.resist.KINETIC ? plate.resist.KINETIC : 0;
-    const mult = Math.min(2, Math.max(0, 1 - resist)); // mirrors elementalMultiplier
-    return amount * mult;
-}
-
-// Convenience read-throughs for the HUD / spawner (thin wrappers over chassis).
-export function aegisCurrentPhase(boss) {
-    return currentPhase(boss);
-}
-export function aegisLivingPlates(boss) {
-    return livingPartCount(boss);
-}
-export function aegisPlateList(boss) {
-    return livingParts(boss);
-}
-export function aegisIsFinalPhase(boss) {
-    return isFinalPhase(boss);
-}
-
-// Arm + tick the death detonation sequence (called by the engine when the core
-// reaches 0 HP; the unit test drives it directly). Independent key from the
-// intro, so both can live on one boss.
+// Death sequence (engine arms this when the core hits 0).
 export function armAegisDeath(boss, ctx = null, now = Date.now(), onComplete = null) {
     if (!boss) return false;
     return initBossDeath(boss, buildDeathScript(), ctx, now, onComplete);
@@ -323,5 +305,28 @@ export function armAegisDeath(boss, ctx = null, now = Date.now(), onComplete = n
 export function tickAegisDeath(boss, ctx = null, now = Date.now()) {
     return updateBossDeath(boss, ctx, now);
 }
+
+// ── Descriptor ───────────────────────────────────────────────────────────────
+export const AEGIS = {
+    id: 'AEGIS',
+    name: 'THE AEGIS',
+    stage: 2,
+    tierBand: [2, 6],
+    element: 'KINETIC',      // tint label only — NO element gating (9.1.0)
+    maxHealth: AEGIS_MAX_HEALTH,
+    size: AEGIS_SIZE,
+    color: '#cfe0f5',
+    glowColor: '#7fb0ff',
+    isBoss: true,
+    isFinalBoss: false,
+    phaseCount: PHASE_GATES.length,
+    buildPhaseScript,
+    buildIntroScript,
+    buildDeathScript,
+    plateScriptForPhase,
+    initBoss: initAegis,
+    updateBoss: updateAegis,
+    draw: drawAegis,         // 9.1.0 per-boss custom renderer
+};
 
 export default AEGIS;

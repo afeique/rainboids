@@ -13,6 +13,7 @@ import { updateBossPhases, phaseBlocksDamage } from './boss-phases.js';
 import { updateBossParts, coreBlocksDamage } from './boss-parts.js';
 import { updateBossIntro, updateBossDeath, introBlocksDamage } from './boss-intro.js';
 import { drawModularBoss } from './boss-render.js';
+import { getBossById } from './bosses/index.js';
 import { decayResistMap, ELEMENTS, weaknessElement } from '../combat/elements.js';
 import { runAura } from './support-aura.js';
 // ENMY-03 — cloak/invisibility. Default-safe: every wiring below is gated on
@@ -1490,8 +1491,16 @@ export class Enemy {
         // world space (the enemy draw pass is already inside the camera
         // transform), then we return so drawEnemyShape never runs for a boss.
         if (this.bossId && this.isBoss && !this.warping && !this._deathFlash) {
-            try { drawModularBoss(ctx, this); }
-            catch (err) { console.error('drawModularBoss failed', err); }
+            // 9.1.0 — per-boss custom renderer if the descriptor provides a
+            // `draw` hook (distinct silhouette + FX); else the generic disc.
+            try {
+                const desc = getBossById(this.bossId);
+                if (desc && typeof desc.draw === 'function') desc.draw(ctx, this);
+                else drawModularBoss(ctx, this);
+            } catch (err) {
+                console.error('boss draw failed', err);
+                try { drawModularBoss(ctx, this); } catch (e) { /* last resort */ }
+            }
             return;
         }
 
