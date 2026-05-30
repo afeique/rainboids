@@ -4,7 +4,7 @@ import { random, wrap } from '../core/utils.js';
 import * as weapons from './weapons.js';
 // 9.0.0 (reboot) — defense abilities removed; abilities.js import dropped.
 import * as progression from './progression.js';
-import * as passives from './passives.js';
+// 9.0.0 (reboot) — passives removed; passives.js import dropped.
 import * as playerRenderer from './renderer.js';
 import { loadSettings } from '../core/storage.js';
 import { DEFAULT_SKIN_ID } from './skins/index.js';
@@ -1234,16 +1234,19 @@ export class Player {
         return progression.getPowerupStacks.call(this, type);
     }
 
-    // Phase P2 — rule-modifier passives (see player/passives.js).
-    _rebuildActivePassives() { return passives._rebuildActivePassives.call(this); }
-    hasPassive(id) { return passives.hasPassive.call(this, id); }
-    getPassiveMod(key) { return passives.getPassiveMod.call(this, key); }
-    getPassiveMult(field) { return passives.getPassiveMult.call(this, field); }
-    getPassiveDamageMult() { return passives.getPassiveDamageMult.call(this); }
-    getPassiveMaxHpMult() { return passives.getPassiveMaxHpMult.call(this); }
-    equipPassive(slot, id) { return passives.equipPassive.call(this, slot, id); }
-    setOwnedPassives(ids) { return passives.setOwnedPassives.call(this, ids); }
-    setPassiveSlotsUnlocked(n) { return passives.setPassiveSlotsUnlocked.call(this, n); }
+    // 9.0.0 (reboot) — passives removed. All wrappers return safe defaults so
+    // internal `hasPassive(...)` checks in player.js (SIEGE, CAPACITOR_BANK,
+    // HEAT_SINK, KINETIC_BATTERY, AFTERIMAGE, …) resolve cleanly to false
+    // and the gated code paths skip without rewriting each call site.
+    _rebuildActivePassives() { /* no-op (9.0.0) */ }
+    hasPassive(/* id */) { return false; }
+    getPassiveMod(/* key */) { return 0; }
+    getPassiveMult(/* field */) { return 1; }
+    getPassiveDamageMult() { return 1; }
+    getPassiveMaxHpMult() { return 1; }
+    equipPassive(/* slot, id */) { return false; }
+    setOwnedPassives(/* ids */) { /* no-op (9.0.0) */ }
+    setPassiveSlotsUnlocked(/* n */) { /* no-op (9.0.0) */ }
 
     getItemAffixTotal(type) {
         return progression.getItemAffixTotal.call(this, type);
