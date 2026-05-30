@@ -5,7 +5,7 @@
 import { GAME_STATES } from '../core/constants.js';
 import { drawCachedHeartIcon, drawCachedShieldIcon, drawCachedMoneyIcon } from '../core/utils.js';
 import { ABILITIES, PRIMARY_WEAPONS } from '../combat/weapon-data.js';
-import { xpForLevel, MAX_LEVEL } from '../core/sp-stats.js';
+// 9.0.0 (reboot) — leveling/XP removed; xpForLevel/MAX_LEVEL no longer used.
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
 import { drawItemFeed } from './item-feed.js';
@@ -1290,53 +1290,9 @@ export function drawXPBar() {
 }
 
 // 6.34.0 — Level XP bar: a thin segmented gold bar across the very
-// bottom of the screen showing progress toward the next level
-// (white → goldenrod → darker-gold gradient, bordered). Full bar at
-// MAX_LEVEL.
-export function drawXPLevelBar(ctx) {
-        const player = this.player;
-        if (!player) return;
-        const level = (player.level | 0) || 1;
-        const W = this.canvas.width;
-        const barH = 6;
-        const y = this.canvas.height - barH;
-
-        let frac;
-        if (level >= MAX_LEVEL) {
-            frac = 1;
-        } else {
-            const need = xpForLevel(level) || 1;
-            frac = Math.max(0, Math.min(1, (player.xp || 0) / need));
-        }
-
-        ctx.save();
-        // Track.
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(0, y, W, barH);
-
-        // Gold fill.
-        if (frac > 0) {
-            const fillW = Math.max(1, W * frac);
-            const g = ctx.createLinearGradient(0, y, fillW, y);
-            g.addColorStop(0.0, '#fffbe6'); // near-white
-            g.addColorStop(0.5, '#daa520'); // goldenrod
-            g.addColorStop(1.0, '#8a6508'); // darker gold
-            ctx.fillStyle = g;
-            ctx.fillRect(0, y, fillW, barH);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-            ctx.fillRect(0, y, fillW, 1); // top highlight
-        }
-
-        // Segment ticks every 40px.
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        for (let x = 40; x < W; x += 40) ctx.fillRect(x, y, 1, barH);
-
-        // Top border (thin gold edge).
-        ctx.fillStyle = 'rgba(218, 165, 32, 0.65)';
-        ctx.fillRect(0, y - 1, W, 1);
-
-        ctx.restore();
-}
+// 9.0.0 (reboot) — leveling/XP removed; bottom XP bar gone (no-op stub kept so
+// any lingering caller doesn't throw).
+export function drawXPLevelBar(/* ctx */) { /* no-op (9.0.0) */ }
 
 export function drawLevelUpText() {
         if (!this.player || !this.player.levelUpTextInfo || !this.player.levelUpTextInfo.active) {

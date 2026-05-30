@@ -233,13 +233,12 @@ export function updateWaveSystem() {
             const totalStages = getRunConfig(this.game).stages;
             this.player.setPassiveSlotsUnlocked(passiveSlotsUnlockedAfter(getStage(clearedWave, runWavesPerStage(this.game)), totalStages));
         }
-        const bonusXP = 40 + clearedWave * 15; // gainExperience is a no-op since 6.0.0; kept for back-compat
         const baseCoins = 50 + clearedWave * 25;
         // RUN-03 — Reward Dial. Default 10×3 run → ×1.0 (no-op); richer runs
         // (wps ≥ 6) scale gold by the waves-per-stage × stage-depth factor.
         const rewardMult = rewardMultiplier(this.game, clearedWave);
         const bonusCoins = Math.round((stageClear ? baseCoins * 2 : baseCoins * 0.6) * rewardMult);
-        this.player.gainExperience(bonusXP);
+        // 9.0.0 (reboot) — XP/leveling removed; gainExperience grant dropped.
         this.game.money += bonusCoins;
         const _mob = isMobile();
         // RUN-01b — the card draft fires on EVERY stage clear EXCEPT the final

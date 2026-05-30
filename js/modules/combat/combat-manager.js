@@ -1245,13 +1245,8 @@ export function onEnemyKill(enemy) {
         }
     }
 
-    // 6.35.0 — XP toward the persistent meta level. Bosses are worth a
-    // big chunk; regular kills a flat trickle. Tuned slow so a full run
-    // is ~3-4 levels early on and reaching 100 is a long cross-run grind.
-    if (this.player && typeof this.player.addXp === 'function') {
-        const isBoss = !!(enemy && enemy.isBoss);
-        this.player.addXp(isBoss ? 120 : 12);
-    }
+    // 9.0.0 (reboot) — XP / leveling removed; per-kill XP grant gone. Power
+    // now comes only from the between-wave boon draft.
 
     // 5.74.3 — kill-streak coin bonuses removed. Gold is pickup-only;
     // the streak still grants its damage-tier buff below.

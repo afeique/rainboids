@@ -20,7 +20,7 @@ export function levelUp() { return false; }
 // Persistent level / XP / SP across playthroughs. `level`, `xp`, `sp`,
 // and `spStats` live on the player but are saved to localStorage so they
 // carry between runs.
-import { xpForLevel, MAX_LEVEL, SP_STATS, SP_STAT_MAX_POINTS } from '../core/sp-stats.js';
+// 9.0.0 (reboot) — SP stats + XP/leveling removed; sp-stats import dropped.
 import { EFFICIENCY_CAP, FLUX_PER_STACK, CAPACITOR_BANK_OVERCHARGE_MULT, CAPACITOR_BANK_DECAY_PER_SEC } from '../core/constants.js';
 import { loadMeta, saveMeta } from '../core/storage.js';
 import { frameClock } from '../core/frame-clock.js';
@@ -33,50 +33,21 @@ import { playerChillSpeedMult } from './player-status.js';
 import { isBuffSuppressed } from '../enemy/abilities/buff-strip.js';
 
 // Initialize the player's meta fields from storage (called in ctor).
+// 9.0.0 (reboot) — leveling / XP / SP all removed. Level pinned at 1 (enemy
+// scaling reads wave, not level); xp/sp/spStats kept as fields for back-compat
+// with any lingering reader, all zero. No persistence — saveMetaState is a
+// no-op so the storage doesn't accumulate stale per-run state.
 export function initMeta() {
-    const m = loadMeta() || {};
-    this.level = Math.max(1, Math.min(MAX_LEVEL, m.level | 0 || 1));
-    this.xp = Math.max(0, m.xp | 0);
-    this.sp = Math.max(0, m.sp | 0);
+    this.level = 1;
+    this.xp = 0;
+    this.sp = 0;
     this.spStats = {};
-    for (const s of SP_STATS) {
-        const v = (m.spStats && m.spStats[s.id]) | 0;
-        this.spStats[s.id] = Math.max(0, Math.min(SP_STAT_MAX_POINTS, v));
-    }
 }
 
-export function saveMetaState() {
-    saveMeta({ level: this.level, xp: this.xp, sp: this.sp, spStats: this.spStats });
-}
+export function saveMetaState() { /* no-op (9.0.0) */ }
 
-// Award XP toward the next level. Rolls over multiple levels if needed;
-// each level grants +1 SP. Sets `_leveledUpPending` so the wave-clear
-// flow knows to open the STATS screen. Persists on any level gain.
-export function addXp(amount) {
-    if (!(amount > 0) || this.level >= MAX_LEVEL) return;
-    this.xp = (this.xp || 0) + amount;
-    let leveled = false;
-    while (this.level < MAX_LEVEL) {
-        const need = xpForLevel(this.level);
-        if (this.xp < need) break;
-        this.xp -= need;
-        this.level += 1;
-        this.sp = (this.sp || 0) + 1;
-        leveled = true;
-    }
-    if (this.level >= MAX_LEVEL) this.xp = 0;
-    if (leveled) {
-        this._leveledUpPending = true;
-        this.saveMetaState();
-        // 6.148.0 — re-arm the on-screen LEVEL UP announcement. The 6.0.0
-        // refactor no-op'd triggerLevelUpEffects and the 6.35.0 meta-leveling
-        // never re-wired it, so level-ups had gone silent. The canvas
-        // animation (ship aura + wavy "LEVEL UP!" text + "+N SP" subtitle) is
-        // driven by `levelUpAnimation`; the DOM ui:show-message path is dead
-        // (game-message-overlay is commented out of index.html).
-        triggerLevelUpAnnounce.call(this);
-    }
-}
+// 9.0.0 (reboot) — XP / leveling removed. No-op so any lingering caller is harmless.
+export function addXp(/* amount */) { /* no-op (9.0.0) */ }
 
 // 6.148.0 — fire the canvas LEVEL UP celebration: a timed `levelUpAnimation`
 // window (ship golden aura via renderer.drawLevelUpEffects + the wavy
@@ -98,36 +69,13 @@ export function triggerLevelUpAnnounce() {
     }
 }
 
-// Spend one SP on a stat (respecting the 20-point cap + unspent SP).
-// Returns true on success. Persists on change.
-export function allocateSp(statId) {
-    if (!this.spStats || !(statId in this.spStats)) return false;
-    if ((this.sp || 0) <= 0) return false;
-    if (this.spStats[statId] >= SP_STAT_MAX_POINTS) return false;
-    this.spStats[statId] += 1;
-    this.sp -= 1;
-    this.saveMetaState();
-    return true;
-}
+// 9.0.0 (reboot) — SP allocation removed (no SP stats). No-op stubs kept.
+export function allocateSp() { return false; }
+export function deallocateSp() { return false; }
 
-// 6.36.0 — Pull one SP back out of a stat (refund to the unspent pool)
-// so the player can freely redistribute. Returns true on success.
-export function deallocateSp(statId) {
-    if (!this.spStats || !(statId in this.spStats)) return false;
-    if ((this.spStats[statId] | 0) <= 0) return false;
-    this.spStats[statId] -= 1;
-    this.sp = (this.sp || 0) + 1;
-    this.saveMetaState();
-    return true;
-}
-
-// Effective value of an SP stat (points × max/20).
-function _spVal(player, statId) {
-    const def = SP_STATS.find((s) => s.id === statId);
-    if (!def || !player || !player.spStats) return 0;
-    const pts = player.spStats[statId] | 0;
-    return pts * (def.max / SP_STAT_MAX_POINTS);
-}
+// 9.0.0 (reboot) — no SP stats. _spVal returns 0 so every effective-stat
+// getter's SP term collapses without rewriting each getter.
+function _spVal(/* player, statId */) { return 0; }
 
 // P2 — additive contribution of the active rule-modifier passives for a stat
 // key (0 until a passive declares a numeric `mods[key]` in P6). Guards a
