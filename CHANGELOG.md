@@ -11,6 +11,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.0.0] - 2026-05-30
+
+### "Back to Basics" — Hades-style survival roguelite reboot
+
+A fundamental gameplay + architectural overhaul. The inventory / gear /
+SP-stats / abilities / leveling / passives layers and the shelved multiplayer
+subsystem are **removed**; in their place is a tight survival loop where all
+in-run power comes from **boon drafts** at the end of every wave.
+
+### Added
+- **New-game picker** (`ui/newgame-overlay.js`) — list-based two-section
+  picker: tap a primary weapon, tap a power weapon, START. No unlock gating;
+  every weapon is free at the start. Mobile-friendly: large rows, single-column
+  on narrow viewports, momentum scrolling.
+- **Endless waves.** Death is the only finish line. The 10-boss roster cycles
+  past stage 10 (stage 11 → boss 1, …); wave configs cycle forever.
+- **Between-wave OFFENSE / DEFENSE draft** (`ui/draft-overlay.js`,
+  `combat/draft-engine.js`, `combat/draft-data.js`) — after every wave clear,
+  choose a category, then 1 of 3 randomized boon cards:
+  - **OFFENSE:** stackable weapon traits (multishot, rapid fire, pierce, big,
+    homing, explosive — mapped to your active primary), global crit + crit
+    damage, and **weapon attunements** (Pyro / Cryo / Volt / Toxic / Void /
+    Radiant — each opens its own 4-card upgrade line in future offense drafts).
+  - **DEFENSE:** Reinforced Hull (+life), Repair Field (+regen), Leeching
+    Rounds (+vampirism), Ablative Plating (+toughness), Afterburners (+speed).
+- **`cheats.autoDraft`** dev flag — auto-picks a random eligible card so the
+  AI-QA bot can survive multi-wave runs without stopping at every draft pause.
+
+### Removed
+- **Inventory / gear / items / loot drops** — enemies no longer drop items;
+  `player.registerItemDrop` / `equipItem` → no-op stubs; `getItemAffixTotal`
+  → 0 (collapses the gear term in every effective-stat getter).
+- **SP stats + XP / leveling** — `sp-stats` import dropped from progression;
+  `initMeta` pins level=1 (enemy scaling now wave-driven); `addXp` /
+  `allocateSp` / `deallocateSp` / `saveMetaState` → no-ops; per-kill + per-wave
+  XP grants gone; bottom-of-screen XP bar → no-op.
+- **Defense abilities** (BULWARK, REPAIR_NANITES, PHASE_DASH, DEFLECTOR_ORBS,
+  EMP_PULSE, TRACTOR_SHIELD, …) — input dispatch removed (1-4 / gamepad
+  pulses); ability HUD bar gone; Co-Pilot auto-cast disabled. SHIFT-dash
+  stays as a movement primitive (not an ability). `updateAbilityCooldowns`
+  rewritten in-place to still tick `powerCooldown` + `dashCooldown` (without
+  this the player could only fire a power weapon ONCE per run).
+- **Passives** — all `hasPassive(...)` checks now resolve to false; gated
+  passive effects skip without rewriting each call site.
+- **Player evasion / dodge stat** — lifecycle DODGE roll removed; DODGE
+  powerup definition gone. Enemy dodge AI (enemy behavior) untouched.
+- **Multiplayer (shelved subsystem)** — deleted the entire `multiplayer/`
+  directory (Rust/WASM co-op attempt + mp.html + tests). Single-player only.
+- **HANGAR (skin picker)** + **skin selection** — title-screen HANGAR button
+  gone; `player.skinId` pinned to the default; HangarOverlay deleted. Skin
+  rendering machinery stays so the default ship still paints normally.
+
+### Changed
+- Wave clear now interposes the **between-wave draft** instead of the
+  survivor-card overlay + level-up STATS interpose. The pause→overlay→resume
+  flow mirrors the proven stats-interpose pattern.
+- `progression.js` effective-stat getters reduce to `base + powerup-stack`
+  (gear / SP / passive contributions all collapse to 0).
+- `drawHUD` now also skips `ARMORY` / `LOADOUT` / `SETTINGS` (not just
+  `TITLE_SCREEN` / `SHOP`) so HUD chrome doesn't leak through pre-run overlays.
+- Title-screen secondary stack is now TUTORIAL + SETTINGS only (HANGAR gone).
+
+### Notes
+- This is a rebuild on top of 6.228.2 (the 7.x / 8.x looter pivot and the
+  earlier "Back to Basics" reboot attempt are NOT in this branch's history).
+- Some dead-but-harmless modules remain (passive-data, abilities.js,
+  defense-data, inventory.js, item-system.js, sp-stats.js, etc.) — they're
+  imported only by other dead modules and execute nothing. Safe to delete in
+  a follow-up cleanup; not a blocker.
+
+---
+
 ## [6.228.2] - 2026-05-26
 
 ### Added — gamepad rumble on power-weapon fire (GP-4 cue)
