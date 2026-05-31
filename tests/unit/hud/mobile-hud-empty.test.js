@@ -123,19 +123,18 @@ describe('updateHUD — mobile restored (5.96.0 RPG-revert)', () => {
         expect(log.length).toBeGreaterThan(0);
     });
 
-    test('mobile mode: drawCanvasTriforce + drawXPBar + drawLevelAndCoinsDisplay ARE invoked', () => {
+    test('mobile mode: drawCanvasTriforce + drawLevelAndCoinsDisplay ARE invoked', () => {
         _resetUrlOverrideForTests(true);
-        let triforceCalls = 0, xpCalls = 0, lvlCalls = 0;
+        let triforceCalls = 0, lvlCalls = 0;
         const { ctx } = makeFakeCtx();
         const engine = makeEngineThis(ctx);
         engine.drawCanvasTriforce = () => triforceCalls++;
-        engine.drawXPBar = () => xpCalls++;
         engine.drawLevelAndCoinsDisplay = () => lvlCalls++;
         updateHUD.call(engine);
-        // All three helpers run on mobile now — the player needs to see
-        // HP/spare tanks/XP in the RPG redesign.
+        // Both helpers run on mobile (triforce spare-tanks + the orb row).
+        // 9.x — the XP bar is gone (no leveling), so updateHUD no longer calls
+        // drawXPBar; health is now a sphere drawn inline.
         expect(triforceCalls).toBe(1);
-        expect(xpCalls).toBe(1);
         expect(lvlCalls).toBe(1);
     });
 
@@ -151,17 +150,15 @@ describe('updateHUD — mobile restored (5.96.0 RPG-revert)', () => {
         expect(loadoutCalls).toBe(0);
     });
 
-    test('desktop mode: drawCanvasTriforce + drawXPBar + drawLevelAndCoinsDisplay all run', () => {
+    test('desktop mode: drawCanvasTriforce + drawLevelAndCoinsDisplay all run', () => {
         _resetUrlOverrideForTests(false);
-        let triforceCalls = 0, xpCalls = 0, lvlCalls = 0;
+        let triforceCalls = 0, lvlCalls = 0;
         const { ctx } = makeFakeCtx();
         const engine = makeEngineThis(ctx);
         engine.drawCanvasTriforce = () => triforceCalls++;
-        engine.drawXPBar = () => xpCalls++;
         engine.drawLevelAndCoinsDisplay = () => lvlCalls++;
         updateHUD.call(engine);
         expect(triforceCalls).toBe(1);
-        expect(xpCalls).toBe(1);
         expect(lvlCalls).toBe(1);
     });
 });

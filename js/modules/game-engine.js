@@ -89,7 +89,6 @@ import * as lifecycle from './player/lifecycle.js';
 import * as weaponFx from './combat/weapon-effects-renderer.js';
 import * as events from './ui/event-setup.js';
 import { showHint, updateHintDimming } from './ui/hint-system.js';
-import { RadialMenu } from './ui/radial-menu.js';
 import { MobileTouchHandler } from './ui/mobile-touch.js';
 import { GamepadHandler } from './ui/gamepad-handler.js';
 import { AssistSystem, ASSIST_LEVELS } from './assist/assist-system.js';
@@ -407,9 +406,9 @@ export class GameEngine {
         window.setAsteroidRenderMode = setAsteroidRenderMode;
         window.getAsteroidRenderMode = getAsteroidRenderMode;
         this._abilitiesRef = ABILITIES; // Expose for UI manager ability slots
-        // Hold-to-open radial menu for E (primary) / R (power) / F (ability).
-        // Pauses gameplay; mouse picks the slice, click commits, key release cancels.
-        this.radialMenu = new RadialMenu(this);
+        // 9.x — weapon/ability radial menus removed (weapons are fixed per run;
+        // abilities are gone). `this.radialMenu` no longer exists; the scattered
+        // `radialMenu && radialMenu.isOpen()` guards short-circuit safely.
 
         // ── Mobile-mode subsystems (5.94.0 — tower-defense pivot) ─────
         // Touch handler: tap-to-aim-and-fire + PRM/PWR HUD button hit-

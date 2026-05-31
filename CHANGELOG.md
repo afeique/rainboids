@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.5.0] - 2026-05-30
+
+### Changed
+- **HUD overhaul.**
+  - **Health is now a red glass SPHERE** (mirrors the energy sphere) instead of
+    the angled health bar — a warm red core that tracks current/max HP off an
+    eased `_displayedHealth`, a heart + `{hp}/{max}` beneath it, and a pulsing
+    rim at low health. The two orbs (health + energy) sit side by side in the
+    top-left cluster.
+  - **Kill-streak moved to the TOP-RIGHT and restyled**: the tier word
+    (EMPOWERED … GODLIKE … RAINBOIDS GOD) is the big line, the kill count sits
+    small beneath it, then the gold-find + tier-progress + idle-countdown bars,
+    all right-aligned (mobile shows the rank + count top-center).
+
+### Removed
+- **Level display** (the "LV" shield badge + level number) — leveling is gone.
+- **Power (PWR) readout** (`P {value}`) from the top-left cluster, plus the now-
+  unused health-bar XP-bar call.
+- **Weapon/ability radial menus** — deleted `js/modules/ui/radial-menu.js` and
+  its instantiation; `F` / `E` / `R` no longer open a primary/power/ability
+  radial (weapons are fixed per run; abilities were already removed). The
+  scattered `radialMenu && isOpen()` guards short-circuit harmlessly.
+
 ## [9.4.0] - 2026-05-30
 
 ### Added

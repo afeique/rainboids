@@ -59,31 +59,8 @@ export function setupEventListeners() {
         //               radial menu is open)
         //   right-clk — alternate POWER weapon trigger
         //
-        // Radial menus open on the first keydown (e.repeat is ignored so
-        // browser auto-repeat doesn't reopen the menu) and close on keyup
-        // or after a click selection. Allowed during PLAYING and
-        // WAVE_TRANSITION so the player can re-equip between waves.
-        const cycleAllowed =
-            this.game.state === GAME_STATES.PLAYING ||
-            this.game.state === GAME_STATES.WAVE_TRANSITION;
-
-        // 5.79.3 — keybind reshuffle (per user request):
-        //   F → primary weapon radial
-        //   E → power weapon radial
-        //   R → defense ability radial (6.54.0 — RE-ENABLED; defensive
-        //       abilities returned in 6.35.0). Hold R to pick the equipped
-        //       ability; TAB still activates it.
-        // The radial-menu types stay 'primary' / 'power' / 'ability'; only
-        // the keys that open each are remapped.
-        const radialKey =
-            e.code === 'KeyF' ? 'primary' :
-            e.code === 'KeyE' ? 'power'   :
-            e.code === 'KeyR' ? 'ability'   :
-            null;
-        if (radialKey && !e.shiftKey && cycleAllowed && !e.repeat) {
-            this.radialMenu.openFor(radialKey);
-            hideHint();
-        }
+        // 9.x — weapon/ability radial menus removed (weapons are fixed per run;
+        // abilities are gone). F / E / R no longer open a radial.
         // TAB activates the equipped defense ability/ability (6.x; the
         // pulse is set in input-handler.handleKeyDown). preventDefault
         // here too so TAB never shifts browser focus off the canvas.
@@ -120,38 +97,7 @@ export function setupEventListeners() {
         // dev-tools console (`window.gameEngine.cheats.*`).
     });
 
-    // Radial-menu keyup — releasing F/E/R closes the menu without changing
-    // the equipped item. Tied to the specific key that opened it so other
-    // unrelated keyups don't dismiss it. (5.79.3 keybind reshuffle mirrors
-    // the keydown above.)
-    document.addEventListener('keyup', (e) => {
-        if (!this.radialMenu || !this.radialMenu.isOpen()) return;
-        const t = this.radialMenu.type;
-        if ((e.code === 'KeyF' && t === 'primary') ||
-            (e.code === 'KeyE' && t === 'power')   ||
-            (e.code === 'KeyR' && t === 'ability')) {
-            // Release closes without changing; the left-click commits the
-            // hovered slice (handled in the mousedown handler below).
-            this.radialMenu.cancel();
-        }
-    });
-
-    // Radial-menu click — when the menu is open, the next mousedown
-    // commits the slice under the cursor. Use mousedown (capture phase)
-    // so it runs before the input-handler's primary-fire mousedown and
-    // before the canvas click handlers.
-    document.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        if (this.radialMenu && this.radialMenu.isOpen()) {
-            this.radialMenu.handleClick();
-            // Mark this click so the canvas click handler (which runs
-            // after the radial closes) doesn't fall through to entity
-            // targeting on the same press.
-            this._radialClickConsumed = true;
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    }, true);
+    // 9.x — radial-menu keyup/mousedown handlers removed with the radial system.
 
     // 5.88.4 — GAME OVER screen routing. Hit-test the two buttons
     // (NEW GAME / RESTART WAVE) drawn by hud/overlays.js::drawGameOverScreen.
@@ -257,16 +203,6 @@ export function setupEventListeners() {
         // double-toggle wave-pick / shop hits too.
         if (isMobile()) return;
 
-        // Swallow the click if the matching mousedown was a radial-menu
-        // commit — the radial closed inside mousedown so isOpen() is now
-        // false, but the canvas click handler must not fall through to
-        // entity targeting on the same press.
-        if (this._radialClickConsumed) {
-            this._radialClickConsumed = false;
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-        }
 
         // 5.79.2 — bottom-center HUD buttons (SHOP / STATS) live on the
         //   canvas. Hit-test FIRST so the click doesn't fall through to
