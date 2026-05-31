@@ -11,6 +11,7 @@ import { tickPlayerStatus } from './player/player-status.js';
 import { Player } from './player/player.js';
 import { Bullet } from './player/bullet.js';
 import { Asteroid } from './world/asteroid.js';
+import { setAsteroidRenderMode, getAsteroidRenderMode } from './render/shapes.js';
 import { Enemy } from './enemy/enemy.js';
 import { EnemyBullet } from './enemy/enemy-bullet.js';
 // ENMY-03 — cloak de-targeting for the auto-aim picker. No-op for cloak-less
@@ -401,6 +402,10 @@ export class GameEngine {
 
         // Make game engine globally accessible for entities
         window.gameEngine = this;
+        // Asteroid render-mode switch ('filled' | 'wireframe') — exposed for the
+        // FPS A/B perf test and for quick console toggling / fallback.
+        window.setAsteroidRenderMode = setAsteroidRenderMode;
+        window.getAsteroidRenderMode = getAsteroidRenderMode;
         this._abilitiesRef = ABILITIES; // Expose for UI manager ability slots
         // Hold-to-open radial menu for E (primary) / R (power) / F (ability).
         // Pauses gameplay; mouse picks the slice, click commits, key release cancels.

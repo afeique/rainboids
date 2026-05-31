@@ -11,6 +11,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.4.0] - 2026-05-30
+
+### Added
+- **Selectable asteroid render mode** — `setAsteroidRenderMode('filled'|'wireframe')`
+  (exposed on `window`) flips between the new filled gem and the classic
+  wireframe at runtime; the wireframe renderer is preserved intact as a fallback
+  and A/B baseline.
+- **`tests/performance/perf-07-asteroid-render-mode.spec.js`** — a draw-loop
+  microbench that isolates per-frame asteroid render cost across a count/radius
+  sweep in both modes. Finding: the filled renderer is ~2–2.5× *cheaper* than
+  the wireframe in CPU rasterization (thick round-capped strokes cost more than
+  triangle fills); the earlier fill-rate prediction was wrong at these sizes.
+
+### Changed
+- **Asteroids render as a vivid rainbow-faceted gem with a bright rainbow
+  wireframe overlay.** Each rock gets a wide per-asteroid hue span (200–320°)
+  mapped along a random gradient axis (`faceHueOffsets` / `edgeHueOffsets`), so
+  facets show a rich, distinct rainbow that still transitions smoothly. Visible
+  edges are stroked in a matched, depth-faded bright rainbow (hidden-line removed
+  via the new `ASTEROID_EDGE_FACES` adjacency) for crisp faceting — no more
+  blobby low-contrast look.
+
+## [9.3.1] - 2026-05-30
+
+### Changed
+- **Asteroid colours are now a smooth per-rock gradient instead of a
+  high-contrast facet mosaic.** Each asteroid gets a random 3D gradient axis +
+  a moderate hue span; `rescale()` bakes a per-face hue offset by projecting
+  every face's object-space centroid onto that axis (`faceHueOffsets`), so
+  spatially-adjacent facets land at near-identical hues — the surface ramps
+  gradually and tumbles with the rock rather than flickering through shuffled
+  rainbow steps. Every asteroid draws its own distinct gradient.
+- **Lower contrast / better shading.** Softened the depth-shade ramp (shadow
+  side 0.62·L instead of 0.30·L²), dropped the dark per-facet seam in favour of
+  a same-colour seam that blends abutting triangles into one continuous
+  surface, eased base saturation/lightness (74-88% / 60-74%), and let lit
+  facets desaturate slightly for a soft highlight instead of neon glare.
+
+---
+
+## [9.3.0] - 2026-05-30
+
+### Changed
+- **Asteroids are now solid rainbow-faceted gems instead of tumbling
+  wireframes.** `render/shapes.js#drawAsteroidShape` fills the icosahedron's
+  20 faces — each in its own slice of the spectrum (the hue sweeps across the
+  facets and cycles over time), depth-shaded so the far side falls into shadow
+  and the rock reads as a 3D volume. Backface culling exploits the convex
+  solid (front facets tile the silhouette with no overlap), so the solid fill
+  needs no depth sort. Added `ASTEROID_FACES` (the 20 outward-wound triangles
+  matching the existing 30-edge topology). Solo + MP share the helper, so both
+  get the new look.
+- **Hit flash rebuilt with filled geometry.** The damage wavefront that sweeps
+  out from the impact point now ignites each *facet* (additive white fill,
+  front-faces only) as the bell-curve passes, instead of stroking edges.
+- **Death flash is a solid faceted silhouette** rather than a self-crossing
+  vertex polygon — the dying rock flares as one coherent white shard.
+
+### Removed
+- Per-asteroid bucket-scratch arrays and the wireframe depth-bucketing pass
+  (`_BUCKETS`/`_bucketEdges`/`_drawScratch`), obsolete under the filled
+  renderer's stateless backface cull.
+
+---
+
 ## [9.2.1] - 2026-05-30
 
 ### Fixed

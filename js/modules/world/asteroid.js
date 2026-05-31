@@ -3,7 +3,7 @@ import { GAME_CONFIG } from '../core/constants.js';
 import { random, GameDimensions, glowSpriteCache } from '../core/utils.js';
 import { frameClock } from '../core/frame-clock.js';
 import { hsl } from '../core/color-cache.js';
-import { drawAsteroidShape as drawAsteroidShapeShared } from '../render/shapes.js';
+import { drawAsteroidShape as drawAsteroidShapeShared, ASTEROID_FACES, ASTEROID_EDGES } from '../render/shapes.js';
 const DEBRIS_COUNT = 5;
 // Asteroid drift cap (px per logic tick, post-scale) + boundary-bounce
 // energy retention (slightly more elastic than the ship's 0.8).
@@ -27,13 +27,6 @@ export class Asteroid {
             [7,8],[7,10],[8,9],[10,11]
         ];
 
-        // OPT: Pre-allocate bucket arrays for drawAsteroidShape — reused every frame
-        this._BUCKETS = 5;
-        this._bucketEdges = new Array(this._BUCKETS);
-        for (let i = 0; i < this._BUCKETS; i++) this._bucketEdges[i] = [];
-        this._bucketHue   = new Float64Array(this._BUCKETS);
-        this._bucketCount = new Uint8Array(this._BUCKETS);
-        
         this.initializeAsteroid(x, y, radius, level);
     }
     
@@ -75,11 +68,22 @@ export class Asteroid {
         this.baseHue = Math.random() < 0.2
             ? 40 + Math.random() * 20            // 20%: warm gold (40-60°)
             : 150 + Math.random() * 130;          // 80%: teal→cyan→blue→violet (150-280°)
-        this.hueSpread = 30 + Math.random() * 70;     // 30-100° spread (tighter than before)
-        this.hueCycleSpeed = 10 + Math.random() * 20;  // how fast the hue shifts (ms divisor)
-        this.saturation = 80 + Math.random() * 15;    // 80-95%
-        this.lightness = 65 + Math.random() * 15;     // 65-80%
-        
+        this.hueSpread = 30 + Math.random() * 70;     // legacy fallback span (see faceHueOffsets)
+        this.hueCycleSpeed = 14 + Math.random() * 22;  // how fast the hue shifts (ms divisor)
+        this.saturation = 74 + Math.random() * 14;    // 74-88% (softer than the old 80-95%)
+        this.lightness = 60 + Math.random() * 14;     // 60-74%
+
+        // Smooth per-asteroid color GRADIENT. Each rock gets a random 3D
+        // gradient axis + a moderate hue span; per-face hue offsets are baked
+        // in rescale() by projecting each face's object-space centroid onto
+        // that axis. Spatially-adjacent faces then land at near-identical
+        // hues, so the surface reads as a gentle gradient that tumbles with
+        // the rock — instead of a high-contrast shuffled rainbow.
+        this.gradHueRange = 200 + Math.random() * 120; // 200-320° span → a rich rainbow mix per rock
+        const gax = random(-1, 1), gay = random(-1, 1), gaz = random(-1, 1);
+        const glen = Math.hypot(gax, gay, gaz) || 1;
+        this.gradAxis = { x: gax / glen, y: gay / glen, z: gaz / glen };
+
         this.rescale(radius || random(30, 60));
 
         // Calculate health based on size tiers and level:
@@ -263,7 +267,48 @@ export class Asteroid {
         
         this.radius = (minR + maxR) / 2;
         this.mass = (4 / 3) * Math.PI * Math.pow(this.radius, 3);
-        
+
+        // Bake this rock's rainbow gradient. Project the 12 vertices onto the
+        // random gradient axis once, then derive a hue offset for every FACE
+        // (centroid) and EDGE (midpoint) by normalizing across the rock's
+        // extent and scaling by the (wide) hue span. Spatially-adjacent
+        // facets/edges land at nearby hues → a coherent rainbow SWEEP with
+        // smooth transitions, distinct per asteroid. Runs once per spawn/reset.
+        const ax = this.gradAxis || { x: 0, y: 1, z: 0 };
+        const verts = this.vertices3D;
+        const faces = ASTEROID_FACES;
+        const edges = ASTEROID_EDGES;
+        if (!this.faceHueOffsets || this.faceHueOffsets.length !== faces.length) {
+            this.faceHueOffsets = new Float64Array(faces.length);
+        }
+        if (!this.edgeHueOffsets || this.edgeHueOffsets.length !== edges.length) {
+            this.edgeHueOffsets = new Float64Array(edges.length);
+        }
+        if (!this._vertProj || this._vertProj.length !== verts.length) {
+            this._vertProj = new Float64Array(verts.length);
+        }
+        const vproj = this._vertProj;
+        let vmin = Infinity, vmax = -Infinity;
+        for (let i = 0; i < verts.length; i++) {
+            const v = verts[i];
+            const p = v.x * ax.x + v.y * ax.y + v.z * ax.z;
+            vproj[i] = p;
+            if (p < vmin) vmin = p;
+            if (p > vmax) vmax = p;
+        }
+        const span = (vmax - vmin) || 1;
+        const range = this.gradHueRange || 240;
+        for (let i = 0; i < faces.length; i++) {
+            const f = faces[i];
+            const cp = (vproj[f[0]] + vproj[f[1]] + vproj[f[2]]) / 3;
+            this.faceHueOffsets[i] = ((cp - vmin) / span) * range;
+        }
+        for (let i = 0; i < edges.length; i++) {
+            const e = edges[i];
+            const mp = (vproj[e[0]] + vproj[e[1]]) / 2;
+            this.edgeHueOffsets[i] = ((mp - vmin) / span) * range;
+        }
+
         this.project();
     }
     
@@ -418,17 +463,25 @@ export class Asteroid {
             ctx.scale(scale, scale);
             ctx.globalAlpha = alpha;
             ctx.strokeStyle = '#ffffff';
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
             ctx.lineWidth = 2.5;
-            ctx.beginPath();
-            for (let i = 0; i < this.projectedVertices.length; i++) {
-                const v = this.projectedVertices[i];
-                if (i === 0) ctx.moveTo(v.x, v.y);
-                else ctx.lineTo(v.x, v.y);
+            ctx.lineJoin = 'round';
+            // Solid faceted silhouette — fill every face (front and back) so
+            // the dying rock flares as a coherent white shard, matching the
+            // filled-geometry body instead of a self-crossing vertex polygon.
+            const pv = this.projectedVertices;
+            for (let i = 0; i < ASTEROID_FACES.length; i++) {
+                const f = ASTEROID_FACES[i];
+                const a = pv[f[0]], b = pv[f[1]], c = pv[f[2]];
+                if (!a || !b || !c) continue;
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.lineTo(c.x, c.y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
             }
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
             ctx.restore();
             return;
         }
@@ -458,46 +511,55 @@ export class Asteroid {
 
         this.drawAsteroidShape(ctx);
 
-        // Damage flash — propagating wave that radiates outward from the
-        // impact point, lighting up each edge as the wavefront sweeps past.
-        // We're back in entity-local coords here (post-translate), so we
-        // convert the world-space hit point to local coords as well.
-        if (this._hitFlashTimer > 0 && this.projectedVertices && this.edges && this.edges.length > 0) {
+        // Damage flash — a pulse of light that radiates outward from the
+        // impact point, igniting each FACET as the wavefront sweeps past
+        // (filled geometry, additive). We're back in entity-local coords here
+        // (post-translate), so we convert the world-space hit point to local.
+        if (this._hitFlashTimer > 0 && this.projectedVertices) {
             const maxT = 10;
             const progress = 1 - (this._hitFlashTimer / maxT); // 0 → 1
             const hp = this._hitPoint || { x: this.x, y: this.y };
             const hx = hp.x - this.x;
             const hy = hp.y - this.y;
-            // Diameter is the worst-case distance from any impact to any edge.
+            // Diameter is the worst-case distance from any impact to any facet.
             const maxDist = Math.max(1, this.radius * 2);
             // Wavefront sweeps from 0 → ~1.1 in normalized distance over the flash.
             const wave = progress * 1.1;
             const waveWidth = 0.32; // bell-curve half-width in normalized units
+            const pv = this.projectedVertices;
 
             ctx.globalCompositeOperation = 'lighter';
-            ctx.lineWidth = 2.5;
-            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#ffffff';
+            ctx.fillStyle = '#ffffff';
 
-            for (let i = 0; i < this.edges.length; i++) {
-                const e = this.edges[i];
-                const v1 = this.projectedVertices[e[0]];
-                const v2 = this.projectedVertices[e[1]];
-                if (!v1 || !v2) continue;
+            for (let i = 0; i < ASTEROID_FACES.length; i++) {
+                const f = ASTEROID_FACES[i];
+                const a = pv[f[0]], b = pv[f[1]], c = pv[f[2]];
+                if (!a || !b || !c) continue;
 
-                const mx = (v1.x + v2.x) * 0.5;
-                const my = (v1.y + v2.y) * 0.5;
+                // Only ignite visible (front-facing) facets so the additive
+                // glow doesn't bleed through from the occluded back side.
+                const crs = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+                if (crs >= 0) continue;
+
+                const mx = (a.x + b.x + c.x) / 3;
+                const my = (a.y + b.y + c.y) / 3;
                 const dNorm = Math.hypot(mx - hx, my - hy) / maxDist;
 
-                // Gaussian centered on the wavefront — edge peaks as it passes.
+                // Gaussian centered on the wavefront — facet peaks as it passes.
                 const u = (wave - dNorm) / waveWidth;
                 const intensity = Math.exp(-u * u);
                 if (intensity < 0.02) continue;
 
                 ctx.globalAlpha = Math.min(1, intensity);
-                ctx.strokeStyle = '#ffffff';
                 ctx.beginPath();
-                ctx.moveTo(v1.x, v1.y);
-                ctx.lineTo(v2.x, v2.y);
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.lineTo(c.x, c.y);
+                ctx.closePath();
+                ctx.fill();
                 ctx.stroke();
             }
 
@@ -683,19 +745,10 @@ export class Asteroid {
     
     // Helper method to draw the asteroid shape
     drawAsteroidShape(ctx) {
-        // 6.x — delegates to the shared pure helper in
-        // js/modules/render/shapes.js so solo + MP draw the identical
-        // tumbling-wireframe silhouette from one definition. Solo passes
-        // its own pre-allocated bucket scratch to preserve the zero-
-        // per-frame-allocation property.
-        if (!this._drawScratch) {
-            this._drawScratch = {
-                BUCKETS: this._BUCKETS,
-                bucketEdges: this._bucketEdges,
-                bucketHue: this._bucketHue,
-                bucketCount: this._bucketCount,
-            };
-        }
+        // Delegates to the shared pure helper in js/modules/render/shapes.js
+        // so solo + MP draw the identical solid rainbow-faceted rock from one
+        // definition. Backface culling there is stateless, so no per-asteroid
+        // scratch is needed.
         drawAsteroidShapeShared(ctx, {
             projectedVertices: this.projectedVertices,
             edges: this.edges,
@@ -704,10 +757,11 @@ export class Asteroid {
             baseHue: this.baseHue,
             hueCycleSpeed: this.hueCycleSpeed,
             hueSpread: this.hueSpread,
+            faceHueOffsets: this.faceHueOffsets,
+            edgeHueOffsets: this.edgeHueOffsets,
             saturation: this.saturation,
             lightness: this.lightness,
             now: frameClock.now,
-            scratch: this._drawScratch,
         });
     }
     

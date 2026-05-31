@@ -150,6 +150,18 @@ export const ASTEROID_EDGES = [
     [7, 8], [7, 10], [8, 9], [10, 11],
 ];
 
+/** Triangular faces of the icosahedron — index triples into the 12-vertex
+ *  set. Each face is wound so `(v1-v0)×(v2-v0)` is the OUTWARD normal, which
+ *  makes the projected screen-space signed area NEGATIVE for front-facing
+ *  triangles (canvas y-down) — a one-line backface-cull test. 20 faces, each
+ *  edge shared by two neighbours → exactly the 30 edges of ASTEROID_EDGES. */
+export const ASTEROID_FACES = [
+    [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
+    [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+    [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+    [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
+];
+
 /** Default perspective focal length (matches solo's `Asteroid.fov`). */
 export const ASTEROID_FOV = 300;
 
@@ -217,45 +229,190 @@ export function projectAsteroidVertices(verts, rot3D, fov = ASTEROID_FOV, out = 
     return out;
 }
 
-// Module-level scratch buckets for the depth-sorted wireframe pass.
-// Shared across all callers that don't pass their own scratch — fine
-// because draw is synchronous and single-threaded. Solo passes its
-// pre-allocated per-entity scratch to avoid contending with this.
-const _BUCKETS = 5;
-const _sharedScratch = {
-    BUCKETS: _BUCKETS,
-    bucketEdges: Array.from({ length: _BUCKETS }, () => []),
-    bucketHue: new Float64Array(_BUCKETS),
-    bucketCount: new Uint8Array(_BUCKETS),
+// ── Asteroid render mode (filled gem vs. classic wireframe) ─────────
+// Two complete renderers live side by side: the default `filled` (solid
+// rainbow-faceted gem + a bright rainbow wireframe overlay) and the classic
+// `wireframe` (translucent depth-bucketed rainbow edges, the pre-9.3.0 look).
+// Flip at runtime with setAsteroidRenderMode() — used to A/B their render
+// cost and to fall back to the cheaper wireframe if it's ever wanted.
+let _asteroidRenderMode = 'filled';
+export function setAsteroidRenderMode(mode) {
+    _asteroidRenderMode = mode === 'wireframe' ? 'wireframe' : 'filled';
+    return _asteroidRenderMode;
+}
+export function getAsteroidRenderMode() { return _asteroidRenderMode; }
+
+// Edge→face adjacency, derived once from the fixed topology: for each of the
+// 30 edges, the (exactly two) faces that share it. The filled renderer uses
+// this for hidden-line removal — an edge is drawn iff at least one of its
+// adjacent faces is front-facing.
+const ASTEROID_EDGE_FACES = ASTEROID_EDGES.map(([a, b]) => {
+    const adj = [];
+    for (let fi = 0; fi < ASTEROID_FACES.length; fi++) {
+        const f = ASTEROID_FACES[fi];
+        const hasA = f[0] === a || f[1] === a || f[2] === a;
+        const hasB = f[0] === b || f[1] === b || f[2] === b;
+        if (hasA && hasB) adj.push(fi);
+    }
+    return adj;
+});
+
+// Scratch reused by the (single-threaded, synchronous) draw passes.
+const _frontFlags = new Uint8Array(ASTEROID_FACES.length);
+const _WF_BUCKETS = 5;
+const _wfScratch = {
+    BUCKETS: _WF_BUCKETS,
+    bucketEdges: Array.from({ length: _WF_BUCKETS }, () => []),
+    bucketHue: new Float64Array(_WF_BUCKETS),
+    bucketCount: new Uint8Array(_WF_BUCKETS),
 };
 
 /**
- * Draw an asteroid's tumbling-wireframe silhouette. The ctx must
+ * Draw an asteroid body. Dispatches to the active render mode. The ctx must
  * ALREADY be translated to the asteroid's center (caller does
- * `ctx.save(); ctx.translate(x, y)` and `ctx.restore()`), exactly like
- * solo's `Asteroid.draw()` does before calling this.
+ * `ctx.save(); ctx.translate(x, y)` and `ctx.restore()`), exactly like solo's
+ * `Asteroid.draw()` does before calling this.
  *
  * @param {CanvasRenderingContext2D} ctx
- * @param {object} s   shape descriptor:
- *   - projectedVertices: {x,y,depth}[]  (entity-local 2D)
- *   - edges: [i,j][]
- *   - fov, radius
- *   - baseHue, hueCycleSpeed, hueSpread, saturation, lightness
- *   - now: monotonic ms (drives the hue cycle)
- *   - scratch?: { BUCKETS, bucketEdges, bucketHue, bucketCount }
+ * @param {object} s   shape descriptor (see drawAsteroidFilled / -Wireframe)
  */
 export function drawAsteroidShape(ctx, s) {
-    const projectedVertices = s.projectedVertices;
-    const edges = s.edges;
-    if (!projectedVertices || !edges) return;
+    if (_asteroidRenderMode === 'wireframe') drawAsteroidWireframe(ctx, s);
+    else drawAsteroidFilled(ctx, s);
+}
+
+/**
+ * FILLED gem renderer (default). Two passes:
+ *   1. Solid facets — each face flat-filled with its own rainbow colour
+ *      (caller supplies `faceHueOffsets`, a per-face hue offset derived from
+ *      the face's position along a random per-asteroid axis → a coherent
+ *      colour SWEEP across the rock with a WIDE span, so adjacent facets are
+ *      visibly different yet transition smoothly), plus a soft depth-shade
+ *      for volume. Backface-culled (convex solid ⇒ front facets tile the
+ *      silhouette with no overlap, no depth sort needed).
+ *   2. Rainbow wireframe — every VISIBLE edge (hidden-line removed via
+ *      ASTEROID_EDGE_FACES + the pass-1 front-flags) stroked in a bright,
+ *      depth-faded rainbow that matches the local facet hue, giving crisp
+ *      faceting and extra colour.
+ *
+ * @param {object} s
+ *   - projectedVertices: {x,y,depth}[]  (entity-local 2D)
+ *   - radius, baseHue, hueCycleSpeed, saturation, lightness
+ *   - faceHueOffsets?: number[30→20]  per-face hue offset (the gradient)
+ *   - edgeHueOffsets?: number[30]     per-edge hue offset (matched gradient)
+ *   - hueSpread?: number              index-stepped fallback span
+ *   - now: monotonic ms (drives the slow global hue cycle)
+ */
+export function drawAsteroidFilled(ctx, s) {
+    const pv = s.projectedVertices;
+    if (!pv) return;
 
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
 
-    // Black underlayer pass — thick opaque outline so the wireframe
-    // stays legible over bright nebula / stars.
+    const radius = s.radius || 1;
+    const baseHue = s.baseHue;
+    const now = s.now || 0;
+    const hueCycleSpeed = s.hueCycleSpeed || 15;
+    const hueDrift = now / hueCycleSpeed;
+    const faceHueOffsets = s.faceHueOffsets;
+    const edgeHueOffsets = s.edgeHueOffsets;
+    const hueSpread = s.hueSpread || 60; // fallback only (no gradient supplied)
+    const sat = s.saturation;
+    const light = s.lightness;
+    const faces = ASTEROID_FACES;
+    const nFaces = faces.length;
+    const frontFlags = _frontFlags;
+
+    ctx.globalAlpha = 1;
+    ctx.lineJoin = 'round';
+
+    // ── Pass 1: filled facets — flat vivid rainbow colour + soft shade ──
+    for (let i = 0; i < nFaces; i++) {
+        const f = faces[i];
+        const a = pv[f[0]], b = pv[f[1]], c = pv[f[2]];
+        if (!a || !b || !c) { frontFlags[i] = 0; continue; }
+
+        // Backface cull; remember front-facing flags for the edge pass.
+        const cross = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+        if (cross >= 0) { frontFlags[i] = 0; continue; }
+        frontFlags[i] = 1;
+
+        // Soft volume shade: lit near side (−z) bright, far side (+z) dimmer.
+        const avgDepth = (a.depth + b.depth + c.depth) / 3;
+        let lit = 0.5 - 0.5 * (avgDepth / radius);
+        if (lit < 0) lit = 0; else if (lit > 1) lit = 1;
+        const shade = 0.55 + 0.45 * lit;                  // shadow 0.55·L … lit 1.0·L
+
+        const hueOff = faceHueOffsets ? faceHueOffsets[i] : (i / nFaces) * hueSpread;
+        const hue = (baseHue + hueDrift + hueOff) % 360;
+        let L = light * shade;
+        if (L < 6) L = 6;
+
+        ctx.fillStyle = hsl(hue, sat, L);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // ── Pass 2: bright rainbow wireframe over the fill (hidden-line removed) ──
+    const edges = ASTEROID_EDGES;
+    const edgeFaces = ASTEROID_EDGE_FACES;
+    const nEdges = edges.length;
+    const edgeSat = sat + 6 > 100 ? 100 : sat + 6;
+    const edgeLight = light + 26 > 92 ? 92 : light + 26;     // brighter than faces → glows
+    ctx.lineWidth = Math.min(2.6, Math.max(1, radius * 0.028));
+    ctx.lineCap = 'round';
+    for (let j = 0; j < nEdges; j++) {
+        const adj = edgeFaces[j];
+        if (!(frontFlags[adj[0]] || (adj[1] !== undefined && frontFlags[adj[1]]))) continue;
+        const e = edges[j];
+        const v1 = pv[e[0]], v2 = pv[e[1]];
+        if (!v1 || !v2) continue;
+
+        const avgDepth = (v1.depth + v2.depth) / 2;
+        let lit = 0.5 - 0.5 * (avgDepth / radius);
+        if (lit < 0) lit = 0; else if (lit > 1) lit = 1;
+
+        const hueOff = edgeHueOffsets ? edgeHueOffsets[j] : (j / nEdges) * hueSpread;
+        const hue = (baseHue + hueDrift + hueOff) % 360;
+
+        ctx.globalAlpha = 0.55 + 0.45 * lit;
+        ctx.strokeStyle = hsl(hue, edgeSat, edgeLight);
+        ctx.beginPath();
+        ctx.moveTo(v1.x, v1.y);
+        ctx.lineTo(v2.x, v2.y);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.lineCap = 'butt';
+}
+
+/**
+ * Classic WIREFRAME renderer (pre-9.3.0). Thick black underlayer for
+ * legibility, then depth-bucketed translucent rainbow edges. Kept for
+ * switch-back and as the cheaper baseline in render-cost comparisons.
+ *
+ * @param {object} s   - projectedVertices, edges?, fov?, radius, baseHue,
+ *   hueCycleSpeed, hueSpread, saturation, lightness, now
+ */
+export function drawAsteroidWireframe(ctx, s) {
+    const projectedVertices = s.projectedVertices;
+    const edges = s.edges || ASTEROID_EDGES;
+    if (!projectedVertices) return;
+
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Black underlayer pass — thick opaque outline so the wireframe stays
+    // legible over bright nebula / stars.
     ctx.globalAlpha = 0.85;
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 4.5;
@@ -273,7 +430,7 @@ export function drawAsteroidShape(ctx, s) {
     ctx.lineCap = 'butt';
     ctx.lineWidth = 2;
 
-    const scratch = s.scratch || _sharedScratch;
+    const scratch = _wfScratch;
     const BUCKETS = scratch.BUCKETS;
     const bucketEdges = scratch.bucketEdges;
     const bucketHue = scratch.bucketHue;
@@ -284,7 +441,7 @@ export function drawAsteroidShape(ctx, s) {
         bucketCount[b] = 0;
     }
 
-    const fov = s.fov;
+    const fov = s.fov || ASTEROID_FOV;
     const radius = s.radius;
     const baseHue = s.baseHue;
     const now = s.now || 0;
