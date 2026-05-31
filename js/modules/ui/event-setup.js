@@ -44,23 +44,46 @@ export function setupEventListeners() {
 
     // Handle pause and test keys
     document.addEventListener('keydown', (e) => {
+        // 9.9.0 — Two weapon radials: hold F for the PRIMARY ring, E for the
+        // POWER ring. While one is open, Escape or the held key closes it
+        // (instead of pausing); other keys are ignored until release.
+        // `_radialKeyHeld` stores the OPEN key's code so keyup commits the
+        // matching ring.
+        const RADIAL_KEYS = { KeyF: 'primary', KeyE: 'power' };
+        const radial = this.radialMenu;
+        if (radial && radial.isOpen()) {
+            if (e.code === 'Escape' || e.code === this._radialKeyHeld) {
+                e.preventDefault();
+                radial.cancel();
+                this._radialKeyHeld = null;
+            }
+            return;
+        }
         if (e.code === 'Escape') {
             // 9.0.0 (reboot) — the inventory ('I') + stats ('`') screens and
             // their key bindings are removed; Esc routes straight to pause.
             this.togglePause();
         }
+        // Hold F (primary) / E (power) to open the matching radial mid-run
+        // (PLAYING only). openFor(kind) no-ops with no player or <2 owned of
+        // that slot, so the key feels inert when there's nothing to switch to.
+        const _radialKind = RADIAL_KEYS[e.code];
+        if (_radialKind && !e.repeat && !this._radialKeyHeld
+            && radial && this.game.state === GAME_STATES.PLAYING) {
+            radial.openFor(_radialKind);
+            if (radial.isOpen()) {
+                this._radialKeyHeld = e.code;
+                e.preventDefault();
+            }
+            return;
+        }
         // Keybind layout:
-        //   E (hold)  — radial menu: PRIMARY weapon (mouse picks, click commits)
-        //   R (hold)  — radial menu: POWER weapon
-        //   F (hold)  — radial menu: ABILITY
-        //   Q         — activate equipped ability (handled in input-handler.js)
+        //   F (hold)  — radial menu: PRIMARY weapon (mouse picks, release commits)
+        //   E (hold)  — radial menu: POWER weapon (handled above, 9.9.0)
         //   SPACE     — fire/charge POWER weapon (handled in input-handler.js)
         //   left-clk  — fire PRIMARY (or commit a radial selection while a
         //               radial menu is open)
         //   right-clk — alternate POWER weapon trigger
-        //
-        // 9.x — weapon/ability radial menus removed (weapons are fixed per run;
-        // abilities are gone). F / E / R no longer open a radial.
         // TAB activates the equipped defense ability/ability (6.x; the
         // pulse is set in input-handler.handleKeyDown). preventDefault
         // here too so TAB never shifts browser focus off the canvas.
@@ -97,7 +120,32 @@ export function setupEventListeners() {
         // dev-tools console (`window.gameEngine.cheats.*`).
     });
 
-    // 9.x — radial-menu keyup/mousedown handlers removed with the radial system.
+    // 9.9.0 — Weapon radial: releasing the SAME key that opened it (F or E)
+    // commits the slice under the cursor (if any) and closes; otherwise unchanged.
+    document.addEventListener('keyup', (e) => {
+        if (!this._radialKeyHeld || e.code !== this._radialKeyHeld) return;
+        const radial = this.radialMenu;
+        this._radialKeyHeld = null;
+        if (radial && radial.isOpen()) {
+            const idx = radial.getHoverIndex();
+            if (idx >= 0) radial.selectIndex(idx);
+            else radial.cancel();
+        }
+    });
+
+    // 9.6.x — While the radial is open a left-click / tap commits the hovered
+    // slice. Registered in the CAPTURE phase so it pre-empts the entity-
+    // targeting / HUD-button click handlers below. screenAimX/Y for the radial
+    // angle are kept in sync from the mousemove handler (this.mouseX/Y).
+    this.canvas.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const radial = this.radialMenu;
+        if (radial && radial.isOpen()) {
+            radial.handleClick();
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
 
     // 5.88.4 — GAME OVER screen routing. Hit-test the two buttons
     // (NEW GAME / RESTART WAVE) drawn by hud/overlays.js::drawGameOverScreen.

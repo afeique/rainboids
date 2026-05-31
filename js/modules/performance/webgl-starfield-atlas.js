@@ -246,7 +246,7 @@ function drawCube(cx, cy, r, ctx) {
     // 3 internal edges from center to top, lower-left, lower-right
     // verts (forming the iso "Y"). Drawn slightly darker (lower alpha)
     // so they read as inset edges against the silhouette.
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.strokeStyle = 'rgba(22, 38, 90, 0.55)';
     ctx.lineWidth = Math.max(2, r * 0.06);
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -274,7 +274,7 @@ function drawOctahedron(cx, cy, r, ctx) {
 
     // Equator (horizontal line through center) — gives the diamond a
     // 3D "split" feel. Plus a subtle vertical line for the back edge.
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.strokeStyle = 'rgba(22, 38, 90, 0.55)';
     ctx.lineWidth = Math.max(2, r * 0.06);
     ctx.beginPath();
     ctx.moveTo(cx - r, cy);
@@ -299,7 +299,7 @@ function drawTetrahedron(cx, cy, r, ctx) {
     // Centroid — internal edges from each vertex to here.
     const gx = (apex[0] + left[0] + right[0]) / 3;
     const gy = (apex[1] + left[1] + right[1]) / 3 + r * 0.15; // pulled down slightly for 3D feel
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.strokeStyle = 'rgba(22, 38, 90, 0.55)';
     ctx.lineWidth = Math.max(2, r * 0.06);
     ctx.beginPath();
     ctx.moveTo(apex[0], apex[1]); ctx.lineTo(gx, gy);
@@ -327,7 +327,7 @@ function drawPrism(cx, cy, r, ctx) {
     ctx.closePath();
     ctx.fill();
     // Internal edges — front-top-right corner vertical and slant.
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.strokeStyle = 'rgba(22, 38, 90, 0.55)';
     ctx.lineWidth = Math.max(2, r * 0.06);
     ctx.beginPath();
     ctx.moveTo(cx - w, cy - h * 0.4);

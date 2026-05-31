@@ -76,11 +76,18 @@ describe('getWaveConfig() – 20-wave campaign', () => {
     }
   });
 
-  test('out-of-range waves clamp to wave 1 / wave 20 entries', () => {
+  test('below-range waves clamp to wave 1; past-MAX always returns a valid config', () => {
     expect(getWaveConfig(0)).toEqual(getWaveConfig(1));
     expect(getWaveConfig(-5)).toEqual(getWaveConfig(1));
-    expect(getWaveConfig(MAX_WAVES + 1)).toEqual(getWaveConfig(MAX_WAVES));
-    expect(getWaveConfig(999)).toEqual(getWaveConfig(MAX_WAVES));
+    // Past MAX_WAVES the behaviour is run-length-dependent (cycle vs clamp keys
+    // off the run's maxWaves) — exhaustively covered in wave-data-runshape.test.js.
+    // Here we just guard that an out-of-range wave never yields a broken config.
+    for (const w of [MAX_WAVES + 1, 999]) {
+      const cfg = getWaveConfig(w);
+      expect(cfg).toBeTruthy();
+      expect(Array.isArray(cfg.subWaves)).toBe(true);
+      expect(cfg.subWaves.length).toBeGreaterThan(0);
+    }
   });
 
   test('isBossWave matches BOSS_WAVES', () => {

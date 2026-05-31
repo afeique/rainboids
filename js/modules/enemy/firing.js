@@ -9,6 +9,25 @@
 import { GAME_CONFIG, GAME_STATES, ENEMY_BULLET_CONFIG, getEnemyFiringCooldown } from '../core/constants.js';
 import { frameClock } from '../core/frame-clock.js';
 
+// ── Predictive Lead-Aim Resolver ─────────────────────────────────────────────
+// The enemy AI brain (brain.js) stamps a PREDICTED LEAD AIM POINT each tick on
+// brained enemies as enemy._aimX / enemy._aimY — snipers/interceptors/kiters
+// aim ahead of a moving player so fast movers can't trivially outrun their
+// fire; brawlers get the player's live position. These are UNDEFINED for bosses
+// or any enemy that didn't run the brain this frame, so we fall back to the
+// live player position (and finally the enemy's own position).
+//
+// Directed firing patterns aim at aimPoint(this); RADIAL/omnidirectional
+// patterns (circle_6, shield_burst, circle bursts, spiral) are left alone —
+// they don't aim at the player so lead is irrelevant.
+function aimPoint(enemy) {
+    const p = enemy.targetPlayer;
+    return {
+        x: (typeof enemy._aimX === 'number') ? enemy._aimX : (p ? p.x : enemy.x),
+        y: (typeof enemy._aimY === 'number') ? enemy._aimY : (p ? p.y : enemy.y),
+    };
+}
+
 // ── Burst Shooting State Machine ─────────────────────────────────────────────
 
 export function handleBurstShooting(gameEngine, now) {
@@ -77,8 +96,20 @@ export function shoot(gameEngine) {
     // Only shoot at the player
     if (!this.targetPlayer) return;
 
-    const targetX = this.targetPlayer.x;
-    const targetY = this.targetPlayer.y;
+    // Aim at the brain's predicted lead point when present, else the live
+    // player. Every DIRECTED pattern below reads these targetX/targetY, so
+    // redirecting the capture here leads all single shots, bursts, spreads,
+    // homing seeds and charged-laser aim in one place. Radial patterns
+    // (circle_6, shield_burst, sentinel circle-burst) ignore these.
+    const aim = aimPoint(this);
+    const targetX = aim.x;
+    const targetY = aim.y;
+
+    // Optional strategy tie-in (low-risk): a brained enemy in 'regroup' is
+    // fleeing/disengaging, not pressing the attack — hold fire so it doesn't
+    // blindly shoot while peeling away. Only brained enemies set _aiStrategy;
+    // bosses and legacy types leave it undefined and fire as normal.
+    if (this._aiStrategy === 'regroup') return;
 
     // Stamp the active shootPattern on the engine so EnemyBullet.reset()
     // can tag spawned bullets with it. Cleared in the finally so subsequent
@@ -643,15 +674,19 @@ export function updateWaspMachineGun(gameEngine) {
         this.waspGunPhaseDuration = this.waspGunState === 'firing' ? 4000 + Math.random() * 1000 : 2000 + Math.random() * 1000;
     }
     if (this.waspGunState === 'firing' && now - this.waspGunLastShot > 520) {
-        // Aim check before firing — 30° tolerance
-        const aimDx = this.targetPlayer.x - this.x;
-        const aimDy = this.targetPlayer.y - this.y;
+        // Aim check before firing — 30° tolerance. Gate on the brain's lead
+        // point so the wasp opens fire when it's facing where the player WILL
+        // be, not just its current spot. (shootWaspBullet itself fires along
+        // faceAngle, so the gate is what actually steers wasp fire.)
+        const aim = aimPoint(this);
+        const aimDx = aim.x - this.x;
+        const aimDy = aim.y - this.y;
         const toPlayer = Math.atan2(aimDy, aimDx);
         let aimDiff = toPlayer - this.faceAngle;
         while (aimDiff > Math.PI) aimDiff -= Math.PI * 2;
         while (aimDiff < -Math.PI) aimDiff += Math.PI * 2;
         if (Math.abs(aimDiff) <= Math.PI / 6) {
-            this.shootWaspBullet(gameEngine, this.targetPlayer.x, this.targetPlayer.y);
+            this.shootWaspBullet(gameEngine, aim.x, aim.y);
         }
         this.waspGunLastShot = now;
     }
@@ -1160,9 +1195,12 @@ export function updateSweepLaserSystem(gameEngine) {
                 this.sweepWarningStart = now;
                 // Save current turret angle so warning lerps smoothly from it
                 this.sweepTurretStartAngle = this.tankTurretAngle || 0;
+                // Center the sweep on the brain's lead point so the beam covers
+                // where the player is heading, not just where they were.
+                const aim = aimPoint(this);
                 const toPlayer = Math.atan2(
-                    this.targetPlayer.y - this.y,
-                    this.targetPlayer.x - this.x
+                    aim.y - this.y,
+                    aim.x - this.x
                 );
                 this.sweepStartAngle = toPlayer - Math.PI / 9; // ±20° sweep (was ±60°)
                 this.sweepEndAngle   = toPlayer + Math.PI / 9;

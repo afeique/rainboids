@@ -300,6 +300,7 @@ export function drawAsteroidShape(ctx, s) {
  *   - radius, baseHue, hueCycleSpeed, saturation, lightness
  *   - faceHueOffsets?: number[30→20]  per-face hue offset (the gradient)
  *   - edgeHueOffsets?: number[30]     per-edge hue offset (matched gradient)
+ *   - vertexHueOffsets?: number[12]   per-vertex hue offset → gradient endpoints
  *   - hueSpread?: number              index-stepped fallback span
  *   - now: monotonic ms (drives the slow global hue cycle)
  */
@@ -319,6 +320,7 @@ export function drawAsteroidFilled(ctx, s) {
     const hueDrift = now / hueCycleSpeed;
     const faceHueOffsets = s.faceHueOffsets;
     const edgeHueOffsets = s.edgeHueOffsets;
+    const vertexHueOffsets = s.vertexHueOffsets;
     const hueSpread = s.hueSpread || 60; // fallback only (no gradient supplied)
     const sat = s.saturation;
     const light = s.lightness;
@@ -360,17 +362,39 @@ export function drawAsteroidFilled(ctx, s) {
         ctx.fill();
     }
 
-    // ── Pass 2: bright rainbow wireframe over the fill (hidden-line removed) ──
+    // ── Pass 2: the COMPLETE rainbow wireframe over the filled gem ──
+    // Every edge of the geometry is drawn (NO hidden-line removal) so the whole
+    // wireframe reads as a cage over the solid faces — filled gem + full
+    // wireframe combined. Each of the 30 edges gets ONE distinct solid colour
+    // (its own per-edge hue offset → a rainbow that sweeps across the rock on
+    // the SAME gradient axis as the facets, so the lines complement the fill).
+    // Back edges are dimmed by depth but stay visible; a thin dark underlayer
+    // makes each colour line crisp against the multicoloured facets beneath.
     const edges = ASTEROID_EDGES;
-    const edgeFaces = ASTEROID_EDGE_FACES;
     const nEdges = edges.length;
     const edgeSat = sat + 6 > 100 ? 100 : sat + 6;
     const edgeLight = light + 26 > 92 ? 92 : light + 26;     // brighter than faces → glows
-    ctx.lineWidth = Math.min(2.6, Math.max(1, radius * 0.028));
+    const edgeW = Math.min(2.6, Math.max(1, radius * 0.028));
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Underlayer: a single thin dark pass behind all edges for legibility.
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = 'rgba(8,10,18,0.9)';
+    ctx.lineWidth = edgeW + 1.4;
+    ctx.beginPath();
     for (let j = 0; j < nEdges; j++) {
-        const adj = edgeFaces[j];
-        if (!(frontFlags[adj[0]] || (adj[1] !== undefined && frontFlags[adj[1]]))) continue;
+        const e = edges[j];
+        const v1 = pv[e[0]], v2 = pv[e[1]];
+        if (!v1 || !v2) continue;
+        ctx.moveTo(v1.x, v1.y);
+        ctx.lineTo(v2.x, v2.y);
+    }
+    ctx.stroke();
+
+    // Colour pass: each edge its own solid rainbow hue, depth-faded.
+    ctx.lineWidth = edgeW;
+    for (let j = 0; j < nEdges; j++) {
         const e = edges[j];
         const v1 = pv[e[0]], v2 = pv[e[1]];
         if (!v1 || !v2) continue;
@@ -378,12 +402,12 @@ export function drawAsteroidFilled(ctx, s) {
         const avgDepth = (v1.depth + v2.depth) / 2;
         let lit = 0.5 - 0.5 * (avgDepth / radius);
         if (lit < 0) lit = 0; else if (lit > 1) lit = 1;
+        // Floor at 0.5 so even the rear-most lines stay clearly visible (the
+        // whole wireframe shows), brightening to 0.95 on the near side.
+        ctx.globalAlpha = 0.5 + 0.45 * lit;
 
         const hueOff = edgeHueOffsets ? edgeHueOffsets[j] : (j / nEdges) * hueSpread;
-        const hue = (baseHue + hueDrift + hueOff) % 360;
-
-        ctx.globalAlpha = 0.55 + 0.45 * lit;
-        ctx.strokeStyle = hsl(hue, edgeSat, edgeLight);
+        ctx.strokeStyle = hsl((baseHue + hueDrift + hueOff) % 360, edgeSat, edgeLight);
         ctx.beginPath();
         ctx.moveTo(v1.x, v1.y);
         ctx.lineTo(v2.x, v2.y);

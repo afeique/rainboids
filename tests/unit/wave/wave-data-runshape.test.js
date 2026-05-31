@@ -59,10 +59,13 @@ describe('getWaveConfig — default (≤ MAX_WAVES) is unchanged', () => {
         }
     });
 
-    test('default 10×3 run never reaches the cycle branch (maxWaves=30)', () => {
-        // maxWaves clamps to 30, so even an out-of-range request maps to 30.
+    test('wave 30 is the authored finale; past it the run cycles (maxWaves=30)', () => {
+        // Wave 30 returns its authored config by reference. Past MAX the run
+        // CYCLES the authored 30-wave pattern (it does NOT clamp to wave 30):
+        // wave 35 → authored wave 5 ((35-1)%30+1), as a fresh deep-equal object,
+        // so compare by value not identity.
         expect(getWaveConfig(30, 30)).toBe(WAVE_DATA[30]);
-        expect(getWaveConfig(35, 30)).toBe(WAVE_DATA[30]); // clamped to 30, not cycled
+        expect(getWaveConfig(35, 30)).toEqual(WAVE_DATA[5]);
     });
 });
 
@@ -70,21 +73,20 @@ describe('getWaveConfig — past MAX_WAVES synthesizes by CYCLING (not wave-1 fa
     // A long run needs a maxWaves big enough that the wave isn't clamped to 30.
     const LONG = 900; // e.g. 100 stages × 9 wps
 
+    // Cycled configs are fresh deep-equal copies, not the same reference, so
+    // every past-MAX assertion compares by VALUE (.toEqual), not identity.
     test('wave 31 cycles to WAVE_DATA[1] (cycle wraps at 30)', () => {
-        // 31 maps to ((31-1) % 30) + 1 === 1. This is the ONE wrap point that
-        // coincides with wave-1 content — but it is reached via the cycle, and
-        // every other past-30 wave gives DIFFERENT, non-trivial content (below).
-        expect(getWaveConfig(31, LONG)).toBe(WAVE_DATA[1]);
+        expect(getWaveConfig(31, LONG)).toEqual(WAVE_DATA[1]);
     });
 
     test('getWaveConfig(33) ≈ WAVE_DATA[3] shape (NOT trivial wave-1 content)', () => {
         const cfg = getWaveConfig(33, LONG);
-        expect(cfg).toBe(WAVE_DATA[3]);
+        expect(cfg).toEqual(WAVE_DATA[3]);
         // And it is decidedly NOT the trivial wave-1 content — the old bug
         // returned WAVE_DATA[1] (a non-boss 3-HUNTER opener) for every wave>30.
-        expect(cfg).not.toBe(WAVE_DATA[1]);
+        expect(cfg).not.toEqual(WAVE_DATA[1]);
         // WAVE_DATA[3] is an authored boss wave; wave-1 carries no boss marker.
-        expect(cfg.isBossWave).toBe(true);
+        expect(WAVE_DATA[3].isBossWave).toBe(true);
         expect(WAVE_DATA[1].isBossWave).toBeUndefined();
     });
 
@@ -92,7 +94,7 @@ describe('getWaveConfig — past MAX_WAVES synthesizes by CYCLING (not wave-1 fa
         for (const [w, key] of [
             [32, 2], [45, 15], [60, 30], [61, 1], [90, 30], [91, 1], [123, 3],
         ]) {
-            expect(getWaveConfig(w, LONG)).toBe(WAVE_DATA[key]);
+            expect(getWaveConfig(w, LONG)).toEqual(WAVE_DATA[key]);
         }
     });
 
@@ -100,7 +102,8 @@ describe('getWaveConfig — past MAX_WAVES synthesizes by CYCLING (not wave-1 fa
         // Sample a spread of late-game waves; at least one must differ from
         // wave-1 (the old bug made ALL of them === wave-1).
         const sampled = [33, 40, 48, 55, 72, 80].map((w) => getWaveConfig(w, LONG));
-        const anyNonTrivial = sampled.some((cfg) => cfg !== WAVE_DATA[1]);
+        const anyNonTrivial = sampled.some(
+            (cfg) => JSON.stringify(cfg) !== JSON.stringify(WAVE_DATA[1]));
         expect(anyNonTrivial).toBe(true);
     });
 });

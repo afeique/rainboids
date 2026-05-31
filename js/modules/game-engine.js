@@ -88,6 +88,7 @@ import * as combat from './combat/combat-manager.js';
 import * as lifecycle from './player/lifecycle.js';
 import * as weaponFx from './combat/weapon-effects-renderer.js';
 import * as events from './ui/event-setup.js';
+import { RadialMenu } from './ui/radial-menu.js';
 import { showHint, updateHintDimming } from './ui/hint-system.js';
 import { MobileTouchHandler } from './ui/mobile-touch.js';
 import { GamepadHandler } from './ui/gamepad-handler.js';
@@ -101,7 +102,6 @@ import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './c
 import { SettingsOverlay } from './ui/settings-overlay.js';
 // 9.0.0 (reboot) — LoadoutOverlay removed.
 import { DraftOverlay } from './ui/draft-overlay.js';
-import { NewGameOverlay } from './ui/newgame-overlay.js';
 import { applyDraftCard, rollDraft } from './combat/draft-engine.js';
 import { DRAFT_CATEGORIES } from './combat/draft-data.js';
 import { AnalogStick } from './ui/analog-stick.js';
@@ -583,6 +583,12 @@ export class GameEngine {
             autoCastPower: this.assists.autoFire,
             autoAim: this.assists.autoAim,
         });
+        // 9.6.x — mid-run weapon radial (hold F primary / E power). The cleanup loop left
+        // scattered `this.radialMenu && this.radialMenu.isOpen()` guards in
+        // place (input short-circuit + the draw hook in render); creating the
+        // instance here re-activates them. Built before event wiring so the
+        // input handlers can reference it.
+        this.radialMenu = new RadialMenu(this);
         this.setupEventListeners();
         // Set the initial ASSISTS / GAMEPAD tab visibility now that the UI
         // exists. On mobile this hides the ASSISTS tab until a gamepad
@@ -1232,8 +1238,8 @@ export class GameEngine {
         // new-run init (incl. CONTINUE/restore: we re-create a fresh one rather
         // than serializing director state — re-warming over the first couple of
         // waves is acceptable, and cold-start holds D=1 for waves 1–2 anyway).
-        // Storing it here auto-lights the CD-16 threat HUD, which resolves
-        // this.game.difficultyDirector in drawThreatLevelHook.
+        // The director adapts challenge quietly; its old on-screen THREAT pip
+        // meter was removed in 9.8.2 (intrusive), but the director itself stays.
         this.game.difficultyDirector = createDirector();
         // CD-17 — fresh per-run director telemetry buffer (READ-ONLY instrumentation).
         // Reset on every new-run init so records never leak across runs. Each
@@ -4539,14 +4545,11 @@ export class GameEngine {
         // 9.0.0 (reboot) — pre-run is a simple "back to basics" picker: pick
         // a primary + power weapon (no inventory, no gear, no unlock gating).
         // The old BUILD-tree pre-run is retired here.
-        this.game.state = GAME_STATES.ARMORY;
-        if (!this._newGameOverlay) this._newGameOverlay = new NewGameOverlay();
-        this._newGameOverlay.open({
-            onStart: (sel) => this.beginNewGameRun(sel),
-            onBack: () => {
-                this.game.state = GAME_STATES.TITLE_SCREEN;
-            },
-        });
+        // Pre-run weapon-select screen removed (9.9.0): NEW GAME starts the run
+        // directly. Weapons are now chosen MID-RUN via the primary/power radials
+        // (hold F / E), so the picker was redundant. beginNewGameRun() handles
+        // the title-screen teardown + startNewRun with the default loadout.
+        this.beginNewGameRun();
     }
 
     // 9.0.0 (reboot) — begin an endless run from the new-game picker's selection

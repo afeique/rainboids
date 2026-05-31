@@ -33,7 +33,9 @@ export const PRIMARY_WEAPONS = {
         color: '#b3ff44',
         fireRate: 130,
         damage: 0.4,
-        bulletSpeed: 1.1,
+        // 9.2.2 — speed 1.1 → 1.0 to seat its carrier range below Rail Driver's
+        // documented MAX while staying in the standard band (3840×1.0×1.0=3840).
+        bulletSpeed: 1.0,
         bulletSize: 0.5,
         // 5.113.1 — Reverted to 1 needle per shot (5.112.0 turned this
         // into a 3-needle fan; rolled back). The "cone of fire" is the
@@ -77,6 +79,21 @@ export const PRIMARY_WEAPONS = {
         unlockWave: 5,
         upgrades: ['SCATTER_MULTI', 'SCATTER_RAPID', 'SCATTER_PIERCING', 'SCATTER_BIG', 'SCATTER_EXPLODE', 'SCATTER_HOMING', 'SCATTER_STUN', 'SCATTER_KNOCK'],
     },
+    // Role: precision sniper / anti-line specialist. Longest range in the
+    // roster (documented MAX) and the highest per-shot damage, paid for by the
+    // slowest fire rate — its single-target DPS sits in-band, its EDGE is
+    // reach + line-piercing, NOT raw output.
+    // 9.2.2 (combat-overhaul) — DOMINANCE FIX. The old build was
+    // pierce(99) + 0.85 range + 2.5 DPS: it deleted whole lines of enemies
+    // across the full screen with no downside, the universal best. Now:
+    //   - pierce 99 → 5: still the best line-clearer, no longer infinite.
+    //   - range 0.85 → 0.80: trimmed off full-screen. Still the LONGEST in the
+    //     roster (3840 × 1.4 × 0.80 = 4301px) — its identity, just not the
+    //     whole arena (old 0.85 = 4570px reached the screen edge).
+    //   - damage 3.0 → 3.6: lifts single-target DPS into the shared band
+    //     (3.6 × 1000/1200 = 3.0).
+    // NOTE: RAIL_PENETRATOR_PLUS capstone / save data may still set pierce 99
+    // at runtime — that's an opt-in build investment, not the base weapon.
     RAIL_DRIVER: {
         id: 'RAIL_DRIVER',
         name: 'Rail Driver',
@@ -84,13 +101,13 @@ export const PRIMARY_WEAPONS = {
         icon: 'dna',
         color: '#ff44ff',
         fireRate: 1200,
-        damage: 3,
+        damage: 3.6,
         bulletSpeed: 1.4,
         bulletSize: 1.2,
         bulletCount: 1,
         spreadAngle: 0,
-        piercing: 99,
-        range: 0.85,
+        piercing: 5,
+        range: 0.80,
         cost: 0,
         unlockWave: 8,
         upgrades: ['RAIL_MULTI', 'RAIL_RAPID', 'RAIL_PIERCING', 'RAIL_BIG', 'RAIL_EXPLODE', 'RAIL_HOMING', 'RAIL_STUN', 'RAIL_KNOCK'],
@@ -115,6 +132,21 @@ export const PRIMARY_WEAPONS = {
     //   `firePrimary` dispatch in `js/modules/player/weapons.js` for
     //   the firing path and `combat-manager.js` for `detonateCluster`
     //   / `spawnSubBomblet`.
+    // Role: charge-lobbed AoE burst / anti-cluster. Concentrated area damage
+    // delivered on a slow charge+cooldown cadence — strong when it lands on a
+    // pack, weak as a single-target tool (you're paying charge time for AoE).
+    // 9.2.2 (combat-overhaul) — EXTREME-OUTLIER FIX. The old payload was
+    // direct 50 + blast 50 + 5×25 bomblets = 225 damage on a single contact,
+    // ~218 DPS — it instantly cleared any cluster AND out-burst every other
+    // weapon on a single target. Payload cut ~3.6× so the on-contact burst is
+    // "strong but not instant-clear":
+    //   direct  damage 50 → 14   (point-blank hit on the thing it touches)
+    //   primary blastDamage 50 → 16  (AoE at the detonation point)
+    //   subBombDamage 25 → 9  (×5 bomblets = 45 spread across the area)
+    // Single-target on-contact burst ≈ direct+blast = 30; full area payload
+    // ≈ 75 spread over the blast field. At the ~700ms post-fire cooldown that
+    // is a healthy AoE burst, no longer a one-shot screen-clear. The slow
+    // charge cadence is the cost; the AoE spread is the identity.
     CLUSTER_LAUNCHER: {
         id: 'CLUSTER_LAUNCHER',
         name: 'Cluster Launcher',
@@ -127,7 +159,7 @@ export const PRIMARY_WEAPONS = {
         // to the screen edge (computed from the viewport in fireCluster).
         // The wind-up + post-fire cooldown live in updateClusterCharge.
         minLaunchDist: 70,
-        damage: 50,
+        damage: 14,
         bulletSpeed: 1.0,
         bulletSize: 1.4,
         bulletCount: 1,
@@ -165,13 +197,15 @@ export const PRIMARY_WEAPONS = {
         armedDurationMs: 0,
         proximityRadius: 18,
         blastRadius: 90,
-        blastDamage: 50,
+        // 9.2.2 — payload trimmed ~3.6× (see role comment above). Was 50.
+        blastDamage: 16,
         subBombCount: 5,
         subBombSpeed: 5,
         subBombFriction: 0.96,
         subBombLifeFrames: 30,
         subBombBlastRadius: 50,
-        subBombDamage: 25,
+        // 9.2.2 — was 25; 5 bomblets × 9 = 45 area damage (was 125).
+        subBombDamage: 9,
         upgrades: ['CLUSTER_MULTI', 'CLUSTER_STUN', 'CLUSTER_KNOCK'],
     },
     // ─── NEW PRIMARIES (brainstorm drop) ────────────────────────────────────
@@ -186,6 +220,12 @@ export const PRIMARY_WEAPONS = {
     // off against single tanky targets (shards curve back). See
     // collision-system (impact + kill triggers) and combat-manager
     // (mitosisSplit / spawnSplitShards).
+    // Role: cascade / anti-swarm. The INITIAL impact sits in-band; the
+    // seeking-shard cascade (chains on kills) is the upside vs dense waves,
+    // not a front-loaded single-target advantage.
+    // 9.2.2 — damage 1.0 → 1.14 so the initial hit is in-band
+    //   (1.14 × 1000/380 = 3.0 DPS); range 3840 × 1.0 = 3840px (band).
+    //   The split shards remain pure upside on top of an in-band base.
     SPLITTER: {
         id: 'SPLITTER',
         name: 'Mitosis Rounds',
@@ -193,7 +233,7 @@ export const PRIMARY_WEAPONS = {
         icon: 'multi-shot',
         color: '#66ff99',
         fireRate: 380,
-        damage: 1.0,
+        damage: 1.14,
         bulletSpeed: 1.0,
         bulletSize: 0.95,
         bulletCount: 1,
@@ -214,6 +254,15 @@ export const PRIMARY_WEAPONS = {
     // RICOCHET — bullets bounce off the arena edges and carom between nearby
     // enemies. Bounded playfield makes bank-shots viable. See bullet.update
     // (boundary reflect) + collision-system (enemy carom).
+    // Role: bank-shot / wall-carom skirmisher. In-band initial DPS; the
+    // bounces between walls/enemies are the upside (re-uses the same round).
+    // 9.2.2 — range 1.25 → 1.05 to pull it back into the standard band.
+    //   Was 5280px (well outside the ~3800–4400 band, an unintended reach
+    //   outlier); now 3840 × 1.1 × 1.05 = 4435px — still generous enough to
+    //   survive several bounces, but no longer a stealth long-range pick.
+    //   Initial DPS unchanged: 1.0 × 1000/340 = 2.94 (in band).
+    // 9.2.2b — range 1.05 → 0.95 (3840×1.1×0.95 = 4013px) so it sits inside the
+    //   band AND below Rail Driver's documented long-range MAX.
     RICOCHET: {
         id: 'RICOCHET',
         name: 'Caroms',
@@ -226,8 +275,8 @@ export const PRIMARY_WEAPONS = {
         bulletSize: 0.9,
         bulletCount: 1,
         spreadAngle: 0,
+        range: 0.95,              // 9.2.2b — in band + below Rail's MAX; still long enough for several bounces
         piercing: 0,
-        range: 1.25,              // longer life so it survives several bounces
         cost: 0,
         unlockWave: 7,
         // Bounce tuning (read in bullet.update + collision-system):
@@ -239,6 +288,14 @@ export const PRIMARY_WEAPONS = {
     // BOOMERANG — slow disc flies out, decelerates, then returns to the ship,
     // damaging on the way out AND back. Rewards holding position. See
     // bullet.update boomerang arc.
+    // Role: positional zoner. The OUTBOUND pass sits at the band floor; the
+    // RETURN pass (and pierce-3) is the conditional upside — you only collect
+    // it by holding position so the disc carves the same lane twice.
+    // 9.2.2 — damage 1.4 → 1.68 so the single (out) pass is in-band
+    //   (1.68 × 1000/600 = 2.8 DPS, band floor). The return pass remains the
+    //   identity reward (~2.8 again vs a target that stays in the lane), so a
+    //   committed boomerang player tops out high BUT pays for it in mobility —
+    //   not a free front-loaded single-pass advantage. Range 3840×1.0 = 3840.
     BOOMERANG: {
         id: 'BOOMERANG',
         name: 'Boomerang Discs',
@@ -246,7 +303,7 @@ export const PRIMARY_WEAPONS = {
         icon: 'loop',
         color: '#ffd633',
         fireRate: 600,
-        damage: 1.4,
+        damage: 1.68,
         bulletSpeed: 1.0,
         bulletSize: 1.1,
         bulletCount: 1,
@@ -266,26 +323,38 @@ export const PRIMARY_WEAPONS = {
     // resets on release. New weapon (kept separate from Storm Needles per
     // the design discussion — merge later if desired). Spin-up is computed
     // in getEffectivePrimaryFireRate from this._fireHoldTime.
+    // Role: ramp / commitment hose. Starts BELOW band (the spin-up is the
+    // cost) and climbs ABOVE band only at full spool — the realistic
+    // mid-engagement average sits in band, and releasing fire resets the ramp.
+    // 9.2.2 — tamed both ends so a realistic engagement averages ~3.0 DPS:
+    //   slowFireRate 220 → 260  (floor DPS 0.5 × 1000/260 = 1.92, in cost)
+    //   fastFireRate  60 → 100  (full-spool DPS 0.5 × 1000/100 = 5.0, was 8.33
+    //                            — still the highest sustained primary, but no
+    //                            longer 2.8× the band)
+    //   nominal fireRate 220 → 260 to match the floor (it's the baseRate
+    //   fallback in getEffectivePrimaryFireRate).
+    //   range 1.0 → 0.95 to pull it into the band (3840×1.2×0.95 = 4378px;
+    //   was 4608, just over). The cone-widen + spin-up commitment stay.
     SPIN_CANNON: {
         id: 'SPIN_CANNON',
         name: 'Spin Cannon',
         description: 'Fire rate spools up the longer you hold — a commitment hose',
         icon: 'tornado',
         color: '#ff7722',
-        fireRate: 220,            // nominal; actual interval is dynamic (see below)
+        fireRate: 260,            // nominal; actual interval is dynamic (see below)
         damage: 0.5,
         bulletSpeed: 1.2,
         bulletSize: 0.55,
         bulletCount: 1,
         spreadAngle: 0.14,        // cone widens slightly at full spin (see fire fn)
         piercing: 0,
-        range: 1.0,
+        range: 0.90,              // 9.2.2b — 3840×1.2×0.90 = 4147px: in band, below Rail's MAX
         cost: 0,
         unlockWave: 12,
         // Spin-up tuning (read in getEffectivePrimaryFireRate):
         spinUpTime: 1400,         // ms of held fire to reach max spin
-        slowFireRate: 220,        // interval (ms) at zero spin
-        fastFireRate: 60,         // interval (ms) at full spin
+        slowFireRate: 260,        // interval (ms) at zero spin
+        fastFireRate: 100,        // interval (ms) at full spin
         spinSpreadBonus: 0.12,    // extra cone added at full spin
         upgrades: ['SPIN_RAPID', 'SPIN_BIG', 'SPIN_PIERCING', 'SPIN_HOMING', 'SPIN_STUN', 'SPIN_KNOCK', 'FLYWHEEL', 'OVERSPIN'],
     },
@@ -293,14 +362,30 @@ export const PRIMARY_WEAPONS = {
     // FLAK_CANNON — rounds detonate into a shrapnel ring at a set distance
     // (proximity airburst), not on contact. Anti-swarm wall. See bullet.update
     // airburst → combat-manager.spawnShrapnelRing.
+    // Role: SHORT-RANGE BRUISER (the roster's deliberate short-range outlier).
+    // The shell airbursts into a shrapnel ring at a FIXED, close burstDistance
+    // — that 300px deploy point is its effective engagement range (the
+    // documented short-range MIN), and the ring's burst is its premium. Strong
+    // vs a wall of close enemies; near-useless past the burst distance.
+    // 9.2.2 (combat-overhaul) — HIGH-OUTLIER FIX. The old per-shot payload was
+    // direct 0.8 + 9×0.55 shrapnel (4.95) + 1.2 burst ≈ 6.95 to the whole ring
+    // at 650ms ≈ ~8.85 DPS-equivalent — roughly 3× the band, a blanket clear.
+    // Trimmed into the short-range-bruiser tier (a premium over band, not 3×):
+    //   fireRate 650 → 700
+    //   direct damage 0.8 → 0.7
+    //   shrapnelDamage 0.55 → 0.32  (9 × 0.32 = 2.88 ring)
+    //   burstBlastDamage 1.2 → 0.9
+    //   per-shot ring total ≈ 0.7 + 2.88 + 0.9 = 4.48 → ~6.4 DPS-equivalent
+    //   (spread across the ring, so per-target value is lower still). A clear
+    //   bruiser premium for staying in close, no longer a screen-wide eraser.
     FLAK_CANNON: {
         id: 'FLAK_CANNON',
         name: 'Flak Cannon',
         description: 'Shells airburst into a shrapnel ring at range',
         icon: 'siren',
         color: '#ffbb55',
-        fireRate: 650,
-        damage: 0.8,              // small direct hit; the burst is the payload
+        fireRate: 700,
+        damage: 0.7,              // small direct hit; the burst is the payload
         bulletSpeed: 0.95,
         bulletSize: 0.95,
         bulletCount: 1,
@@ -311,19 +396,27 @@ export const PRIMARY_WEAPONS = {
         unlockWave: 11,
         // Airburst tuning (read in bullet.update + combat-manager):
         flak: true,
-        burstDistance: 300,       // px traveled before airburst (+LONG_FUSE)
+        burstDistance: 300,       // px traveled before airburst (+LONG_FUSE) — the short-range deploy point
         shrapnelCount: 9,         // shards in the ring (+FLECHETTE)
-        shrapnelDamage: 0.55,
+        shrapnelDamage: 0.32,
         shrapnelSpeed: 5,
         shrapnelLifeFrames: 14,
         burstBlastRadius: 60,     // small AoE at the burst point
-        burstBlastDamage: 1.2,
+        burstBlastDamage: 0.9,
         upgrades: ['FLAK_RAPID', 'FLAK_BIG', 'FLAK_STUN', 'FLAK_KNOCK', 'FLECHETTE', 'PROXIMITY_FUSE', 'LONG_FUSE'],
     },
 
     // GRAVITY_LANCE — slow heavy orb that tugs nearby enemies toward its path
     // before expiring. Low direct damage; a combo enabler that clusters mobs
     // for AoE. See bullet.update gravity pull.
+    // Role: UTILITY / crowd-control enabler (the deliberate low-DPS pick).
+    // Its job is to drag a pack together for someone else's AoE, not to deal
+    // damage — so it carries an EXPLICIT lower-DPS exception in the balance
+    // test. Pierce-6 + the pull radius are the value; direct damage is minimal.
+    // 9.2.2 — damage 0.6 → 0.75 so it isn't outright useless (DPS 0.75 ×
+    //   1000/720 = 1.04) while staying well below the ~3.0 single-target band.
+    //   Slow speed + short reach (3840 × 0.6 × 1.15 = 2650px) are intentional:
+    //   it's a setup orb you lob into a crowd, not a ranged damage tool.
     GRAVITY_LANCE: {
         id: 'GRAVITY_LANCE',
         name: 'Gravity Lance',
@@ -331,7 +424,7 @@ export const PRIMARY_WEAPONS = {
         icon: 'vortex',
         color: '#b066ff',
         fireRate: 720,
-        damage: 0.6,
+        damage: 0.75,
         bulletSpeed: 0.6,         // slow-moving well
         bulletSize: 1.5,
         bulletCount: 1,

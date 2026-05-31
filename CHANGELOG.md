@@ -11,6 +11,219 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.10.0] - 2026-05-31
+
+### Added
+- **Elemental status effects now emit per-element particle VFX.** While a status
+  is active on an enemy, element-coloured particles radiate from it (throttled
+  ~150ms): **Burn** rising red-orange flame, **Corrode/Toxic** drifting green
+  cloud, **Chill/Freeze** pale-blue mist *and the enemy is tinted blue* while
+  frozen, **Conduct/Volt** yellow-white sparks, **Mark/Void** purple motes,
+  **Bleed** white motes (`enemy.js _processStatusEffects`, existing particle pool).
+
+### Changed
+- **Every element now deals extra damage.** On-hit flat bonuses already existed;
+  this adds the missing damage-over-time ticks — **Conduct** (0.4/0.5s),
+  **Freeze** (0.5/0.5s), **Chill** (0.3/0.5s), **Mark** (0.3/0.5s) — alongside
+  the existing Burn/Bleed DoTs and Corrode/Conduct damage-amp, so no element is
+  purely cosmetic/CC.
+
+## [9.9.3] - 2026-05-31
+
+### Changed
+- **Health-shape stroke is now deep navy instead of black.** The health-orb
+  polyhedra (cube/octahedron/tetrahedron/prism) draw internal edges in
+  `rgba(22,38,90,0.55)` — a clean dark-blue outline harmonising with the orb's
+  blue fill (`webgl-starfield-atlas.js`).
+
+## [9.9.2] - 2026-05-31
+
+### Changed
+- **Asteroids render as a filled rainbow gem with a COMPLETE rainbow wireframe.**
+  The whole geometry's wireframe draws over the filled facets (no hidden-line
+  removal); each of the 30 edges is a distinct solid rainbow colour over a thin
+  dark underlayer — filled faces + full visible cage combined.
+
+## [9.9.1] - 2026-05-31
+
+### Changed
+- **Primary weapon radial moved to F.** Hold **F** (was Q) for the primary ring;
+  **E** opens the power ring. Pause-menu controls + README updated.
+
+### Removed
+- **Culled 24 stale unit-test suites** that pinned reboot-removed features
+  (abilities / assist-casting / passives / item-system / inventory / sp-stats /
+  DODGE stat / kinetic-battery / ability HUD+input / threat-level) — they
+  imported deleted modules or asserted deleted behaviour and gave no signal.
+  Fixed the live ones instead (`wave.test.js` + `wave-data-runshape` 20→30-wave,
+  clamp→cycle, ref→value equality). Unit suite fully green (144 suites / 1715
+  tests).
+
+## [9.9.0] - 2026-05-31
+
+### Added
+- **Both weapon radials are back, with mid-run switching.** Hold **F** for the
+  PRIMARY ring and **E** for the POWER ring (release the held key on a slice to
+  equip; mouse hover + gamepad bumpers L1/R1 also work). The radial reads the
+  run's owned weapon set (all non-hidden weapons by default) and equips via
+  `equipPrimary`/`equipPower`, which the firing dispatch already keys off. The
+  ring shows a PRIMARY/POWER center label so it's clear which is open. The radial
+  controls are now listed in the pause menu.
+
+### Changed
+- **NEW GAME drops straight into a run.** Removed the pre-run weapon-select
+  screen (`NewGameOverlay`) — with both weapon radials available mid-run, the
+  picker was redundant. The run starts with the default loadout and you switch
+  weapons live via F/E.
+
+## [9.8.5] - 2026-05-31
+
+### Fixed
+- **`updateBrain is not defined` game-loop crash (recurrence).** A prior
+  re-application of the enemy steering-brain hook landed the `updateMovement`
+  dispatch but silently dropped the `import { updateBrain }`, so every brained
+  enemy threw on its first movement tick. Restored the import and added a
+  regression guard (`tests/unit/ai/enemy-updatemovement.test.js`) that drives
+  the REAL `Enemy.updateMovement` path for every brained archetype — the
+  existing brain test imported `updateBrain` directly and couldn't catch a
+  missing import inside `enemy.js`.
+
+## [9.8.4] - 2026-05-31
+
+### Changed
+- **Weapon matchup tuning — BOUNCE weapons now have a real weakness.** Bounce
+  weapons (Ricochet / Boomerang / Splitter) vs the SNIPER archetype dropped
+  0.90 → 0.70, matching the row's stated design ("weak vs lone distant targets
+  where there's nothing to ricochet between"). Completes the rock-paper-scissors:
+  every weapon class now has both a genuine strength (≥1.30) and a genuine
+  weakness (≤0.70), so no class is a safe universal pick. Still within the
+  [0.6, 1.5] band; matchup tests green.
+
+## [9.8.3] - 2026-05-31
+
+### Changed
+- **Enemy AI tuning pass.** Brawler archetypes (`CLOSE_DISTANCE`) now loom at a
+  short *pressure* standoff (default 0.6× preferredRange) instead of face-hugging
+  the player at point-blank — heavy and in-your-face, but no longer an
+  overlapping permanent-contact aura that ignored their range. The standoff is a
+  per-archetype knob (`brain.closeStandoff`); dedicated rammers like JUGGERNAUT
+  press tighter (0.45×) and still ram via their charge ability. Verified across
+  all archetypes with a behavioral harness: brutes hold steady pressure (low
+  jitter), interceptors dive-bomb with big in/out swings, snipers kite at range,
+  orbiters hold the ring, and swarmers spread (separation) while converging.
+
+## [9.8.2] - 2026-05-31
+
+### Removed
+- **THREAT level indicator** — the top-center difficulty-pip meter was
+  unnecessary and intrusive, so it's gone. Removed `hud/threat-level.js` and its
+  `drawThreatLevelHook` call from the HUD draw order. The difficulty director
+  itself is untouched — it still adapts the challenge quietly; it just no longer
+  surfaces a meter.
+
+## [9.8.1] - 2026-05-31
+
+### Fixed
+- **`updateBrain is not defined` game-loop crash.** The enemy steering brain hook
+  in `enemy.js` (`updateMovement` → `updateBrain`) and its import had been lost
+  when the file was reverted, so every brained enemy threw on its first movement
+  tick and spammed the game loop. Restored the `import { updateBrain }` and the
+  `if (this.config.brain) { updateBrain(this, gameEngine); return; }` dispatch.
+
+## [9.8.0] - 2026-05-31
+
+### Added
+- **Weapon radial — mid-run weapon switching is back.** Hold **Q** to open a
+  radial of your owned primaries and swap on the fly (release on a slice to
+  commit; mouse-click and controller/touch also work), so you can answer
+  different enemy archetypes with the right delivery. A run carries its full
+  unlocked primary pool; selecting one sets the active primary, which the
+  existing firing dispatch already keys off. Recovers + adapts the
+  `radial-menu.js` removed in 9.5.0 (primary-only now), wired in
+  `game-engine.js` (which re-activates the draw/update guards the 9.5.0 cleanup
+  left behind) and `ui/event-setup.js`. Makes the 9.6.x weapon diversity +
+  matchups strategically usable. (Needs an in-browser feel pass.)
+
+## [9.7.0] - 2026-05-31
+
+### Added
+- **Weapon↔archetype matchup multipliers — certain weapons beat certain
+  enemies.** Player-bullet damage to an enemy now scales by how well the
+  weapon's delivery class (PRECISION / SPREAD / AOE / BOUNCE / RAMP / UTILITY)
+  matches the target's archetype — AoE shreds swarms, precision punishes distant
+  snipers/supports, spread underwhelms a lone brute, ramp rewards sustained fire
+  on brutes, etc. A modest matrix (multipliers clamped to [0.6, 1.5]; unknown
+  pairings and the SPECIAL archetype → neutral 1.0) in
+  `js/modules/combat/matchup-data.js`, applied at the player-bullet→enemy damage
+  site in `combat/collision-system.js` (keyed off `bullet.weaponId`, neutral
+  fallback for secondary/AoE-spawned damage). Encoded + bounds-checked by
+  `tests/unit/weapons/matchup.test.js`. This is what makes the weapon radial
+  strategic: switch to the tool the current archetype is weak to.
+
+## [9.6.1] - 2026-05-30
+
+### Changed
+- **Weapon rebalance — no single best weapon, distinct feels preserved.** Every
+  primary's effective DPS-against-its-ideal-target is brought into a shared band
+  (~2.7–3.25) and effective range mostly banded (~3800–4450px) with two
+  deliberate outliers (Rail Driver long, Flak short), so weapons differ by
+  *delivery* (single-target / spread / AoE / DoT / bounce / ramp), not raw
+  output. **Rail Driver** loses its no-downside dominance: pierce 99→5 and range
+  0.85→0.80 — now the long-range precision specialist, not the universal best.
+  Extreme burst outliers tamed: **Cluster Launcher** payload 225→75, **Flak**
+  and **Spin Cannon** peaks pulled toward band; Ricochet/Storm range trimmed into
+  band; Splitter/Boomerang/Gravity Lance initial hits nudged in-band. New
+  `tests/unit/weapons/dps-balance.test.js` encodes the DPS+range invariants so
+  balance can't silently drift again.
+
+## [9.6.0] - 2026-05-30
+
+### Added
+- **Enemy AI overhaul — steering + strategy brain with hybrid navigation.** All
+  29 enemy types now run a shared, data-driven two-layer AI instead of bespoke
+  hand-coded movement (full architecture in `docs/ENEMY_AI_OVERHAUL.md`):
+  - **Reynolds steering substrate** (`enemy/steering.js`): seek / flee / arrive /
+    pursue (lead) / evade / wander / flocking / containment + a momentum
+    integrator (mass / maxForce / maxSpeed / maxTurnRate). Big/slow-vs-small/fast
+    is now *physics* — heavy archetypes are ponderous and turn wide; light ones
+    are twitchy.
+  - **Context-steering avoidance** (`enemy/context-steering.js`): interest-vs-
+    danger heading sampling slides enemies around asteroids without oscillating,
+    with an escape route when boxed in.
+  - **Strategy brain** (`enemy/strategy.js` + `enemy/brain.js`): a throttled
+    utility selector with hysteresis picks a tactic — close-distance, orbit,
+    dive-bomb, kite, flank, regroup — which the steering layer executes.
+  - **Hybrid A*/flow-field navigation** (`enemy/navgrid.js`): steering by
+    default; one flow field (Dijkstra from the player) routes the whole swarm
+    around screen-filling boss hulls — the one place local steering would trap.
+  - **Archetypes** (`enemy/enemy-data.js`): all 29 types re-expressed as
+    Brute / Interceptor / Swarmer / Sniper / Orbiter / Support / Special configs
+    on the shared brain; special abilities (cloak/blink/charge/reflect/maw/aura/
+    spawner/trail) preserved.
+  - **Predictive lead-aim** (`enemy/firing.js`): directed enemy shots aim at the
+    brain's predicted lead point (`enemy._aimX/_aimY`) instead of the player's
+    current position, so fast players can't trivially outrun enemy fire.
+    Snipers/interceptors/kiters/flankers lead; brawlers aim at the live position.
+    A single `aimPoint()` resolver redirects the central target capture in
+    `shoot()` (single shots, bursts, spreads, homing seeds, charged-laser/arc
+    aim) plus the wasp machine-gun aim gate and the Titan sweep-laser center.
+    Radial patterns (circle_6, shield_burst, sentinel circle-burst, spiral) are
+    untouched; falls back to the live player position for bosses / un-brained
+    enemies. Enemies in the `regroup` strategy hold fire while disengaging.
+  - Opt-in and default-safe: legacy movement patterns remain as a fallback.
+
+## [9.5.1] - 2026-05-30
+
+### Changed
+- **Asteroid edges are now true rainbow GRADIENTS.** Each visible wireframe edge
+  strokes with a `createLinearGradient` whose endpoints take their hue from the
+  two vertices' projection onto the rock's gradient axis (with the edge midpoint
+  as a middle stop), so the rainbow sweeps continuously *along* every edge and
+  stays coherent where edges meet — instead of one flat hue per edge. Baked once
+  per spawn (new `vertexHueOffsets`, reusing the existing per-vertex projection),
+  so there's no per-frame cost beyond the gradient object. Rainbow strokes now
+  contrast against the rainbow facets, "rainbows on rainbows."
+
 ## [9.5.0] - 2026-05-30
 
 ### Changed

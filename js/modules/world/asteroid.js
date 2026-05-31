@@ -287,6 +287,9 @@ export class Asteroid {
         if (!this._vertProj || this._vertProj.length !== verts.length) {
             this._vertProj = new Float64Array(verts.length);
         }
+        if (!this.vertexHueOffsets || this.vertexHueOffsets.length !== verts.length) {
+            this.vertexHueOffsets = new Float64Array(verts.length);
+        }
         const vproj = this._vertProj;
         let vmin = Infinity, vmax = -Infinity;
         for (let i = 0; i < verts.length; i++) {
@@ -307,6 +310,12 @@ export class Asteroid {
             const e = edges[i];
             const mp = (vproj[e[0]] + vproj[e[1]]) / 2;
             this.edgeHueOffsets[i] = ((mp - vmin) / span) * range;
+        }
+        // Per-VERTEX hue offset (same projection) so the edge wireframe can be
+        // a true rainbow GRADIENT along each stroke: edges meeting at a vertex
+        // share that vertex's hue → the sweep is continuous across the rock.
+        for (let i = 0; i < verts.length; i++) {
+            this.vertexHueOffsets[i] = ((vproj[i] - vmin) / span) * range;
         }
 
         this.project();
@@ -759,6 +768,7 @@ export class Asteroid {
             hueSpread: this.hueSpread,
             faceHueOffsets: this.faceHueOffsets,
             edgeHueOffsets: this.edgeHueOffsets,
+            vertexHueOffsets: this.vertexHueOffsets,
             saturation: this.saturation,
             lightness: this.lightness,
             now: frameClock.now,

@@ -1,5 +1,5 @@
 // ── Enemy Type Definitions ─────────────────────────────────────────────────
-// Data-driven config for all 10 enemy types.
+// Data-driven config for all 29 enemy types.
 // Each type defines: base stats, movement pattern, firing pattern, visual shape, and AI params.
 // Movement/firing/visual keys will be consumed by strategy registries (Phases 6.2–6.4).
 // For now, movePattern and shootPattern remain the primary dispatch keys.
@@ -50,6 +50,12 @@ export const ENEMY_TYPES = {
             microMovements: true,
             fishMotion: true,
         },
+        // Archetype: INTERCEPTOR — small/fast dive-bomber.
+        brain: {
+            mass: 0.8, maxForce: 0.16, maxTurnRate: 0.20, preferredRange: 250,
+            evalIntervalMs: 280,
+            strategies: ['dive_bomb', 'close_distance', 'orbit', 'regroup'],
+        },
     },
 
     GUARDIAN: {
@@ -84,6 +90,11 @@ export const ENEMY_TYPES = {
             dodgeBullets: true,
             microMovements: true,
             fishMotion: true,
+        },
+        // Archetype: BRUTE — big/slow/heavy, closes & rams with wide turns.
+        brain: {
+            mass: 3.0, maxTurnRate: 0.05, preferredRange: 220,
+            strategies: ['close_distance', 'flank', 'regroup'],
         },
     },
 
@@ -120,6 +131,12 @@ export const ENEMY_TYPES = {
             microMovements: true,
             fishMotion: true,
         },
+        // Archetype: SWARMER — tiny/very fast, flocks & overwhelms.
+        brain: {
+            mass: 0.5, maxForce: 0.18, maxTurnRate: 0.22, preferredRange: 200,
+            swarm: true, separationWeight: 0.9, evalIntervalMs: 250,
+            strategies: ['dive_bomb', 'close_distance', 'regroup'],
+        },
     },
 
     STALKER: {
@@ -154,6 +171,11 @@ export const ENEMY_TYPES = {
             dodgeBullets: true,
             microMovements: true,
             fishMotion: true,
+        },
+        // Archetype: INTERCEPTOR — small/fast dive-bomber.
+        brain: {
+            mass: 0.9, maxForce: 0.16, maxTurnRate: 0.18, preferredRange: 220,
+            strategies: ['dive_bomb', 'orbit', 'kite', 'regroup'],
         },
     },
 
@@ -190,6 +212,11 @@ export const ENEMY_TYPES = {
             microMovements: true,
             fishMotion: true,
         },
+        // Archetype: SNIPER/ARTILLERY — kites at range with lead.
+        brain: {
+            mass: 1.1, maxForce: 0.10, maxTurnRate: 0.12, preferredRange: 300,
+            strategies: ['kite', 'orbit', 'regroup'],
+        },
     },
 
     PROWLER: {
@@ -225,6 +252,11 @@ export const ENEMY_TYPES = {
             dodgeBullets: false,
             microMovements: true,
             fishMotion: true,
+        },
+        // Archetype: BRUTE — big/slow/heavy, closes & rams with wide turns.
+        brain: {
+            mass: 3.5, maxTurnRate: 0.04, preferredRange: 200,
+            strategies: ['close_distance', 'flank', 'regroup'],
         },
     },
 
@@ -264,6 +296,11 @@ export const ENEMY_TYPES = {
             microMovements: true,
             fishMotion: true,
         },
+        // Archetype: ORBITER — circles at distance.
+        brain: {
+            mass: 1.0, maxForce: 0.11, maxTurnRate: 0.13, preferredRange: 200,
+            strategies: ['orbit', 'kite', 'regroup'],
+        },
     },
 
     SENTINEL: {
@@ -302,6 +339,11 @@ export const ENEMY_TYPES = {
             microMovements: true,
             fishMotion: true,
         },
+        // Archetype: SNIPER/ARTILLERY — kites at range with lead.
+        brain: {
+            mass: 1.4, maxForce: 0.09, maxTurnRate: 0.10, preferredRange: 320,
+            strategies: ['kite', 'orbit', 'regroup'],
+        },
     },
 
     TANGERINE: {
@@ -337,6 +379,11 @@ export const ENEMY_TYPES = {
             dodgeBullets: false,
             microMovements: true,
             fishMotion: true,
+        },
+        // Archetype: SPECIAL/BOMBER — mine-layer; keeps lay_mine ability.
+        brain: {
+            mass: 0.9, maxForce: 0.13, maxTurnRate: 0.16, preferredRange: 170,
+            strategies: ['dive_bomb', 'close_distance', 'regroup'],
         },
     },
 
@@ -376,6 +423,11 @@ export const ENEMY_TYPES = {
             microMovements: false,
             fishMotion: false,
         },
+        // Archetype: BRUTE — biggest/heaviest, closes & rams with very wide turns.
+        brain: {
+            mass: 4.0, maxForce: 0.05, maxTurnRate: 0.035, preferredRange: 280,
+            strategies: ['close_distance', 'flank', 'regroup'],
+        },
     },
 
     // ── E8b — New elemental types (Pyro/Cryo batch) ──
@@ -403,6 +455,12 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'wasp_machinegun', burstCount: 1, burstDelay: 0, cooldown: { min: 500, max: 2200 } },
         visual: { shape: 'cinder_ember', glowColor: '#ffaa44', trailLength: 15 },
         ai: { evasion: 0.6, preferredRange: 180, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: SWARMER — tiny/very fast, flocks & overwhelms.
+        brain: {
+            mass: 0.45, maxForce: 0.18, maxTurnRate: 0.22, preferredRange: 190,
+            swarm: true, separationWeight: 0.9, evalIntervalMs: 250,
+            strategies: ['dive_bomb', 'close_distance', 'regroup'],
+        },
     },
 
     // Glacier — slow Cryo tank. Reuses GUARDIAN square movement + spread fire +
@@ -422,6 +480,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'guardian_spread', burstCount: 3, burstDelay: 105, cooldown: { min: 2500, max: 8000 } },
         visual: { shape: 'ice_crystal', glowColor: '#bbf0ff', trailLength: 15 },
         ai: { evasion: 0.2, preferredRange: 320, dodgeBullets: false, microMovements: true, fishMotion: true },
+        // Archetype: BRUTE — slow ice tank, closes & rams with wide turns.
+        brain: {
+            mass: 3.5, maxTurnRate: 0.04, preferredRange: 240,
+            strategies: ['close_distance', 'flank', 'regroup'],
+        },
     },
 
     // Frost Lance — Cryo sniper. Reuses STALKER arc movement + charged_laser +
@@ -441,6 +504,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'charged_laser', burstCount: 1, burstDelay: 0, cooldown: { min: 1500, max: 6000 } },
         visual: { shape: 'icicle_lance', glowColor: '#bbf0ff', trailLength: 15 },
         ai: { evasion: 0.6, preferredRange: 220, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: INTERCEPTOR — small/fast ice dive-bomber.
+        brain: {
+            mass: 0.9, maxForce: 0.15, maxTurnRate: 0.18, preferredRange: 240,
+            strategies: ['dive_bomb', 'orbit', 'regroup'],
+        },
     },
 
     // Ashen Detonator — Pyro bomber that bursts into a flare ON DEATH (damages
@@ -462,6 +530,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 2, burstDelay: 90, cooldown: { min: 900, max: 3500 } },
         visual: { shape: 'cracked_bomb', glowColor: '#ffaa66', trailLength: 15 },
         ai: { evasion: 0.4, preferredRange: 220, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: SPECIAL/BOMBER — suicide-flare; keeps deathFlare ability.
+        brain: {
+            mass: 1.0, maxForce: 0.14, maxTurnRate: 0.16, preferredRange: 150,
+            strategies: ['close_distance', 'dive_bomb', 'regroup'],
+        },
     },
 
     // ── E8c — New elemental types (Volt/Toxic batch) ──
@@ -484,6 +557,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'arc_lightning', burstCount: 1, burstDelay: 0, cooldown: { min: 1500, max: 5500 } },
         visual: { shape: 'arc_node', glowColor: '#c890ff', trailLength: 15 },
         ai: { evasion: 0.65, preferredRange: 260, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: INTERCEPTOR — small/fast volt dive-bomber.
+        brain: {
+            mass: 0.75, maxForce: 0.17, maxTurnRate: 0.20, preferredRange: 230,
+            strategies: ['dive_bomb', 'orbit', 'regroup'],
+        },
     },
 
     // Plaguebearer — Toxic area-denier. Reuses TANGERINE chase + lay_mine, so
@@ -506,6 +584,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'lay_mine', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 7000 }, mineLifetime: 18000 },
         visual: { shape: 'plague_sac', glowColor: '#aaff66', trailLength: 15 },
         ai: { evasion: 0.2, preferredRange: 150, dodgeBullets: false, microMovements: true, fishMotion: true },
+        // Archetype: SPECIAL/BRUISER — acid-trail; keeps trailHazard ability.
+        brain: {
+            mass: 1.6, maxForce: 0.09, maxTurnRate: 0.10, preferredRange: 240,
+            strategies: ['orbit', 'close_distance', 'regroup'],
+        },
     },
 
     // ── E8e — Anti-meta type ──
@@ -530,6 +613,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'missile', burstCount: 1, burstDelay: 0, cooldown: { min: 900, max: 3500 } },
         visual: { shape: 'prism_facet', glowColor: '#e0c8ff', trailLength: 15 },
         ai: { evasion: 0.3, preferredRange: 400, dodgeBullets: false, microMovements: true, fishMotion: true },
+        // Archetype: BRUTE — slow adaptive tank, closes & rams with wide turns.
+        brain: {
+            mass: 3.2, maxTurnRate: 0.045, preferredRange: 260,
+            strategies: ['close_distance', 'flank', 'regroup'],
+        },
     },
 
     // ── E8e — Bruiser (uses the S3 spawn system) ──
@@ -552,6 +640,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1200, max: 4000 } },
         visual: { shape: 'plague_sac', glowColor: '#aaffbb', trailLength: 12 },
         ai: { evasion: 0.2, preferredRange: 200, dodgeBullets: false, microMovements: true, fishMotion: true },
+        // Archetype: SPECIAL/BRUISER — splitter; keeps splitOnDeath ability.
+        brain: {
+            mass: 2.0, maxForce: 0.08, maxTurnRate: 0.09, preferredRange: 220,
+            strategies: ['close_distance', 'flank', 'regroup'],
+        },
     },
 
     // ── E8c — Spawner (uses the S3 spawn system) ──
@@ -574,6 +667,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1600, max: 5000 } },
         visual: { shape: 'plague_sac', glowColor: '#c8ff8f', trailLength: 12 },
         ai: { evasion: 0.4, preferredRange: 360, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: SUPPORT — hangs back; keeps drone spawner ability.
+        brain: {
+            mass: 2.0, maxForce: 0.07, maxTurnRate: 0.07, preferredRange: 360,
+            strategies: ['kite', 'regroup'],
+        },
     },
 
     // ── E8d — Support (uses the S7 ally-aura system) ──
@@ -596,6 +694,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1800, max: 5500 } },
         visual: { shape: 'shield_turret', glowColor: '#fff0b0', trailLength: 14 },
         ai: { evasion: 0.5, preferredRange: 340, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: SUPPORT/SHIELDER — hangs back, buffs allies; keeps shield aura.
+        brain: {
+            mass: 1.3, maxForce: 0.09, maxTurnRate: 0.10, preferredRange: 360,
+            strategies: ['kite', 'regroup'],
+        },
     },
 
     // ENMY-08 — CONDUIT_NODE: a slow, stationary-ish Volt SUPPORT that channels
@@ -627,6 +730,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 5600 } },
         visual: { shape: 'shield_turret', glowColor: '#8af0ff', trailLength: 14 },
         ai: { evasion: 0.4, preferredRange: 340, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: SUPPORT/SHIELDER — hangs back, heals allies; keeps heal aura.
+        brain: {
+            mass: 1.5, maxForce: 0.08, maxTurnRate: 0.08, preferredRange: 380,
+            strategies: ['kite', 'regroup'],
+        },
     },
 
     // ENMY-03 — PHANTOM: light/fast Void skirmisher that runs a visible↔cloaked
@@ -649,6 +757,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1200, max: 4500 } },
         visual: { shape: 'stalker_sword', glowColor: '#bb99ff', trailLength: 15 },
         ai: { evasion: 0.6, preferredRange: 240, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: INTERCEPTOR — small/fast dive-bomber; keeps cloak ability.
+        brain: {
+            mass: 0.9, maxForce: 0.15, maxTurnRate: 0.18, preferredRange: 240,
+            strategies: ['dive_bomb', 'flank', 'orbit', 'regroup'],
+        },
     },
 
     // ENMY-07 — WRAITHWORM: a Volt burrower (blink-burrow.js). It periodically
@@ -673,6 +786,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1400, max: 4800 } },
         visual: { shape: 'spiked_circle', glowColor: '#8af0ff', trailLength: 16 },
         ai: { evasion: 0.5, preferredRange: 300, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: SPECIAL/BRUISER — blink/burrow overrides movement when active; brain drives the idle approach.
+        brain: {
+            mass: 1.6, maxForce: 0.10, maxTurnRate: 0.12, preferredRange: 260,
+            strategies: ['flank', 'close_distance', 'regroup'],
+        },
     },
 
     // ENMY-10 — NULL_DRONE: a slow Volt SUPPORT drone (suppress-aura.js). It
@@ -698,6 +816,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1600, max: 5200 } },
         visual: { shape: 'shield_turret', glowColor: '#a98aff', trailLength: 14 },
         ai: { evasion: 0.4, preferredRange: 320, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: SUPPORT — hangs back, suppresses; keeps suppress aura.
+        brain: {
+            mass: 1.4, maxForce: 0.08, maxTurnRate: 0.09, preferredRange: 340,
+            strategies: ['kite', 'regroup'],
+        },
     },
 
     // ENMY-04 — PRISM_MIRROR: a slow, hovering Radiant enemy with a front-arc
@@ -725,6 +848,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 1800, max: 5400 } },
         visual: { shape: 'shield_turret', glowColor: '#ffb0ee', trailLength: 14 },
         ai: { evasion: 0.4, preferredRange: 300, dodgeBullets: true, microMovements: true, fishMotion: true },
+        // Archetype: ORBITER — circles at distance; keeps front-arc reflect ability.
+        brain: {
+            mass: 2.2, maxForce: 0.07, maxTurnRate: 0.07, preferredRange: 300,
+            strategies: ['orbit', 'kite', 'regroup'],
+        },
     },
 
     // SYS-4 / ENMY-09 — DEVOURER: a slow, beefy Void DAMAGE-SOAKER with a MAW
@@ -755,6 +883,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 1, burstDelay: 0, cooldown: { min: 2000, max: 5800 } },
         visual: { shape: 'shield_turret', glowColor: '#c08aff', trailLength: 16 },
         ai: { evasion: 0.25, preferredRange: 280, dodgeBullets: false, microMovements: true, fishMotion: true },
+        // Archetype: SPECIAL/BRUISER — projectile-eater; keeps maw ability.
+        brain: {
+            mass: 2.4, maxForce: 0.07, maxTurnRate: 0.07, preferredRange: 240,
+            strategies: ['close_distance', 'flank', 'regroup'],
+        },
     },
 
     // SYS-8 / ENMY-05 — LEECH: a FAST, low-HP Toxic HARRIER (buff-strip.js
@@ -784,6 +917,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 0, burstDelay: 0, cooldown: { min: 99999, max: 99999 } },
         visual: { shape: 'wasp', glowColor: '#b6ff8a', trailLength: 18 },
         ai: { evasion: 0.2, preferredRange: 0, dodgeBullets: false, microMovements: true, fishMotion: true },
+        // Archetype: SPECIAL/HARRIER — fast contact buff-stripper; keeps stripsBuff ability.
+        brain: {
+            mass: 0.9, maxForce: 0.15, maxTurnRate: 0.18, preferredRange: 200,
+            strategies: ['dive_bomb', 'close_distance', 'regroup'],
+        },
     },
 
     // SYS-11 / ENMY-10b — JUGGERNAUT: a Kinetic BRUISER built around a
@@ -824,6 +962,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 0, burstDelay: 0, cooldown: { min: 99999, max: 99999 } },
         visual: { shape: 'juggernaut_ram', glowColor: '#ffb066', trailLength: 12 },
         ai: { evasion: 0.1, preferredRange: 120, dodgeBullets: false, microMovements: false, fishMotion: false },
+        // Archetype: SPECIAL/BRUISER — charge ability overrides movement when active; brain drives the idle approach.
+        brain: {
+            mass: 3.0, maxForce: 0.06, maxTurnRate: 0.05, preferredRange: 260,
+            strategies: ['close_distance', 'regroup'],
+        },
     },
     // ENMY-10b — THORNBACK: a Kinetic BRUISER built around a COUNTER-ATTACK. Every
     // damage instance it takes triggers a small RETALIATORY pulse — but ONLY if
@@ -859,6 +1002,11 @@ export const ENEMY_TYPES = {
         firing: { pattern: 'hunter_single', burstCount: 0, burstDelay: 0, cooldown: { min: 99999, max: 99999 } },
         visual: { shape: 'thornback', glowColor: '#ff7d97', trailLength: 8 },
         ai: { evasion: 0.15, preferredRange: 180, dodgeBullets: false, microMovements: false, fishMotion: false },
+        // Archetype: SPECIAL/BRUISER — counter-attacker; keeps thorns ability.
+        brain: {
+            mass: 2.8, maxForce: 0.06, maxTurnRate: 0.05, preferredRange: 230,
+            strategies: ['close_distance', 'flank', 'regroup'],
+        },
     },
 };
 

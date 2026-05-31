@@ -87,7 +87,7 @@ function _buildTutorialOverlay() {
         'Primary weapon — hold LEFT CLICK to fire continuously.',
         'Power weapon — RIGHT CLICK / SPACE (costs energy — see below).',
         'Abilities — 1 / 2 / 3 / 4.   Dash — SHIFT.',
-        'Weapon radials — hold F (primary), E (power), R (defense ability).',
+        'Weapon radials — hold F (primary) or E (power); release on a wedge to switch.',
         'Pause — ESC.   Stats — backtick (`).',
     ]));
     // GAMEPAD section — built hidden; the engine reveals it whenever a pad

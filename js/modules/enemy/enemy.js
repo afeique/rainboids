@@ -32,6 +32,10 @@ import { createBlink, tickBlink, isVanished } from './abilities/blink-burrow.js'
 // windup→strike→recover cycle + locks the lane (the render reads the telegraph
 // phase directly via telegraphPhase, and the damage path reads isRearExposed).
 import { createCharge, tickCharge } from './abilities/charge.js';
+// Steering+strategy brain (the new AI). Opt-in per archetype via config.brain:
+// when present, updateBrain() supplies the velocity instead of the legacy
+// movePattern switch. Default-safe — brain-less enemies take the old path.
+import { updateBrain } from './brain.js';
 // ENMY-10b — counter-attack on being hit (THORNBACK). `createThorns` builds the
 // per-instance counter state attached on `this.thorns` (only THORNBACK carries
 // `config.thorns`). The counter itself fires from collision-system's universal
@@ -391,6 +395,13 @@ export class Enemy {
         // `slowUntil > frameClock.now` (Nova AFTERSHOCK). Reset on spawn.
         this.slowUntil = 0;
         this.slowFactor = 1;
+        // Per-element status VFX + DoT throttles. Reset every spawn so a
+        // recycled pool slot doesn't carry forward a stale timestamp.
+        //   _statusParticleAt — gates the per-status particle burst (~150 ms).
+        //   _elemDotAt        — gates the small per-element bonus DoT (~500 ms)
+        //                       for CHILL / FREEZE / CONDUCT / MARK.
+        this._statusParticleAt = 0;
+        this._elemDotAt = 0;
 
         // ── E3 — extended elemental statuses ──
         //   CORRODE: +15%/stack incoming damage from ALL sources (read in
@@ -1055,7 +1066,18 @@ export class Enemy {
     
     updateMovement(gameEngine) {
         const now = frameClock.now;
-        
+
+        // New steering+strategy brain (opt-in). When the archetype declares a
+        // `brain` block it OWNS movement: updateBrain sets this.vel under
+        // physical limits (mass/force/turn). The enemy.update() pipeline still
+        // integrates position + applies SLOW/boundary/status, so this slots in
+        // without disturbing the ability overrides. Brain-less types fall
+        // through to the legacy per-pattern switch unchanged.
+        if (this.config.brain) {
+            updateBrain(this, gameEngine);
+            return;
+        }
+
         switch (this.config.movePattern) {
             case 'chase':
                 this.chasePlayer();
@@ -1810,7 +1832,29 @@ export class Enemy {
     
     drawTargetingEffect(ctx) { return shapes.drawTargetingEffect.call(this, ctx); }
     
-    drawEnemyShape(ctx) { return shapes.drawEnemyShape.call(this, ctx); }
+    drawEnemyShape(ctx) {
+        shapes.drawEnemyShape.call(this, ctx);
+        // E3 — CHILL / FREEZE tint. Overlay a translucent blue wash on the
+        // enemy body while it is chilled or frozen so the slow/lock reads at
+        // a glance. Skipped during the death-flash silhouette pass (the body
+        // is already a white flash there). Drawn inside the same
+        // translate/rotate transform as the silhouette, so it sits on top of
+        // the shape. frameClock is imported at module scope.
+        if (!this._deathFlashRendering) {
+            const _now = frameClock.now;
+            if (this.freezeUntil > _now || this.chillUntil > _now) {
+                const frozen = this.freezeUntil > _now;
+                const r = this.radius || 12;
+                ctx.save();
+                ctx.globalAlpha = frozen ? 0.32 : 0.2;
+                ctx.fillStyle = frozen ? '#aaddff' : '#66ccff';
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+    }
     
     // drawAimingTriangle method removed - not working as intended
 
@@ -1969,6 +2013,79 @@ export class Enemy {
         if (this.corrodeStacks > 0 && now > this.corrodeUntil) {
             this.corrodeStacks = 0;
             this.corrodeUntil = 0;
+        }
+
+        // ── Per-element status: small bonus DoT so EVERY element deals extra
+        // damage. BRN / BLEED above already tick; CORRODE amplifies all damage
+        // (a multiplier in applyDamageToEnemy) so it needs no DoT here. The
+        // gap was CHILL / FREEZE / CONDUCT / MARK — they applied NO damage.
+        // Add a small ~500 ms tick for each, routed through takeDamage so
+        // kills award XP / loot / FX exactly like a bullet. Conservative
+        // numbers (bonus damage on top of the on-hit flat bonus). Shared
+        // `_elemDotAt` throttle keeps this cheap at high enemy counts.
+        if (now >= this._elemDotAt) {
+            this._elemDotAt = now + 500;
+            // CONDUCT — small shock tick while electrified.
+            if (this.conductUntil > now) {
+                this.takeDamage(0.4, { showNumber: true, isBurn: true });
+                if (!this.active) return;
+            }
+            // FREEZE / CHILL — small frost tick. Freeze (the harder lock)
+            // bites a touch more than a plain chill.
+            if (this.freezeUntil > now) {
+                this.takeDamage(0.5, { showNumber: true, isBurn: true });
+                if (!this.active) return;
+            } else if (this.chillUntil > now) {
+                this.takeDamage(0.3, { showNumber: true, isBurn: true });
+                if (!this.active) return;
+            }
+            // MARK — small void-rot tick while marked.
+            if (this.markUntil > now) {
+                this.takeDamage(0.3, { showNumber: true, isBurn: true });
+                if (!this.active) return;
+            }
+        }
+
+        // ── Per-element status particle VFX. Emit a small element-colored
+        // burst from the enemy while each status is active, THROTTLED by
+        // `_statusParticleAt` (~150 ms total, NOT per frame) so the cost
+        // stays bounded at high enemy counts. Reuses existing particle
+        // types ('burnFlame' for fire, 'explosionEmber' for colored motes)
+        // with a color arg — no new particle type needed.
+        if (_ge && _ge.particlePool && now >= this._statusParticleAt) {
+            this._statusParticleAt = now + 150;
+            const _pp = _ge.particlePool;
+            const _r = this.radius || 12;
+            // Spawn helper: a colored mote near the enemy body.
+            const _puff = (color, type = 'explosionEmber') => {
+                const px = this.x + (Math.random() - 0.5) * _r;
+                const py = this.y + (Math.random() - 0.5) * _r;
+                _pp.get(px, py, type, color);
+            };
+            // BRN — red-orange rising flame.
+            if (this.brnStacks > 0 && this.brnUntil > now) {
+                _puff(Math.random() < 0.6 ? '#ff6622' : '#ffaa44', 'burnFlame');
+            }
+            // CORRODE — green drifting poison puff.
+            if (this.corrodeStacks > 0 && this.corrodeUntil > now) {
+                _puff('#88dd33');
+            }
+            // CHILL / FREEZE — pale-blue mist.
+            if (this.freezeUntil > now || this.chillUntil > now) {
+                _puff(Math.random() < 0.5 ? '#66ccff' : '#aaddff');
+            }
+            // CONDUCT — bright yellow-white electric spark.
+            if (this.conductUntil > now) {
+                _puff(Math.random() < 0.5 ? '#ffee44' : '#ffffff');
+            }
+            // MARK — purple void mote.
+            if (this.markUntil > now) {
+                _puff('#cc66ff');
+            }
+            // BLEED — white / bright mote.
+            if (this.bleedStacks > 0 && this.bleedUntil > now) {
+                _puff('#ffffff');
+            }
         }
 
         // E8e — WARDEN adaptive-resist decay. Every ~1s, fade the resistances

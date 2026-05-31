@@ -10,6 +10,10 @@ import { introBlocksDamage } from '../enemy/boss-intro.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { elementalMultiplier, multiElementMultiplier, adaptResist, ELEMENTS } from './elements.js';
+// Weapon-vs-archetype effectiveness (rock-paper-scissors damage nudge). Applied
+// ONLY on the player-bullet-damages-enemy path below, guarded so an un-tagged
+// bullet (no weaponId) degrades to a neutral 1.0 multiplier — never breaks damage.
+import { matchupMultiplier } from './matchup-data.js';
 import { allyShieldMult } from '../enemy/support-aura.js';
 // SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE). Per-frame ENEMY→PLAYER
 // debuff: applySuppression stamps the player's _skill* fields when they stand
@@ -844,6 +848,15 @@ export function handleCollisions() {
                     && enemy.cryoFrozenUntil && enemy.cryoFrozenUntil > frameClock.now) {
                     damage *= 1.3;
                 }
+                // Weapon-vs-archetype matchup nudge (rock-paper-scissors). Multiplies
+                // the player-bullet damage by the (weaponClass × enemyArchetype)
+                // factor from matchup-data.js. The source weapon is read from
+                // `bullet.weaponId` (the canonical field the per-weapon hit-SFX path
+                // above already uses); a bullet without one yields a neutral 1.0,
+                // so AoE/shrapnel/split shards that carry no weaponId are unaffected.
+                // Applied ONLY here on the player-bullet→enemy path — enemy-vs-player,
+                // AoE-vs-asteroid, and DoT/status paths are untouched.
+                damage *= matchupMultiplier(bullet.weaponId, enemy.type);
                 if (this.game.stats) this.game.stats.shotsHit++;
                 const enemyHpBefore = enemy.health;
                 // P6 — Predator passive: the first hit on a FULL-HP enemy always

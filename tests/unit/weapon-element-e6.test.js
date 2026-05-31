@@ -88,4 +88,22 @@ describe('applyWeaponElementStatus (E6)', () => {
         applyWeaponElementStatus.call(ctx, { active: false }, 'PYRO', 5);
         expect(ctx.calls).toEqual([]);
     });
+
+    test('an unknown element id procs no status (default arm is a no-op)', () => {
+        // Pins that a bogus / un-tagged element falls through the switch's
+        // default and applies NOTHING — the damage path must never throw or
+        // mis-apply a status for an element the system doesn't know.
+        const ctx = mkCtx();
+        applyWeaponElementStatus.call(ctx, enemy, 'NOT_AN_ELEMENT', 5);
+        expect(ctx.calls).toEqual([]);
+    });
+
+    test('CRYO at exactly the freeze threshold (8) freezes', () => {
+        // Boundary pin: the chill→freeze escalation uses `dealt >= 8`, so a
+        // hit of exactly 8 must FREEZE (not chill). Guards an off-by-one drift
+        // in ELEM_FREEZE_HIT or the comparison operator.
+        const ctx = mkCtx();
+        applyWeaponElementStatus.call(ctx, enemy, 'CRYO', 8);
+        expect(ctx.calls).toEqual(['freeze']);
+    });
 });

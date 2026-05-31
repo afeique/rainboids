@@ -52,6 +52,17 @@ describe('isMechanicMod — classification', () => {
         expect(isMechanicMod(null)).toBe(false);
         expect(isMechanicMod('TOTALLY_MADE_UP')).toBe(false);
     });
+
+    test('classification matches by SUFFIX, not substring', () => {
+        // The proc match uses endsWith(), so a mechanic keyword in the
+        // MIDDLE of an id (e.g. an efficacy upgrade that merely mentions
+        // PIERCING/STUN) must NOT be misclassified as a mod. Guards a
+        // regression to a looser includes()-style match.
+        expect(isMechanicMod('PIERCING_DAMAGE')).toBe(false); // keyword as prefix
+        expect(isMechanicMod('STUN_RESIST_DOWN')).toBe(false); // keyword embedded
+        expect(isMechanicMod('MISSILE_PIERCING')).toBe(true);  // true suffix match
+        expect(isMechanicMod('RAIL_STUN')).toBe(true);         // true suffix match
+    });
 });
 
 describe('getMechanicMods / getEfficacyUpgrades — partition', () => {

@@ -112,11 +112,14 @@ describe('PRIMARY_WEAPONS.CLUSTER_LAUNCHER — config sanity', () => {
         const cfg = PRIMARY_WEAPONS.CLUSTER_LAUNCHER;
         expect(cfg).toBeDefined();
         expect(cfg.id).toBe('CLUSTER_LAUNCHER');
-        expect(cfg.damage).toBe(50);
+        // 9.6.1 weapon rebalance — burst tamed from the old instant-clear
+        // (50 + 50 + 5×25 = 225 payload, ~218 DPS) to a modest AoE premium
+        // (14 + 16 + 5×9 = 75) so the lob is strong-but-not-dominant.
+        expect(cfg.damage).toBe(14);
         expect(cfg.fireRate).toBe(800);
         expect(cfg.range).toBe(9999);
         expect(cfg.blastRadius).toBe(90);
-        expect(cfg.blastDamage).toBe(50);
+        expect(cfg.blastDamage).toBe(16);
         expect(cfg.subBombCount).toBe(5);
         expect(cfg.travelFriction).toBeLessThan(1.0); // decelerates in flight
         expect(cfg.haltVelocity).toBeGreaterThan(0);   // arrival speed at target
