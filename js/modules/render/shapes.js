@@ -259,13 +259,6 @@ const ASTEROID_EDGE_FACES = ASTEROID_EDGES.map(([a, b]) => {
 
 // Scratch reused by the (single-threaded, synchronous) draw passes.
 const _frontFlags = new Uint8Array(ASTEROID_FACES.length);
-const _WF_BUCKETS = 5;
-const _wfScratch = {
-    BUCKETS: _WF_BUCKETS,
-    bucketEdges: Array.from({ length: _WF_BUCKETS }, () => []),
-    bucketHue: new Float64Array(_WF_BUCKETS),
-    bucketCount: new Uint8Array(_WF_BUCKETS),
-};
 
 /**
  * Draw an asteroid body. Dispatches to the active render mode. The ctx must
@@ -460,19 +453,8 @@ export function drawAsteroidWireframe(ctx, s) {
         ctx.lineTo(v2.x, v2.y);
     }
     ctx.stroke();
-    ctx.lineCap = 'butt';
+    ctx.lineCap = 'round';
     ctx.lineWidth = 2;
-
-    const scratch = _wfScratch;
-    const BUCKETS = scratch.BUCKETS;
-    const bucketEdges = scratch.bucketEdges;
-    const bucketHue = scratch.bucketHue;
-    const bucketCount = scratch.bucketCount;
-    for (let b = 0; b < BUCKETS; b++) {
-        bucketEdges[b].length = 0;
-        bucketHue[b] = 0;
-        bucketCount[b] = 0;
-    }
 
     const fov = s.fov || ASTEROID_FOV;
     const radius = s.radius;
@@ -480,36 +462,42 @@ export function drawAsteroidWireframe(ctx, s) {
     const now = s.now || 0;
     const hueCycleSpeed = s.hueCycleSpeed || 15;
     const hueSpread = s.hueSpread || 60;
+    const hueDrift = now / hueCycleSpeed;
+    // Per-vertex rainbow hue offsets — a smooth spatial sweep baked per rock
+    // (asteroid.js) so adjacent vertices land at nearby hues. Index-based
+    // fallback (spread over a full turn) keeps a rainbow even without them.
+    const vertexHueOffsets = s.vertexHueOffsets;
+    const nv = projectedVertices.length || 12;
+    const vHue = (idx) => (baseHue + hueDrift +
+        (vertexHueOffsets ? vertexHueOffsets[idx] : (idx / nv) * 360)) % 360;
+    // Bright, vivid lines so the rainbow reads clearly over the backdrop.
+    const wfSat = Math.min(100, (s.saturation || 90) + 8);
+    const wfLight = Math.min(86, (s.lightness || 70) + 14);
 
+    // Each edge is its OWN linear gradient from vertex-A's hue to vertex-B's
+    // hue — so every line is a different colour AND, because connected edges
+    // share a vertex (= share that endpoint's colour), the lines knit into ONE
+    // continuous rainbow gradient flowing across the whole wireframe. Depth-
+    // faded so the far side recedes. (Replaces the old depth-bucket averaging
+    // that washed every line in a band down to a few flat colours.)
     for (let i = 0; i < edges.length; i++) {
         const e = edges[i];
         const v1 = projectedVertices[e[0]];
         const v2 = projectedVertices[e[1]];
         if (!v1 || !v2) continue;
         const avg = (v1.depth + v2.depth) / 2;
-        const alpha = Math.max(0.2, Math.pow(Math.max(0, (fov - avg) / (fov + radius)), 2.0));
-        const hue = (baseHue + now / hueCycleSpeed + (i / edges.length) * hueSpread) % 360;
-        const bi = Math.min(BUCKETS - 1, Math.floor((alpha - 0.2) / 0.8 * BUCKETS));
-        bucketEdges[bi].push(v1, v2, alpha);
-        bucketHue[bi] += hue;
-        bucketCount[bi]++;
-    }
-
-    for (let bi = 0; bi < BUCKETS; bi++) {
-        if (bucketCount[bi] === 0) continue;
-        const edgesB = bucketEdges[bi];
-        const alpha = edgesB[2];
-        const hue = bucketHue[bi] / bucketCount[bi];
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = hsl(hue, s.saturation, s.lightness);
+        ctx.globalAlpha = Math.max(0.2, Math.pow(Math.max(0, (fov - avg) / (fov + radius)), 2.0));
+        const grad = ctx.createLinearGradient(v1.x, v1.y, v2.x, v2.y);
+        grad.addColorStop(0, hsl(vHue(e[0]), wfSat, wfLight));
+        grad.addColorStop(1, hsl(vHue(e[1]), wfSat, wfLight));
+        ctx.strokeStyle = grad;
         ctx.beginPath();
-        for (let j = 0; j < edgesB.length; j += 3) {
-            ctx.moveTo(edgesB[j].x, edgesB[j].y);
-            ctx.lineTo(edgesB[j + 1].x, edgesB[j + 1].y);
-        }
+        ctx.moveTo(v1.x, v1.y);
+        ctx.lineTo(v2.x, v2.y);
         ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    ctx.lineCap = 'butt';
 }
 
 // ── Enemy silhouettes ──────────────────────────────────────────────

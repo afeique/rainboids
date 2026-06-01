@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [10.1.1] - 2026-06-01
+
+### Fixed
+- **Asteroid wireframe is now a true rainbow gradient.** In `wireframe` render mode the edges were batched into depth buckets and stroked with one *averaged* hue per bucket, washing the whole wireframe down to a few flat colours. Each edge now strokes as its own `createLinearGradient` from vertex-A's hue to vertex-B's hue using the per-rock baked `vertexHueOffsets` (a smooth ~200–320° spatial sweep): every line is a different colour, and because connected edges share a vertex they knit into one continuous rainbow gradient flowing across the rock. Lines brightened/saturated so the rainbow reads clearly; depth-fade preserved. (The default `filled` gem already rendered per-edge rainbow.)
+
 ## [10.1.0] - 2026-06-01
 
 ### Added
