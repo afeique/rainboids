@@ -1,11 +1,14 @@
 // RUN-03 / X3 — Reward Dial unit tests (pure, no DOM, no globals).
 // DIR-08 — §14.4 mode + performance reward terms.
 //
-// The CRITICAL guarantee under test: the DEFAULT 10×3 NORMAL campaign with no
-// performance bonus is reward-identical to today — rewardMultiplier() ===
-// EXACTLY 1.0 at every wave. Richer runs (wps ≥ 6) compound a flat
-// waves-per-stage factor with a gentle stage-depth endurance curve; DIR-08
-// layers the difficulty MODE term and a per-clear PERFORMANCE bonus on top.
+// 9.11.0 — the run is now a FIXED 50-wave campaign (10 stages × 5 waves) and
+// getRunConfig PINS the shape, ignoring any stages/wavesPerStage override. So
+// every game-keyed reward term resolves at the canonical wps=5 / stages=10:
+//   - wavesPerStageRewardMult → wavesPerStageRewardMultForWps(5) = 1.2
+//   - stageDepthRewardMult / rewardMultiplier walk the fixed 10-stage depth.
+// The pure wps-explicit helper (wavesPerStageRewardMultForWps) and the
+// mode/perf terms still cover arbitrary inputs; the difficulty MODE term and
+// a per-clear PERFORMANCE bonus still layer on multiplicatively.
 import {
     WAVES_PER_STAGE_REWARD_MULT,
     DEFAULT_WAVES_PER_STAGE,
@@ -31,16 +34,20 @@ const gameWithMode = (stages, wavesPerStage, mode) =>
     ({ runConfig: { stages, wavesPerStage, mode } });
 
 describe('wavesPerStageRewardMult', () => {
-    test('table hits: 3 → 1.0, 6 → 1.3, 9 → 1.6', () => {
-        expect(wavesPerStageRewardMult(gameWith(10, 3))).toBe(1.0);
-        expect(wavesPerStageRewardMult(gameWith(5, 6))).toBeCloseTo(1.3, 10);
-        expect(wavesPerStageRewardMult(gameWith(4, 9))).toBeCloseTo(1.6, 10);
+    // 9.11.0 — the run is pinned to wps=5, so ALL game-keyed lookups resolve to
+    // wavesPerStageRewardMultForWps(5) = 1.0 + 0.10×(5-3) = 1.2, regardless of
+    // any (ignored) wavesPerStage override on the game's runConfig. The exact
+    // 3/6/9 table values are still verified directly via the pure helper below.
+    test('pinned run (wps=5) → 1.2 regardless of any override', () => {
+        expect(wavesPerStageRewardMult(gameWith(10, 3))).toBeCloseTo(1.2, 10);
+        expect(wavesPerStageRewardMult(gameWith(5, 6))).toBeCloseTo(1.2, 10);
+        expect(wavesPerStageRewardMult(gameWith(4, 9))).toBeCloseTo(1.2, 10);
     });
 
-    test('default (no runConfig) → 1.0', () => {
-        expect(wavesPerStageRewardMult({})).toBe(1.0);
-        expect(wavesPerStageRewardMult(null)).toBe(1.0);
-        expect(wavesPerStageRewardMult(undefined)).toBe(1.0);
+    test('default (no runConfig) → pinned wps=5 → 1.2', () => {
+        expect(wavesPerStageRewardMult({})).toBeCloseTo(1.2, 10);
+        expect(wavesPerStageRewardMult(null)).toBeCloseTo(1.2, 10);
+        expect(wavesPerStageRewardMult(undefined)).toBeCloseTo(1.2, 10);
     });
 
     test('wps ≤ 3 floors at 1.0', () => {
@@ -75,9 +82,12 @@ describe('stageDepthRewardMult', () => {
         expect(stageDepthRewardMult(1, gameWith(10, 6))).toBeCloseTo(1.0, 10);
     });
 
-    test('grows monotonically to the documented cap at the final stage (10×6 run)', () => {
-        const game = gameWith(10, 6); // 60 waves, 10 stages
-        const lastWaveOfStage = (s) => s * 6; // wave at end of stage s
+    test('grows monotonically to the documented cap at the final stage (pinned 10×5 run)', () => {
+        // 9.11.0 — the run is pinned to 10 stages × 5 waves = 50 waves; the wps
+        // override is ignored, so stages are sized 5 and the final stage ends at
+        // wave 50. Depth walks waves 5,10,…,50.
+        const game = gameWith(10, 6); // override ignored → pinned 10×5
+        const lastWaveOfStage = (s) => s * 5; // wave at end of stage s (wps=5)
         let prev = -Infinity;
         for (let s = 1; s <= 10; s++) {
             const m = stageDepthRewardMult(lastWaveOfStage(s), game);
@@ -85,17 +95,19 @@ describe('stageDepthRewardMult', () => {
             prev = m;
         }
         // stage 1 → 1.0, stage 10 (final) → 1 + STAGE_DEPTH_MAX_BONUS.
-        expect(stageDepthRewardMult(6, game)).toBeCloseTo(1.0, 10);
-        expect(stageDepthRewardMult(60, game)).toBeCloseTo(1.0 + STAGE_DEPTH_MAX_BONUS, 10);
+        expect(stageDepthRewardMult(5, game)).toBeCloseTo(1.0, 10);
+        expect(stageDepthRewardMult(50, game)).toBeCloseTo(1.0 + STAGE_DEPTH_MAX_BONUS, 10);
         // midpoint (stage ~5.5) sits around halfway up the bonus.
-        expect(stageDepthRewardMult(30, game)).toBeGreaterThan(1.0);
-        expect(stageDepthRewardMult(30, game)).toBeLessThan(1.0 + STAGE_DEPTH_MAX_BONUS);
+        expect(stageDepthRewardMult(25, game)).toBeGreaterThan(1.0);
+        expect(stageDepthRewardMult(25, game)).toBeLessThan(1.0 + STAGE_DEPTH_MAX_BONUS);
     });
 
-    test('1-stage run has no depth → 1.0 always', () => {
-        const game = gameWith(1, 6);
-        expect(stageDepthRewardMult(1, game)).toBe(1.0);
-        expect(stageDepthRewardMult(6, game)).toBe(1.0);
+    test('pinned run is always 10 stages → there is always depth (no degenerate 1-stage run)', () => {
+        // 9.11.0 — a 1-stage runConfig is ignored; the run is always 10 stages,
+        // so stage-1 is exactly 1.0 but later stages climb above it.
+        const game = gameWith(1, 6); // override ignored → pinned 10×5
+        expect(stageDepthRewardMult(1, game)).toBeCloseTo(1.0, 10);
+        expect(stageDepthRewardMult(50, game)).toBeCloseTo(1.0 + STAGE_DEPTH_MAX_BONUS, 10);
     });
 
     test('opts.maxBonus overrides the cap', () => {
@@ -110,49 +122,58 @@ describe('stageDepthRewardMult', () => {
     });
 });
 
-describe('rewardMultiplier — default-run guarantee', () => {
-    test('EXACTLY 1.0 for the default 10×3 run at every wave', () => {
-        const game = gameWith(10, 3);
-        for (let wave = 1; wave <= 30; wave++) {
-            expect(rewardMultiplier(game, wave)).toBe(1.0);
+describe('rewardMultiplier — pinned-run shape (9.11.0)', () => {
+    // 9.11.0 — the run is pinned to wps=5 (> DEFAULT_WAVES_PER_STAGE=3), so the
+    // shape factor is wavesPerStageRewardMult(=1.2) × stageDepthRewardMult. At
+    // stage 1 (wave 1) depth is 1.0, so a NORMAL no-perf run starts at exactly
+    // 1.2 and grows with depth; the wps override is ignored.
+    test('wps factor (1.2) applies at every wave for the pinned NORMAL run', () => {
+        const game = gameWith(10, 3); // override ignored → pinned 10×5
+        for (let wave = 1; wave <= 50; wave++) {
+            const expected = wavesPerStageRewardMult(game) * stageDepthRewardMult(wave, game);
+            expect(rewardMultiplier(game, wave)).toBeCloseTo(expected, 10);
+        }
+        // stage 1 (wave 1) → depth 1.0 → just the 1.2 wps factor.
+        expect(rewardMultiplier(game, 1)).toBeCloseTo(1.2, 10);
+    });
+
+    test('no runConfig resolves to the same pinned shape', () => {
+        for (const wave of [1, 5, 10, 25, 50]) {
+            const expected = wavesPerStageRewardMult({}) * stageDepthRewardMult(wave, {});
+            expect(rewardMultiplier({}, wave)).toBeCloseTo(expected, 10);
+            expect(rewardMultiplier(null, wave)).toBeCloseTo(expected, 10);
         }
     });
 
-    test('EXACTLY 1.0 when no runConfig is set (implicit default)', () => {
-        for (const wave of [1, 5, 10, 15, 30]) {
-            expect(rewardMultiplier({}, wave)).toBe(1.0);
-            expect(rewardMultiplier(null, wave)).toBe(1.0);
-        }
-    });
-
-    test('EXACTLY 1.0 for any wps ≤ DEFAULT_WAVES_PER_STAGE', () => {
+    test('DEFAULT_WAVES_PER_STAGE is still 3, but the pinned run runs at wps=5', () => {
         expect(DEFAULT_WAVES_PER_STAGE).toBe(3);
-        expect(rewardMultiplier(gameWith(10, 1), 5)).toBe(1.0);
-        expect(rewardMultiplier(gameWith(10, 2), 5)).toBe(1.0);
-        expect(rewardMultiplier(gameWith(10, 3), 5)).toBe(1.0);
+        // Every override resolves to the pinned wps=5 shape (1.2 at stage 1).
+        expect(rewardMultiplier(gameWith(10, 1), 1)).toBeCloseTo(1.2, 10);
+        expect(rewardMultiplier(gameWith(10, 2), 1)).toBeCloseTo(1.2, 10);
+        expect(rewardMultiplier(gameWith(10, 3), 1)).toBeCloseTo(1.2, 10);
     });
 });
 
-describe('rewardMultiplier — richer runs', () => {
-    test('> 1.0 for a 10×6 run at deep waves', () => {
-        const game = gameWith(10, 6);
-        // shallow wave still > 1.0 because the flat wps factor (1.3) applies.
+describe('rewardMultiplier — depth scaling on the pinned run', () => {
+    test('> 1.0 at every wave, growing with depth', () => {
+        const game = gameWith(10, 6); // override ignored → pinned 10×5
+        // shallow wave still > 1.0 because the flat wps factor (1.2) applies.
         expect(rewardMultiplier(game, 1)).toBeGreaterThan(1.0);
         // deep wave compounds wps × stage-depth → strictly larger.
-        expect(rewardMultiplier(game, 60)).toBeGreaterThan(rewardMultiplier(game, 1));
+        expect(rewardMultiplier(game, 50)).toBeGreaterThan(rewardMultiplier(game, 1));
     });
 
-    test('combined factor equals wps × stage-depth for richer runs', () => {
-        const game = gameWith(10, 6);
-        for (const wave of [6, 18, 36, 60]) {
+    test('combined factor equals wps × stage-depth at every depth', () => {
+        const game = gameWith(10, 6); // override ignored → pinned 10×5
+        for (const wave of [5, 15, 30, 50]) {
             const expected = wavesPerStageRewardMult(game) * stageDepthRewardMult(wave, game);
             expect(rewardMultiplier(game, wave)).toBeCloseTo(expected, 10);
         }
     });
 
-    test('final-stage 10×6 factor ≈ 1.3 × 1.4 = 1.82', () => {
-        const game = gameWith(10, 6);
-        expect(rewardMultiplier(game, 60)).toBeCloseTo(1.3 * (1.0 + STAGE_DEPTH_MAX_BONUS), 10);
+    test('final-stage factor ≈ 1.2 × 1.4 = 1.68 (pinned wps=5)', () => {
+        const game = gameWith(10, 6); // override ignored → pinned 10×5
+        expect(rewardMultiplier(game, 50)).toBeCloseTo(1.2 * (1.0 + STAGE_DEPTH_MAX_BONUS), 10);
     });
 });
 
@@ -165,20 +186,24 @@ describe('modeReward term (DIR-08 / §14.4)', () => {
         expect(modeReward('LEGENDARY')).toBeCloseTo(2.2, 10);
     });
 
-    test('NORMAL mode leaves a default run at exactly 1.0', () => {
+    test('NORMAL mode (1.0) leaves the pinned shape factor unchanged', () => {
+        // 9.11.0 — the run is pinned to wps=5, so a NORMAL run is the bare shape
+        // factor (1.2 × stage-depth), not 1.0 — modeReward(NORMAL)=1.0 is a no-op.
         const game = gameWithMode(10, 3, 'NORMAL');
-        for (const wave of [1, 5, 15, 30]) {
-            expect(rewardMultiplier(game, wave)).toBe(1.0);
+        for (const wave of [1, 5, 15, 50]) {
+            const shape = wavesPerStageRewardMult(game) * stageDepthRewardMult(wave, game);
+            expect(rewardMultiplier(game, wave)).toBeCloseTo(shape, 10);
         }
     });
 
-    test('mode scales a DEFAULT-shape (3 wps) run with no perf', () => {
-        // wps + stage-depth are 1.0 for a 3-wps run, so the factor is purely
-        // the mode term — proving mode applies at the default shape.
-        expect(rewardMultiplier(gameWithMode(10, 3, 'HARD'), 5)).toBeCloseTo(1.3, 10);
-        expect(rewardMultiplier(gameWithMode(10, 3, 'LEGENDARY'), 5)).toBeCloseTo(2.2, 10);
-        expect(rewardMultiplier(gameWithMode(10, 3, 'EASY'), 5)).toBeCloseTo(0.8, 10);
-        expect(rewardMultiplier(gameWithMode(10, 3, 'EPIC'), 5)).toBeCloseTo(1.7, 10);
+    test('mode scales the pinned-shape run multiplicatively (no perf)', () => {
+        // At wave 5 the pinned run is stage 1 (depth 1.0), so the shape factor is
+        // exactly the wps factor (1.2); the result is 1.2 × modeReward(mode).
+        const at5 = (mode) => rewardMultiplier(gameWithMode(10, 3, mode), 5);
+        expect(at5('HARD')).toBeCloseTo(1.2 * 1.3, 10);
+        expect(at5('LEGENDARY')).toBeCloseTo(1.2 * 2.2, 10);
+        expect(at5('EASY')).toBeCloseTo(1.2 * 0.8, 10);
+        expect(at5('EPIC')).toBeCloseTo(1.2 * 1.7, 10);
     });
 });
 
@@ -231,29 +256,32 @@ describe('rewardMultiplier — perf arg (DIR-08)', () => {
         }
     });
 
-    test('perf bonus multiplies through on a DEFAULT-shape NORMAL run', () => {
+    test('perf bonus multiplies through on the pinned NORMAL run', () => {
         const game = gameWithMode(10, 3, 'NORMAL');
-        // shape = 1.0, mode = 1.0, so factor === perfBonus alone.
-        expect(rewardMultiplier(game, 5, { flawless: true })).toBeCloseTo(1.25, 10);
-        expect(rewardMultiplier(game, 5, { fastClear: true })).toBeCloseTo(1.15, 10);
+        // 9.11.0 — at wave 5 the pinned run is stage 1 (depth 1.0), shape = 1.2,
+        // mode = 1.0, so the factor === 1.2 × perfBonus.
+        expect(rewardMultiplier(game, 5, { flawless: true })).toBeCloseTo(1.2 * 1.25, 10);
+        expect(rewardMultiplier(game, 5, { fastClear: true })).toBeCloseTo(1.2 * 1.15, 10);
         expect(rewardMultiplier(game, 5, { flawless: true, fastClear: true }))
-            .toBeCloseTo(1.40, 10);
+            .toBeCloseTo(1.2 * 1.40, 10);
     });
 });
 
 describe('rewardMultiplier — all four factors compound (DIR-08)', () => {
-    test('6 wps + HARD + flawless at a deep wave multiplies all four terms', () => {
-        const game = gameWithMode(10, 6, 'HARD'); // 60 waves, 10 stages
-        const wave = 60; // final stage → full stage-depth bonus
+    test('pinned shape + HARD + flawless at the final wave multiplies all four terms', () => {
+        // 9.11.0 — wps override ignored → pinned 10×5. Wave 50 is the final
+        // stage (full depth bonus).
+        const game = gameWithMode(10, 6, 'HARD'); // override ignored → pinned 10×5
+        const wave = 50; // final stage → full stage-depth bonus
         const perf = { flawless: true };
         const expected =
-            wavesPerStageRewardMult(game)        // 1.3 (6 wps)
+            wavesPerStageRewardMult(game)        // 1.2 (pinned wps=5)
             * stageDepthRewardMult(wave, game)   // 1.40 (final stage)
             * modeReward('HARD')                 // 1.3
             * perfBonus(perf);                   // 1.25
         expect(rewardMultiplier(game, wave, perf)).toBeCloseTo(expected, 10);
-        // sanity: numerically 1.3 × 1.4 × 1.3 × 1.25 = 2.9575
-        expect(rewardMultiplier(game, wave, perf)).toBeCloseTo(2.9575, 10);
+        // sanity: numerically 1.2 × 1.4 × 1.3 × 1.25 = 2.73
+        expect(rewardMultiplier(game, wave, perf)).toBeCloseTo(2.73, 10);
         // strictly larger than any single factor alone
         expect(rewardMultiplier(game, wave, perf))
             .toBeGreaterThan(rewardMultiplier(game, wave));

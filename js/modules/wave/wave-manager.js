@@ -769,6 +769,9 @@ function spawnSubWave(idx) {
         }
         const opts = { onScreen: true };
         if (enemyGroup.isBoss && enemyGroup.bossTier) opts.bossTier = enemyGroup.bossTier;
+        // 9.11.0 — ELITE/miniboss spec (isElite wave): thread the flag so
+        // spawnLeveledEnemies spawns these as beefed-up minibosses.
+        if (enemyGroup.elite) opts.elite = true;
         this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count, opts);
     }
     // H2 — guarantee the modular boss on EVERY real stage-final (wave % wps ===
@@ -877,6 +880,8 @@ export function tryAdvanceSubWave() {
             }
             const opts = { onScreen: true };
             if (group.bossTier) opts.bossTier = group.bossTier | 0;
+            // 9.11.0 — ELITE/miniboss spec (isElite wave) — see spawnLeveledEnemies.
+            if (group.elite) opts.elite = true;
             this.spawnLeveledEnemies(group.type, group.count | 0, opts);
             spawnedThisTick = true;
         }
@@ -1124,14 +1129,27 @@ export function spawnLeveledAsteroids(count, opts = {}) {
     }
 }
 
+// 9.11.0 — ELITE/miniboss tuning for the FIXED-campaign ELITE waves
+// (isElite, wave 3 of each block). When a subWave spec carries `elite: true`,
+// EVERY enemy it spawns becomes a beefed-up miniboss: spawned at a higher
+// effective level, ~1.8× HP, ~1.4× size, isMiniBoss tag, and 3× points. This
+// is additive — it only fires when `opts.elite` is set; non-elite spawns are
+// byte-for-byte unchanged.
+export const ELITE_LEVEL_BONUS = 6;
+export const ELITE_HP_MUL = 1.8;
+export const ELITE_SIZE_MUL = 1.4;
+export const ELITE_POINTS_MUL = 3;
+
 export function spawnLeveledEnemies(enemyType, count, opts = {}) {
+    const elite = opts.elite === true;
     // 5.75.0 — mid-wave mini-boss promotion. On non-boss spawns from
     // wave 4 onward, one enemy in the group has a wave-scaled chance of
     // becoming a "mini-boss": 1.7× HP, 1.25× size, distinct visual tag,
     // and triple gold drops on death. Adds an interesting threat spike
     // to the long stretches of regular waves between scripted bosses.
+    // Skipped for ELITE groups — those promote EVERY member below.
     let miniBossIdx = -1;
-    if (!opts.bossTier && enemyType !== 'TITAN' && this.game.currentWave >= 4) {
+    if (!elite && !opts.bossTier && enemyType !== 'TITAN' && this.game.currentWave >= 4) {
         const wave = this.game.currentWave;
         const chance = Math.min(0.45, 0.06 + (wave - 4) * 0.025);
         // Per group, but only one mini per group (so the player still
@@ -1140,6 +1158,11 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
             miniBossIdx = (Math.random() * count) | 0;
         }
     }
+    // ELITE groups spawn at a higher effective level. Stash + temporarily lift
+    // game.enemyLevel so enemy.reset + applyEnemyLevelScaling pick up the bump,
+    // then restore it after the spawn loop (so subsequent groups are unaffected).
+    const baseEnemyLevel = this.game.enemyLevel;
+    if (elite) this.game.enemyLevel = (baseEnemyLevel | 0) + ELITE_LEVEL_BONUS;
 
     // 5.77.0 — collect bosses spawned in this group so we can link
     // their `_bossPair` (tier 2) and shared `_formationCenter`
@@ -1157,7 +1180,17 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
             const sp = this.getRandomSpawnPosition(opts);
             enemy.reset(sp.x, sp.y, enemyType, this.game.enemyLevel, this);
             this.applyEnemyLevelScaling(enemy, opts);
-            if (i === miniBossIdx) {
+            if (elite) {
+                // 9.11.0 — every ELITE-spec member is a beefy miniboss (already
+                // spawned at +ELITE_LEVEL_BONUS level via the lifted enemyLevel).
+                enemy.isMiniBoss = true;
+                enemy.isElite = true;
+                enemy.health *= ELITE_HP_MUL;
+                enemy.maxHealth *= ELITE_HP_MUL;
+                if (typeof enemy.radius === 'number') enemy.radius *= ELITE_SIZE_MUL;
+                if (typeof enemy.baseRadius === 'number') enemy.baseRadius *= ELITE_SIZE_MUL;
+                if (enemy.config) enemy.config.points = (enemy.config.points || 100) * ELITE_POINTS_MUL;
+            } else if (i === miniBossIdx) {
                 enemy.isMiniBoss = true;
                 enemy.health *= 1.7;
                 enemy.maxHealth *= 1.7;
@@ -1172,6 +1205,9 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
             }
         }
     }
+    // Restore the wave's base enemy level after an ELITE group (the lift above
+    // is local to this group's spawns only).
+    if (elite) this.game.enemyLevel = baseEnemyLevel;
     // Link bosses spawned together (tier 2 pair, tier 3 formation,
     // tier 4 both). Only fires when the group spawned ≥ 2 bosses; a
     // solo tier-4 still gets formation seeding but skips pair link.

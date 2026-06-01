@@ -1,9 +1,12 @@
-// RUN-01a — runConfig data model + run-aware wave-helper plumbing.
+// RUN-01a → 9.11.0 — runConfig data model + run-aware wave-helper plumbing.
 //
-// These tests pin the behavior-preservation contract: the single-arg /
-// default-param forms of every helper must equal today's 10 × 3 (= 30
-// wave) campaign, and the new optional params (wavesPerStage / maxWaves)
-// must reshape the math correctly when supplied.
+// 9.11.0 pins the run shape to the FIXED 50-wave campaign (10 blocks × 5
+// waves). getRunConfig / runMaxWaves / runWavesPerStage now IGNORE any
+// stages/wavesPerStage override and always resolve to the canonical 10 × 5
+// campaign (only `mode` is still honored). The underlying stage HELPERS
+// (getStage / getSubWaveIndex / isStageClear / getStageLabel / isBossWave) are
+// still pure, configurable functions — their explicit-wps forms are unchanged;
+// only their single-arg DEFAULT now uses WAVES_PER_STAGE = 5.
 
 import {
     DEFAULT_RUN_CONFIG,
@@ -27,11 +30,11 @@ import {
 } from '../../../js/modules/wave/wave-data.js';
 
 describe('DEFAULT_RUN_CONFIG', () => {
-    test('is the canonical 10 × 3 = 30-wave campaign', () => {
+    test('is the canonical 10 × 5 = 50-wave campaign', () => {
         expect(DEFAULT_RUN_CONFIG.stages).toBe(MAX_STAGES);
         expect(DEFAULT_RUN_CONFIG.wavesPerStage).toBe(WAVES_PER_STAGE);
         expect(DEFAULT_RUN_CONFIG.stages).toBe(10);
-        expect(DEFAULT_RUN_CONFIG.wavesPerStage).toBe(3);
+        expect(DEFAULT_RUN_CONFIG.wavesPerStage).toBe(5);
         expect(DEFAULT_RUN_CONFIG.stages * DEFAULT_RUN_CONFIG.wavesPerStage).toBe(MAX_WAVES);
     });
 
@@ -62,26 +65,21 @@ describe('getRunConfig()', () => {
         expect(getRunConfig({ runConfig: { stages: Infinity, wavesPerStage: 3 } })).toEqual(DEFAULT_RUN_CONFIG);
     });
 
-    test('returns the configured value when present and valid', () => {
-        // DIR-03 — a valid run shape with no mode resolves mode → NORMAL.
+    // 9.11.0 — the run shape is now FIXED. A stages/wavesPerStage override on
+    // runConfig is IGNORED; every run resolves to the canonical 10 × 5 = 50.
+    test('IGNORES a stages/wavesPerStage override — run shape is pinned to 50', () => {
         expect(getRunConfig({ runConfig: { stages: 20, wavesPerStage: 6 } }))
-            .toEqual({ stages: 20, wavesPerStage: 6, mode: 'NORMAL' });
-    });
-
-    test('clamps stages / wavesPerStage to >= 1', () => {
+            .toEqual({ stages: 10, wavesPerStage: 5, mode: 'NORMAL' });
+        expect(getRunConfig({ runConfig: { stages: 100, wavesPerStage: 9 } }))
+            .toEqual({ stages: 10, wavesPerStage: 5, mode: 'NORMAL' });
         expect(getRunConfig({ runConfig: { stages: 0, wavesPerStage: 0 } }))
-            .toEqual({ stages: 1, wavesPerStage: 1, mode: 'NORMAL' });
-        expect(getRunConfig({ runConfig: { stages: -5, wavesPerStage: -2 } }))
-            .toEqual({ stages: 1, wavesPerStage: 1, mode: 'NORMAL' });
-    });
-
-    test('floors fractional values to integers', () => {
+            .toEqual({ stages: 10, wavesPerStage: 5, mode: 'NORMAL' });
         expect(getRunConfig({ runConfig: { stages: 10.9, wavesPerStage: 3.7 } }))
-            .toEqual({ stages: 10, wavesPerStage: 3, mode: 'NORMAL' });
+            .toEqual({ stages: 10, wavesPerStage: 5, mode: 'NORMAL' });
     });
 });
 
-// ── DIR-03 — difficulty MODE on runConfig ─────────────────────────────────
+// ── DIR-03 — difficulty MODE on runConfig (still honored under the fixed run) ─
 describe('getRunConfig() — mode (DIR-03)', () => {
     test('mode is NORMAL when absent or runConfig is invalid', () => {
         expect(getRunConfig().mode).toBe('NORMAL');
@@ -89,9 +87,12 @@ describe('getRunConfig() — mode (DIR-03)', () => {
         expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3 } }).mode).toBe('NORMAL');
     });
 
-    test('keeps a valid mode', () => {
+    test('keeps a valid mode (shape still pinned to 50)', () => {
         for (const m of ['EASY', 'NORMAL', 'HARD', 'EPIC', 'LEGENDARY']) {
-            expect(getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: m } }).mode).toBe(m);
+            const rc = getRunConfig({ runConfig: { stages: 10, wavesPerStage: 3, mode: m } });
+            expect(rc.mode).toBe(m);
+            expect(rc.stages).toBe(MAX_STAGES);
+            expect(rc.wavesPerStage).toBe(WAVES_PER_STAGE);
         }
     });
 
@@ -110,7 +111,7 @@ describe('getRunConfig() — mode (DIR-03)', () => {
 
     test('a valid mode survives even when the run shape is invalid', () => {
         // Mode is resolved independently of stages/wavesPerStage: a valid mode
-        // on a broken shape still yields the default shape + that mode.
+        // on a broken shape still yields the fixed shape + that mode.
         expect(getRunConfig({ runConfig: { stages: 'x', wavesPerStage: 3, mode: 'hard' } }))
             .toEqual({ ...DEFAULT_RUN_CONFIG, mode: 'HARD' });
     });
@@ -132,56 +133,54 @@ describe('getRunMode() (DIR-03)', () => {
 });
 
 describe('runMaxWaves()', () => {
-    test('default game / no runConfig => 30', () => {
-        expect(runMaxWaves()).toBe(30);
-        expect(runMaxWaves({})).toBe(30);
+    test('default game / no runConfig => 50', () => {
+        expect(runMaxWaves()).toBe(50);
+        expect(runMaxWaves({})).toBe(50);
         expect(runMaxWaves(null)).toBe(MAX_WAVES);
     });
 
-    test('= stages × wavesPerStage for configured runs', () => {
-        expect(runMaxWaves({ runConfig: { stages: 20, wavesPerStage: 6 } })).toBe(120);
-        expect(runMaxWaves({ runConfig: { stages: 100, wavesPerStage: 9 } })).toBe(900);
-        expect(runMaxWaves({ runConfig: { stages: 5, wavesPerStage: 4 } })).toBe(20);
-    });
-
-    test('clamped config still yields a positive product', () => {
-        expect(runMaxWaves({ runConfig: { stages: 0, wavesPerStage: 0 } })).toBe(1);
+    test('is pinned to 50 — a stages × wavesPerStage override is ignored', () => {
+        expect(runMaxWaves({ runConfig: { stages: 20, wavesPerStage: 6 } })).toBe(50);
+        expect(runMaxWaves({ runConfig: { stages: 100, wavesPerStage: 9 } })).toBe(50);
+        expect(runMaxWaves({ runConfig: { stages: 5, wavesPerStage: 4 } })).toBe(50);
+        expect(runMaxWaves({ runConfig: { stages: 0, wavesPerStage: 0 } })).toBe(50);
     });
 });
 
 describe('runWavesPerStage()', () => {
-    test('default => 3', () => {
+    test('default => 5', () => {
         expect(runWavesPerStage()).toBe(WAVES_PER_STAGE);
-        expect(runWavesPerStage({})).toBe(3);
+        expect(runWavesPerStage({})).toBe(5);
     });
-    test('reads configured value', () => {
-        expect(runWavesPerStage({ runConfig: { stages: 10, wavesPerStage: 6 } })).toBe(6);
+    test('is pinned to 5 — a configured value is ignored', () => {
+        expect(runWavesPerStage({ runConfig: { stages: 10, wavesPerStage: 6 } })).toBe(5);
+        expect(runWavesPerStage({ runConfig: { stages: 20, wavesPerStage: 3 } })).toBe(5);
     });
 });
 
-// ── Stage helpers — optional wavesPerStage param ──────────────────────────
+// ── Stage helpers — still pure / configurable via explicit wavesPerStage ──────
 
 describe('getStage() optional wavesPerStage', () => {
-    test('single-arg form is identical to the pre-RUN-01a behavior (wps=3)', () => {
+    test('single-arg form uses the default wps=5 (10 stages of 5)', () => {
         expect(getStage(1)).toBe(1);
-        expect(getStage(3)).toBe(1);
-        expect(getStage(4)).toBe(2);
+        expect(getStage(5)).toBe(1);
         expect(getStage(6)).toBe(2);
-        expect(getStage(30)).toBe(10);
+        expect(getStage(10)).toBe(2);
+        expect(getStage(50)).toBe(10);
     });
     test('explicit wavesPerStage reshapes the stage map', () => {
         expect(getStage(6, 6)).toBe(1);   // 6-wave stages: wave 6 is still stage 1
         expect(getStage(7, 6)).toBe(2);
-        expect(getStage(6, 3)).toBe(2);   // == single-arg default
+        expect(getStage(6, 3)).toBe(2);   // 3-wave stages: wave 6 is stage 2
     });
 });
 
 describe('getSubWaveIndex() optional wavesPerStage', () => {
-    test('single-arg form unchanged (1..3)', () => {
+    test('single-arg form uses the default wps=5 (1..5)', () => {
         expect(getSubWaveIndex(1)).toBe(1);
-        expect(getSubWaveIndex(3)).toBe(3);
-        expect(getSubWaveIndex(4)).toBe(1);
-        expect(getSubWaveIndex(6)).toBe(3);
+        expect(getSubWaveIndex(5)).toBe(5);
+        expect(getSubWaveIndex(6)).toBe(1);
+        expect(getSubWaveIndex(10)).toBe(5);
     });
     test('explicit wavesPerStage widens the sub-wave range', () => {
         expect(getSubWaveIndex(6, 6)).toBe(6);
@@ -190,10 +189,10 @@ describe('getSubWaveIndex() optional wavesPerStage', () => {
 });
 
 describe('isStageClear() optional wavesPerStage', () => {
-    test('single-arg form unchanged (every 3rd wave)', () => {
-        expect(isStageClear(3)).toBe(true);
-        expect(isStageClear(6)).toBe(true);
-        expect(isStageClear(30)).toBe(true);
+    test('single-arg form is every 5th wave (default wps=5)', () => {
+        expect(isStageClear(5)).toBe(true);
+        expect(isStageClear(10)).toBe(true);
+        expect(isStageClear(50)).toBe(true);
         expect(isStageClear(1)).toBe(false);
         expect(isStageClear(4)).toBe(false);
         expect(isStageClear(0)).toBe(false);
@@ -206,10 +205,10 @@ describe('isStageClear() optional wavesPerStage', () => {
 });
 
 describe('getStageLabel() optional wavesPerStage', () => {
-    test('single-arg form unchanged', () => {
+    test('single-arg form uses the default wps=5', () => {
         expect(getStageLabel(1)).toBe('1-1');
-        expect(getStageLabel(6)).toBe('2-3');
-        expect(getStageLabel(30)).toBe('10-3');
+        expect(getStageLabel(6)).toBe('2-1');
+        expect(getStageLabel(50)).toBe('10-5');
     });
     test('explicit wavesPerStage relabels', () => {
         expect(getStageLabel(6, 6)).toBe('1-6');
@@ -220,11 +219,11 @@ describe('getStageLabel() optional wavesPerStage', () => {
 // ── isBossWave — optional wavesPerStage param ─────────────────────────────
 
 describe('isBossWave() optional wavesPerStage', () => {
-    test('single-arg form matches today [3,6,9,...,30] for waves 1..30', () => {
+    test('single-arg form matches [5,10,15,…,50] for waves 1..50', () => {
         for (let w = 1; w <= MAX_WAVES; w++) {
             expect(isBossWave(w)).toBe(w % WAVES_PER_STAGE === 0);
         }
-        expect(isBossWave(3)).toBe(true);
+        expect(isBossWave(5)).toBe(true);
         expect(isBossWave(4)).toBe(false);
         expect(isBossWave(0)).toBe(false);
     });

@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.11.0] - 2026-05-31
+
+### Changed
+- **Fixed 50-wave campaign.** Replaced the open-ended/user-configurable run with a single authored 50-wave campaign: 10 blocks of 5 waves each. Per block — waves 1-2 normal, wave 3 an ELITE/miniboss wave, wave 4 a light "cooldown" breather, wave 5 the block's boss. The 10 bosses (Harbinger → … → Prismarch) each appear once, in order, with escalating boss tiers; Prismarch at wave 50 ends the run.
+- The run shape is now pinned (`getRunConfig`/`runMaxWaves`/`runWavesPerStage` ignore stage/waves-per-stage overrides) so every run is exactly waves 1→50.
+
+### Added
+- ELITE waves: `elite`-flagged spawns become beefed-up minibosses (+level, ~1.8× HP, ~1.4× size, 3× points).
+
 ## [9.10.0] - 2026-05-31
 
 ### Added

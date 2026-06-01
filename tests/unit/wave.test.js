@@ -1,5 +1,5 @@
 /**
- * tests/unit/wave.test.js — unit tests for wave-data.js (20-wave campaign).
+ * tests/unit/wave.test.js — unit tests for wave-data.js (fixed 50-wave campaign).
  *
  * Tests getWaveConfig, getEnemyLevel, getAsteroidLevel,
  * getLevelScaledEnemyStats, getLevelScaledAsteroidStats, isBossWave.
@@ -22,7 +22,7 @@ import { MAX_WAVES, BOSS_WAVES } from '../../js/modules/core/constants.js';
 // getWaveConfig()
 // ---------------------------------------------------------------------------
 
-describe('getWaveConfig() – 20-wave campaign', () => {
+describe('getWaveConfig() – 50-wave campaign', () => {
   // 5.75.0 — wave configs now use `subWaves: [[group, ...], ...]`
   // instead of a flat `enemies` array. Tests updated to walk the
   // nested structure.
@@ -36,7 +36,7 @@ describe('getWaveConfig() – 20-wave campaign', () => {
     expect(cfg.subWaves[0][0].type).toBe('HUNTER');
   });
 
-  test('every wave 1-20 returns a valid config with at least one sub-wave', () => {
+  test('every wave 1-50 returns a valid config with at least one sub-wave', () => {
     for (let w = 1; w <= MAX_WAVES; w++) {
       const cfg = getWaveConfig(w);
       expect(cfg).toBeDefined();
@@ -54,17 +54,20 @@ describe('getWaveConfig() – 20-wave campaign', () => {
     }
   });
 
-  test('boss waves are marked isBossWave + bossTier and contain a TITAN with isBoss', () => {
+  test('boss waves are marked isBossWave + bossTier; the boss is spawned by the manager (not embedded)', () => {
+    // 9.11.0 — boss waves no longer embed a TITAN-with-isBoss spec in subWaves.
+    // The wave-manager spawns the real block boss via getStage(wave,5) →
+    // getBossForStage(); the boss-wave subWaves carry only the light escort
+    // adds, so they must NOT contain any isBoss-flagged group.
     for (const w of BOSS_WAVES) {
       const cfg = getWaveConfig(w);
       expect(cfg.isBossWave).toBe(true);
       expect(cfg.bossTier).toBeGreaterThanOrEqual(1);
       expect(cfg.bossTier).toBeLessThanOrEqual(4);
-      // TITAN with isBoss should appear in some sub-wave (typically the last).
       const allGroups = cfg.subWaves.flat();
-      const titan = allGroups.find(e => e.type === 'TITAN' && e.isBoss);
-      expect(titan).toBeDefined();
-      expect(titan.bossTier).toBe(cfg.bossTier);
+      // Escort adds only — no embedded boss spec.
+      expect(allGroups.some(e => e.isBoss)).toBe(false);
+      expect(allGroups.length).toBeGreaterThan(0);
     }
   });
 
@@ -114,9 +117,11 @@ describe('early-game variety front-loading', () => {
     expect(getWaveConfig(1).subWaves[0][0].type).toBe('HUNTER');
   });
 
-  test('DRIFTER debuts by wave 2, TANGERINE by wave 5, WEAVER by wave 8', () => {
+  test('DRIFTER debuts by wave 2, TANGERINE by wave 6, WEAVER by wave 8', () => {
+    // 9.11.0 fixed campaign — TANGERINE debuts in block 2 (wave 6), WEAVER in
+    // block 2 as well (wave 7); both are met well before the end of stage 3.
     expect(typesUpToWave(2).has('DRIFTER')).toBe(true);
-    expect(typesUpToWave(5).has('TANGERINE')).toBe(true);
+    expect(typesUpToWave(6).has('TANGERINE')).toBe(true);
     expect(typesUpToWave(8).has('WEAVER')).toBe(true);
   });
 

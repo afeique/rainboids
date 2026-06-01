@@ -364,12 +364,17 @@ export const GAME_STATES = {
 // Survivor-card economy: 1 free pick per stage clear × 10 stages = 10
 // picks per playthrough (same total budget as the pre-6.1.0 "every 3rd
 // wave" cadence, just renamed and aligned with the boss waves).
-export const MAX_WAVES = 30;
-export const WAVES_PER_STAGE = 3;
+// 9.11.0 — FIXED 50-wave campaign: 10 blocks × 5 waves. Each block is
+// 4 enemy waves + 1 boss-wave finale, escalating, with one of the 10
+// bosses per block in stage order (Harbinger → … → Prismarch finale).
+// Per block: wave 1/2 normal, wave 3 ELITE/miniboss, wave 4 cooldown
+// breather, wave 5 BOSS. The run is no longer user-configurable — see
+// getRunConfig() which pins the shape to this campaign.
+export const MAX_WAVES = 50;
+export const WAVES_PER_STAGE = 5;
 export const MAX_STAGES = MAX_WAVES / WAVES_PER_STAGE; // 10
-// Bosses live on stage finals (was [5,10,15,20,25,30] in 6.0.x).
-// Every stage now ends with a boss; +67% boss density vs pre-6.1.0.
-export const BOSS_WAVES = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30];
+// Bosses live on stage (block) finals: 5, 10, 15, …, 50.
+export const BOSS_WAVES = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
 // Kept as 3 (was 5) so any legacy consumers reading this constant
 // produce sensible defaults under the new cadence.
 export const BOSS_WAVE_INTERVAL = WAVES_PER_STAGE;
@@ -507,22 +512,17 @@ export const DEFAULT_RUN_CONFIG = { stages: MAX_STAGES, wavesPerStage: WAVES_PER
 // run-shape fields are missing/invalid (and vice-versa).
 export function getRunConfig(game) {
     const rc = game && game.runConfig;
-    // Resolve mode first so it can ride on either branch below.
+    // 9.11.0 — the run shape is now FIXED at the authored 50-wave campaign
+    // (MAX_STAGES × WAVES_PER_STAGE = 10 × 5 = 50). The old user-configurable
+    // stages/wavesPerStage override is intentionally IGNORED so every run —
+    // fresh launch, BUILD loadout, or restored CONTINUE save (even an old
+    // 10×3 one) — plays exactly waves 1→50 and ends after the 10th boss.
+    // Only `mode` is still honored from the run config.
     let mode = DEFAULT_MODE;
     if (rc && typeof rc.mode === 'string') {
         const up = rc.mode.toUpperCase();
         if (MODES.includes(up)) mode = up;
     }
-    if (rc
-        && typeof rc.stages === 'number' && isFinite(rc.stages)
-        && typeof rc.wavesPerStage === 'number' && isFinite(rc.wavesPerStage)) {
-        return {
-            stages: Math.max(1, rc.stages | 0),
-            wavesPerStage: Math.max(1, rc.wavesPerStage | 0),
-            mode,
-        };
-    }
-    // Run-shape invalid/absent → default shape, but still honor a valid mode.
     return mode === DEFAULT_MODE
         ? DEFAULT_RUN_CONFIG
         : { ...DEFAULT_RUN_CONFIG, mode };

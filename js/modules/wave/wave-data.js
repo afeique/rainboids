@@ -1,41 +1,33 @@
 // Wave configuration data for enemy and asteroid spawning.
 //
-// 6.1.0 — 30 waves restructured as 10 STAGES × 3 waves. Every stage
-// final (wave 3, 6, 9, …, 30) is a BOSS. Each stage typically
-// introduces a new enemy type, with the boss + escort showcasing the
-// stage's headliners. Meta-goal: 10 survivor-card picks (one per stage
-// clear, free) across the campaign.
+// 9.11.0 — FIXED 50-wave campaign: 10 BLOCKS × 5 waves (a "stage" = a block).
+// Replaces the old user-configurable endless run with a single authored
+// campaign that marches through all 10 bosses, once each, in stage order.
 //
-//   Stage  1 (1-1..1-3)  : First Contact   — HUNTER + WASP, DRIFTER debut; boss Harbinger
-//   Stage  2 (2-1..2-3)  : Iron Wall       — adds GUARDIAN + TANGERINE (bomber); boss Aegis
-//   Stage  3 (3-1..3-3)  : Crossfire       — adds STALKER (sniper) + WEAVER; boss Lumen
-//   Stage  4 (4-1..4-3)  : Twin Iron       — DRIFTER/TANGERINE ramp; LEECH debut
-//   Stage  5 (5-1..5-3)  : Triple Threat   — adds SENTINEL; WRAITHWORM debut
+// Each block b (waves 5b+1 … 5b+5):
+//   wave 1 : normal enemy wave (gentle)
+//   wave 2 : normal enemy wave (a bit bigger)
+//   wave 3 : ELITE / miniboss wave (isElite) — few but MUCH tougher enemies;
+//            `elite: true` specs spawn at +6 level, ~1.8× HP, ~1.4× size,
+//            isMiniBoss + 3× points (see spawnLeveledEnemies).
+//   wave 4 : COOLDOWN wave (isCooldown) — few weak adds + more asteroids; a breather.
+//   wave 5 : BOSS wave (isBossWave) — the block's boss (spawned by the manager
+//            via getStage(wave,5) → getBossForStage) + a couple of light escorts.
 //
-// 6.x — EARLY-ENGAGEMENT pass: enemy variety is front-loaded across stages 1-3
-// so a new player meets a distinct new threat almost every wave (7 types + 3
-// different bosses by wave 9) instead of grinding HUNTER/WASP for three waves.
-// Only "fair" enemies are pulled forward (DRIFTER arc-lightning, TANGERINE
-// mines, WEAVER spiral-laser); the punishing/mechanic-heavy roster (LEECH strip,
-// PHANTOM cloak, DEVOURER absorb, PRISM_MIRROR reflect, NULL_DRONE suppress, …)
-// stays back-loaded so the opening teaches one readable behavior at a time.
-//   Stage  6 (6-1..6-3)  : Iron Quartet    — adds PROWLER (full roster); NULL_DRONE debut
-//   Stage  7 (7-1..7-3)  : Iron Crown      — combined arms, dense; PHANTOM debut
-//   Stage  8 (8-1..8-3)  : The Long Walk   — compounding pressure; DEVOURER + PRISM_MIRROR debut
-//   Stage  9 (9-1..9-3)  : Apocalypse      — peak density; new-type roster at full ramp
-//   Stage 10 (10-1..10-3): The Last Stand  — finale; new-type showcase; 10-3 = FINAL BOSS
+// Boss per block (stage order, from js/modules/enemy/bosses/index.js):
+//    5 → Harbinger    10 → Aegis        15 → Lumen        20 → Gemini
+//   25 → Maelstrom    30 → Hivemother   35 → Iron Throne  40 → Warden Prime
+//   45 → Nullmaw      50 → Prismarch (isFinalBoss — ends the run)
 //
-// New-type roster insertion (non-boss waves only; the live Adaptive
-// Difficulty Director is the safety net for the difficulty shift):
-//   LEECH        (Toxic strip)   : 11(1), 13(2), 22(2), 26(2)
-//   WRAITHWORM   (Volt blink)    : 14(1), 19(2), 25(1)
-//   NULL_DRONE   (Volt suppress) : 17(1), 20(1), 26(1)   — always solo
-//   PHANTOM      (Void cloak)    : 19(1), 23(2), 28(1), 29(1)
-//   DEVOURER     (Void absorb)   : 22(1), 26(1), 28(1)
-//   PRISM_MIRROR (Radiant reflect): 23(1), 28(1)         — count 1 only
-//   CONDUIT_NODE (Volt heal-aura) : 25(1)                — count 1 only; debut
-//   JUGGERNAUT   (Kinetic ram)    : 22(1)                — count 1 only; debut (charge-and-ram bruiser)
-//   THORNBACK    (Kinetic counter): 25(1)                — count 1 only; debut (counter-attack bruiser)
+// bossTier escalates: blocks 1-2 → T1, blocks 3-5 → T2, blocks 6-8 → T3,
+// blocks 9-10 → T4. Enemy roster escalates with depth using only the TEN
+// fully-defined enemy types (see the NOTE inside WAVE_DATA): early blocks lean
+// on the gentle/fair types (HUNTER, WASP, DRIFTER, then GUARDIAN, TANGERINE,
+// WEAVER, STALKER); mid blocks introduce the tougher SENTINEL + PROWLER and
+// the first TITAN-chassis elites; late blocks pile on dense GUARDIAN/SENTINEL/
+// PROWLER mixes with multi-TITAN elite gauntlets. Per-wave difficulty is
+// further carried by the enemy-level / HP / speed curves (getEnemyLevel etc.),
+// which now stretch across the full 50-wave campaign via MAX_WAVES.
 
 import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
@@ -52,256 +44,237 @@ import { isMobile } from '../platform/platform-detect.js';
 // (see wave-manager.spawnLeveledEnemies — the chance is wave-scaled).
 export const WAVE_DATA = {
 
-    // ── Stage 1: First Contact (HUNTER + WASP, then DRIFTER) ──
-    // Wave 1 stays the gentlest possible intro (HUNTER/WASP only). DRIFTER
-    // (arc-lightning, wavy mover) debuts on 1-2 as a single accent — a striking
-    // new look and projectile, but low pressure — eight waves earlier than before.
+    // ══════════════════════════════════════════════════════════════════════
+    // 9.11.0 — FIXED 50-wave campaign: 10 BLOCKS × 5 waves. Each block b
+    // (waves 5b+1 … 5b+5) runs: 1/2 normal · 3 ELITE (isElite — few but tough,
+    // elite:true specs spawn as beefy minibosses) · 4 COOLDOWN (isCooldown —
+    // weak adds + extra asteroids, a breather) · 5 BOSS (isBossWave — the
+    // block's boss via getStage(wave,5)→getBossForStage + light escorts).
+    // Bosses by block (stage order): 5 Harbinger · 10 Aegis · 15 Lumen ·
+    // 20 Gemini · 25 Maelstrom · 30 Hivemother · 35 Iron Throne ·
+    // 40 Warden Prime · 45 Nullmaw · 50 Prismarch (FINAL). The boss itself is
+    // spawned by the manager; the boss-wave subWaves below are the light adds.
+    // bossTier escalates: blocks 1-2 → T1, 3-5 → T2, 6-8 → T3, 9-10 → T4.
+    // ══════════════════════════════════════════════════════════════════════
+
+    // NOTE: only the 10 fully-defined enemy types (those with real entries in
+    // ENEMY_DATA) are used here — HUNTER, WASP, DRIFTER, GUARDIAN, TANGERINE,
+    // STALKER, WEAVER, SENTINEL, PROWLER, TITAN. The ~19 other names in
+    // ENEMY_TYPES have NO config and getEnemyConfig() silently falls back to
+    // HUNTER, so spawning them would just be disguised HUNTERs. Escalation is
+    // carried by COUNTS + which of the real tougher types (GUARDIAN/SENTINEL/
+    // PROWLER/TITAN) appear, plus the per-wave enemy-level / HP / speed curve.
+
+    // ── BLOCK 1 (waves 1-5) — boss: Harbinger (T1) ──
     1: { asteroids: 5, subWaves: [
         [{ type: 'HUNTER', count: 3 }],
         [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }],
     ] },
     2: { asteroids: 5, subWaves: [
         [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
         [{ type: 'WASP', count: 3 }, { type: 'DRIFTER', count: 1 }],
-        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
     ] },
-    // 1-3 BOSS — Harbinger (stage 1): introductory boss, HUNTER/WASP/DRIFTER escort.
-    3: {
-        asteroids: 3, isBossWave: true, bossTier: 1,
-        subWaves: [
-            [{ type: 'HUNTER', count: 3 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
-            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
-        ],
-    },
+    // 1-3 ELITE — a lone armored GUARDIAN miniboss + a couple of HUNTER adds.
+    3: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'GUARDIAN', count: 1, elite: true }, { type: 'HUNTER', count: 2 }],
+    ] },
+    // 1-4 COOLDOWN — a breather.
+    4: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'HUNTER', count: 2 }],
+    ] },
+    // 1-5 BOSS — Harbinger + WASP/DRIFTER escort.
+    5: { asteroids: 2, isBossWave: true, bossTier: 1, subWaves: [
+        [{ type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
+    ] },
 
-    // ── Stage 2: Iron Wall (adds GUARDIAN heavy, then TANGERINE bomber) ──
-    // GUARDIAN (slow armored tank) debuts on 2-1; TANGERINE (mine-laying Bomber —
-    // a new area-denial threat) debuts on 2-2. Both are "fair" reads — no
-    // cloak/strip/reflect tricks — so the player learns one new behavior at a
-    // time while the roster visibly widens.
-    4: { asteroids: 5, subWaves: [
-        [{ type: 'GUARDIAN', count: 2 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
+    // ── BLOCK 2 (waves 6-10) — boss: Aegis (T1) ──
+    6: { asteroids: 5, subWaves: [
+        [{ type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
+        [{ type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }],
     ] },
-    5: { asteroids: 5, subWaves: [
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'TANGERINE', count: 1 }],
-        [{ type: 'WASP', count: 3 }, { type: 'TANGERINE', count: 1 }],
-        [{ type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }, { type: 'TANGERINE', count: 1 }],
-    ] },
-    // 2-3 BOSS — Aegis (stage 2): armored boss with a GUARDIAN/TANGERINE escort.
-    6: {
-        asteroids: 3, isBossWave: true, bossTier: 1,
-        subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'TANGERINE', count: 1 }],
-            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }],
-        ],
-    },
-
-    // ── Stage 3: Crossfire (adds STALKER sniper, then WEAVER) ──
-    // STALKER (charged-laser sniper) debuts on 3-1; WEAVER (spiral-laser spinner)
-    // debuts on 3-2. By the end of Stage 3 the player has met SEVEN distinct enemy
-    // types (HUNTER/WASP/DRIFTER/GUARDIAN/TANGERINE/STALKER/WEAVER) and three
-    // different bosses (Harbinger/Aegis/Lumen) — vs. the old three-types-by-wave-8
-    // opening.
     7: { asteroids: 5, subWaves: [
-        [{ type: 'STALKER', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'DRIFTER', count: 1 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 1 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'WASP', count: 2 }],
     ] },
-    8: { asteroids: 5, subWaves: [
-        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 1 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 1 }, { type: 'GUARDIAN', count: 2 }],
+    // 2-3 ELITE — a fast PROWLER miniboss harasses behind a WASP screen.
+    8: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'PROWLER', count: 1, elite: true }, { type: 'WASP', count: 3 }],
     ] },
-    // 3-3 BOSS — Lumen (stage 3): TITAN T2 with a STALKER/WEAVER escort.
-    9: {
-        asteroids: 3, isBossWave: true, bossTier: 2,
-        subWaves: [
-            [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }],
-            [{ type: 'TITAN', count: 1, isBoss: true, bossTier: 2 }, { type: 'STALKER', count: 2 }, { type: 'HUNTER', count: 2 }],
-        ],
-    },
+    9: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'WASP', count: 3 }],
+    ] },
+    // 2-5 BOSS — Aegis + GUARDIAN/TANGERINE escort.
+    10: { asteroids: 2, isBossWave: true, bossTier: 1, subWaves: [
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'TANGERINE', count: 1 }],
+    ] },
 
-    // ── Stage 4: Twin Iron (adds DRIFTER + TANGERINE; LEECH debut) ──
-    // 11-3 introduces the LEECH (Toxic harrier) as a 1-count accent — a
-    // low-HP nuisance that strips player buffs. It debuts here in the
-    // toxic-flavored stage (alongside PLAGUEBEARER) before ramping later.
-    10: { asteroids: 4, subWaves: [
-        [{ type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'CINDER', count: 2 }],
-        [{ type: 'DRIFTER', count: 2 }, { type: 'ASHEN_DETONATOR', count: 2 }, { type: 'HUNTER', count: 1 }],
-    ] },
+    // ── BLOCK 3 (waves 11-15) — boss: Lumen (T2). Snipers + spinners. ──
     11: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 2 }, { type: 'DRIFTER', count: 2 }],
-        [{ type: 'TANGERINE', count: 2 }, { type: 'CINDER', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'TESLA_WRAITH', count: 2 }, { type: 'PLAGUEBEARER', count: 1 }, { type: 'LEECH', count: 1 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 1 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 2 }],
     ] },
-    // 4-3 BOSS — Twin Iron: 2× TITAN T2.
-    12: {
-        asteroids: 3, isBossWave: true, bossTier: 2,
-        subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }, { type: 'WASP', count: 2 }],
-            [{ type: 'TITAN', count: 2, isBoss: true, bossTier: 2 }, { type: 'STALKER', count: 2 }, { type: 'TANGERINE', count: 1 }],
-        ],
-    },
+    12: { asteroids: 4, subWaves: [
+        [{ type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 1 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'GUARDIAN', count: 1 }],
+    ] },
+    // 3-3 ELITE — a SENTINEL miniboss anchors a STALKER firing line.
+    13: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'SENTINEL', count: 1, elite: true }, { type: 'STALKER', count: 2 }],
+    ] },
+    14: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'DRIFTER', count: 2 }, { type: 'WASP', count: 1 }],
+    ] },
+    // 3-5 BOSS — Lumen + STALKER/WEAVER escort.
+    15: { asteroids: 2, isBossWave: true, bossTier: 2, subWaves: [
+        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 1 }],
+    ] },
 
-    // ── Stage 5: Triple Threat (adds WEAVER + SENTINEL; LEECH ramps, WRAITHWORM debut) ──
-    // LEECH (Toxic) steps up to 2 here. WRAITHWORM (Volt blink-burrow)
-    // makes its first appearance on 14-3 as a single accent — it warps
-    // around the field, so it shows up sparingly before ramping in Stage 7+.
-    13: { asteroids: 4, subWaves: [
-        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 3 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'GLACIER', count: 2 }, { type: 'STALKER', count: 1 }, { type: 'LEECH', count: 2 }],
-    ] },
-    14: { asteroids: 4, subWaves: [
-        [{ type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'GLACIER', count: 2 }, { type: 'WEAVER', count: 1 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'FROST_LANCE', count: 2 }, { type: 'WEAVER', count: 1 }, { type: 'WRAITHWORM', count: 1 }],
-    ] },
-    // 5-3 BOSS — Triple Threat: 3× TITAN T3.
-    15: {
-        asteroids: 2, isBossWave: true, bossTier: 3,
-        subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 1 }],
-            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 1 }],
-        ],
-    },
-
-    // ── Stage 6: Iron Quartet (adds PROWLER — full roster; NULL_DRONE debut) ──
-    // NULL_DRONE (Volt suppress-aura) debuts on 17-3 as a SINGLE escort —
-    // its aura damps the player's fire rate, so it's introduced one at a
-    // time and always solo, never stacked. Pair it with the support-style
-    // units (HYDRA/WARDEN) that already anchor this stage.
+    // ── BLOCK 4 (waves 16-20) — boss: Gemini (T2). Heavier mixes. ──
     16: { asteroids: 4, subWaves: [
-        [{ type: 'PROWLER', count: 2 }, { type: 'HUNTER', count: 3 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'SPORE_CARRIER', count: 1 }],
-        [{ type: 'WARDEN', count: 1 }, { type: 'PROWLER', count: 1 }, { type: 'GUARDIAN', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
+        [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 2 }],
     ] },
     17: { asteroids: 4, subWaves: [
-        [{ type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'HYDRA', count: 1 }, { type: 'NULL_DRONE', count: 1 }, { type: 'WASP', count: 2 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'TANGERINE', count: 2 }],
     ] },
-    // 6-3 BOSS — Iron Quartet: 3× TITAN T3 + PROWLER escort.
-    18: {
-        asteroids: 2, isBossWave: true, bossTier: 3,
-        subWaves: [
-            [{ type: 'PROWLER', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'WASP', count: 2 }],
-            [{ type: 'TITAN', count: 3, isBoss: true, bossTier: 3 }, { type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
-        ],
-    },
+    // 4-3 ELITE — twin GUARDIAN minibosses behind a STALKER line.
+    18: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'GUARDIAN', count: 2, elite: true }, { type: 'STALKER', count: 2 }],
+    ] },
+    19: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'WASP', count: 2 }, { type: 'HUNTER', count: 2 }],
+    ] },
+    // 4-5 BOSS — Gemini + GUARDIAN/SENTINEL escort.
+    20: { asteroids: 2, isBossWave: true, bossTier: 2, subWaves: [
+        [{ type: 'GUARDIAN', count: 1 }, { type: 'SENTINEL', count: 1 }],
+    ] },
 
-    // ── Stage 7: Iron Crown (combined arms, dense; PHANTOM debut, WRAITHWORM/NULL_DRONE ramp) ──
-    // PHANTOM (Void cloak) makes its first appearance on 19-3 as a single
-    // accent — it phases off auto-aim/homing, so it slips in among the
-    // dense roster. WRAITHWORM steps up to 2 (mid-wave). NULL_DRONE
-    // reappears solo on 20-2 to keep the suppress pressure occasional.
-    19: { asteroids: 4, subWaves: [
-        [{ type: 'HUNTER', count: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'LUMEN_DRONE', count: 1 }, { type: 'WRAITHWORM', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'PHANTOM', count: 1 }, { type: 'TANGERINE', count: 1 }],
+    // ── BLOCK 5 (waves 21-25) — boss: Maelstrom (T2). Predators + snipers. ──
+    21: { asteroids: 4, subWaves: [
+        [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 1 }],
+        [{ type: 'TANGERINE', count: 2 }, { type: 'WEAVER', count: 1 }],
     ] },
-    20: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WASP', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'NULL_DRONE', count: 1 }, { type: 'HUNTER', count: 1 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }, { type: 'DRIFTER', count: 2 }],
-    ] },
-    // 7-3 BOSS — Iron Crown: 4× TITAN T4 + STALKER escort.
-    21: {
-        asteroids: 2, isBossWave: true, bossTier: 4,
-        subWaves: [
-            [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WEAVER', count: 1 }],
-            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'STALKER', count: 2 }, { type: 'SENTINEL', count: 2 }],
-        ],
-    },
-
-    // ── Stage 8: The Long Walk (compounding pressure; DEVOURER + PRISM_MIRROR debut) ──
-    // DEVOURER (Void projectile-absorb) debuts on 22-3 as a single accent —
-    // it eats incoming shots, rewarding repositioning. LEECH ramps to 2
-    // here. PRISM_MIRROR (Radiant reflect) makes its FIRST appearance on
-    // 23-3 as a single unit only — reflection is potent, so it stays at 1.
-    // PHANTOM steps up to 2 (cloak pressure in the late game). JUGGERNAUT
-    // (Kinetic charge-and-ram bruiser) DEBUTS on 22-1 as a single accent
-    // among the Kinetic-flavored TANGERINE/GUARDIAN/HUNTER opener — a
-    // read-the-tell threat that telegraphs a lethal charge.
     22: { asteroids: 4, subWaves: [
-        [{ type: 'TANGERINE', count: 2 }, { type: 'GUARDIAN', count: 2 }, { type: 'HUNTER', count: 2 }, { type: 'JUGGERNAUT', count: 1 }],
-        [{ type: 'WEAVER', count: 2 }, { type: 'DRIFTER', count: 2 }, { type: 'LEECH', count: 2 }],
-        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'DEVOURER', count: 1 }, { type: 'WASP', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 2 }],
+        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 1 }],
     ] },
-    23: { asteroids: 4, subWaves: [
-        [{ type: 'HUNTER', count: 5 }, { type: 'STALKER', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'PHANTOM', count: 2 }],
-        [{ type: 'GUARDIAN', count: 3 }, { type: 'PRISM_MIRROR', count: 1 }, { type: 'DRIFTER', count: 1 }],
+    // 5-3 ELITE — a TITAN-chassis miniboss flanked by PROWLER escorts.
+    23: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'TITAN', count: 1, elite: true }, { type: 'PROWLER', count: 2 }],
     ] },
-    // 8-3 BOSS — Iron Quintet: 4× TITAN T4 + TANGERINE.
-    24: {
-        asteroids: 2, isBossWave: true, bossTier: 4,
-        subWaves: [
-            [{ type: 'TANGERINE', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 2 }],
-            [{ type: 'TITAN', count: 4, isBoss: true, bossTier: 4 }, { type: 'TANGERINE', count: 2 }, { type: 'PROWLER', count: 2 }],
-        ],
-    },
+    24: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'HUNTER', count: 2 }, { type: 'DRIFTER', count: 1 }],
+    ] },
+    // 5-5 BOSS — Maelstrom + PROWLER/SENTINEL escort.
+    25: { asteroids: 2, isBossWave: true, bossTier: 2, subWaves: [
+        [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 1 }],
+    ] },
 
-    // ── Stage 9: Apocalypse (peak density; new-type roster at full ramp; CONDUIT_NODE debut) ──
-    // The new types reach their late-game presence here: WRAITHWORM
-    // (blink) on 25-2, then DEVOURER (absorb) + NULL_DRONE (suppress) +
-    // LEECH (strip) layered across 26. Counts stay 1-2 each — the
-    // Adaptive Difficulty Director carries the scaling — but every new
-    // mechanic is now live in the player's face at peak density.
-    // CONDUIT_NODE (Volt HEAL-aura support) makes its FIRST appearance on
-    // 25-2 as a SINGLE accent — it sits among the Volt-flavored WRAITHWORM
-    // and a beefy SENTINEL/PROWLER escort whose HP its aura can meaningfully
-    // mend, so killing the node first becomes the priority. Count 1 only.
-    // THORNBACK (Kinetic counter-attack bruiser) DEBUTS on 25-1 as a single
-    // accent among the Kinetic-flavored STALKER/GUARDIAN/WASP opener — a
-    // punish-point-blank threat that rewards measured fire from range. Count 1.
-    25: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 2 }, { type: 'THORNBACK', count: 1 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 2 }, { type: 'WRAITHWORM', count: 1 }, { type: 'CONDUIT_NODE', count: 1 }],
-        [{ type: 'TANGERINE', count: 3 }, { type: 'DRIFTER', count: 2 }, { type: 'HUNTER', count: 3 }],
-    ] },
+    // ── BLOCK 6 (waves 26-30) — boss: Hivemother (T3). Dense combined arms. ──
     26: { asteroids: 4, subWaves: [
-        [{ type: 'PROWLER', count: 3 }, { type: 'NULL_DRONE', count: 1 }, { type: 'TANGERINE', count: 2 }],
-        [{ type: 'WEAVER', count: 3 }, { type: 'LEECH', count: 2 }, { type: 'GUARDIAN', count: 2 }],
-        [{ type: 'HUNTER', count: 4 }, { type: 'DEVOURER', count: 1 }, { type: 'DRIFTER', count: 2 }],
+        [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }],
     ] },
-    // 9-3 BOSS — Iron Tide: 5× TITAN T4 + WEAVER escort.
-    27: {
-        asteroids: 2, isBossWave: true, bossTier: 4,
-        subWaves: [
-            [{ type: 'WEAVER', count: 3 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }],
-            [{ type: 'TITAN', count: 5, isBoss: true, bossTier: 4 }, { type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 2 }],
-        ],
-    },
+    27: { asteroids: 4, subWaves: [
+        [{ type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 2 }],
+        [{ type: 'WEAVER', count: 3 }, { type: 'TANGERINE', count: 2 }],
+    ] },
+    // 6-3 ELITE — a SENTINEL+GUARDIAN miniboss pair shielded by a WASP swarm.
+    28: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'SENTINEL', count: 1, elite: true }, { type: 'GUARDIAN', count: 1, elite: true }, { type: 'WASP', count: 3 }],
+    ] },
+    29: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'WASP', count: 3 }],
+    ] },
+    // 6-5 BOSS — Hivemother + SENTINEL/WEAVER escort.
+    30: { asteroids: 2, isBossWave: true, bossTier: 3, subWaves: [
+        [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 1 }],
+    ] },
 
-    // ── Stage 10: The Last Stand (finale; new-type showcase) ──
-    // The finale waves showcase the new mechanics one last time before the
-    // final boss: DEVOURER + PHANTOM on 28, a second (and final) lone
-    // PRISM_MIRROR on 28-3, and a single PHANTOM cloaker escorting the
-    // 29-3 TITAN mini-boss. Reflection stays at count 1 throughout the run.
-    28: { asteroids: 4, subWaves: [
-        [{ type: 'STALKER', count: 3 }, { type: 'GUARDIAN', count: 3 }, { type: 'DEVOURER', count: 1 }, { type: 'WASP', count: 2 }],
-        [{ type: 'TANGERINE', count: 3 }, { type: 'PHANTOM', count: 1 }, { type: 'HUNTER', count: 2 }],
-        [{ type: 'SENTINEL', count: 3 }, { type: 'WEAVER', count: 2 }, { type: 'PRISM_MIRROR', count: 1 }, { type: 'DRIFTER', count: 2 }],
+    // ── BLOCK 7 (waves 31-35) — boss: Iron Throne (T3). Predator packs. ──
+    31: { asteroids: 4, subWaves: [
+        [{ type: 'PROWLER', count: 3 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'WEAVER', count: 2 }],
     ] },
-    29: { asteroids: 4, subWaves: [
-        [{ type: 'HUNTER', count: 4 }, { type: 'GUARDIAN', count: 3 }, { type: 'WASP', count: 3 }],
-        [{ type: 'STALKER', count: 3 }, { type: 'WEAVER', count: 3 }, { type: 'PROWLER', count: 2 }],
-        [{ type: 'TITAN', count: 1 }, { type: 'SENTINEL', count: 2 }, { type: 'PHANTOM', count: 1 }, { type: 'DRIFTER', count: 2 }],
+    32: { asteroids: 4, subWaves: [
+        [{ type: 'PROWLER', count: 3 }, { type: 'SENTINEL', count: 2 }],
+        [{ type: 'STALKER', count: 3 }, { type: 'TANGERINE', count: 2 }],
     ] },
-    // 10-3 FINAL BOSS — The Last Stand: 5× TITAN T4 + full escort.
-    30: {
-        asteroids: 2, isBossWave: true, bossTier: 4, isFinalBoss: true,
-        subWaves: [
-            [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }],
-            [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }, { type: 'TANGERINE', count: 2 }],
-            [{ type: 'TITAN', count: 5, isBoss: true, bossTier: 4 }, { type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }, { type: 'STALKER', count: 2 }, { type: 'PROWLER', count: 1 }],
-        ],
-    },
+    // 7-3 ELITE — a PROWLER+SENTINEL miniboss pair behind a STALKER line.
+    33: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'PROWLER', count: 1, elite: true }, { type: 'SENTINEL', count: 1, elite: true }, { type: 'STALKER', count: 2 }],
+    ] },
+    34: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
+    ] },
+    // 7-5 BOSS — Iron Throne + PROWLER/GUARDIAN escort.
+    35: { asteroids: 2, isBossWave: true, bossTier: 3, subWaves: [
+        [{ type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 1 }],
+    ] },
+
+    // ── BLOCK 8 (waves 36-40) — boss: Warden Prime (T3). Peak density. ──
+    36: { asteroids: 4, subWaves: [
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }],
+        [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }],
+    ] },
+    37: { asteroids: 4, subWaves: [
+        [{ type: 'SENTINEL', count: 3 }, { type: 'STALKER', count: 2 }],
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'TANGERINE', count: 2 }],
+    ] },
+    // 8-3 ELITE — a lone TITAN miniboss walled by GUARDIANs.
+    38: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'TITAN', count: 1, elite: true }, { type: 'GUARDIAN', count: 2 }],
+    ] },
+    39: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 1 }],
+    ] },
+    // 8-5 BOSS — Warden Prime + SENTINEL/PROWLER escort.
+    40: { asteroids: 2, isBossWave: true, bossTier: 3, subWaves: [
+        [{ type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 1 }],
+    ] },
+
+    // ── BLOCK 9 (waves 41-45) — boss: Nullmaw (T4). Heavy gauntlet. ──
+    41: { asteroids: 4, subWaves: [
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'PROWLER', count: 2 }],
+        [{ type: 'SENTINEL', count: 3 }, { type: 'WEAVER', count: 2 }],
+    ] },
+    42: { asteroids: 4, subWaves: [
+        [{ type: 'PROWLER', count: 3 }, { type: 'SENTINEL', count: 2 }],
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'STALKER', count: 3 }],
+    ] },
+    // 9-3 ELITE — twin TITAN minibosses amid a GUARDIAN wall.
+    43: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'TITAN', count: 2, elite: true }, { type: 'GUARDIAN', count: 2 }],
+    ] },
+    44: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'WASP', count: 3 }, { type: 'HUNTER', count: 1 }],
+    ] },
+    // 9-5 BOSS — Nullmaw + GUARDIAN/SENTINEL escort.
+    45: { asteroids: 2, isBossWave: true, bossTier: 4, subWaves: [
+        [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }],
+    ] },
+
+    // ── BLOCK 10 (waves 46-50) — boss: Prismarch (T4, FINAL). The last stand. ──
+    46: { asteroids: 4, subWaves: [
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 3 }],
+        [{ type: 'PROWLER', count: 3 }, { type: 'STALKER', count: 2 }],
+    ] },
+    47: { asteroids: 4, subWaves: [
+        [{ type: 'SENTINEL', count: 3 }, { type: 'PROWLER', count: 3 }],
+        [{ type: 'GUARDIAN', count: 3 }, { type: 'WEAVER', count: 3 }],
+    ] },
+    // 10-3 ELITE — a double-TITAN gauntlet behind a PROWLER pack.
+    48: { asteroids: 3, isElite: true, subWaves: [
+        [{ type: 'TITAN', count: 2, elite: true }, { type: 'PROWLER', count: 3 }],
+    ] },
+    49: { asteroids: 5, isCooldown: true, subWaves: [
+        [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 1 }],
+    ] },
+    // 10-5 FINAL BOSS — Prismarch + GUARDIAN/SENTINEL/PROWLER escort.
+    50: { asteroids: 2, isBossWave: true, bossTier: 4, isFinalBoss: true, subWaves: [
+        [{ type: 'GUARDIAN', count: 1 }, { type: 'SENTINEL', count: 1 }, { type: 'PROWLER', count: 1 }],
+    ] },
 };
 
 // Helper function to get wave configuration. Past MAX_WAVES we just clamp
@@ -494,36 +467,66 @@ export function getEnemyBulletSpeedMultiplier(waveNumber, maxWaves = MAX_WAVES) 
 // Stage finals (3, 6, 9, 12, ...) call out the boss; mid-stage waves
 // (1-1 / 1-2 / 2-1 / 2-2 / etc.) get pithy combat one-liners.
 export const WAVE_SUBTITLES = {
+    // ── BLOCK 1 → Harbinger ──
     1:  "Don't worry, they die easy.",
     2:  "Arc-lightning inbound — meet the Drifter.",
-    3:  "BOSS — Iron Scout. Aim for the bolts.",
-    4:  "Heavies on deck.",
-    5:  "Bombs away — mind the Bomber's mines.",
-    6:  "BOSS — Iron Sentinel. Walking armor.",
-    7:  "Sniper line. Don't stand still.",
-    8:  "Weavers spinning up. Keep moving.",
-    9:  "BOSS — Iron Vanguard. Bring a hammer.",
-    10: "Stragglers and squadrons.",
-    11: "Heavy weather. Bring a coat.",
-    12: "BOSS — Twin Iron. Doubled, redoubled.",
-    13: "Storms in space — who knew?",
-    14: "Defense wall. Bring a hammer.",
-    15: "BOSS — Triple Threat. Three. Of. Them.",
-    16: "Predators inbound. Pack hunters.",
-    17: "All-star roster. They're showing off.",
-    18: "BOSS — Iron Quartet. Four for the price of three.",
-    19: "Combined arms — every type, every angle.",
-    20: "Bullet hell sample platter.",
-    21: "BOSS — Iron Crown. The throne is overdue.",
-    22: "Aftershocks. They aren't done.",
-    23: "The walls are closing in.",
-    24: "BOSS — Iron Quintet. Five-tier salute.",
-    25: "Apocalypse. Light at the end is a missile.",
-    26: "There is no off-switch.",
-    27: "BOSS — Iron Tide. Endless onslaught.",
-    28: "Edge of doom. One more push.",
-    29: "Final approach. Steady hands.",
-    30: "FINAL BOSS — The Last Stand.",
+    3:  "ELITE — armored heavy. Crack the shell.",
+    4:  "Catch your breath.",
+    5:  "BOSS — the Harbinger arrives.",
+    // ── BLOCK 2 → Aegis ──
+    6:  "Bombs away — mind the Bomber's mines.",
+    7:  "Weavers spinning up. Keep moving.",
+    8:  "ELITE — a Prowler runs you down.",
+    9:  "Easy does it.",
+    10: "BOSS — Aegis, the walking wall.",
+    // ── BLOCK 3 → Lumen ──
+    11: "Sniper line. Don't stand still.",
+    12: "Crossfire — every angle covered.",
+    13: "ELITE — a Sentinel digs in.",
+    14: "A quiet moment.",
+    15: "BOSS — Lumen lights you up.",
+    // ── BLOCK 4 → Gemini ──
+    16: "Heavies and spinners. Keep moving.",
+    17: "The wall thickens.",
+    18: "ELITE — twin heavies bear down.",
+    19: "Breathe.",
+    20: "BOSS — Gemini, doubled and redoubled.",
+    // ── BLOCK 5 → Maelstrom ──
+    21: "Predators on the prowl.",
+    22: "Pressure's building.",
+    23: "ELITE — a Titan-class brute.",
+    24: "Eye of the storm.",
+    25: "BOSS — the Maelstrom churns.",
+    // ── BLOCK 6 → Hivemother ──
+    26: "Combined arms — every angle.",
+    27: "It keeps coming.",
+    28: "ELITE — a heavy pair anchors the swarm.",
+    29: "Clear the lungs.",
+    30: "BOSS — the Hivemother broods.",
+    // ── BLOCK 7 → Iron Throne ──
+    31: "Predator packs. Stay mobile.",
+    32: "They're flanking.",
+    33: "ELITE — a predator-sentinel duo.",
+    34: "Steady hands.",
+    35: "BOSS — the Iron Throne holds.",
+    // ── BLOCK 8 → Warden Prime ──
+    36: "Peak density. Pick your shots.",
+    37: "Walls of iron.",
+    38: "ELITE — a lone Titan, walled in.",
+    39: "Catch a breath.",
+    40: "BOSS — Warden Prime stands guard.",
+    // ── BLOCK 9 → Nullmaw ──
+    41: "The gauntlet begins.",
+    42: "No safe lanes.",
+    43: "ELITE — twin Titans inbound.",
+    44: "Almost there.",
+    45: "BOSS — the Nullmaw opens wide.",
+    // ── BLOCK 10 → Prismarch (FINAL) ──
+    46: "The last stand. No more lessons.",
+    47: "Edge of doom. One more push.",
+    48: "ELITE — twin Titans block the way.",
+    49: "Final approach. Steady hands.",
+    50: "FINAL BOSS — the Prismarch awaits.",
 };
 
 // Generic subtitles, only used if WAVE_SUBTITLES is missing an entry.

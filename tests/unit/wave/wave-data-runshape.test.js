@@ -1,19 +1,22 @@
 /**
- * tests/unit/wave/wave-data-runshape.test.js — H2 (Bug-Pass 2026-05-25)
+ * tests/unit/wave/wave-data-runshape.test.js
  *
- * Pins the non-default-run-shape fixes for getWaveConfig + the stage-final
- * boss marker:
+ * Pins the non-default-run-shape invariants for getWaveConfig + the stage-final
+ * boss marker, updated for the fixed 50-wave campaign (10 boss blocks × 5
+ * waves). The campaign shape itself (block roles, boss tiers, finale) is pinned
+ * by campaign-50.test.js; this file pins the EDGE behaviour:
  *
- *   1. getWaveConfig past MAX_WAVES (30) no longer falls back to wave-1's
- *      trivial 3-HUNTER content. It CYCLES the authored 30-wave pattern, so a
- *      long run (stages > 10) keeps varied, escalating GROUP content. Waves
- *      ≤ 30 are byte-for-byte unchanged.
+ *   1. getWaveConfig past MAX_WAVES (50) does NOT fall back to wave-1's trivial
+ *      opener. It CYCLES the authored 50-wave pattern (mod 50), so an
+ *      endless/debug caller keeps varied, escalating content. On desktop both
+ *      in-range and cycled waves return the authored entry BY REFERENCE (no
+ *      defensive copy); only the mobile path clones to thin escort counts.
  *
  *   2. isBossWave(wave, wps) is the run-aware stage-final marker. For a
  *      non-default wps (6), the stage-finals move to 6, 12, 18, … — and those
- *      waves are boss-eligible while the old fixed 3/6/9 table positions are
- *      NOT (wave 3 is mid-stage when wps=6). Combined with the wave-manager
- *      spawn-path fix, this is what actually drives the boss spawn.
+ *      waves are boss-eligible while the default wps=5 positions are NOT (wave 5
+ *      is mid-stage when wps=6). Combined with the wave-manager spawn-path, this
+ *      is what actually drives the boss spawn.
  */
 
 // Browser shims — must happen before any game module import (getWaveConfig
@@ -52,56 +55,68 @@ import { _resetUrlOverrideForTests } from '../../../js/modules/platform/platform
 beforeEach(() => { _resetUrlOverrideForTests(false); });
 afterEach(() => { _resetUrlOverrideForTests(null); });
 
-describe('getWaveConfig — default (≤ MAX_WAVES) is unchanged', () => {
-    test('waves 1..30 return their authored WAVE_DATA entry verbatim', () => {
+describe('getWaveConfig — within the authored campaign (≤ MAX_WAVES)', () => {
+    test('waves 1..MAX_WAVES return a deep-equal copy of their authored entry', () => {
         for (let w = 1; w <= MAX_WAVES; w++) {
-            expect(getWaveConfig(w)).toBe(WAVE_DATA[w]);
+            expect(getWaveConfig(w)).toEqual(WAVE_DATA[w]);
         }
     });
 
-    test('wave 30 is the authored finale; past it the run cycles (maxWaves=30)', () => {
-        // Wave 30 returns its authored config by reference. Past MAX the run
-        // CYCLES the authored 30-wave pattern (it does NOT clamp to wave 30):
-        // wave 35 → authored wave 5 ((35-1)%30+1), as a fresh deep-equal object,
-        // so compare by value not identity.
-        expect(getWaveConfig(30, 30)).toBe(WAVE_DATA[30]);
-        expect(getWaveConfig(35, 30)).toEqual(WAVE_DATA[5]);
+    test('on desktop getWaveConfig returns the authored entry by reference (in-range AND cycled)', () => {
+        // 9.11.0 — on desktop, getWaveConfig does NOT defensively copy: an
+        // in-range wave returns the shared authored entry, and a past-MAX wave
+        // returns the cycled authored entry — both by REFERENCE. (Only the mobile
+        // path clones, to thin escort counts.) Callers treat these as read-only.
+        expect(getWaveConfig(1)).toBe(WAVE_DATA[1]);
+        // wave 51 cycles to authored wave 1 ((51-1)%50+1) and is the SAME object.
+        expect(getWaveConfig(51, 5000)).toBe(WAVE_DATA[1]);
+        // wave 55 cycles to authored wave 5 (a boss wave) — also by reference.
+        expect(getWaveConfig(55, 5000)).toBe(WAVE_DATA[5]);
+    });
+
+    test('wave 50 is the authored finale (final boss); past it the run cycles', () => {
+        expect(getWaveConfig(50, 50)).toEqual(WAVE_DATA[50]);
+        expect(WAVE_DATA[50].isFinalBoss).toBe(true);
+        // Past MAX the run CYCLES (it does NOT clamp to the finale):
+        // wave 55 → authored wave 5 ((55-1)%50+1).
+        expect(getWaveConfig(55, 50)).toEqual(WAVE_DATA[5]);
     });
 });
 
 describe('getWaveConfig — past MAX_WAVES synthesizes by CYCLING (not wave-1 fallback)', () => {
-    // A long run needs a maxWaves big enough that the wave isn't clamped to 30.
-    const LONG = 900; // e.g. 100 stages × 9 wps
+    // A long run needs a maxWaves big enough that the wave isn't clamped.
+    const LONG = 5000;
 
-    // Cycled configs are fresh deep-equal copies, not the same reference, so
-    // every past-MAX assertion compares by VALUE (.toEqual), not identity.
-    test('wave 31 cycles to WAVE_DATA[1] (cycle wraps at 30)', () => {
-        expect(getWaveConfig(31, LONG)).toEqual(WAVE_DATA[1]);
+    // Past-MAX waves cycle the authored 1..50 pattern. On desktop the cycled
+    // config is the authored entry BY REFERENCE; these assertions compare by
+    // VALUE (.toEqual) since that holds for both the desktop (ref) and mobile
+    // (thinned copy) paths.
+    test('wave 51 cycles to WAVE_DATA[1] (cycle wraps at 50)', () => {
+        expect(getWaveConfig(51, LONG)).toEqual(WAVE_DATA[1]);
     });
 
-    test('getWaveConfig(33) ≈ WAVE_DATA[3] shape (NOT trivial wave-1 content)', () => {
-        const cfg = getWaveConfig(33, LONG);
-        expect(cfg).toEqual(WAVE_DATA[3]);
-        // And it is decidedly NOT the trivial wave-1 content — the old bug
-        // returned WAVE_DATA[1] (a non-boss 3-HUNTER opener) for every wave>30.
+    test('getWaveConfig(55) ≈ WAVE_DATA[5] shape — an authored BOSS wave', () => {
+        const cfg = getWaveConfig(55, LONG);
+        expect(cfg).toEqual(WAVE_DATA[5]);
+        // And it is decidedly NOT the trivial wave-1 opener.
         expect(cfg).not.toEqual(WAVE_DATA[1]);
-        // WAVE_DATA[3] is an authored boss wave; wave-1 carries no boss marker.
-        expect(WAVE_DATA[3].isBossWave).toBe(true);
+        // WAVE_DATA[5] is an authored boss wave; wave-1 carries no boss marker.
+        expect(WAVE_DATA[5].isBossWave).toBe(true);
         expect(WAVE_DATA[1].isBossWave).toBeUndefined();
     });
 
-    test('the cycle maps wave (30k + r) → WAVE_DATA[r] across several laps', () => {
+    test('the cycle maps wave (50k + r) → WAVE_DATA[r] across several laps', () => {
         for (const [w, key] of [
-            [32, 2], [45, 15], [60, 30], [61, 1], [90, 30], [91, 1], [123, 3],
+            [52, 2], [55, 5], [100, 50], [101, 1], [150, 50], [151, 1], [203, 3],
         ]) {
             expect(getWaveConfig(w, LONG)).toEqual(WAVE_DATA[key]);
         }
     });
 
-    test('past-30 waves are NOT uniformly the trivial wave-1 config', () => {
-        // Sample a spread of late-game waves; at least one must differ from
-        // wave-1 (the old bug made ALL of them === wave-1).
-        const sampled = [33, 40, 48, 55, 72, 80].map((w) => getWaveConfig(w, LONG));
+    test('past-50 waves are NOT uniformly the trivial wave-1 config', () => {
+        // Sample a spread of past-campaign waves; at least one must differ from
+        // wave-1 (a clamp/fallback bug would make ALL of them === wave-1).
+        const sampled = [55, 63, 78, 90, 122, 140].map((w) => getWaveConfig(w, LONG));
         const anyNonTrivial = sampled.some(
             (cfg) => JSON.stringify(cfg) !== JSON.stringify(WAVE_DATA[1]));
         expect(anyNonTrivial).toBe(true);
@@ -109,27 +124,27 @@ describe('getWaveConfig — past MAX_WAVES synthesizes by CYCLING (not wave-1 fa
 });
 
 describe('isBossWave — stage-finals for a non-default wps are boss-eligible', () => {
-    test('default wps=3: stage-finals are 3,6,9,…,30 (unchanged)', () => {
+    test('default wps=5: stage-finals are 5,10,…,50 (unchanged)', () => {
         for (let w = 1; w <= MAX_WAVES; w++) {
             expect(isBossWave(w)).toBe(w % WAVES_PER_STAGE === 0);
         }
     });
 
-    test('wps=6: stage-finals move to 6,12,18,… and wave 3 is NOT a boss', () => {
+    test('wps=6: stage-finals move to 6,12,18,… and the wps=5 positions are NOT bosses', () => {
         expect(isBossWave(6, 6)).toBe(true);
         expect(isBossWave(12, 6)).toBe(true);
         expect(isBossWave(18, 6)).toBe(true);
-        // The OLD fixed table position (wave 3) is mid-stage for wps=6.
-        expect(isBossWave(3, 6)).toBe(false);
-        expect(isBossWave(9, 6)).toBe(false);
+        // The default-wps positions (5, 10) are mid-stage for wps=6.
+        expect(isBossWave(5, 6)).toBe(false);
+        expect(isBossWave(10, 6)).toBe(false);
     });
 
-    test('wps=6 past wave 30: cycled content still presents stage-finals as boss waves', () => {
-        // Combined with the wave-manager fix, the boss spawn is driven by this
-        // marker — so a long wps=6 run keeps getting bosses past wave 30.
-        expect(isBossWave(36, 6)).toBe(true);
-        expect(isBossWave(42, 6)).toBe(true);
+    test('wps=6 past wave 50: cycled content still presents stage-finals as boss waves', () => {
+        // Combined with the wave-manager spawn-path, the boss spawn is driven by
+        // this marker — so a long wps=6 run keeps getting bosses past wave 50.
+        expect(isBossWave(54, 6)).toBe(true);
+        expect(isBossWave(60, 6)).toBe(true);
         expect(isBossWave(120, 6)).toBe(true);
-        expect(isBossWave(37, 6)).toBe(false);
+        expect(isBossWave(55, 6)).toBe(false);
     });
 });

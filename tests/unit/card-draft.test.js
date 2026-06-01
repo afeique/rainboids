@@ -32,17 +32,21 @@ const player = (over = {}) => ({
 });
 
 describe('Card draft — cadence (RUN-01b: every stage clear except the last)', () => {
-    test('default 10×3 run fires on stage clears 3,6,…,27 but NOT wave 30', () => {
+    // 9.11.0 — the run is a FIXED 50-wave campaign (10 stages × 5 waves). Card
+    // drafts fire on every stage clear EXCEPT the final stage, i.e. boss waves
+    // 5,10,…,45 (stages 1–9), but NOT wave 50 (the final stage ends the run).
+    test('fixed 50-wave run fires on stage clears 5,10,…,45 but NOT wave 50', () => {
         const fires = [];
-        for (let w = 1; w <= 30; w++) if (isCardStage(w)) fires.push(w);
-        expect(fires).toEqual([3, 6, 9, 12, 15, 18, 21, 24, 27]); // 9 drafts
+        for (let w = 1; w <= 50; w++) if (isCardStage(w)) fires.push(w);
+        expect(fires).toEqual([5, 10, 15, 20, 25, 30, 35, 40, 45]); // 9 drafts
         expect(fires.length).toBe(CARDS_PER_RUN);
-        expect(isCardStage(30)).toBe(false); // final stage clear → no card
+        expect(isCardStage(50)).toBe(false); // final stage clear → no card
     });
     test('does not fire mid-stage', () => {
         expect(isCardStage(1)).toBe(false);
         expect(isCardStage(2)).toBe(false);
-        expect(isCardStage(5)).toBe(false);
+        expect(isCardStage(3)).toBe(false);
+        expect(isCardStage(4)).toBe(false);
         expect(isCardStage(7)).toBe(false);
     });
     test('cardsPerRun(default) === 9 (stages − 1) and matches CARDS_PER_RUN', () => {
@@ -51,25 +55,32 @@ describe('Card draft — cadence (RUN-01b: every stage clear except the last)', 
         expect(CARDS_PER_RUN).toBe(9);
     });
 
-    describe('non-default runConfig (20×6)', () => {
+    describe('run shape is pinned — stage/waves-per-stage overrides are ignored', () => {
+        // 9.11.0 — getRunConfig pins the run to the fixed 10×5=50 campaign and
+        // ignores any stages/wavesPerStage override on runConfig. So a stale
+        // 20×6 (or any other) override resolves back to the canonical 50-wave
+        // cadence: card stages stay 5,10,…,45 and cardsPerRun stays 9.
         const game = { runConfig: { stages: 20, wavesPerStage: 6 } };
-        test('fires on the 19th-stage clear (wave 114) but not the 20th (wave 120)', () => {
-            // Stage clears land on multiples of 6: 6,12,…,114 (stages 1–19), 120 (stage 20).
-            expect(isCardStage(114, game)).toBe(true);  // stage 19 clear → card
-            expect(isCardStage(120, game)).toBe(false); // stage 20 (final) clear → no card
-            expect(isCardStage(6, game)).toBe(true);    // stage 1 clear → card
-            expect(isCardStage(7, game)).toBe(false);   // mid-stage → no card
+        test('the override does NOT move the card stages off 5,10,…,45', () => {
+            // wave 114/120 (old 20×6 stage clears) are NOT card stages now.
+            expect(isCardStage(114, game)).toBe(false);
+            expect(isCardStage(120, game)).toBe(false);
+            // The pinned cadence still fires on the canonical positions.
+            expect(isCardStage(5, game)).toBe(true);   // stage 1 clear → card
+            expect(isCardStage(45, game)).toBe(true);  // stage 9 clear → card
+            expect(isCardStage(50, game)).toBe(false); // final stage → no card
+            expect(isCardStage(7, game)).toBe(false);  // mid-stage → no card
         });
-        test('fires on every stage clear except the final one (19 drafts)', () => {
+        test('fires on every stage clear except the final one (9 drafts)', () => {
             const fires = [];
-            for (let w = 1; w <= 120; w++) if (isCardStage(w, game)) fires.push(w);
-            expect(fires.length).toBe(19);
-            expect(fires[0]).toBe(6);
-            expect(fires[fires.length - 1]).toBe(114);
-            expect(fires).not.toContain(120);
+            for (let w = 1; w <= 50; w++) if (isCardStage(w, game)) fires.push(w);
+            expect(fires.length).toBe(9);
+            expect(fires[0]).toBe(5);
+            expect(fires[fires.length - 1]).toBe(45);
+            expect(fires).not.toContain(50);
         });
-        test('cardsPerRun(20×6) === 19 (stages − 1)', () => {
-            expect(cardsPerRun(game)).toBe(19);
+        test('cardsPerRun(override) is still 9 (run is pinned to 10 stages)', () => {
+            expect(cardsPerRun(game)).toBe(9);
         });
     });
 });
