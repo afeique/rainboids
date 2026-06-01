@@ -8,12 +8,6 @@ import * as movement from './movement.js';
 import * as firing from './firing.js';
 import * as shapes from './shapes.js';
 import * as ai from './ai.js';
-import { updateBossRage, bossFormationMovement, bossRageBlocksDamage, notifyBossDeath } from './boss-rage.js';
-import { updateBossPhases, phaseBlocksDamage } from './boss-phases.js';
-import { updateBossParts, coreBlocksDamage } from './boss-parts.js';
-import { updateBossIntro, updateBossDeath, introBlocksDamage } from './boss-intro.js';
-import { drawModularBoss } from './boss-render.js';
-import { getBossById } from './bosses/index.js';
 import { decayResistMap, ELEMENTS, weaknessElement } from '../combat/elements.js';
 import { runAura } from './support-aura.js';
 // ENMY-03 — cloak/invisibility. Default-safe: every wiring below is gated on
@@ -36,7 +30,6 @@ import { createCharge, tickCharge } from './abilities/charge.js';
 // when present, updateBrain() supplies the velocity instead of the legacy
 // movePattern switch. Default-safe — brain-less enemies take the old path.
 import { updateBrain } from './brain.js';
-import { updateBossAttacks } from './boss-attacks.js';
 // ENMY-10b — counter-attack on being hit (THORNBACK). `createThorns` builds the
 // per-instance counter state attached on `this.thorns` (only THORNBACK carries
 // `config.thorns`). The counter itself fires from collision-system's universal
@@ -454,7 +447,7 @@ export class Enemy {
         // etc.). Reset every such field to undefined so the lazy-init
         // re-triggers fresh for whatever type now occupies this slot.
         // initializeEnemy runs BEFORE applyEnemyLevelScaling, so clearing
-        // the boss flags here is safe — real bosses re-set them afterward.
+        // the elite flags here is safe — promotions re-set them afterward.
         this._arcDirection = undefined;
         this._arcAngle = undefined;
         this.arcState = undefined;
@@ -493,16 +486,11 @@ export class Enemy {
         // (weaverState / waspZigzagState / boulderState / sweepState already
         // reset to undefined above.)
 
-        // Boss / rage / formation flags — set only by applyEnemyLevelScaling
-        // for real bosses, never cleared on recycle → a recycled grunt could
-        // inherit boss treatment (extra HP path, rage rings, homing bullets).
-        this.isBoss = false;
+        // Elite / formation flags — set only by applyEnemyLevelScaling,
+        // never cleared on recycle → a recycled grunt could inherit elite
+        // treatment (extra HP path, homing bullets).
         this.isMiniBoss = false;
-        this.bossTier = 0;
-        this.bossSizeMul = 1;
-        this.enableHomingBullets = false;
         this._partnerDied = false;
-        this._bossPair = null;
         this._phaseTimer = 0;
         this._phaseIdx = 0;
         this._formationCenter = null;
@@ -694,41 +682,6 @@ export class Enemy {
             }
         }
 
-        // BOSS-04 — modular boss driver. A boss spawned from a `bosses/*`
-        // descriptor carries `_bossDriver` (the descriptor's updateBoss). It
-        // owns the per-frame intro→parts→phases order + stashes `_now`, so we
-        // run IT instead of the four generic chassis calls below (which would
-        // otherwise double-advance the runners). The death sequence is NOT
-        // ticked by updateBoss, so we still run updateBossDeath for it. Wrapped
-        // in try/catch so a buggy boss module can never break the game loop.
-        if (this.isBoss && typeof this._bossDriver === 'function') {
-            try { this._bossDriver(this, gameEngine, Date.now()); }
-            catch (err) { console.error('boss updateBoss failed', err); }
-            // ATK-n — consume the driver's signature-attack FIRE edge to spawn
-            // the boss's distinctive bullet pattern (boss-attacks.js). Additive:
-            // a boss with no entry there keeps its generic chassis fire.
-            try { updateBossAttacks(this, gameEngine, Date.now()); }
-            catch (err) { console.error('boss attack failed', err); }
-            updateBossDeath(this, gameEngine);
-        } else if (this.isBoss) {
-            // Legacy tier-boss path (boss-rage.js) + any boss given the chassis
-            // runners directly. Unchanged.
-            // Boss rage + per-tier mechanics (HP-threshold telegraph, invuln,
-            // tantrum, tier-4 phase cycling, tier-2 partner-death flags).
-            updateBossRage(this, gameEngine);
-            // D.B0 — declarative phase-script runner (no-op unless this boss was
-            // given a phaseScript via initBossPhases).
-            updateBossPhases(this, gameEngine);
-            // D.B0 — weak-point sub-entities: track part positions (no-op unless
-            // this boss was given a partsScript via initBossParts).
-            updateBossParts(this, gameEngine);
-            // D.B0 — time-gated intro/death sequences (no-op unless this boss was
-            // given a sequence via initBossIntro / initBossDeath). NOT gated by
-            // dying/warping: an intro plays during warp-in, a death while dying.
-            updateBossIntro(this, gameEngine);
-            updateBossDeath(this, gameEngine);
-        }
-
         // Late-wave AI throttle: in waves 15+, run the heavy spatial scans
         // on alternating frames per enemy.
         const wave = (gameEngine && gameEngine.game && gameEngine.game.currentWave) | 0;
@@ -775,14 +728,13 @@ export class Enemy {
                 this.vel.x = 0;
                 this.vel.y = 0;
             }
-        } else if (!this.isBoss || !bossFormationMovement(this)) {
-            // Tier-3 (and tier-4 phase 0) formation orbit overrides normal movement.
+        } else {
             this.updateMovement(gameEngine);
         }
 
         // Mobile lateral weave — small sin-phased side-step perpendicular
         // to line-of-sight so enemies READ as actively moving while they shoot.
-        if (!chargeActive && isMobile() && !this.isBoss) {
+        if (!chargeActive && isMobile()) {
             if (typeof this._weavePhase !== 'number') {
                 this._weavePhase = Math.random() * Math.PI * 2;
             }
@@ -1511,27 +1463,6 @@ export class Enemy {
             this.drawWarpEffect(ctx);
         }
 
-        // BOSS-04 — modular boss body. A boss spawned from a `bosses/*`
-        // descriptor (carries `bossId`) is drawn by the generic boss renderer
-        // (core disc + living weak-points), NOT the per-type enemy silhouette.
-        // The renderer no-ops while warping/dying so the warp streak above + the
-        // death-flash branch earlier keep ownership of those moments. Drawn in
-        // world space (the enemy draw pass is already inside the camera
-        // transform), then we return so drawEnemyShape never runs for a boss.
-        if (this.bossId && this.isBoss && !this.warping && !this._deathFlash) {
-            // 9.1.0 — per-boss custom renderer if the descriptor provides a
-            // `draw` hook (distinct silhouette + FX); else the generic disc.
-            try {
-                const desc = getBossById(this.bossId);
-                if (desc && typeof desc.draw === 'function') desc.draw(ctx, this);
-                else drawModularBoss(ctx, this);
-            } catch (err) {
-                console.error('boss draw failed', err);
-                try { drawModularBoss(ctx, this); } catch (e) { /* last resort */ }
-            }
-            return;
-        }
-
         // 5.78.0 — mini-boss visual marker (P1). Mini-bosses (5.75.0
         // promoted regular enemies) get a slow-pulsing halo + a thin
         // outer ring in their type color. Quick visual tell that "this
@@ -1561,50 +1492,6 @@ export class Enemy {
             ctx.stroke();
             ctx.setLineDash([]);
             ctx.restore();
-        }
-
-        // 5.77.0 — boss rage visuals.
-        //   Telegraph (pre-rage): pulsing red ring for 0.4 s wind-up.
-        //   Active: faint red aura + pulse so the player can read the
-        //   "this thing is buffed" state at a glance.
-        //   Invuln window: bright red shield ring (1.5 s after activation).
-        if (this.isBoss) {
-            const now = Date.now();
-            const inv = this._rageInvulnUntil && now < this._rageInvulnUntil;
-            if (this._rageTelegraph > 0) {
-                const t = 1 - this._rageTelegraph / 24;
-                const r = this.radius * (1.4 + Math.sin(now * 0.04) * 0.15);
-                ctx.save();
-                ctx.strokeStyle = `rgba(255, 60, 60, ${0.55 * (0.4 + 0.6 * t)})`;
-                ctx.lineWidth = 4;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.restore();
-            } else if (inv) {
-                const ttl = (this._rageInvulnUntil - now) / 1500;
-                ctx.save();
-                ctx.strokeStyle = `rgba(255, 90, 90, ${0.7 * ttl + 0.3})`;
-                ctx.lineWidth = 5;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 1.55, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.strokeStyle = `rgba(255, 200, 200, ${0.5 * ttl})`;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 1.75, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.restore();
-            } else if (this._rageActive) {
-                const pulse = 0.5 + 0.5 * Math.sin(now * 0.008);
-                ctx.save();
-                ctx.strokeStyle = `rgba(255, 70, 70, ${0.20 + 0.20 * pulse})`;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 1.35, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.restore();
-            }
         }
 
         // Draw laser targeting line first (behind everything else)
@@ -2109,10 +1996,9 @@ export class Enemy {
     takeDamage(damage, opts = {}) {
         // 5.78.0 — delegated to the engine's `applyDamageToEnemy`
         // consolidator (M1). The consolidator owns invuln gating
-        // (warp / deathFlash / boss rage), HP subtract + clamp, damage
-        // number, stats, and boss-pair notify. Behaviour matches the
-        // pre-consolidation path exactly; future damage modifiers land
-        // in one place instead of three.
+        // (warp / deathFlash), HP subtract + clamp, damage number, and
+        // stats. Behaviour matches the pre-consolidation path exactly;
+        // future damage modifiers land in one place instead of three.
         if (this.gameEngine && typeof this.gameEngine.applyDamageToEnemy === 'function') {
             const result = this.gameEngine.applyDamageToEnemy(this, damage, opts);
             return result.destroyed;
@@ -2121,12 +2007,6 @@ export class Enemy {
         // damage application + return so tests that synthesize an enemy
         // outside the engine still work.
         if (this.warping || this._deathFlash > 0) return false;
-        if (bossRageBlocksDamage(this)) return false;
-        if (phaseBlocksDamage(this)) return false;
-        // Core invulnerable while weak-point parts live (no-op without parts).
-        if (coreBlocksDamage(this)) return false;
-        // Invulnerable while the intro sequence plays (no-op without an intro).
-        if (introBlocksDamage(this)) return false;
         this.health = Math.max(0, this.health - damage);
         return this.health <= 0.001;
     }

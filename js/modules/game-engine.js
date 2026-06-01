@@ -21,7 +21,6 @@ import { isTargetable } from './enemy/abilities/cloak.js';
 // blink-less objects; only ever filters a WRAITHWORM that's mid-blink/underground.
 import { isVanished } from './enemy/abilities/blink-burrow.js';
 import { FormationManager } from './enemy/formations.js';
-import { bossFxCameraShake } from './enemy/boss-fx.js';
 import { Particle, drawParticlesBatched } from './world/particle.js';
 import { WebGLParticleRenderer } from './performance/webgl-particle-renderer.js';
 import { WebGLStarfieldRenderer } from './performance/webgl-starfield-renderer.js';
@@ -684,7 +683,6 @@ export class GameEngine {
                 totalDamageTaken: 0,
                 enemiesKilled: 0,
                 asteroidsDestroyed: 0,
-                bossesKilled: 0,
                 deaths: 0,
                 coinsEarned: 0,
                 weaponShots: {},         // weaponId → shots fired
@@ -1276,7 +1274,6 @@ export class GameEngine {
             totalDamageTaken: 0,
             enemiesKilled: 0,
             asteroidsDestroyed: 0,
-            bossesKilled: 0,
             deaths: 0,
             coinsEarned: 0,
             weaponShots: {},
@@ -2851,28 +2848,12 @@ export class GameEngine {
 
     spawnLeveledEnemies(enemyType, count, opts) { return wave.spawnLeveledEnemies.call(this, enemyType, count, opts); }
 
-    // A.E9-S3 — mid-fight enemy spawn (Spore Carrier drones, Hydra split, boss
-    // egg-sacs). Concurrent-capped; returns the enemy or null.
+    // A.E9-S3 — mid-fight enemy spawn (Spore Carrier drones, Hydra split).
+    // Concurrent-capped; returns the enemy or null.
     requestEnemySpawn(type, x, y, opts) { return wave.requestEnemySpawn.call(this, type, x, y, opts); }
 
-    // BOSS-04 — modular boss spawn bindings.
-    //   spawnModularBoss(which, opts) — spawn ONE boss from a descriptor (by
-    //     stage number, boss id, or descriptor object). opts: {x,y,warp,level}.
-    //   spawnStageBoss()              — spawn the current stage's boss on a boss
-    //     wave (gated once per wave). Used by the wave spawn path.
-    //   spawnBoss(idOrStage)          — DEBUG HOOK. Force-spawn a boss on demand
-    //     (no warp, instantly fightable) for QA + manual testing, e.g.
-    //     `gameEngine.spawnBoss('HARBINGER')` or `gameEngine.spawnBoss(1)`.
-    spawnModularBoss(which, opts) { return wave.spawnModularBoss.call(this, which, opts); }
-    spawnStageBoss() { return wave.spawnStageBoss.call(this); }
-    // 9.0.0 — DEBUG tab (pause → DEBUG, ?debug=1) bindings: list every boss and
-    // confront one instantly (drains the field, warps the boss in).
-    getBossList() { return wave.getBossList.call(this); }
-    debugSpawnBoss(id) { return wave.debugSpawnBoss.call(this, id); }
-    spawnBoss(idOrStage, opts = {}) { return wave.spawnModularBoss.call(this, idOrStage, { warp: false, ...opts }); }
-
     // ENMY-03 — DEBUG HOOK. Force-spawn a PHANTOM (cloaking enemy) on demand for
-    // QA + manual testing, mirroring spawnBoss. Spawns at the viewport center
+    // QA + manual testing. Spawns at the viewport center
     // (or explicit opts.x/opts.y), no warp, instantly fightable. Returns the
     // enemy (carrying a `cloak` state), or null if the pool is dry.
     //   gameEngine.spawnPhantom()  or  gameEngine.spawnPhantom({ x, y })
@@ -3299,19 +3280,9 @@ export class GameEngine {
     _setLastHit(target) {
         if (!target || !target.active) return;
         this.lastHitEnemy = target;
-        // Bosses spawn on a generic chassis (e.g. the TITAN enemy), so
-        // `config.name` would read "TITAN" for every boss. Prefer the boss's
-        // own descriptor display name (set by spawnModularBoss → e.g. "THE
-        // HARBINGER") when this target is a boss; fall back to the config name
-        // for regular enemies, then ASTEROID.
-        const bossName = target.isBoss
-            ? (target.name || (target.bossId && String(target.bossId).replace(/_/g, ' ')))
-            : null;
-        const name = bossName
-            ? String(bossName).toUpperCase()
-            : (target.config && target.config.name)
-                ? target.config.name.toUpperCase()
-                : 'ASTEROID';
+        const name = (target.config && target.config.name)
+            ? target.config.name.toUpperCase()
+            : 'ASTEROID';
         this.lastHitInfo = {
             ref: target,
             name,
@@ -4339,20 +4310,6 @@ export class GameEngine {
         let kickX = this._cameraKickX || 0;
         let kickY = this._cameraKickY || 0;
 
-        // ── BOSS-04 — boss intro/death camera shake ──
-        // Sum the per-frame shake contribution from any active modular-boss
-        // intro/death sequence (boss-fx.bossFxCameraShake) into the camera kick
-        // so the warp-in rumble + death detonation shake the whole frame
-        // (playfield + bullets). Additive — zero when no boss FX is active.
-        if (this.enemyPool && this.enemyPool.activeObjects) {
-            const fxNow = Date.now();
-            for (const e of this.enemyPool.activeObjects) {
-                if (!e || !e.isBoss || !e.bossId) continue;
-                const s = bossFxCameraShake(e, fxNow);
-                if (s.magnitude > 0) { kickX += s.dx; kickY += s.dy; }
-            }
-        }
-
         // 5.79.2 — track the per-frame total screen offset (shake + kick)
         //   in screen pixels so the WebGL bullet renderer can apply the
         //   same translation to its draw call. Without this, bullets
@@ -5289,19 +5246,18 @@ function _polyPath(ctx, r, points) {
 // other, they just avoid overlap. O(n²) over active enemies which
 // is fine for typical counts (10-20).
 //
-// Warping enemies + bosses skip the push: warping is the
-// invuln/positioning window and bosses have scripted positions that
-// should never get nudged off-script.
+// Warping enemies skip the push: warping is the invuln/positioning
+// window and those positions should never get nudged off-script.
 function _separateEnemies(enemies) {
     const n = enemies.length;
     if (n < 2) return;
     for (let i = 0; i < n; i++) {
         const a = enemies[i];
-        if (!a || !a.active || a.warping || a.isBoss) continue;
+        if (!a || !a.active || a.warping) continue;
         const ra = a.radius || 14;
         for (let j = i + 1; j < n; j++) {
             const b = enemies[j];
-            if (!b || !b.active || b.warping || b.isBoss) continue;
+            if (!b || !b.active || b.warping) continue;
             const rb = b.radius || 14;
             const dx = b.x - a.x;
             const dy = b.y - a.y;

@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [10.1.0] - 2026-06-01
+
+### Added
+- **Procedural fireball + smoke explosions.** New `js/modules/world/explosion.js` (`spawnExplosion`) plus a new `fireballPuff` particle type render a cluster of partly-overlapping, billboarded "spheres" that together read as a volumetric 3D fireball: each puff is a lit-sphere radial gradient (its bright centre offset toward a fixed light) that expands and ramps colour over its life — white-hot → yellow → orange → deep red while blending **additively** (overlaps blow out to white-hot), then crosses over into a drifting, warm-grey **smoke** puff (normal blend) that billows, rises on a gentle updraft, and fades fully out. Enemy kills, the frame-6 debris pop, and asteroid shatters all route through it (scaled by blast size + power).
+
+### Changed
+- Enemy and asteroid explosions now build their fire + smoke body from the new puff system instead of the old layered stack (3× plasma cores + standalone smoke + ember clouds). The sharp punch — bright flash, chromatic shockwave rings, and starburst sparkles — is retained around it.
+
+### Removed
+- **Lingering explosion particles.** The slow-fading after-glow embers (frame-0 + frame-6 enemy ember clouds, asteroid core-glow + hue-range embers) and the standalone billowing smoke that hung around long after a blast are gone. The new fireball→smoke effect is self-contained and fully resolves, leaving nothing floating once the explosion clears (`explosionSmoke` / `enemyPlasmaCore` types are no longer spawned).
+
+## [10.0.0] - 2026-06-01
+
+### Removed
+- **All bosses removed.** Deleted the entire scripted-boss subsystem — all 10 boss descriptors + their custom renderers (`enemy/bosses/`), and the boss chassis/systems (`boss-rage`, `boss-phases`, `boss-parts`, `boss-intro`, `boss-fx`, `boss-attacks`, `boss-render`, `world/boss-camera`, `hud/boss-healthbar`). Boss spawning, the boss HP bar, dynamic boss-fight camera framing + enlarged arena, boss-rage homing bullets, weak-point routing, boss drop profiles, the "Bosses Defeated" stat, and the `?debug=1` SPAWN BOSS picker are all gone. Stage-final waves (every 5th wave) remain as the block's climax combat wave — they still drive the stage-clear card draft + gold bonus (now labelled "STAGE BONUS"), just with no boss entity. Mini-boss / ELITE enemy promotions are unaffected.
+
 ## [9.21.0] - 2026-06-01
 
 ### Added

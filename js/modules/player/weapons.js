@@ -490,7 +490,7 @@ export function updateClusterCharge(input, bulletPool, audioManager, particlePoo
 export function firePrimary(bulletPool, audioManager, particlePool) {
     // 5.76.2 — soft-cap with eviction (was: refuse spawn). When the
     // pool is at the 300 cap (which Twin Cannon + Multi-Shot 4 +
-    // Cone-of-Fire builds reach during boss pressure), evict the
+    // Cone-of-Fire builds reach during heavy pressure), evict the
     // oldest non-piercing bullet to make room rather than silently
     // dropping the shot. Piercing bullets are kept because they're
     // still useful — they tend to be the high-value rail / capstone

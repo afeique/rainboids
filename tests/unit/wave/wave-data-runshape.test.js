@@ -74,9 +74,9 @@ describe('getWaveConfig — within the authored campaign (≤ MAX_WAVES)', () =>
         expect(getWaveConfig(55, 5000)).toBe(WAVE_DATA[5]);
     });
 
-    test('wave 50 is the authored finale (final boss); past it the run cycles', () => {
+    test('wave 50 is the authored finale; past it the run cycles', () => {
         expect(getWaveConfig(50, 50)).toEqual(WAVE_DATA[50]);
-        expect(WAVE_DATA[50].isFinalBoss).toBe(true);
+        expect(WAVE_DATA[50]).toBeDefined();
         // Past MAX the run CYCLES (it does NOT clamp to the finale):
         // wave 55 → authored wave 5 ((55-1)%50+1).
         expect(getWaveConfig(55, 50)).toEqual(WAVE_DATA[5]);
@@ -95,14 +95,14 @@ describe('getWaveConfig — past MAX_WAVES synthesizes by CYCLING (not wave-1 fa
         expect(getWaveConfig(51, LONG)).toEqual(WAVE_DATA[1]);
     });
 
-    test('getWaveConfig(55) ≈ WAVE_DATA[5] shape — an authored BOSS wave', () => {
+    test('getWaveConfig(55) ≈ WAVE_DATA[5] shape — an authored stage-final wave', () => {
         const cfg = getWaveConfig(55, LONG);
         expect(cfg).toEqual(WAVE_DATA[5]);
         // And it is decidedly NOT the trivial wave-1 opener.
         expect(cfg).not.toEqual(WAVE_DATA[1]);
-        // WAVE_DATA[5] is an authored boss wave; wave-1 carries no boss marker.
-        expect(WAVE_DATA[5].isBossWave).toBe(true);
-        expect(WAVE_DATA[1].isBossWave).toBeUndefined();
+        // wave 5 is a stage-final wave (isBossWave predicate); wave 1 is not.
+        expect(isBossWave(5, 5)).toBe(true);
+        expect(isBossWave(1, 5)).toBe(false);
     });
 
     test('the cycle maps wave (50k + r) → WAVE_DATA[r] across several laps', () => {

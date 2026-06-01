@@ -150,7 +150,7 @@ export class PoolManager {
      * `cap`, release the oldest active object that satisfies the
      * predicate (default: any object). Used by `firePrimary` to evict
      * the oldest non-piercing bullet rather than refusing the spawn,
-     * so heavy fire-rate builds don't silently drop shots during boss
+     * so heavy fire-rate builds don't silently drop shots under heavy
      * pressure. Returns true if an eviction was made.
      *
      * @param {number} cap        — soft active-count threshold

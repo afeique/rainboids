@@ -507,6 +507,33 @@ export class Particle {
                 this.angle = Math.random() * Math.PI * 2;
                 break;
             }
+
+            // 10.1.0 — Procedural fireball + smoke puff. A single billboard
+            //   "sphere" that, over its life, expands and ramps colour from
+            //   white-hot → orange → deep red (additive FIRE phase) and then
+            //   crosses over into a drifting warm-grey SMOKE puff (source-over)
+            //   that billows, rises, and fades out completely. Many of these
+            //   overlapping + offset = a volumetric fireball that resolves into
+            //   a smoke cloud and vanishes — no lingering embers left behind.
+            //   The caller (world/explosion.js spawnExplosion) overrides vel /
+            //   maxRadius / life / _decay / _smokeStart per puff for variety.
+            case 'fireballPuff': {
+                const [startR] = args;
+                const r0 = startR || random(10, 20);
+                this.radius = r0;
+                this.maxRadius = r0 * random(1.8, 2.6);
+                this.life = 1;
+                this.maxLife = 1;
+                this._decay = random(0.018, 0.026);     // → ~38–55 frame lifetime
+                const a = Math.random() * Math.PI * 2;
+                const sp = random(0.2, 1.0);
+                this.vel = { x: Math.cos(a) * sp, y: Math.sin(a) * sp };
+                this._fireHue = 18 + Math.random() * 26;        // 18–44° fiery band
+                this._smokeStart = 0.56 + Math.random() * 0.12; // fire→smoke crossover (lifeFrac)
+                this._smokeLum = 24 + Math.random() * 16;       // smoke grey lightness
+                this.angle = Math.random() * Math.PI * 2;
+                break;
+            }
         }
     }
 
@@ -729,6 +756,26 @@ export class Particle {
                 // Ease-out growth toward maxRadius (never shrinks).
                 this.radius = this.radius + (this.maxRadius - this.radius) * 0.06 * TS;
                 break;
+
+            // 10.1.0 — fireball/smoke puff. Drift + decelerate; once it crosses
+            //   into the smoke phase a gentle updraft lifts it and it keeps
+            //   billowing slightly larger. Monotonic ease toward maxRadius
+            //   (never shrinks) so the sphere only ever grows as it dissipates.
+            case 'fireballPuff': {
+                this.x += this.vel.x * TS;
+                this.y += this.vel.y * TS;
+                this.vel.x *= Math.pow(0.93, TS);
+                this.vel.y *= Math.pow(0.93, TS);
+                // Smoke phase: a soft updraft so the cloud rises as it cools.
+                if (this.life < (this._smokeStart || 0.58)) this.vel.y -= 0.03 * TS;
+                this.life -= (this._decay || 0.02) * TS;
+                // Smoke billows ~25% wider than the fire core did.
+                const target = this.life < (this._smokeStart || 0.58)
+                    ? this.maxRadius * 1.25
+                    : this.maxRadius;
+                this.radius += (target - this.radius) * 0.07 * TS;
+                break;
+            }
         }
 
         if (this.life <= 0) {
@@ -1099,6 +1146,55 @@ export class Particle {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
+                break;
+            }
+
+            // 10.1.0 — fireball/smoke puff. The shaded "3D sphere" look comes
+            //   from a radial gradient whose bright centre is OFFSET toward a
+            //   fixed up-left light, so each billboard reads as a lit ball;
+            //   overlapping many builds a volumetric cloud. FIRE phase draws
+            //   additively (white-hot → orange → red, cooling as it ages) so
+            //   overlaps blow out to white; SMOKE phase draws source-over in
+            //   warm grey so it reads as opaque cloud, billowing and fading to
+            //   nothing. ctx.save/restore isolates the composite + alpha.
+            case 'fireballPuff': {
+                const lifeFrac = Math.max(0, this.life);
+                const r = this.radius;
+                if (r <= 0) break;
+                const smokeStart = this._smokeStart || 0.58;
+                // Light from up-left → offset the inner gradient stop for shading.
+                const cx = this.x - r * 0.30;
+                const cy = this.y - r * 0.30;
+                ctx.save();
+                const g = ctx.createRadialGradient(cx, cy, 0, this.x, this.y, r);
+                if (lifeFrac > smokeStart) {
+                    // FIRE — additive. t: 1 at birth → 0 at crossover.
+                    const t = (lifeFrac - smokeStart) / (1 - smokeStart);
+                    // Hue cools yellow→orange→deep-red as the puff ages.
+                    const hue = 8 + (this._fireHue - 8) * t + 14 * t * t;
+                    const coreLum = 70 + 25 * t;     // near-white hot when young
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.globalAlpha = 0.85 * t;
+                    g.addColorStop(0,    hsl(48, 100, Math.min(96, coreLum + 15)));
+                    g.addColorStop(0.45, hsl(hue, 100, 58));
+                    g.addColorStop(1,    'rgba(0,0,0,0)');
+                } else {
+                    // SMOKE — source-over. t: 1 at crossover → 0 at death.
+                    const t = lifeFrac / smokeStart;
+                    const lum = this._smokeLum || 30;
+                    // Fade in just after the fire, peak mid-life, fade fully out.
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.globalAlpha = Math.sin(t * Math.PI) * 0.55;
+                    // Warm-tinted grey: a little ember heat lingers in the core.
+                    g.addColorStop(0,    hsl(this._fireHue, 16, lum + 10 + 14 * t));
+                    g.addColorStop(0.6,  hsl(this._fireHue, 8, lum));
+                    g.addColorStop(1,    'rgba(0,0,0,0)');
+                }
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
                 break;
             }
 

@@ -399,7 +399,7 @@ export const ENEMY_TYPES = {
         points: 320,
         movement: {
             pattern: 'boulder',
-            turnSpeed: 0.06,       // was 0.04 — still slow for a boss
+            turnSpeed: 0.06,       // was 0.04 — still slow for a heavy
             rotationSpeed: { min: -0.005, max: 0.005 },
         },
         firing: {
@@ -926,7 +926,7 @@ export const ENEMY_TYPES = {
 
     // SYS-11 / ENMY-10b — JUGGERNAUT: a Kinetic BRUISER built around a
     // telegraphed CHARGE-AND-RAM (the shared ENMY-01 telegraph helper, the same
-    // wind-up→strike→recover machine the bosses use). It approaches at a slow
+    // wind-up→strike→recover machine heavy enemies use). It approaches at a slow
     // base speed; once within `chargeOpts.range` and off cooldown it WINDS UP a
     // visible tell (the telegraph's `windup`), then COMMITS a fast charge down a
     // LOCKED lane toward where the player was at charge-start (the `strike`),
@@ -1057,7 +1057,7 @@ const ENEMY_RESISTS = {
     WEAVER:    { CRYO: -0.40 },                                // evasive; freeze to land hits
     SENTINEL:  { RADIANT: 0.50, KINETIC: -0.30 },              // bastion; raw kinetic cracks it
     TANGERINE: { PYRO: 0.60, CRYO: -0.40 },                    // bomber; don't fight fire w/ fire
-    TITAN:     { KINETIC: 0.30, PYRO: 0.30, CRYO: 0.30, VOLT: 0.30, TOXIC: 0.30, VOID: 0.30, RADIANT: 0.30 }, // boss: tanky all-around (rotating weak-core = later behavior)
+    TITAN:     { KINETIC: 0.30, PYRO: 0.30, CRYO: 0.30, VOLT: 0.30, TOXIC: 0.30, VOID: 0.30, RADIANT: 0.30 }, // heavy: tanky all-around
     CINDER:    { PYRO: 0.85, CRYO: -0.50 },                    // E8b — near-fireproof swarmer; freeze it
     GLACIER:   { CRYO: 0.90, PYRO: -0.50 },                    // E8b — near-cryo-immune tank; burn it
     FROST_LANCE: { CRYO: 0.40, TOXIC: -0.40 },                 // E8b — ice sniper; rots to Toxic

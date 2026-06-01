@@ -5,11 +5,14 @@ import { hsl } from '../core/color-cache.js';
 import { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES, STREAK_TIERS, STREAK_BUFF_DURATION, getStreakGoldMult, ABILITIES } from './weapon-data.js';
 // 9.0.0 (reboot) — defense-data.js removed with the gear/defense-items system.
 import { POWERUP_TYPES } from '../world/powerup.js';
+// 10.1.0 — procedural fireball+smoke explosion (overlapping lit-sphere puffs
+// that ramp white-hot → orange → grey smoke → gone). Replaces the old
+// plasma-core / standalone-smoke / lingering-ember stack.
+import { spawnExplosion } from '../world/explosion.js';
 // 9.0.0 (reboot) — item drops removed; createItem / rollRarity imports dropped.
 import { rewardMultiplier } from '../world/reward-dial.js';
 import { isMobile } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
-import { initBossDeath } from '../enemy/boss-intro.js';
 
 // P6 — Killing Spree passive: doubles the kill-streak damage BONUS (the amount
 // over 1.0), so a tier's +X% becomes +2X%. Pure; exported for unit tests.
@@ -72,15 +75,15 @@ export function createDebris(ast) {
         this.triggerCameraKick(kdx, kdy, isLarge ? 12 : 7);
     }
 
-    // 0. Dust puffs (spawned FIRST so they paint UNDER the flash/rings).
-    // 9.11.2 — A couple of soft puffs lend a brief dust cloud to the
-    // shatter; scaled down vs. enemy kills since rock is inert.
-    const dustCount = Math.round(random(1, 2) * sizeScale);
-    for (let i = 0; i < dustCount; i++) {
-        const dx = ast.x + random(-ast.baseRadius, ast.baseRadius) * 0.4;
-        const dy = ast.y + random(-ast.baseRadius, ast.baseRadius) * 0.4;
-        this.particlePool.get(dx, dy, 'explosionSmoke', undefined, sizeScale * 0.7);
-    }
+    // 0. Fireball + dust pop (spawned FIRST so it paints UNDER the flash/rings).
+    // 10.1.0 — a small overlapping-puff burst that flashes warm then resolves
+    // into a brief dust cloud and clears. Scaled down + lower power vs. enemy
+    // kills since rock is inert. Replaces the old standalone smoke puffs +
+    // lingering ember stacks (sections 0/4/5) with one self-resolving effect.
+    spawnExplosion(this.particlePool, ast.x, ast.y, {
+        radius: ast.baseRadius * 1.1 * sizeScale,
+        power: 0.7,
+    });
 
     // 1. Soft white core flash — visible during hitstop, refined radius.
     this.particlePool.get(ast.x, ast.y, 'explosionFlash', ast.baseRadius * 1.5 * sizeScale);
@@ -103,27 +106,9 @@ export function createDebris(ast) {
         this.particlePool.get(ast.x, ast.y, 'explosionShrapnel', angle, speed, color);
     }
 
-    // 4. Core glow — slow embers at center that linger
-    for (let i = 0; i < 4; i++) {
-        const p = this.particlePool.get(
-            ast.x + random(-3, 3), ast.y + random(-3, 3),
-            'explosionEmber', i < 1 ? '#ffffff' : brightColor
-        );
-        if (p) {
-            p.vel.x *= 0.15;
-            p.vel.y *= 0.15;
-            p.life = random(1.3, 2.0);
-            p.radius = random(2, 4.5);
-        }
-    }
-
-    // 5. Lingering embers in asteroid's hue range
-    const emberCount = Math.floor(10 + 7 * sizeScale);
-    for (let i = 0; i < emberCount; i++) {
-        const eHue = hue + random(-30, 30);
-        const eColor = hsl((eHue + 360) % 360, sat, random(55, 80));
-        this.particlePool.get(ast.x, ast.y, 'explosionEmber', eColor);
-    }
+    // (Sections 4/5 — lingering core-glow + hue-range embers — removed in
+    //  10.1.0; the fireball+dust pop above now carries the after-glow and
+    //  fully resolves, leaving nothing floating after the shatter.)
 
     // 6. Classic small particles for density
     for (let i = 0; i < 20; i++) {
@@ -272,7 +257,7 @@ export function triggerEnemyFinalExplosion(enemy) {
     const accentEmber = palette[2];
     const r = enemy.radius || 18;
     // Size floor — even tiny enemies produce a beefy 32-px-anchored burst.
-    // Bosses scale up via sizeScale capped at 2.5×.
+    // Larger enemies scale up via sizeScale capped at 2.5×.
     const bigR = Math.max(32, r);
     const sizeScale = Math.min(2.5, bigR / 15);
     const onScreen = this.isEntityOnScreen(enemy);
@@ -294,27 +279,15 @@ export function triggerEnemyFinalExplosion(enemy) {
         this.triggerScreenShake(14, 8, bigR * 1.4);
     }
 
-    // ── 0. Smoke puffs (spawned FIRST so they paint UNDER the fire) ──
-    // 9.11.2 — A handful of soft dark puffs that billow outward, drift
-    // upward, expand, and slowly dissipate after the blast — layered
-    // beneath the plasma cores + rings for added depth. Translucent
-    // (peak alpha ~0.28) so they read as atmosphere, not a screen-filler.
-    const smokeCount = Math.round(random(3, 5) * sizeScale);
-    for (let i = 0; i < smokeCount; i++) {
-        const sx = ex + random(-bigR, bigR) * 0.4;
-        const sy = ey + random(-bigR, bigR) * 0.4;
-        this.particlePool.get(sx, sy, 'explosionSmoke', undefined, sizeScale);
-    }
-
-    // ── 1. Chromatic plasma core stack ──
-    // Three layered fireballs of decreasing size: white (hottest) → warm
-    // → enemy color. They overlap as one defined plasma blob that lingers
-    // ~30 frames, sustaining the explosion's anchor point through the
-    // entire 24-frame death window. Warm accent comes from the random
-    // per-kill palette so cores read different per explosion.
-    this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 1.6 * sizeScale, color);
-    this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 1.2 * sizeScale, accentWarm);
-    this.particlePool.get(ex, ey, 'enemyPlasmaCore', bigR * 0.85 * sizeScale, '#ffffff');
+    // ── 0+1. Procedural fireball + smoke body ──
+    // 10.1.0 — a cluster of overlapping lit-sphere puffs IS the explosion:
+    // each expands and ramps white-hot → orange → deep red (additive fire)
+    // then crosses into a drifting grey smoke puff that billows, rises, and
+    // fades fully out. Replaces the old 3-layer plasma core + standalone
+    // smoke + frame-0 ember stack with one cohesive effect that leaves
+    // nothing lingering. The flash / rings / shockwave / sparkles below
+    // still supply the sharp "BANG" punch around it.
+    spawnExplosion(this.particlePool, ex, ey, { radius: bigR * sizeScale, power: 1 });
 
     // ── 2. Bright instantaneous flash ──
     // The "frame-0 punch" — engulfs the area for ~6 frames before the
@@ -342,12 +315,6 @@ export function triggerEnemyFinalExplosion(enemy) {
     // rings and reads as the actual blast wave dissipating outward.
     this.particlePool.get(ex, ey, 'enemyShockwave', ringBase * 1.8, accentEmber, tiltAngle, tiltSquash);
 
-    // 6.26.1 — Radial lightning crackle removed. The bolts read as
-    //   a player-ability (EMP / electric chain) rather than a generic
-    //   death effect, and they obscured the plasma core's chromatic
-    //   layering. The rings + shockwave + sparkles + embers carry
-    //   the "BANG" by themselves.
-
     // ── 6. Starburst sparkles ──
     // 14 bright cross-sparkles arranged in a tight ring just outside the
     // plasma core. Each sparkle is the WebGL atlas's 8-point star — they
@@ -370,30 +337,9 @@ export function triggerEnemyFinalExplosion(enemy) {
         }
     }
 
-    // ── 7. Hot embers at frame 0 ──
-    // Previously embers were ONLY in the debris burst (frame 6). Adding
-    // them at frame 0 fills the gap between "ship vanishes" and "debris
-    // emerges" with motion, so the explosion never has a dead frame.
-    const emberCount = 16 + Math.floor(sizeScale * 6);
-    for (let i = 0; i < emberCount; i++) {
-        // Mostly hot palette (white/gold/orange/enemy-color) with a slight
-        // outward bias so the ember cloud blooms instead of just
-        // floating in place.
-        const eColor = i % 5 === 0 ? '#ffffff'
-                     : i % 5 === 1 ? accentWarm
-                     : i % 5 === 2 ? color
-                     : i % 5 === 3 ? accentEmber
-                     :              accentHot;
-        const p = this.particlePool.get(ex, ey, 'explosionEmber', eColor);
-        if (p) {
-            // Bias velocity outward so embers radiate from the core.
-            const a = random(0, Math.PI * 2);
-            const sp = random(1.2, 4.5) * sizeScale;
-            p.vel = { x: Math.cos(a) * sp, y: Math.sin(a) * sp };
-            p.radius = random(1.8, 4.0);
-            p.life = random(0.7, 1.1);
-        }
-    }
+    // (Frame-0 hot-ember cloud removed in 10.1.0 — the fireball+smoke puff
+    // body spawned above now fills the "ship vanishes → debris emerges" gap
+    // with motion, and leaves no lingering embers behind.)
 }
 
 // ── BEAT 3: Debris flies through the still-expanding rings ──
@@ -488,20 +434,12 @@ export function triggerEnemyDebrisBurst(enemy) {
         }
     }
 
-    // 4. Late ember puff — 8 hot embers spawn at random offsets within
-    //    the debris cloud, simulating the after-glow of secondary ignitions.
-    for (let i = 0; i < 8; i++) {
-        const ox = ex + random(-bigR * 0.7, bigR * 0.7);
-        const oy = ey + random(-bigR * 0.7, bigR * 0.7);
-        const p = this.particlePool.get(ox, oy, 'explosionEmber',
-            i < 2 ? '#ffffff' : i < 5 ? color : accentHot);
-        if (p) {
-            p.vel.x *= 0.4;
-            p.vel.y *= 0.4;
-            p.life = random(0.8, 1.3);
-            p.radius = random(2, 4.5);
-        }
-    }
+    // 4. Secondary smoke pop — a small fireball+smoke burst as the wreckage
+    //    emerges, so the debris flies out THROUGH fresh smoke. Replaces the
+    //    old lingering after-glow ember puff (10.1.0) with a self-resolving
+    //    effect. Lower power so it reads as a chamber rupture, not a second
+    //    primary blast.
+    spawnExplosion(this.particlePool, ex, ey, { radius: bigR * 0.7 * sizeScale, power: 0.7 });
 }
 
 export function createShapeDebris(enemy) {
@@ -834,16 +772,10 @@ export function harvestBonus(enemy) {
 function _splitMoneyDrop(total, profile = null) {
     if (total <= 0) return { shapes: [], pixels: [] };
 
-    // 6.18.0 — Boss drops use the higher budget cap so platinum-tier
-    //   shapes can actually fire.
-    const isBoss = profile && profile.budgetMult >= 2.0;
-    const dropMax = isBoss
-        ? GAME_CONFIG.MONEY_ORB_DROP_BUDGET_MAX_BOSS
-        : GAME_CONFIG.MONEY_ORB_DROP_BUDGET_MAX;
-    total = Math.min(total, dropMax);
+    total = Math.min(total, GAME_CONFIG.MONEY_ORB_DROP_BUDGET_MAX);
 
     const shapeCap = GAME_CONFIG.MONEY_ORB_SHAPE_VALUE_MAX;
-    // 6.18.0 — Profile-driven minimum shape count. Bosses guarantee
+    // 6.18.0 — Profile-driven minimum shape count. Heavy enemies guarantee
     //   1 shape minimum; grunts (minShape=0) may emit pixel-only when
     //   the budget is tiny.
     const minShape = profile ? (profile.minShape | 0) : 1;
@@ -860,7 +792,7 @@ function _splitMoneyDrop(total, profile = null) {
     const remainder = Math.max(0, total - shapeBudget);
     const profilePixelBonus = profile ? (profile.pixelBonus | 0) : 0;
     // Base 10-12 pieces from shape count; profile adds extras so
-    //   bosses sparkle bigger and grunts scatter more confetti.
+    //   tanky enemies sparkle bigger and grunts scatter more confetti.
     const pixelCount = Math.min(
         GAME_CONFIG.MONEY_ORB_PIXEL_COUNT_MAX,
         Math.max(6, 8 + shapeN * 2 + profilePixelBonus)
@@ -946,7 +878,7 @@ export function dropOrbsFromEntity(x, y, entity = null) {
     const enemyQuantityMultiplier = isEnemy ? 1.3 : 1;
 
     // 6.18.0 — Per-enemy drop profile. Grunts drop pixel showers,
-    //   tanky enemies guarantee shapes, bosses jackpot. Asteroids
+    //   tanky enemies guarantee shapes, elites jackpot. Asteroids
     //   and non-enemy drops fall through to 'standard' defaults.
     const profile = isEnemy ? getEnemyDropProfile(entity) : null;
     const profileBudgetMult = profile ? profile.budgetMult : 1.0;
@@ -1042,7 +974,7 @@ export function dropOrbsFromEntity(x, y, entity = null) {
         const moneyBudget = Math.max(1,
             Math.round(totalLegacyCount * avgMoney * goldFindMult * streakGoldMult * profileBudgetMult * runRewardMult));
 
-        // 6.18.0 — _splitMoneyDrop reads profile for boss budget cap
+        // 6.18.0 — _splitMoneyDrop reads profile for drop budget
         //   + bonus pixel pieces.
         const { shapes, pixels } = _splitMoneyDrop(moneyBudget, profile);
         for (const v of shapes) this.createMoneyOrb(x, y, v, false);
@@ -1314,30 +1246,6 @@ export function onEnemyKill(enemy) {
         }
     }
 
-    // BOSS-04 — modular boss death. A boss spawned from a `bosses/*` descriptor
-    // carries `bossId` + a cached death-script builder. On its kill:
-    //   • arm the chassis DEATH sequence (boss-fx.js reads it → detonation FX +
-    //     camera shake play over the next ~3-4s).
-    //   • if it's THE final boss (Prismarch), route the run to GAME_COMPLETE via
-    //     the existing completeRun path. Guarded so it fires once.
-    if (enemy && enemy.bossId && enemy.isBoss && !enemy._bossDeathArmed) {
-        enemy._bossDeathArmed = true;
-        if (typeof enemy._buildBossDeathScript === 'function') {
-            try { initBossDeath(enemy, enemy._buildBossDeathScript(), this, Date.now()); }
-            catch (err) { console.error('boss death sequence failed', err); }
-        }
-        if (this.game && this.game.stats) this.game.stats.bossesKilled = (this.game.stats.bossesKilled | 0) + 1;
-        // 9.0.0 (endless) — in an endless run the "final" boss (Prismarch) is
-        // just another boss in the cycled roster; killing it must NOT end the run.
-        // Only an explicitly-finite run routes to GAME_COMPLETE here.
-        if (enemy.isFinalBoss && !this.game.endless && !this._finalBossDefeated) {
-            this._finalBossDefeated = true;
-            this.game.waveComplete = true;
-            this.game.state = GAME_STATES.WAVE_TRANSITION;
-            if (typeof this.completeRun === 'function') this.completeRun();
-        }
-    }
-
     // 5.75.0 — mission progress hooks.
     if (typeof this.checkMissionOnKill === 'function') this.checkMissionOnKill();
 }
@@ -1545,7 +1453,7 @@ export function createDamageNumber(x, y, damage, opts = {}) {
 //   asteroid with a player bullet. Pulls the stack count off the
 //   player's VAMPIRISM powerup; no-op if zero stacks. The healed
 //   amount is clamped to the player's effective max HP, so overflow
-//   (e.g. hitting boss enemies for 50 damage while near full HP) is
+//   (e.g. hitting tanky enemies for 50 damage while near full HP) is
 //   silently discarded — vampirism is a sustain tool, not a tank-
 //   progress shortcut. Fires a green "+N" floater via createDamageNumber
 //   so the player sees the heal land.

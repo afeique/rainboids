@@ -3,7 +3,7 @@
 // enemy flashes/charges during WINDUP, the attack lands during STRIKE, then it
 // cools off during RECOVER before returning to IDLE. TITAN had a bespoke
 // version of this; this is the extracted, shared helper (Ashen telegraph,
-// Juggernaut ram, boss attacks all reuse it).
+// Juggernaut ram, charge attacks all reuse it).
 //
 // The caller holds the small state object on the enemy (e.g. enemy._telegraph),
 // starts a windup with startTelegraph, advances it each frame with

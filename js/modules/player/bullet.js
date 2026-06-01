@@ -343,7 +343,7 @@ export class Bullet {
             const list = enemyPool.activeObjects;
             for (let i = 0; i < list.length; i++) {
                 const e = list[i];
-                if (!e || !e.active || e.warping || e.isBoss) continue;
+                if (!e || !e.active || e.warping) continue;
                 const dx = this.x - e.x;
                 const dy = this.y - e.y;
                 const d2 = dx * dx + dy * dy;

@@ -1,8 +1,7 @@
 // Wave configuration data for enemy and asteroid spawning.
 //
 // 9.11.0 — FIXED 50-wave campaign: 10 BLOCKS × 5 waves (a "stage" = a block).
-// Replaces the old user-configurable endless run with a single authored
-// campaign that marches through all 10 bosses, once each, in stage order.
+// A single authored campaign of escalating combat waves, in stage order.
 //
 // Each block b (waves 5b+1 … 5b+5):
 //   wave 1 : normal enemy wave (gentle)
@@ -11,25 +10,19 @@
 //            `elite: true` specs spawn at +6 level, ~1.8× HP, ~1.4× size,
 //            isMiniBoss + 3× points (see spawnLeveledEnemies).
 //   wave 4 : COOLDOWN wave (isCooldown) — few weak adds + more asteroids; a breather.
-//   wave 5 : BOSS wave (isBossWave) — the block's boss (spawned by the manager
-//            via getStage(wave,5) → getBossForStage) + a couple of light escorts.
+//   wave 5 : STAGE FINAL (isBossWave predicate) — the block's climax wave; the
+//            stage-clear card draft + gold bonus fire here.
 //
-// Boss per block (stage order, from js/modules/enemy/bosses/index.js):
-//    5 → Harbinger    10 → Aegis        15 → Lumen        20 → Gemini
-//   25 → Maelstrom    30 → Hivemother   35 → Iron Throne  40 → Warden Prime
-//   45 → Nullmaw      50 → Prismarch (isFinalBoss — ends the run)
-//
-// bossTier escalates: blocks 1-2 → T1, blocks 3-5 → T2, blocks 6-8 → T3,
-// blocks 9-10 → T4. Enemy roster escalates with depth using only the TEN
-// fully-defined enemy types (see the NOTE inside WAVE_DATA): early blocks lean
-// on the gentle/fair types (HUNTER, WASP, DRIFTER, then GUARDIAN, TANGERINE,
-// WEAVER, STALKER); mid blocks introduce the tougher SENTINEL + PROWLER and
-// the first TITAN-chassis elites; late blocks pile on dense GUARDIAN/SENTINEL/
-// PROWLER mixes with multi-TITAN elite gauntlets. Per-wave difficulty is
-// further carried by the enemy-level / HP / speed curves (getEnemyLevel etc.),
-// which now stretch across the full 50-wave campaign via MAX_WAVES.
+// Enemy roster escalates with depth using only the TEN fully-defined enemy
+// types (see the NOTE inside WAVE_DATA): early blocks lean on the gentle/fair
+// types (HUNTER, WASP, DRIFTER, then GUARDIAN, TANGERINE, WEAVER, STALKER);
+// mid blocks introduce the tougher SENTINEL + PROWLER and the first TITAN-
+// chassis elites; late blocks pile on dense GUARDIAN/SENTINEL/PROWLER mixes
+// with multi-TITAN elite gauntlets. Per-wave difficulty is further carried by
+// the enemy-level / HP / speed curves (getEnemyLevel etc.), which stretch
+// across the full 50-wave campaign via MAX_WAVES.
 
-import { GAME_CONFIG, MAX_WAVES, BOSS_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
+import { GAME_CONFIG, MAX_WAVES, WAVES_PER_STAGE } from '../core/constants.js';
 import { isMobile } from '../platform/platform-detect.js';
 
 // 5.75.0 — Each wave is now a SEQUENCE of sub-waves instead of a single
@@ -38,23 +31,17 @@ import { isMobile } from '../platform/platform-detect.js';
 // remain (or after a 12s fallback), etc. Wave only ends when ALL
 // sub-waves have spawned AND every enemy is dead. Result: waves last
 // 2–3× longer, density stays manageable, and the player gets time
-// between pulses to breathe / collect orbs / spend picks. Boss waves
-// hold the boss in the final sub-wave so the escort softens the player
-// up first. All non-boss waves get a CHANCE for a mid-wave mini-boss
-// (see wave-manager.spawnLeveledEnemies — the chance is wave-scaled).
+// between pulses to breathe / collect orbs / spend picks. Every wave
+// gets a CHANCE for a mid-wave mini-boss (see
+// wave-manager.spawnLeveledEnemies — the chance is wave-scaled).
 export const WAVE_DATA = {
 
     // ══════════════════════════════════════════════════════════════════════
     // 9.11.0 — FIXED 50-wave campaign: 10 BLOCKS × 5 waves. Each block b
     // (waves 5b+1 … 5b+5) runs: 1/2 normal · 3 ELITE (isElite — few but tough,
     // elite:true specs spawn as beefy minibosses) · 4 COOLDOWN (isCooldown —
-    // weak adds + extra asteroids, a breather) · 5 BOSS (isBossWave — the
-    // block's boss via getStage(wave,5)→getBossForStage + light escorts).
-    // Bosses by block (stage order): 5 Harbinger · 10 Aegis · 15 Lumen ·
-    // 20 Gemini · 25 Maelstrom · 30 Hivemother · 35 Iron Throne ·
-    // 40 Warden Prime · 45 Nullmaw · 50 Prismarch (FINAL). The boss itself is
-    // spawned by the manager; the boss-wave subWaves below are the light adds.
-    // bossTier escalates: blocks 1-2 → T1, 3-5 → T2, 6-8 → T3, 9-10 → T4.
+    // weak adds + extra asteroids, a breather) · 5 STAGE FINAL (isBossWave
+    // predicate — the block's climax wave; stage-clear card + gold fire here).
     // ══════════════════════════════════════════════════════════════════════
 
     // NOTE: only the 10 fully-defined enemy types (those with real entries in
@@ -65,7 +52,7 @@ export const WAVE_DATA = {
     // carried by COUNTS + which of the real tougher types (GUARDIAN/SENTINEL/
     // PROWLER/TITAN) appear, plus the per-wave enemy-level / HP / speed curve.
 
-    // ── BLOCK 1 (waves 1-5) — boss: Harbinger (T1) ──
+    // ── BLOCK 1 (waves 1-5) ──
     1: { asteroids: 5, subWaves: [
         [{ type: 'HUNTER', count: 3 }],
         [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
@@ -82,12 +69,12 @@ export const WAVE_DATA = {
     4: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'HUNTER', count: 2 }],
     ] },
-    // 1-5 BOSS — Harbinger + WASP/DRIFTER escort.
-    5: { asteroids: 2, isBossWave: true, bossTier: 1, subWaves: [
+    // 1-5 STAGE FINAL — WASP/DRIFTER escort.
+    5: { asteroids: 2, subWaves: [
         [{ type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
     ] },
 
-    // ── BLOCK 2 (waves 6-10) — boss: Aegis (T1) ──
+    // ── BLOCK 2 (waves 6-10) ──
     6: { asteroids: 5, subWaves: [
         [{ type: 'WASP', count: 2 }, { type: 'DRIFTER', count: 1 }],
         [{ type: 'TANGERINE', count: 1 }, { type: 'HUNTER', count: 2 }],
@@ -103,12 +90,12 @@ export const WAVE_DATA = {
     9: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'WASP', count: 3 }],
     ] },
-    // 2-5 BOSS — Aegis + GUARDIAN/TANGERINE escort.
-    10: { asteroids: 2, isBossWave: true, bossTier: 1, subWaves: [
+    // 2-5 STAGE FINAL — GUARDIAN/TANGERINE escort.
+    10: { asteroids: 2, subWaves: [
         [{ type: 'GUARDIAN', count: 2 }, { type: 'TANGERINE', count: 1 }],
     ] },
 
-    // ── BLOCK 3 (waves 11-15) — boss: Lumen (T2). Snipers + spinners. ──
+    // ── BLOCK 3 (waves 11-15) ──
     11: { asteroids: 4, subWaves: [
         [{ type: 'WEAVER', count: 2 }, { type: 'STALKER', count: 1 }],
         [{ type: 'TANGERINE', count: 2 }, { type: 'HUNTER', count: 2 }],
@@ -124,12 +111,12 @@ export const WAVE_DATA = {
     14: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'DRIFTER', count: 2 }, { type: 'WASP', count: 1 }],
     ] },
-    // 3-5 BOSS — Lumen + STALKER/WEAVER escort.
-    15: { asteroids: 2, isBossWave: true, bossTier: 2, subWaves: [
+    // 3-5 STAGE FINAL — STALKER/WEAVER escort.
+    15: { asteroids: 2, subWaves: [
         [{ type: 'STALKER', count: 2 }, { type: 'WEAVER', count: 1 }],
     ] },
 
-    // ── BLOCK 4 (waves 16-20) — boss: Gemini (T2). Heavier mixes. ──
+    // ── BLOCK 4 (waves 16-20) ──
     16: { asteroids: 4, subWaves: [
         [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 1 }],
         [{ type: 'WEAVER', count: 2 }, { type: 'WASP', count: 2 }],
@@ -145,12 +132,12 @@ export const WAVE_DATA = {
     19: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'WASP', count: 2 }, { type: 'HUNTER', count: 2 }],
     ] },
-    // 4-5 BOSS — Gemini + GUARDIAN/SENTINEL escort.
-    20: { asteroids: 2, isBossWave: true, bossTier: 2, subWaves: [
+    // 4-5 STAGE FINAL — GUARDIAN/SENTINEL escort.
+    20: { asteroids: 2, subWaves: [
         [{ type: 'GUARDIAN', count: 1 }, { type: 'SENTINEL', count: 1 }],
     ] },
 
-    // ── BLOCK 5 (waves 21-25) — boss: Maelstrom (T2). Predators + snipers. ──
+    // ── BLOCK 5 (waves 21-25) ──
     21: { asteroids: 4, subWaves: [
         [{ type: 'PROWLER', count: 2 }, { type: 'STALKER', count: 1 }],
         [{ type: 'TANGERINE', count: 2 }, { type: 'WEAVER', count: 1 }],
@@ -166,12 +153,12 @@ export const WAVE_DATA = {
     24: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'HUNTER', count: 2 }, { type: 'DRIFTER', count: 1 }],
     ] },
-    // 5-5 BOSS — Maelstrom + PROWLER/SENTINEL escort.
-    25: { asteroids: 2, isBossWave: true, bossTier: 2, subWaves: [
+    // 5-5 STAGE FINAL — PROWLER/SENTINEL escort.
+    25: { asteroids: 2, subWaves: [
         [{ type: 'PROWLER', count: 2 }, { type: 'SENTINEL', count: 1 }],
     ] },
 
-    // ── BLOCK 6 (waves 26-30) — boss: Hivemother (T3). Dense combined arms. ──
+    // ── BLOCK 6 (waves 26-30) ──
     26: { asteroids: 4, subWaves: [
         [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 2 }],
         [{ type: 'GUARDIAN', count: 2 }, { type: 'STALKER', count: 2 }],
@@ -187,12 +174,12 @@ export const WAVE_DATA = {
     29: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'WASP', count: 3 }],
     ] },
-    // 6-5 BOSS — Hivemother + SENTINEL/WEAVER escort.
-    30: { asteroids: 2, isBossWave: true, bossTier: 3, subWaves: [
+    // 6-5 STAGE FINAL — SENTINEL/WEAVER escort.
+    30: { asteroids: 2, subWaves: [
         [{ type: 'SENTINEL', count: 2 }, { type: 'WEAVER', count: 1 }],
     ] },
 
-    // ── BLOCK 7 (waves 31-35) — boss: Iron Throne (T3). Predator packs. ──
+    // ── BLOCK 7 (waves 31-35) ──
     31: { asteroids: 4, subWaves: [
         [{ type: 'PROWLER', count: 3 }, { type: 'STALKER', count: 2 }],
         [{ type: 'GUARDIAN', count: 2 }, { type: 'WEAVER', count: 2 }],
@@ -208,12 +195,12 @@ export const WAVE_DATA = {
     34: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'HUNTER', count: 2 }, { type: 'WASP', count: 2 }],
     ] },
-    // 7-5 BOSS — Iron Throne + PROWLER/GUARDIAN escort.
-    35: { asteroids: 2, isBossWave: true, bossTier: 3, subWaves: [
+    // 7-5 STAGE FINAL — PROWLER/GUARDIAN escort.
+    35: { asteroids: 2, subWaves: [
         [{ type: 'PROWLER', count: 2 }, { type: 'GUARDIAN', count: 1 }],
     ] },
 
-    // ── BLOCK 8 (waves 36-40) — boss: Warden Prime (T3). Peak density. ──
+    // ── BLOCK 8 (waves 36-40) ──
     36: { asteroids: 4, subWaves: [
         [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 2 }],
         [{ type: 'PROWLER', count: 2 }, { type: 'WEAVER', count: 2 }],
@@ -229,12 +216,12 @@ export const WAVE_DATA = {
     39: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 1 }],
     ] },
-    // 8-5 BOSS — Warden Prime + SENTINEL/PROWLER escort.
-    40: { asteroids: 2, isBossWave: true, bossTier: 3, subWaves: [
+    // 8-5 STAGE FINAL — SENTINEL/PROWLER escort.
+    40: { asteroids: 2, subWaves: [
         [{ type: 'SENTINEL', count: 2 }, { type: 'PROWLER', count: 1 }],
     ] },
 
-    // ── BLOCK 9 (waves 41-45) — boss: Nullmaw (T4). Heavy gauntlet. ──
+    // ── BLOCK 9 (waves 41-45) ──
     41: { asteroids: 4, subWaves: [
         [{ type: 'GUARDIAN', count: 3 }, { type: 'PROWLER', count: 2 }],
         [{ type: 'SENTINEL', count: 3 }, { type: 'WEAVER', count: 2 }],
@@ -250,12 +237,12 @@ export const WAVE_DATA = {
     44: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'WASP', count: 3 }, { type: 'HUNTER', count: 1 }],
     ] },
-    // 9-5 BOSS — Nullmaw + GUARDIAN/SENTINEL escort.
-    45: { asteroids: 2, isBossWave: true, bossTier: 4, subWaves: [
+    // 9-5 STAGE FINAL — GUARDIAN/SENTINEL escort.
+    45: { asteroids: 2, subWaves: [
         [{ type: 'GUARDIAN', count: 2 }, { type: 'SENTINEL', count: 2 }],
     ] },
 
-    // ── BLOCK 10 (waves 46-50) — boss: Prismarch (T4, FINAL). The last stand. ──
+    // ── BLOCK 10 (waves 46-50) ──
     46: { asteroids: 4, subWaves: [
         [{ type: 'GUARDIAN', count: 3 }, { type: 'SENTINEL', count: 3 }],
         [{ type: 'PROWLER', count: 3 }, { type: 'STALKER', count: 2 }],
@@ -271,14 +258,14 @@ export const WAVE_DATA = {
     49: { asteroids: 5, isCooldown: true, subWaves: [
         [{ type: 'HUNTER', count: 2 }, { type: 'STALKER', count: 1 }],
     ] },
-    // 10-5 FINAL BOSS — Prismarch + GUARDIAN/SENTINEL/PROWLER escort.
-    50: { asteroids: 2, isBossWave: true, bossTier: 4, isFinalBoss: true, subWaves: [
+    // 10-5 STAGE FINAL — GUARDIAN/SENTINEL/PROWLER escort.
+    50: { asteroids: 2, subWaves: [
         [{ type: 'GUARDIAN', count: 1 }, { type: 'SENTINEL', count: 1 }, { type: 'PROWLER', count: 1 }],
     ] },
 };
 
 // Helper function to get wave configuration. Past MAX_WAVES we just clamp
-// to the final boss wave — the run loop should transition to GAME_COMPLETE
+// to the final wave — the run loop should transition to GAME_COMPLETE
 // before getWaveConfig is called for wave 21+.
 //
 // 5.99.1 → 5.99.2 — Mobile difficulty pass with a STEEPER early-wave
@@ -294,9 +281,8 @@ export const WAVE_DATA = {
 // Asteroid count uses a parallel curve:
 //   Wave 1-3: 0.25×, Wave 4: 0.35×, Wave 5+: 0.40×
 //
-// Bosses (count×bossTier) are preserved so the campaign milestones
-// (waves 5/10/15/20) still feel like milestones — only their escort
-// enemies thin out.
+// All wave groups thin out uniformly on mobile (the per-wave multiplier
+// applies to every enemy entry).
 const _MOBILE_ENEMY_MULT_BY_WAVE = {
     1: 0.20,
     2: 0.25,
@@ -335,11 +321,7 @@ function _scaleConfigForMobile(cfg, waveNumber) {
     const scaleCount = (n) => Math.max(1, Math.min(perEntryCap, Math.round(n * enemyMult)));
 
     const scaledSubWaves = (cfg.subWaves || []).map((group) =>
-        group.map((entry) => {
-            // Don't thin the boss itself — only escort enemies.
-            if (entry.isBoss) return { ...entry };
-            return { ...entry, count: scaleCount(entry.count) };
-        })
+        group.map((entry) => ({ ...entry, count: scaleCount(entry.count) }))
     );
 
     const scaledAsteroids = Math.max(1, Math.round((cfg.asteroids || 0) * asteroidMult));
@@ -354,16 +336,15 @@ const _mobileWaveCache = new Map();
 
 // H2 (Bug-Pass 2026-05-25) — past the hand-authored WAVE_DATA (waves
 // 1..MAX_WAVES = 1..30), long runs (stages > 10) used to fall back to
-// WAVE_DATA[1] — wave-1's trivial 3-HUNTER content with no boss entry — so
-// any wave > 30 went trivial AND never spawned a boss. RUN-05b (the
-// procedural wave composer) will replace this; until then we CYCLE the
-// authored 30-wave pattern so a long run keeps varied, escalating GROUP
-// content. The per-wave enemy LEVEL / HP / speed scaling is still driven by
-// the REAL `waveNumber` / `maxWaves` in getEnemyLevel / getLevelScaledEnemyStats
-// (NOT this cycled key), so cycling only picks WHICH enemy groups spawn — the
-// stat curve is untouched and there's no double-scaling. Stage-finals past 30
-// are made boss-eligible by isBossWave(wave, wps) on the spawn path (fix #1),
-// independent of which authored entry the cycle landed on.
+// WAVE_DATA[1] — wave-1's trivial 3-HUNTER content — so any wave > 30 went
+// trivial. RUN-05b (the procedural wave composer) will replace this; until
+// then we CYCLE the authored 30-wave pattern so a long run keeps varied,
+// escalating GROUP content. The per-wave enemy LEVEL / HP / speed scaling is
+// still driven by the REAL `waveNumber` / `maxWaves` in getEnemyLevel /
+// getLevelScaledEnemyStats (NOT this cycled key), so cycling only picks WHICH
+// enemy groups spawn — the stat curve is untouched and there's no
+// double-scaling. Stage-finals past 30 are still detected by isBossWave(wave,
+// wps) on the spawn path, independent of which authored entry the cycle landed on.
 //
 // Default-safe: for waveNumber ≤ MAX_WAVES this is byte-for-byte the old
 // `WAVE_DATA[w] || WAVE_DATA[1]` (the cycle key === w in that range, and the
@@ -392,13 +373,12 @@ export function getWaveConfig(waveNumber, maxWaves = MAX_WAVES) {
     return scaled;
 }
 
-// Returns true when this wave is a boss wave — the LAST wave of each
-// stage. RUN-01a: derived from `wavesPerStage` (boss is every multiple
-// of it) instead of the static BOSS_WAVES table, so longer / shorter
-// runs get bosses on their real stage finals. With the default
-// wavesPerStage=3 this yields exactly [3,6,9,...,30] — identical to the
-// BOSS_WAVES membership for waves 1..30. BOSS_WAVES stays exported for
-// any legacy reader; the live check routes through this param form.
+// Returns true when this wave is a STAGE-FINAL wave — the LAST wave of each
+// stage (the climax wave that fires the stage-clear card draft + gold bonus).
+// RUN-01a: derived from `wavesPerStage` (every multiple of it) so longer /
+// shorter runs get their stage finals on the right waves. With the default
+// wavesPerStage=3 this yields exactly [3,6,9,...,30]. (Kept the historical
+// name `isBossWave` since callers across the codebase reference it.)
 export function isBossWave(waveNumber, wavesPerStage = WAVES_PER_STAGE) {
     const w = waveNumber | 0;
     const wps = Math.max(1, wavesPerStage | 0);
@@ -464,69 +444,69 @@ export function getEnemyBulletSpeedMultiplier(waveNumber, maxWaves = MAX_WAVES) 
 // Pithy one-liners displayed during wave intros (one per wave for the
 // 30-wave run, plus generic backups in case a wave is added later).
 // 6.1.0 — Wave subtitles re-keyed for the 10-stage / 3-wave layout.
-// Stage finals (3, 6, 9, 12, ...) call out the boss; mid-stage waves
+// Stage finals (5, 10, 15, ...) mark the block climax; mid-stage waves
 // (1-1 / 1-2 / 2-1 / 2-2 / etc.) get pithy combat one-liners.
 export const WAVE_SUBTITLES = {
-    // ── BLOCK 1 → Harbinger ──
+    // ── BLOCK 1 ──
     1:  "Don't worry, they die easy.",
     2:  "Arc-lightning inbound — meet the Drifter.",
     3:  "ELITE — armored heavy. Crack the shell.",
     4:  "Catch your breath.",
-    5:  "BOSS — the Harbinger arrives.",
-    // ── BLOCK 2 → Aegis ──
+    5:  "STAGE FINAL — hold the line.",
+    // ── BLOCK 2 ──
     6:  "Bombs away — mind the Bomber's mines.",
     7:  "Weavers spinning up. Keep moving.",
     8:  "ELITE — a Prowler runs you down.",
     9:  "Easy does it.",
-    10: "BOSS — Aegis, the walking wall.",
-    // ── BLOCK 3 → Lumen ──
+    10: "STAGE FINAL — the wall closes in.",
+    // ── BLOCK 3 ──
     11: "Sniper line. Don't stand still.",
     12: "Crossfire — every angle covered.",
     13: "ELITE — a Sentinel digs in.",
     14: "A quiet moment.",
-    15: "BOSS — Lumen lights you up.",
-    // ── BLOCK 4 → Gemini ──
+    15: "STAGE FINAL — lights and snipers.",
+    // ── BLOCK 4 ──
     16: "Heavies and spinners. Keep moving.",
     17: "The wall thickens.",
     18: "ELITE — twin heavies bear down.",
     19: "Breathe.",
-    20: "BOSS — Gemini, doubled and redoubled.",
-    // ── BLOCK 5 → Maelstrom ──
+    20: "STAGE FINAL — doubled and redoubled.",
+    // ── BLOCK 5 ──
     21: "Predators on the prowl.",
     22: "Pressure's building.",
     23: "ELITE — a Titan-class brute.",
     24: "Eye of the storm.",
-    25: "BOSS — the Maelstrom churns.",
-    // ── BLOCK 6 → Hivemother ──
+    25: "STAGE FINAL — the storm churns.",
+    // ── BLOCK 6 ──
     26: "Combined arms — every angle.",
     27: "It keeps coming.",
     28: "ELITE — a heavy pair anchors the swarm.",
     29: "Clear the lungs.",
-    30: "BOSS — the Hivemother broods.",
-    // ── BLOCK 7 → Iron Throne ──
+    30: "STAGE FINAL — combined arms.",
+    // ── BLOCK 7 ──
     31: "Predator packs. Stay mobile.",
     32: "They're flanking.",
     33: "ELITE — a predator-sentinel duo.",
     34: "Steady hands.",
-    35: "BOSS — the Iron Throne holds.",
-    // ── BLOCK 8 → Warden Prime ──
+    35: "STAGE FINAL — hold the line.",
+    // ── BLOCK 8 ──
     36: "Peak density. Pick your shots.",
     37: "Walls of iron.",
     38: "ELITE — a lone Titan, walled in.",
     39: "Catch a breath.",
-    40: "BOSS — Warden Prime stands guard.",
-    // ── BLOCK 9 → Nullmaw ──
+    40: "STAGE FINAL — peak density.",
+    // ── BLOCK 9 ──
     41: "The gauntlet begins.",
     42: "No safe lanes.",
     43: "ELITE — twin Titans inbound.",
     44: "Almost there.",
-    45: "BOSS — the Nullmaw opens wide.",
-    // ── BLOCK 10 → Prismarch (FINAL) ──
+    45: "STAGE FINAL — the gauntlet's end.",
+    // ── BLOCK 10 ──
     46: "The last stand. No more lessons.",
     47: "Edge of doom. One more push.",
     48: "ELITE — twin Titans block the way.",
     49: "Final approach. Steady hands.",
-    50: "FINAL BOSS — the Prismarch awaits.",
+    50: "LAST WAVE — no more lessons.",
 };
 
 // Generic subtitles, only used if WAVE_SUBTITLES is missing an entry.
@@ -590,12 +570,3 @@ export function getLevelScaledAsteroidStats(baseHealth, level) {
     return Math.max(1, Math.round(baseHealth * hpMul));
 }
 
-// Boss HP / size multipliers per boss tier (1 → 4). Boss enemies are TITAN
-// at the boss waves (5/10/15/20) and get these multipliers stacked on top
-// of normal level scaling. Tier 4 is the final boss.
-export const BOSS_TIER_STATS = {
-    1: { hpMul: 4.0, sizeMul: 1.35, speedMul: 1.0,  points: 500 },
-    2: { hpMul: 5.0, sizeMul: 1.45, speedMul: 1.05, points: 1000 },
-    3: { hpMul: 6.0, sizeMul: 1.55, speedMul: 1.10, points: 1750 },
-    4: { hpMul: 8.0, sizeMul: 1.75, speedMul: 1.15, points: 3000 },
-};

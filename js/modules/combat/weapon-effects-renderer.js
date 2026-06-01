@@ -1154,7 +1154,7 @@ export function drawWeaponEffects() {
             const r2 = GRAVITY_WELL_RADIUS * GRAVITY_WELL_RADIUS;
             ctx.beginPath();
             for (const e of pool) {
-                if (!e || !e.active || e.warping || e._deathFlash > 0 || e.isBoss) continue;
+                if (!e || !e.active || e.warping || e._deathFlash > 0) continue;
                 const dx = tx - e.x, dy = ty - e.y;
                 const d2 = dx * dx + dy * dy;
                 if (d2 > r2 || d2 < GRAVITY_WELL_DEADZONE * GRAVITY_WELL_DEADZONE) continue;

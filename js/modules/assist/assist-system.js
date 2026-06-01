@@ -40,7 +40,7 @@ export function senseThreats(snapshot) {
         const closing = (toX * rvx + toY * rvy) > 0;
         const miss = Math.abs(toX * rvy - toY * rvx) / relSpeed;
         const radius = pr + (b.radius || 8) + DODGE_PAD;
-        const homing = b.homing || b.bossRageHoming || b.shape === 'homing_mine';
+        const homing = b.homing || b.shape === 'homing_mine';
         if (homing || (closing && miss < radius)) {
             incoming.push({ bullet: b, dist, tti: dist / relSpeed, miss, homing: !!homing });
         }
@@ -57,7 +57,6 @@ export function senseSituation(snapshot) {
         ? player.getCurrentMaxHp()
         : (player.maxHealth || 1);
     let nearest = null;
-    let boss = null;
     let cx = 0, cy = 0, crowding = 0;
     const px = player.x || 0, py = player.y || 0;
     const octants = new Set();
@@ -65,7 +64,6 @@ export function senseSituation(snapshot) {
         const dx = e.x - px, dy = e.y - py;
         const dist = Math.hypot(dx, dy);
         if (!nearest || dist < nearest.dist) nearest = { target: e, dist };
-        if (e.isBoss || e.bossId || e.type === 'boss') boss = e;
         if (dist < 330) {
             crowding++;
             cx += e.x;
@@ -80,7 +78,6 @@ export function senseSituation(snapshot) {
         enemies,
         incoming,
         nearest: nearest?.target || null,
-        boss,
         hpFrac: Math.max(0, Math.min(1, (player.health || 0) / maxHp)),
         energyFrac: Math.max(0, Math.min(1, (player.energy || 0) / (player.maxEnergy || 100))),
         minTTI: incoming.length ? incoming[0].tti : Infinity,
@@ -111,11 +108,11 @@ function roleScore(role, situation, config) {
         case 'summon':
             return situation.enemies.length >= 2 ? 52 : 0;
         case 'buff':
-            return situation.threatLevel >= 3 || situation.boss ? 55 : 0;
+            return situation.threatLevel >= 3 ? 55 : 0;
         case 'nuke':
-            return situation.boss ? 78 : (situation.crowding >= 4 ? 62 + situation.crowding * 4 : 0);
+            return situation.crowding >= 4 ? 62 + situation.crowding * 4 : 0;
         case 'snipe':
-            return situation.boss || situation.nearest ? 48 + (situation.boss ? 20 : 0) : 0;
+            return situation.nearest ? 48 : 0;
         default:
             return 0;
     }
@@ -141,7 +138,7 @@ export function decidePower(situation, powerId, ready, config = DEFAULT_ASSIST_C
         type: 'power',
         id: powerId,
         score,
-        target: meta.targeting === 'cluster' ? situation.clusterCentroid : (situation.boss || situation.nearest),
+        target: meta.targeting === 'cluster' ? situation.clusterCentroid : situation.nearest,
     };
 }
 

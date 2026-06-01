@@ -13,8 +13,8 @@ import { frameClock } from '../core/frame-clock.js';
 // The enemy AI brain (brain.js) stamps a PREDICTED LEAD AIM POINT each tick on
 // brained enemies as enemy._aimX / enemy._aimY — snipers/interceptors/kiters
 // aim ahead of a moving player so fast movers can't trivially outrun their
-// fire; brawlers get the player's live position. These are UNDEFINED for bosses
-// or any enemy that didn't run the brain this frame, so we fall back to the
+// fire; brawlers get the player's live position. These are UNDEFINED for any
+// enemy that didn't run the brain this frame, so we fall back to the
 // live player position (and finally the enemy's own position).
 //
 // Directed firing patterns aim at aimPoint(this); RADIAL/omnidirectional
@@ -108,7 +108,7 @@ export function shoot(gameEngine) {
     // Optional strategy tie-in (low-risk): a brained enemy in 'regroup' is
     // fleeing/disengaging, not pressing the attack — hold fire so it doesn't
     // blindly shoot while peeling away. Only brained enemies set _aiStrategy;
-    // bosses and legacy types leave it undefined and fire as normal.
+    // legacy types leave it undefined and fire as normal.
     if (this._aiStrategy === 'regroup') return;
 
     // Stamp the active shootPattern on the engine so EnemyBullet.reset()
@@ -1146,17 +1146,6 @@ export function createEnemyBullet(gameEngine, angle, speed, color, explosive = f
         // For homing missiles and homing shots, provide player reference
         if (movementPattern === 'missile' || movementPattern === 'homing' || movementPattern === 'titan_homing') {
             bullet.targetPlayer = target || this.targetPlayer;
-        }
-
-        // 5.77.0 — boss rage homing. When a boss has `enableHomingBullets`
-        // (set on rage activation), every bullet it fires gets a gentle
-        // homing nudge toward the player, regardless of the underlying
-        // movement pattern. Implemented via a `bossRageHoming` flag the
-        // enemy-bullet update reads after the switch dispatch (see
-        // enemy-bullet.js update()).
-        if (this.enableHomingBullets) {
-            bullet.targetPlayer = target || this.targetPlayer;
-            bullet.bossRageHoming = true;
         }
 
         // Titan accelerating missiles don't need target reference (they fly straight)

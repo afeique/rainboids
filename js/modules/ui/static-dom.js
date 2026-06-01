@@ -132,8 +132,8 @@ function _buildTutorialOverlay() {
     body.appendChild(section('KILL STREAKS & BONUSES', [
         'Consecutive kills build a streak that ramps your damage AND',
         'gold-find (the HUD shows your current +% GOLD). Taking damage',
-        'resets the streak. Clearing a stage grants a survivor-card pick;',
-        'boss waves grant a bonus pick on top.',
+        'resets the streak. Clearing a stage grants a survivor-card pick',
+        'plus a bonus gold reward.',
     ]));
     panel.appendChild(body);
 }

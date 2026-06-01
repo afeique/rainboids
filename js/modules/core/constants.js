@@ -12,23 +12,8 @@ export const GAME_CONFIG = {
     FIELD_WIDTH: 1920,
     FIELD_HEIGHT: 1080,
 
-    // ── 9.1.0 Boss redesign — massive maneuver-around bosses ──────────────────
-    // Boss fights enlarge the play field (so there's room to fly AROUND a
-    // screen-filling boss) and pull the camera back via DYNAMIC FRAMING (zoom
-    // eased from player↔boss distance). See world/boss-camera.js + camera-manager.
-    BOSS_ARENA_SCALE: 1.6,        // linear scale → ~2.5× area on a boss wave
-    BOSS_ZOOM_MIN: 0.72,          // desktop: most zoomed-out (reading the whole body)
-    BOSS_ZOOM_MAX: 1.0,           // desktop: closed-in (full dodge fidelity)
-    BOSS_ZOOM_NEAR_R: 220,        // ≤ this px from the boss → ease toward MAX (1.0)
-    BOSS_ZOOM_FAR_R: 900,         // ≥ this px from the boss → ease toward MIN
-    BOSS_ZOOM_EASE: 0.05,         // per-frame lerp of camera.zoom toward target
-    // Mobile: don't stack the boss zoom-out on top of the platform zoom-out into
-    // oblivion. The boss framing is gentle and the EFFECTIVE zoom is hard-floored.
-    BOSS_ZOOM_MOBILE_FACTOR: 0.94,
-    MIN_EFFECTIVE_ZOOM: 0.62,     // absolute floor (ship never becomes a speck)
-    MIN_SHIP_SCREEN_R: 12,        // ship-size guardrail: rendered ship radius floor (px)
     // Platform base zoom (mirrors game-engine._refreshCameraZoom; centralized so
-    // the dynamic-framing easing converges to the same rest value).
+    // the camera easing converges to the same rest value).
     BASE_ZOOM_DESKTOP: 1.0,
     BASE_ZOOM_PORTRAIT: 0.78,
     BASE_ZOOM_LANDSCAPE: 0.88,
@@ -93,9 +78,6 @@ export const GAME_CONFIG = {
     //   With the new visual layout (1 shape + ≤30 pixels) this
     //   keeps the drop event from delivering more than ~250g.
     MONEY_ORB_DROP_BUDGET_MAX: 250,
-    // 6.18.0 — Boss drops get a higher cap so platinum-tier shapes can
-    //   actually fire. Normal kills cap at 250; boss kills at 600.
-    MONEY_ORB_DROP_BUDGET_MAX_BOSS: 600,
 
     // 5.78.2 — Orb-drop "*_UPGRADE" constants and MEDPACK / PAYDAY /
     // DOCTOR / HIGH_ROLLER per-stack constants removed alongside the
@@ -354,30 +336,23 @@ export const GAME_STATES = {
     SHOP: 'SHOP'
 };
 
-// 6.1.0 — Stage system. The 30-wave campaign is now structured as
-// 10 STAGES of 3 waves each. Wave is the source of truth internally;
-// stage + sub-wave are derived. Stage final = boss = free survivor
-// card on clear. Mid-stage waves get just a brisk WAVE CLEAR toast.
+// 6.1.0 — Stage system. The campaign is structured as STAGES of N waves
+// each. Wave is the source of truth internally; stage + sub-wave are
+// derived. Stage final = free survivor card on clear. Mid-stage waves get
+// just a brisk WAVE CLEAR toast.
 //
-// Display format: "1-1", "1-2", "1-3", "2-1", ... "10-3".
+// Display format: "1-1", "1-2", ... "10-5".
 //
 // Survivor-card economy: 1 free pick per stage clear × 10 stages = 10
-// picks per playthrough (same total budget as the pre-6.1.0 "every 3rd
-// wave" cadence, just renamed and aligned with the boss waves).
+// picks per playthrough.
 // 9.11.0 — FIXED 50-wave campaign: 10 blocks × 5 waves. Each block is
-// 4 enemy waves + 1 boss-wave finale, escalating, with one of the 10
-// bosses per block in stage order (Harbinger → … → Prismarch finale).
-// Per block: wave 1/2 normal, wave 3 ELITE/miniboss, wave 4 cooldown
-// breather, wave 5 BOSS. The run is no longer user-configurable — see
-// getRunConfig() which pins the shape to this campaign.
+// 4 enemy waves + 1 stage-final climax wave, escalating. Per block: wave
+// 1/2 normal, wave 3 ELITE/miniboss, wave 4 cooldown breather, wave 5
+// stage final. The run is no longer user-configurable — see getRunConfig()
+// which pins the shape to this campaign.
 export const MAX_WAVES = 50;
 export const WAVES_PER_STAGE = 5;
 export const MAX_STAGES = MAX_WAVES / WAVES_PER_STAGE; // 10
-// Bosses live on stage (block) finals: 5, 10, 15, …, 50.
-export const BOSS_WAVES = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50];
-// Kept as 3 (was 5) so any legacy consumers reading this constant
-// produce sensible defaults under the new cadence.
-export const BOSS_WAVE_INTERVAL = WAVES_PER_STAGE;
 
 // ── Combat-depth (CD) build-axis caps ───────────────────────────────────────
 // R-CAP — hard ceilings that keep the CD permanent stats from trivializing
@@ -516,7 +491,7 @@ export function getRunConfig(game) {
     // (MAX_STAGES × WAVES_PER_STAGE = 10 × 5 = 50). The old user-configurable
     // stages/wavesPerStage override is intentionally IGNORED so every run —
     // fresh launch, BUILD loadout, or restored CONTINUE save (even an old
-    // 10×3 one) — plays exactly waves 1→50 and ends after the 10th boss.
+    // 10×3 one) — plays exactly waves 1→50 and ends after the final wave.
     // Only `mode` is still honored from the run config.
     let mode = DEFAULT_MODE;
     if (rc && typeof rc.mode === 'string') {
@@ -614,7 +589,7 @@ export const BIG_STAR_SHAPES = ['point', 'circle'];
 // Bronze   — small-kill scraps; copper-toned, subtle.
 // Silver   — common drops; pale silver.
 // Gold     — most kills; the default treasure-gold (visual baseline).
-// Platinum — boss kills / huge multi-kills; cyan-tinted, big, glowy.
+// Platinum — elite kills / huge multi-kills; cyan-tinted, big, glowy.
 //
 // Tiers are intentionally distinct in HUE so the player can read drop
 // quality at a glance without reading numbers.
@@ -664,8 +639,7 @@ export function getDropTier(value) {
 
 // ─── 6.18.0 — ENEMY DROP PROFILES ───────────────────────────────────────
 // Each enemy type maps to a drop profile that scales the base drop
-// budget and rate. Bosses get the 'boss' profile via isBoss override
-// regardless of type.
+// budget and rate.
 //
 //   budgetMult     — multiplier applied to total drop budget
 //   rateMult       — multiplier applied to drop rate
@@ -673,17 +647,15 @@ export function getDropTier(value) {
 //   minShape       — minimum chunky shapes per drop (1 = always 1)
 //
 // Grunts (cheap, frequent) drop pixel showers; tanky enemies drop
-// guaranteed shapes; bosses drop jackpots.
+// guaranteed shapes; minibosses drop jackpots.
 export const ENEMY_DROP_PROFILES = {
     grunt:    { budgetMult: 0.75, rateMult: 0.85, pixelBonus: 2, minShape: 0 },
     standard: { budgetMult: 1.00, rateMult: 1.00, pixelBonus: 0, minShape: 1 },
     tanky:    { budgetMult: 1.40, rateMult: 1.00, pixelBonus: 0, minShape: 1 },
     miniboss: { budgetMult: 1.80, rateMult: 1.00, pixelBonus: 4, minShape: 1 },
-    boss:     { budgetMult: 2.40, rateMult: 1.00, pixelBonus: 6, minShape: 1 },
 };
 
-// Enemy-type → profile slug. Bosses are identified by the isBoss
-// FLAG, not the type, so this map covers the standard kill case.
+// Enemy-type → profile slug.
 export const ENEMY_TYPE_DROP_PROFILE = {
     HUNTER:    'grunt',
     WASP:      'grunt',
@@ -699,7 +671,8 @@ export const ENEMY_TYPE_DROP_PROFILE = {
 
 export function getEnemyDropProfile(entity) {
     if (!entity) return ENEMY_DROP_PROFILES.standard;
-    if (entity.isBoss) return ENEMY_DROP_PROFILES.boss;
+    // Elite-promoted (mini-boss) enemies jackpot regardless of type.
+    if (entity.isMiniBoss) return ENEMY_DROP_PROFILES.miniboss;
     const slug = ENEMY_TYPE_DROP_PROFILE[entity.type] || 'standard';
     return ENEMY_DROP_PROFILES[slug] || ENEMY_DROP_PROFILES.standard;
-} 
+}

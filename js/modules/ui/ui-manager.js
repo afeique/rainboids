@@ -815,12 +815,10 @@ export class UIManager {
 
     // 9.0.0 — DEBUG tab populator. Only visible when ?debug=1 is in the URL
     // (the tab BUTTON is hidden in static-dom.js otherwise). Lazy-rendered
-    // when the tab opens. Lists every boss in the registry as a button that,
-    // when clicked, instantly spawns that boss for testing.
+    // when the tab opens.
     updateDebugTab() {
         const tab = document.getElementById('debug-tab');
         if (!tab) return;
-        const ge = this.gameEngine;
         tab.replaceChildren();
         const h2 = document.createElement('h2');
         h2.textContent = 'DEBUG';
@@ -829,42 +827,6 @@ export class UIManager {
         sub.className = 'pause-tab-subtitle';
         sub.textContent = 'Developer tools. ?debug=1 only.';
         tab.appendChild(sub);
-
-        // BOSS PICKER — instant boss spawn for testing.
-        const bossHead = document.createElement('h3');
-        bossHead.textContent = 'SPAWN BOSS';
-        bossHead.style.cssText = 'margin: 14px 0 6px; font-size: 11px; color: #ffcc44; letter-spacing: 1px;';
-        tab.appendChild(bossHead);
-        const bossSub = document.createElement('div');
-        bossSub.className = 'pause-tab-subtitle';
-        bossSub.style.fontSize = '8px';
-        bossSub.textContent = 'Drains the field and warps in the chosen boss. Resumes from the pause menu.';
-        tab.appendChild(bossSub);
-        const bossGrid = document.createElement('div');
-        bossGrid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 8px;';
-        const list = (ge && typeof ge.getBossList === 'function') ? ge.getBossList() : [];
-        if (!list.length) {
-            const none = document.createElement('div');
-            none.style.cssText = 'font-size: 9px; color: #6b7a96; padding: 8px 0;';
-            none.textContent = 'No bosses registered.';
-            bossGrid.appendChild(none);
-        }
-        for (const { id, name } of list) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.textContent = name || id;
-            btn.style.cssText = 'font-family: inherit; font-size: 9px; padding: 10px 8px; cursor: pointer; background: #1b2536; color: #e8eefc; border: 1px solid #3a4a66; line-height: 1.3;';
-            btn.addEventListener('mouseenter', () => { btn.style.borderColor = '#5fd0ff'; btn.style.background = '#243349'; });
-            btn.addEventListener('mouseleave', () => { btn.style.borderColor = '#3a4a66'; btn.style.background = '#1b2536'; });
-            btn.addEventListener('click', () => {
-                try {
-                    if (ge && typeof ge.debugSpawnBoss === 'function') ge.debugSpawnBoss(id);
-                    if (typeof this.togglePause === 'function') this.togglePause();
-                } catch (err) { console.error('debug spawn boss failed:', err); }
-            });
-            bossGrid.appendChild(btn);
-        }
-        tab.appendChild(bossGrid);
     }
 
     

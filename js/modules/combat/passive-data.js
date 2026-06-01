@@ -75,7 +75,7 @@ export const PASSIVES = {
         // CD-02 §6c — no-downside offense keystone filling the slot freed by the
         // Berserker→Glass Cannon merge. Anchors crit/assassin builds; "fun to
         // feel." NO static damageMult — the execute IS the effect (wired in
-        // collision-system.applyDamageToEnemy, gated on hasPassive). Bosses exempt.
+        // collision-system.applyDamageToEnemy, gated on hasPassive).
         id: 'APEX_PREDATOR', name: 'Apex Predator', desc: 'Your damage executes enemies below 15% max HP',
         hooks: ['damage', 'execute'], tags: ['keystone', 'offense'],
         slot: true, item: false, stack: B,

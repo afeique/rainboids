@@ -9,7 +9,6 @@ import { PRIMARY_WEAPONS } from '../combat/weapon-data.js';
 import { WAVY_PALETTES } from './overlays.js';
 import { drawHudButtons } from './hud-buttons.js';
 import { drawItemFeed } from './item-feed.js';
-import { drawBossFxHook } from '../enemy/boss-fx.js';
 import { getIconImage, resolveIconSlug } from '../ui/icons.js';
 // SYS-9 / ENMY-10 — skill-suppress aura (NULL_DRONE) HUD cue. isSuppressed is
 // false unless an active suppression stamp is live, so the slot-bar tint below
@@ -98,14 +97,6 @@ export function drawHUD() {
             }
             // 6.x — Left-edge item loot feed (replaces world pickup orbs).
             drawItemFeed.call(this, this.ctx);
-            // 9.1.1 — top-center boss HP bar removed (was drawBossHealthbarHook
-            // here; its import is dropped too). Boss FX / telegraph / intro hooks
-            // below still run.
-            // BOSS-03 — Boss intro/death canvas FX (name-card sweep +
-            // death detonation). Co-located with the healthbar hook; the
-            // hook scans the pool for a boss playing an intro/death
-            // sequence and no-ops otherwise.
-            drawBossFxHook.call(this);
         } else {
             // Clear stale rects so input handlers don't act on them.
             this._hudButtonRects = null;
@@ -474,7 +465,6 @@ export function drawGameComplete() {
         ['Damage Taken',       formatNumber(stats.totalDamageTaken || 0)],
         ['Enemies Killed',     String(stats.enemiesKilled || 0)],
         ['Asteroids Destroyed',String(stats.asteroidsDestroyed || 0)],
-        ['Bosses Defeated',    String(stats.bossesKilled || 0)],
         ['Coins Earned',       String(stats.coinsEarned || 0)],
         ['Preferred Weapon',   preferredWeaponId || '—'],
     ];

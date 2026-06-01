@@ -4,9 +4,8 @@
  * Validates the 10-block × 5-wave structure:
  *   block b (0..9), waves 5b+1 … 5b+5:
  *     wave 1,2 : normal   wave 3 : ELITE (isElite)
- *     wave 4   : COOLDOWN (isCooldown)   wave 5 : BOSS (isBossWave)
- * Bosses land on 5,10,…,50; stage = getStage(wave,5) = 1..10 → all 10 bosses
- * once each in stage order, with Prismarch (isFinalBoss) at wave 50. The run
+ *     wave 4   : COOLDOWN (isCooldown)   wave 5 : STAGE FINAL (isBossWave predicate)
+ * Stage finals land on 5,10,…,50; stage = getStage(wave,5) = 1..10. The run
  * length is pinned to 50 regardless of any runConfig override.
  */
 
@@ -34,20 +33,23 @@ if (typeof globalThis.navigator === 'undefined') {
 import { beforeAll, describe, expect, test } from '@jest/globals';
 import { WAVE_DATA, isBossWave } from '../../../js/modules/wave/wave-data.js';
 import {
-    MAX_WAVES, WAVES_PER_STAGE, MAX_STAGES, BOSS_WAVES,
+    MAX_WAVES, WAVES_PER_STAGE, MAX_STAGES,
     getStage, runMaxWaves, runWavesPerStage,
 } from '../../../js/modules/core/constants.js';
-import { getBossForStage, BOSS_DESCRIPTORS } from '../../../js/modules/enemy/bosses/index.js';
 import { _resetUrlOverrideForTests } from '../../../js/modules/platform/platform-detect.js';
 
 beforeAll(() => { _resetUrlOverrideForTests(false); });
+
+// Stage-final waves — derived from the run cadence (WAVES_PER_STAGE=5 → 5,10,…,50).
+const STAGE_FINAL_WAVES = [];
+for (let w = WAVES_PER_STAGE; w <= MAX_WAVES; w += WAVES_PER_STAGE) STAGE_FINAL_WAVES.push(w);
 
 describe('50-wave campaign — constants', () => {
     test('describe a 50-wave / 5-per-block / 10-block campaign', () => {
         expect(MAX_WAVES).toBe(50);
         expect(WAVES_PER_STAGE).toBe(5);
         expect(MAX_STAGES).toBe(10);
-        expect(BOSS_WAVES).toEqual([5, 10, 15, 20, 25, 30, 35, 40, 45, 50]);
+        expect(STAGE_FINAL_WAVES).toEqual([5, 10, 15, 20, 25, 30, 35, 40, 45, 50]);
     });
 });
 
@@ -61,7 +63,7 @@ describe('50-wave campaign — WAVE_DATA structure', () => {
         }
     });
 
-    test('isBossWave is true exactly on 5,10,…,50', () => {
+    test('isBossWave (stage-final predicate) is true exactly on 5,10,…,50', () => {
         const found = [];
         for (let w = 1; w <= MAX_WAVES; w++) {
             if (isBossWave(w, WAVES_PER_STAGE)) found.push(w);
@@ -69,26 +71,10 @@ describe('50-wave campaign — WAVE_DATA structure', () => {
         expect(found).toEqual([5, 10, 15, 20, 25, 30, 35, 40, 45, 50]);
     });
 
-    test('every boss-wave entry has isBossWave + a valid bossTier', () => {
-        for (const w of BOSS_WAVES) {
-            expect(WAVE_DATA[w].isBossWave).toBe(true);
-            expect(WAVE_DATA[w].bossTier).toBeGreaterThanOrEqual(1);
-            expect(WAVE_DATA[w].bossTier).toBeLessThanOrEqual(4);
-        }
-    });
-
-    test('boss tiers escalate by block (1-2 T1, 3-5 T2, 6-8 T3, 9-10 T4)', () => {
-        const expectedTier = (block /* 1..10 */) =>
-            block <= 2 ? 1 : block <= 5 ? 2 : block <= 8 ? 3 : 4;
-        for (let block = 1; block <= 10; block++) {
-            const bossWave = block * 5;
-            expect(WAVE_DATA[bossWave].bossTier).toBe(expectedTier(block));
-        }
-    });
-
-    test('only wave 50 carries isFinalBoss', () => {
-        for (const w of BOSS_WAVES) {
-            expect(WAVE_DATA[w].isFinalBoss === true).toBe(w === 50);
+    test('every stage-final wave carries its combat groups', () => {
+        for (const w of STAGE_FINAL_WAVES) {
+            const groups = WAVE_DATA[w].subWaves.flat();
+            expect(groups.length).toBeGreaterThan(0);
         }
     });
 
@@ -114,13 +100,6 @@ describe('50-wave campaign — WAVE_DATA structure', () => {
         }
     });
 
-    test('non-boss waves have no isBossWave flag', () => {
-        for (let w = 1; w <= MAX_WAVES; w++) {
-            if (BOSS_WAVES.includes(w)) continue;
-            expect(WAVE_DATA[w].isBossWave).toBeFalsy();
-        }
-    });
-
     test('every spec type is a known enemy type and counts are positive', async () => {
         const enemyMod = await import('../../../js/modules/enemy/enemy-data.js');
         // enemy-data.js exports the roster as ENEMY_TYPES (the campaign only
@@ -136,26 +115,10 @@ describe('50-wave campaign — WAVE_DATA structure', () => {
     });
 });
 
-describe('50-wave campaign — boss mapping', () => {
-    test('stage maps the 10 bosses once each in order; Prismarch is the wave-50 finale', () => {
-        expect(BOSS_DESCRIPTORS.length).toBe(10);
-        const seenIds = [];
-        const stages = [];
-        for (const w of BOSS_WAVES) {
-            const stage = getStage(w, WAVES_PER_STAGE);
-            stages.push(stage);
-            const boss = getBossForStage(stage);
-            expect(boss).toBeTruthy();
-            seenIds.push(boss.id);
-        }
-        // Stages 1..10 in order across the 10 boss waves.
+describe('50-wave campaign — stage mapping', () => {
+    test('getStage maps the 10 stage-finals to stages 1..10 in order', () => {
+        const stages = STAGE_FINAL_WAVES.map((w) => getStage(w, WAVES_PER_STAGE));
         expect(stages).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-        // All 10 bosses appear exactly once.
-        expect(new Set(seenIds).size).toBe(10);
-        // Wave 50 → stage 10 → the final boss.
-        const finalBoss = getBossForStage(getStage(50, WAVES_PER_STAGE));
-        expect(finalBoss.isFinalBoss).toBe(true);
-        expect(finalBoss.id).toBe('PRISMARCH');
     });
 });
 
@@ -183,7 +146,7 @@ describe('50-wave campaign — elite spawn mechanic', () => {
         const spawned = [];
         const makeEnemy = () => ({
             health: 100, maxHealth: 100, radius: 20, baseRadius: 20,
-            config: { points: 100 }, isBoss: false, isMiniBoss: false,
+            config: { points: 100 }, isMiniBoss: false,
             reset() {}, startWarpIn() {},
         });
         const ctx = {
@@ -215,7 +178,7 @@ describe('50-wave campaign — elite spawn mechanic', () => {
         const spawned = [];
         const makeEnemy = () => ({
             health: 100, maxHealth: 100, radius: 20, baseRadius: 20,
-            config: { points: 100 }, isBoss: false, isMiniBoss: false,
+            config: { points: 100 }, isMiniBoss: false,
             reset() {}, startWarpIn() {},
         });
         const ctx = {

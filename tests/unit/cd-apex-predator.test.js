@@ -47,37 +47,30 @@ describe('CD-02 — shouldExecute threshold math', () => {
 
     test('a hit that leaves the enemy AT/BELOW 15% maxHP executes', () => {
         // 100 maxHP, currently 20, take 6 → 14 remaining ≤ 15 → execute.
-        expect(shouldExecute(20, 6, 100, false)).toBe(true);
+        expect(shouldExecute(20, 6, 100)).toBe(true);
         // Exactly at the boundary: 100 maxHP, currently 16, take 1 → 15 = 15% → execute.
-        expect(shouldExecute(16, 1, 100, false)).toBe(true);
+        expect(shouldExecute(16, 1, 100)).toBe(true);
         // Already-lethal hit (would drop below 0) also "executes" (still lethal).
-        expect(shouldExecute(20, 50, 100, false)).toBe(true);
+        expect(shouldExecute(20, 50, 100)).toBe(true);
     });
 
     test('a hit that leaves the enemy ABOVE 15% maxHP does NOT execute', () => {
         // 100 maxHP, currently 50, take 10 → 40 remaining > 15 → normal.
-        expect(shouldExecute(50, 10, 100, false)).toBe(false);
+        expect(shouldExecute(50, 10, 100)).toBe(false);
         // Just above the boundary: 100 maxHP, currently 17, take 1 → 16 > 15 → normal.
-        expect(shouldExecute(17, 1, 100, false)).toBe(false);
-    });
-
-    test('a BOSS is never executed (even chipped to a sliver)', () => {
-        expect(shouldExecute(16, 1, 100, true)).toBe(false);
-        expect(shouldExecute(1, 0.1, 100, true)).toBe(false);
+        expect(shouldExecute(17, 1, 100)).toBe(false);
     });
 
     test('zero / missing maxHealth never executes (guards divide-by-nonsense)', () => {
-        expect(shouldExecute(5, 1, 0, false)).toBe(false);
-        expect(shouldExecute(5, 1, undefined, false)).toBe(false);
+        expect(shouldExecute(5, 1, 0)).toBe(false);
+        expect(shouldExecute(5, 1, undefined)).toBe(false);
     });
 
     test('apexExecutes wraps shouldExecute over an enemy object', () => {
-        const low = { health: 16, maxHealth: 100, isBoss: false };
-        const high = { health: 60, maxHealth: 100, isBoss: false };
-        const boss = { health: 16, maxHealth: 100, isBoss: true };
+        const low = { health: 16, maxHealth: 100 };
+        const high = { health: 60, maxHealth: 100 };
         expect(apexExecutes(low, 1)).toBe(true);
         expect(apexExecutes(high, 1)).toBe(false);
-        expect(apexExecutes(boss, 1)).toBe(false);
         expect(apexExecutes(null, 1)).toBe(false);
     });
 });
@@ -114,13 +107,6 @@ describe('CD-02 — APEX_PREDATOR through applyDamageToEnemy', () => {
         const e = mkEnemy({ health: 60 }); // 60 → 50 after a 10-hit, well above 15
         const r = applyDamageToEnemy.call(APEX_CTX, e, 10, { element: 'KINETIC', showNumber: false });
         expect(e.health).toBeCloseTo(50);
-        expect(r.destroyed).toBeFalsy();
-    });
-
-    test('a BOSS at low HP is NEVER executed by APEX_PREDATOR', () => {
-        const e = mkEnemy({ health: 14, isBoss: true });
-        const r = applyDamageToEnemy.call(APEX_CTX, e, 1, { element: 'KINETIC', showNumber: false });
-        expect(e.health).toBeCloseTo(13); // normal hit only
         expect(r.destroyed).toBeFalsy();
     });
 });

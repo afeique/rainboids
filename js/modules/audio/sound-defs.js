@@ -1132,7 +1132,7 @@ export const SOUND_DEFS = {
     //   light  — HUNTER, WASP            (~250ms total)
     //   mid    — STALKER, DRIFTER, WEAVER, TANGERINE  (~400-500ms)
     //   heavy  — SENTINEL, PROWLER, GUARDIAN  (~600-900ms)
-    //   boss   — TITAN                   (~1100ms)
+    //   heavy  — TITAN                   (~1100ms)
 
     // HUNTER — light/agile. Audible-mid body that descends, plus
     // bright HPF tail for the "pop" character.
@@ -1407,7 +1407,7 @@ export const SOUND_DEFS = {
         ],
     },
 
-    // TITAN — boss. Cataclysmic, longest in the library. Lower mid
+    // TITAN — heavy. Cataclysmic, longest in the library. Lower mid
     // body (~280Hz) but still audible; max envelope length; layered
     // stuttered secondary detonations.
     enemyDestroy_TITAN: {

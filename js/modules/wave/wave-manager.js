@@ -9,9 +9,7 @@ import { GAME_CONFIG, GAME_STATES, MAX_WAVES, MAX_STAGES, WAVES_PER_STAGE, getEn
 import { passiveSlotsUnlockedAfter } from '../combat/passive-data.js';
 import { Asteroid } from '../world/asteroid.js';
 import { Enemy } from '../enemy/enemy.js';
-import { linkBosses } from '../enemy/boss-rage.js';
-import { getBossForStage, getBossById, BOSS_DESCRIPTORS } from '../enemy/bosses/index.js';
-import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getEnemySpeedMultiplier, getEnemyBulletSpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, BOSS_TIER_STATS, isBossWave } from './wave-data.js';
+import { getWaveConfig, getEnemyLevel, getAsteroidLevel, getLevelScaledEnemyStats, getEnemySpeedMultiplier, getEnemyBulletSpeedMultiplier, WAVE_SUBTITLES, WAVE_SUBTITLES_GENERIC, isBossWave } from './wave-data.js';
 import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
@@ -243,8 +241,8 @@ export function updateWaveSystem() {
         const _mob = isMobile();
         // RUN-01b — the card draft fires on EVERY stage clear EXCEPT the final
         // stage (runConfig-aware → default 10×3 run: waves 3,6,…,27 but NOT
-        // wave 30, the run-ending boss). Cards-per-run = stages − 1 (default 9).
-        // The final stage clear still grants the gold bonus + boss, just no card.
+        // wave 30, the run end). Cards-per-run = stages − 1 (default 9).
+        // The final stage clear still grants the gold bonus, just no card.
         const survivorWave = isCardStage(clearedWave, this.game);
 
         // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
@@ -453,11 +451,11 @@ const MISSION_TEMPLATES = [
 ];
 
 export function startWaveMission() {
-    // Boss waves get a fixed mission flavor; non-boss roll random.
+    // Stage-final waves get a fixed mission flavor; others roll random.
     const wave = this.game.currentWave;
-    const isBoss = isBossWave(wave, runWavesPerStage(this.game));
-    const tpl = isBoss
-        ? MISSION_TEMPLATES[0]    // boss waves: take no damage (hard, but iconic)
+    const isStageFinal = isBossWave(wave, runWavesPerStage(this.game));
+    const tpl = isStageFinal
+        ? MISSION_TEMPLATES[0]    // stage finals: take no damage (hard, but iconic)
         : MISSION_TEMPLATES[(Math.random() * MISSION_TEMPLATES.length) | 0];
     this.game.mission = {
         id: tpl.id,
@@ -716,9 +714,6 @@ export function spawnWaveEntities() {
     // the gate in weapons.firePower also requires the powerup, so this is inert
     // without it.
     if (this.player) this.player._surgeBatteryReady = true;
-    // BOSS-04 — clear the once-per-wave modular-boss guard so this wave's boss
-    // (if any) can spawn when its boss group fires.
-    this._modularBossSpawnedWave = null;
 
     // 5.75.0 — assign this wave's mission and announce it.
     startWaveMission.call(this);
@@ -749,37 +744,12 @@ function spawnSubWave(idx) {
     if (!groups || groups.length === 0) return false;
 
     for (const enemyGroup of groups) {
-        // BOSS-04 — modular boss takes the place of the legacy TITAN-tier boss
-        // on stage finals (gated; defaults ON). The escort groups (non-isBoss)
-        // still spawn normally. spawnStageBoss is self-guarded to fire once per
-        // boss wave, so a multi-boss-group config can't double-spawn.
-        //
-        // H2 (Bug-Pass 2026-05-25) — the authored `isBoss` group lives at the
-        // FIXED wave position 3/6/9/…/30 (the wps=3 layout). For a non-default
-        // wps (e.g. 6), spawnStageBoss returns null at that wave (it's NOT a
-        // stage-final for the chosen wps) — and the old code `continue`d
-        // unconditionally, dropping the whole group so the wave spawned NOTHING
-        // (no boss, no escort). Now: if no boss spawned, fall through to spawn
-        // the group as ESCORT enemies. The real stage-final boss is driven by
-        // isBossWave(wave, wps) in maybeSpawnStageFinalBoss below, decoupled
-        // from this fixed-position flag.
-        if (enemyGroup.isBoss && this._modularBossesEnabled !== false) {
-            if (spawnStageBoss.call(this)) continue;
-            // else: no boss this wave/wps → spawn the group as escort instead.
-        }
         const opts = { onScreen: true };
-        if (enemyGroup.isBoss && enemyGroup.bossTier) opts.bossTier = enemyGroup.bossTier;
         // 9.11.0 — ELITE/miniboss spec (isElite wave): thread the flag so
         // spawnLeveledEnemies spawns these as beefed-up minibosses.
         if (enemyGroup.elite) opts.elite = true;
         this.spawnLeveledEnemies(enemyGroup.type, enemyGroup.count, opts);
     }
-    // H2 — guarantee the modular boss on EVERY real stage-final (wave % wps ===
-    // 0), even when the cycled / non-default-wps WAVE_DATA entry has no `isBoss`
-    // group at this sub-wave position. Fires on the LAST sub-wave so the escort
-    // softens the player first (mirrors the authored boss-in-final-subwave
-    // layout). Self-guarded (once per wave) + a no-op on non-stage-finals.
-    maybeSpawnStageFinalBoss.call(this, idx, subWaves.length);
     this.game.subWaveIndex = idx + 1;
     this.game.lastSubWaveSpawnAt = Date.now();
 
@@ -865,30 +835,12 @@ export function tryAdvanceSubWave() {
     let spawnedThisTick = false;
     if (groups && groups.length > 0) {
         for (const group of groups) {
-            // BOSS-04 — modular boss replaces the legacy TITAN-tier boss on
-            // stage finals (gated; defaults ON). Self-guarded to fire once.
-            //
-            // H2 (Bug-Pass 2026-05-25) — same decoupling as spawnSubWave: the
-            // authored `isBoss` flag sits at a FIXED wave position; for a
-            // non-default wps spawnStageBoss returns null here, so DON'T drop
-            // the group — fall through to spawn it as escort. The actual
-            // stage-final boss is driven by isBossWave(wave, wps) in
-            // maybeSpawnStageFinalBoss after the loop.
-            if (group.isBoss && this._modularBossesEnabled !== false) {
-                if (spawnStageBoss.call(this)) { spawnedThisTick = true; continue; }
-                // else: no boss this wave/wps → spawn the group as escort.
-            }
             const opts = { onScreen: true };
-            if (group.bossTier) opts.bossTier = group.bossTier | 0;
             // 9.11.0 — ELITE/miniboss spec (isElite wave) — see spawnLeveledEnemies.
             if (group.elite) opts.elite = true;
             this.spawnLeveledEnemies(group.type, group.count | 0, opts);
             spawnedThisTick = true;
         }
-        // H2 — modular boss on the real stage-final (wave % wps === 0), driven
-        // by isBossWave(wave, wps) not the fixed-position flag. Fires on the
-        // last sub-wave; self-guarded once per wave; no-op otherwise.
-        if (maybeSpawnStageFinalBoss.call(this, idx, totalSubWaves)) spawnedThisTick = true;
         if (idx > 0 && this.events?.emit) {
             this.events.emit('ui:show-message', {
                 title: `STAGE ${getStageLabel(this.game.currentWave, runWavesPerStage(this.game))} · PHASE ${idx + 1} of ${totalSubWaves}`,
@@ -950,8 +902,7 @@ export function canSpawn(activeCount, cap = ENEMY_SPAWN_CAP) {
  *   cap     : override the concurrent cap
  *   warpTo  : {x,y} → play the warp-in animation toward there (else spawn in place)
  *   onSpawn : callback(enemy) to tweak the fresh enemy (health/size/split-gen)
- * Used by Spore Carrier (drone spawns) + Hydra (split-on-death) + the
- * Hivemother boss (egg-sacs).
+ * Used by Spore Carrier (drone spawns) + Hydra (split-on-death).
  */
 export function requestEnemySpawn(type, x, y, opts = {}) {
     const cap = opts.cap || ENEMY_SPAWN_CAP;
@@ -964,156 +915,6 @@ export function requestEnemySpawn(type, x, y, opts = {}) {
     else { enemy.x = x; enemy.y = y; }
     if (typeof opts.onSpawn === 'function') opts.onSpawn(enemy);
     return enemy;
-}
-
-// 9.0.0 — DEBUG boss roster for the pause-menu DEBUG tab (?debug=1). Returns a
-// lightweight [{ id, name }] for every registered boss; no engine deps.
-export function getBossList() {
-    return BOSS_DESCRIPTORS.map(d => ({ id: d.id, name: d.name }));
-}
-
-// 9.0.0 — DEBUG boss confrontation (pause → DEBUG tab → SPAWN BOSS). Drains the
-// active field (enemies, asteroids, enemy fire) so the tester faces the boss
-// alone, clears the once-per-wave spawn guard, then warps the chosen boss in by
-// id. Returns the boss enemy, or null on failure.
-export function debugSpawnBoss(id) {
-    if (this.enemyPool && typeof this.enemyPool.drainActive === 'function') this.enemyPool.drainActive();
-    if (this.asteroidPool && typeof this.asteroidPool.drainActive === 'function') this.asteroidPool.drainActive();
-    if (this.enemyBulletPool && typeof this.enemyBulletPool.drainActive === 'function') this.enemyBulletPool.drainActive();
-    this._modularBossSpawnedWave = null;
-    return spawnModularBoss.call(this, id, { warp: true });
-}
-
-// BOSS-04 — spawn ONE modular boss from a descriptor. Additive + gated: this is
-// the ONLY place a `bosses/*` descriptor becomes a live entity. It does NOT
-// replace the legacy wave spawn — it adds the boss into the same enemy pool,
-// where it participates in wave-clear (active === 0 gate) like any enemy.
-//
-// `which` is a stage number, a boss id ('HARBINGER'), or a descriptor object.
-// opts:
-//   x, y     : world center (default: center of the visible viewport)
-//   warp     : play the warp-in streak (default true; debug/test pass false for
-//              an instantly-fightable boss)
-//   level    : escort level passed to enemy.reset (default game.enemyLevel || 1)
-// Returns the boss enemy, or null if no descriptor / the pool is dry.
-//
-// `this` is the engine.
-export function spawnModularBoss(which, opts = {}) {
-    let desc = null;
-    if (which && typeof which === 'object' && which.id) desc = which;
-    else if (typeof which === 'number') desc = getBossForStage(which);
-    else if (typeof which === 'string') desc = getBossById(which);
-    if (!desc) {
-        console.warn('spawnModularBoss: no boss descriptor for', which);
-        return null;
-    }
-
-    const boss = this.enemyPool.get();
-    if (!boss) return null;
-
-    // Reset to a real enemy type first so all the per-frame movement / firing
-    // code has a valid config (the descriptor overwrites HP/size/element after).
-    // TITAN is the heaviest base chassis — closest in spirit to a boss.
-    const level = (opts.level != null) ? opts.level : ((this.game && this.game.enemyLevel) || 1);
-    const baseType = (ENEMY_TYPES && ENEMY_TYPES.TITAN) ? 'TITAN' : 'HUNTER';
-    boss.reset(0, 0, baseType, level, this);
-
-    // Target position: explicit, else center of the visible viewport.
-    const cx = (opts.x != null) ? opts.x
-        : (this.camera ? this.camera.x + this.width / 2 : (this.gameField ? this.gameField.width / 2 : 600));
-    const cy = (opts.y != null) ? opts.y
-        : (this.camera ? this.camera.y + this.height / 2 : (this.gameField ? this.gameField.height / 2 : 400));
-
-    // Stamp descriptor identity + run the descriptor's init (seeds HP/phases/
-    // parts/intro over the shipped chassis). The chassis init reads `boss.x/y`
-    // for the initial part-orbit positions, so set them first.
-    boss.x = cx;
-    boss.y = cy;
-    boss.angle = 0;
-    const now = Date.now();
-    try {
-        if (typeof desc.initBoss === 'function') desc.initBoss(boss, this, now);
-    } catch (err) {
-        console.error('spawnModularBoss: initBoss failed', err);
-        this.enemyPool.release(boss);
-        return null;
-    }
-
-    // Carry the descriptor's display fields onto the enemy so the HUD healthbar,
-    // boss-FX hook, and the generic renderer all read them. initBoss already set
-    // most of these; we make sure the renderer-facing ones are present.
-    boss.isBoss = true;
-    boss.bossId = desc.id;
-    boss.name = desc.name;
-    boss.element = desc.element;
-    boss.color = desc.color || boss.color;
-    boss.glowColor = desc.glowColor || boss.glowColor;
-    boss.size = desc.size || boss.size || 96;
-    boss.radius = boss.size / 2;
-    boss.baseRadius = boss.radius;
-    boss.phaseCount = desc.phaseCount || boss.phaseCount;
-    boss.isFinalBoss = !!desc.isFinalBoss;
-    // The per-frame driver enemy.update() calls (BOSS-04 wiring in enemy.js).
-    boss._bossDriver = desc.updateBoss;
-    // Cache the descriptor's death-script builder so the kill path can arm the
-    // death detonation sequence (boss-fx reads it).
-    boss._buildBossDeathScript = desc.buildDeathScript;
-    // Recompute mass for the heavier collider.
-    boss.mass = Math.PI * boss.radius * boss.radius * 0.8;
-
-    // Warp the boss in from off-target (live game) or place it instantly (debug
-    // / test). The intro sequence plays during the warp either way.
-    const warp = opts.warp !== false;
-    if (warp) {
-        // Start just off the top edge of the viewport, streak down to center.
-        boss.x = cx;
-        boss.y = cy - Math.max(280, this.height * 0.5 + boss.radius + 60);
-        boss.startWarpIn(cx, cy);
-    } else {
-        boss.warping = false;
-        boss.x = cx;
-        boss.y = cy;
-    }
-
-    return boss;
-}
-
-// BOSS-04 — spawn the boss for the CURRENT stage on its boss wave. Gated so it
-// only fires once per boss wave (guarded by `_modularBossSpawnedWave`). Called
-// from the boss-wave spawn path; a no-op on non-boss waves. `this` is the engine.
-export function spawnStageBoss() {
-    const wave = this.game.currentWave | 0;
-    const wps = runWavesPerStage(this.game);
-    if (!isBossWave(wave, wps)) return null;
-    if (this._modularBossSpawnedWave === wave) return null; // already spawned this wave
-    const stage = getStage(wave, wps);
-    const boss = spawnModularBoss.call(this, stage, { warp: true });
-    if (boss) this._modularBossSpawnedWave = wave;
-    return boss;
-}
-
-// H2 (Bug-Pass 2026-05-25) — decouple the modular-boss spawn from the
-// hard-coded `isBoss` table position. Called after EVERY sub-wave's groups
-// are spawned (from spawnSubWave + tryAdvanceSubWave). On the LAST sub-wave of
-// a REAL stage-final (isBossWave(wave, wps) — the actual marker for the chosen
-// wps), spawn the modular boss + escort. This guarantees a boss on every
-// stage-final regardless of wps and regardless of whether the cycled WAVE_DATA
-// entry happens to carry an `isBoss` group at that position.
-//
-// `spawnStageBoss` is itself self-guarded (once per wave via
-// `_modularBossSpawnedWave`), so when the authored `isBoss` group already
-// triggered the boss on the default 10×3 layout, this is a NO-OP — the default
-// run is byte-for-byte unchanged (boss still spawns from the isBoss group on
-// the final sub-wave; this just confirms it). Returns the boss or null.
-//
-// `this` is the engine.
-export function maybeSpawnStageFinalBoss(subWaveIdx, totalSubWaves) {
-    if (this._modularBossesEnabled === false) return null;
-    // Only on the last sub-wave (escort softens the player up first).
-    if ((subWaveIdx | 0) < (totalSubWaves | 0) - 1) return null;
-    const wave = this.game.currentWave | 0;
-    if (!isBossWave(wave, runWavesPerStage(this.game))) return null;
-    return spawnStageBoss.call(this);
 }
 
 export function spawnLeveledAsteroids(count, opts = {}) {
@@ -1142,14 +943,13 @@ export const ELITE_POINTS_MUL = 3;
 
 export function spawnLeveledEnemies(enemyType, count, opts = {}) {
     const elite = opts.elite === true;
-    // 5.75.0 — mid-wave mini-boss promotion. On non-boss spawns from
-    // wave 4 onward, one enemy in the group has a wave-scaled chance of
-    // becoming a "mini-boss": 1.7× HP, 1.25× size, distinct visual tag,
-    // and triple gold drops on death. Adds an interesting threat spike
-    // to the long stretches of regular waves between scripted bosses.
+    // 5.75.0 — mid-wave mini-boss promotion. From wave 4 onward, one enemy in
+    // the group has a wave-scaled chance of becoming a "mini-boss": 1.7× HP,
+    // 1.25× size, distinct visual tag, and triple gold drops on death. Adds an
+    // interesting threat spike to the long stretches of regular waves.
     // Skipped for ELITE groups — those promote EVERY member below.
     let miniBossIdx = -1;
-    if (!elite && !opts.bossTier && enemyType !== 'TITAN' && this.game.currentWave >= 4) {
+    if (!elite && enemyType !== 'TITAN' && this.game.currentWave >= 4) {
         const wave = this.game.currentWave;
         const chance = Math.min(0.45, 0.06 + (wave - 4) * 0.025);
         // Per group, but only one mini per group (so the player still
@@ -1164,15 +964,10 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
     const baseEnemyLevel = this.game.enemyLevel;
     if (elite) this.game.enemyLevel = (baseEnemyLevel | 0) + ELITE_LEVEL_BONUS;
 
-    // 5.77.0 — collect bosses spawned in this group so we can link
-    // their `_bossPair` (tier 2) and shared `_formationCenter`
-    // (tier 3+). Linking happens after the spawn loop so every
-    // boss exists before back-references are written.
-    const spawnedBosses = [];
-    // 5.115.0 — collect non-boss members so the formation manager
-    // can bundle this sub-wave group into a choreographed routine
-    // (orbit / weave / flank / cross / figure8). Bosses + mini-
-    // bosses are excluded — they have their own scripted positions.
+    // 5.115.0 — collect members so the formation manager can bundle this
+    // sub-wave group into a choreographed routine (orbit / weave / flank /
+    // cross / figure8). Mini-bosses are excluded — they get their own
+    // scripted positions.
     const formationCandidates = [];
     for (let i = 0; i < count; i++) {
         const enemy = this.enemyPool.get();
@@ -1198,9 +993,7 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
                 if (enemy.config) enemy.config.points = (enemy.config.points || 100) * 2;
             }
             enemy.startWarpIn(sp.targetX, sp.targetY);
-            if (enemy.isBoss) {
-                spawnedBosses.push(enemy);
-            } else if (!enemy.isMiniBoss) {
+            if (!enemy.isMiniBoss) {
                 formationCandidates.push(enemy);
             }
         }
@@ -1208,14 +1001,8 @@ export function spawnLeveledEnemies(enemyType, count, opts = {}) {
     // Restore the wave's base enemy level after an ELITE group (the lift above
     // is local to this group's spawns only).
     if (elite) this.game.enemyLevel = baseEnemyLevel;
-    // Link bosses spawned together (tier 2 pair, tier 3 formation,
-    // tier 4 both). Only fires when the group spawned ≥ 2 bosses; a
-    // solo tier-4 still gets formation seeding but skips pair link.
-    if (spawnedBosses.length >= 2 || (spawnedBosses[0] && spawnedBosses[0].bossTier === 4)) {
-        linkBosses(spawnedBosses, this.gameField);
-    }
 
-    // 5.115.0 — Bundle non-boss group into a choreographed formation.
+    // 5.115.0 — Bundle the group into a choreographed formation.
     //   Chance scales with group size: 3 enemies = 55%, 4 = 70%,
     //   5+ = 85%. Late-game waves see more formations.
     //   The formation manager picks the slot positions; each enemy's
@@ -1261,11 +1048,9 @@ export function applyEnemyLevelScaling(enemy, opts = {}) {
     const bulletSpeedMul = getEnemyBulletSpeedMultiplier(this.game.currentWave, _mw);
 
     // RUN-05a — Adaptive Difficulty Director HP axis (D_hp). Multiply the base
-    // level-scaled HP by the active D_hp (default 1.0 with no director). Applied
-    // to the BASE scaled HP here, BEFORE the bossTier overlay below, so bosses
-    // scale with D_hp too (boss HP = base × D_hp × tier.hpMul, per the design).
-    // health stays === maxHealth. Cold-start holds D_hp=1 for waves 1–2, so
-    // early-game HP is unchanged; the director's [0.6,3.0] clamp bounds the rest.
+    // level-scaled HP by the active D_hp (default 1.0 with no director). health
+    // stays === maxHealth. Cold-start holds D_hp=1 for waves 1–2, so early-game
+    // HP is unchanged; the director's [0.6,3.0] clamp bounds the rest.
     const dHp = directorHpMult(this.game);
     enemy.health = scaledStats.health * dHp;
     enemy.maxHealth = scaledStats.health * dHp;
@@ -1277,23 +1062,6 @@ export function applyEnemyLevelScaling(enemy, opts = {}) {
 
     // Update points value for higher level enemies
     enemy.config.points = scaledStats.points;
-
-    // Boss-tier overlays: HP × hpMul, points override, larger size, faster
-    // speed multiplier on top of campaign scaling. Bosses also get a
-    // visible bossTier marker for the renderer.
-    if (opts.bossTier) {
-        const tier = BOSS_TIER_STATS[opts.bossTier] || BOSS_TIER_STATS[1];
-        enemy.isBoss = true;
-        enemy.bossTier = opts.bossTier;
-        enemy.health *= tier.hpMul;
-        enemy.maxHealth *= tier.hpMul;
-        enemy.config.speed *= tier.speedMul;
-        enemy.config.points = tier.points;
-        // Inflate radius/size for visual bossiness. The renderer reads
-        // either `radius` or whatever the type uses; we set both for safety.
-        if (typeof enemy.radius === 'number') enemy.radius *= tier.sizeMul;
-        if (typeof enemy.bossSizeMul === 'undefined') enemy.bossSizeMul = tier.sizeMul;
-    }
 }
 
 // Final-wave-cleared handler — finalize stats and transition to the
@@ -1999,23 +1767,21 @@ export function openWavePickOverlay() {
                 });
             }
 
-            // Boss-wave bonus: on top of the card just picked, grant a chunk
-            // of bonus run-gold. R7.4 — this used to auto-grant a random
-            // PASSIVE stack, but stat passives are now SP-driven ONLY (earned
-            // by leveling, spent in the STATS menu). Gold fits the new economy
-            // (spend on extra cards / repair, or bank toward unlocks).
+            // Stage-final bonus: on top of the card just picked, grant a chunk
+            // of bonus run-gold (spend on extra cards / repair, or bank toward
+            // unlocks).
             const justCleared = (this.game && this.game.currentWave) | 0;
-            // M1: thread the run's wavesPerStage so boss-bonus gold fires on
-            // the SAME waves as every other isBossWave() call in this file.
+            // M1: thread the run's wavesPerStage so the stage-final bonus fires
+            // on the SAME waves as every other isBossWave() call in this file.
             // Omitting it defaulted to 3, mis-firing under a non-default config.
             if (justCleared > 0 && isBossWave(justCleared, runWavesPerStage(this.game))) {
-                const bossGold = 200 + justCleared * 20;
-                this.game.money = (this.game.money | 0) + bossGold;
+                const stageGold = 200 + justCleared * 20;
+                this.game.money = (this.game.money | 0) + stageGold;
                 if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
                 if (this.events?.emit) {
                     this.events.emit('ui:show-message', {
-                        title: '★ BOSS BONUS ★',
-                        subtitle: `+${bossGold} gold`,
+                        title: '★ STAGE BONUS ★',
+                        subtitle: `+${stageGold} gold`,
                         duration: 1800,
                         position: 'top',
                     });

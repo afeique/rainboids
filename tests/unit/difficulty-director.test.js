@@ -4,8 +4,8 @@
  *
  * Pure, deterministic: hand-fed wave outcomes drive Po/Pd (EMA), the two
  * decoupled axes D_hp∈[0.6,3.0] / D_thr∈[0.6,1.8], the deadband / rate-limit /
- * clamp / cold-start / cross-term / mercy / escalation rules, getThreatLevel
- * (1..5 pip) and lockForBoss.
+ * clamp / cold-start / cross-term / mercy / escalation rules, and
+ * getThreatLevel (1..5 pip).
  */
 
 import { describe, expect, test } from '@jest/globals';
@@ -16,7 +16,6 @@ import {
     tickWave,
     getDifficulty,
     getThreatLevel,
-    lockForBoss,
     setDirectorContext,
     getEnemyPower,
     DIRECTOR_DEFAULTS,
@@ -427,30 +426,6 @@ describe('net per-wave rate limit (FIX-01 — no compounding)', () => {
                 expect(netMove(beforeThr, s.D_thr)).toBeLessThanOrEqual(MS + EPS);
             }
         }
-    });
-});
-
-describe('lockForBoss (frozen snapshot)', () => {
-    test('returns the current D snapshot', () => {
-        const s = createDirector();
-        runWaves(s, godOutcome, 40);
-        const lock = lockForBoss(s);
-        expect(lock.D_hp).toBe(s.D_hp);
-        expect(lock.D_thr).toBe(s.D_thr);
-    });
-
-    test('snapshot is NOT mutated by subsequent recordWave/updateDifficulty', () => {
-        const s = createDirector();
-        runWaves(s, godOutcome, 40);
-        const lock = lockForBoss(s);
-        const lockedHp = lock.D_hp;
-        const lockedThr = lock.D_thr;
-        // keep playing — director keeps moving
-        runWaves(s, weakOutcome, 20);
-        expect(lock.D_hp).toBe(lockedHp);
-        expect(lock.D_thr).toBe(lockedThr);
-        // and the frozen object can't be written to
-        expect(() => { 'use strict'; lock.D_hp = 999; }).toThrow();
     });
 });
 

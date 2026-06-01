@@ -3,10 +3,6 @@
 import { GAME_CONFIG, BLOODLUST_MAX_STACKS, BLOODLUST_PER_STACK } from '../core/constants.js';
 import { random, collision, starCollision, triggerHapticFeedback } from '../core/utils.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, ABILITIES } from './weapon-data.js';
-import { notifyBossDeath } from '../enemy/boss-rage.js';
-import { phaseBlocksDamage } from '../enemy/boss-phases.js';
-import { coreBlocksDamage, bossPartAt, damageBossPart } from '../enemy/boss-parts.js';
-import { introBlocksDamage } from '../enemy/boss-intro.js';
 import { isMobile, isPortrait } from '../platform/platform-detect.js';
 import { frameClock } from '../core/frame-clock.js';
 import { elementalMultiplier, multiElementMultiplier, adaptResist, ELEMENTS } from './elements.js';
@@ -24,7 +20,7 @@ import { applySuppression } from '../enemy/abilities/suppress-aura.js';
 // pre-pass (routeBulletToReflect, below) bounces a player bullet that strikes a
 // mirror's front arc back as an ENEMY bullet; the mirror takes no damage and the
 // original is consumed. Gated on `enemy.reflects`, so this is a no-op for every
-// other enemy. Mirrors the routeBulletToBossPart weak-point pre-pass precedent.
+// other enemy.
 import { shouldReflect, makeReflectedBullet } from '../enemy/abilities/reflect.js';
 // SYS-4 / ENMY-09 — projectile absorption (DEVOURER). A bullet-vs-enemy pre-pass
 // (routeBulletToAbsorb, below) EATS a player bullet that flies into a devourer's
@@ -178,7 +174,7 @@ export const COLLISION_CONFIG = {
         SMALL_ASTEROID: 0.05,   // was 0.15
         LARGE_ASTEROID: 0.08,   // was 0.20
         ENEMY_WASP:     0.22,   // was 0.65
-        ENEMY_TITAN:    0.50,   // was 0.80 (boss tier — still meaningful)
+        ENEMY_TITAN:    0.50,   // was 0.80 (heavy chassis — still meaningful)
         ENEMY_TANGERINE:0.28,   // was 0.70
         ENEMY_DEFAULT:  0.18,   // was 0.55
     },
@@ -783,22 +779,16 @@ export function handleCollisions() {
         // apply per-tick contact damage). Same for sub-bomblets — they
         // detonate on contact via the proximity block below.
         if (bullet.cluster || bullet.subBomb) continue;
-        // BOSS-02 — weak-point pre-pass. Boss parts orbit OUTSIDE the core
-        // radius, so the spatial-grid core test below would miss them. Route
-        // the bullet to a live weak-point first; if it lands on one, the bullet
-        // is consumed there and we move to the next bullet.
-        if (routeBulletToBossPart.call(this, bullet)) continue;
-        // ENMY-04 — reflect pre-pass (PRISM_MIRROR). Runs AFTER boss-part
-        // routing (the two are disjoint — boss parts are never reflectors).
-        // If a mirror's front arc bounces this bullet, it's consumed here (an
-        // enemy bullet is spawned flying back) and we move to the next bullet,
-        // so the normal enemy-damage path below is skipped. Gated on
-        // `enemy.reflects`, so for every non-mirror enemy the scan finds nothing
-        // and returns false — a byte-for-byte no-op for today's roster.
+        // ENMY-04 — reflect pre-pass (PRISM_MIRROR). If a mirror's front arc
+        // bounces this bullet, it's consumed here (an enemy bullet is spawned
+        // flying back) and we move to the next bullet, so the normal
+        // enemy-damage path below is skipped. Gated on `enemy.reflects`, so for
+        // every non-mirror enemy the scan finds nothing and returns false — a
+        // byte-for-byte no-op for today's roster.
         if (routeBulletToReflect.call(this, bullet)) continue;
-        // ENMY-09 — absorb pre-pass (DEVOURER). Runs AFTER boss-part + reflect
-        // routing; the three are disjoint (a boss part / a mirror / a devourer
-        // are different enemies). If a devourer's maw cone eats this bullet, it's
+        // ENMY-09 — absorb pre-pass (DEVOURER). Runs AFTER reflect routing; the
+        // two are disjoint (a mirror / a devourer are different enemies). If a
+        // devourer's maw cone eats this bullet, it's
         // consumed here (the devourer banks a shield, NO new bullet spawned) and
         // we move to the next bullet, so the normal enemy-damage path below is
         // skipped. Gated on `enemy.eatsProjectiles`, so for every non-devourer
@@ -2363,7 +2353,7 @@ export function destroyAsteroid(ast) {
 // 5.78.0 — single canonical damage entry point. All paths that damage
 // enemies (bullets via enemy.takeDamage, AOE via damageEnemy, future
 // damage modifiers) now funnel through this helper so the invuln gates
-// (warp / deathFlash / boss rage) are checked in exactly one place.
+// (warp / deathFlash) are checked in exactly one place.
 // Returns `{ blocked, destroyed }`. Callers that want the legacy boolean
 // can read `result.destroyed`.
 // P6 — true if the enemy carries any active elemental/CC status (used by the
@@ -2441,18 +2431,18 @@ export function bloodlustMult(stacks) {
 // its max HP instead EXECUTES it (the hit becomes lethal). Pure resolver so it
 // unit-tests without the engine `this`. Given the final post-multiplier `damage`
 // and the enemy's current `health` / `maxHealth`, returns true when the strike
-// should execute. Bosses are exempt. DEFAULT-SAFE by construction: the caller
-// gates on hasPassive('APEX_PREDATOR'), so without the passive this is never
-// consulted and `damage` is untouched.
+// should execute. DEFAULT-SAFE by construction: the caller gates on
+// hasPassive('APEX_PREDATOR'), so without the passive this is never consulted
+// and `damage` is untouched.
 export const APEX_EXECUTE_THRESHOLD = 0.15; // fraction of max HP
-export function shouldExecute(health, damage, maxHealth, isBoss) {
-    if (isBoss || !(maxHealth > 0)) return false;
+export function shouldExecute(health, damage, maxHealth) {
+    if (!(maxHealth > 0)) return false;
     return (health - damage) <= APEX_EXECUTE_THRESHOLD * maxHealth;
 }
 // Enemy-object convenience wrapper used at the damage hook.
 export function apexExecutes(enemy, damage) {
     if (!enemy) return false;
-    return shouldExecute(enemy.health, damage, enemy.maxHealth, !!enemy.isBoss);
+    return shouldExecute(enemy.health, damage, enemy.maxHealth);
 }
 
 // R1 / CD-07 — AoE power-weapon crit roll. Pure resolver so it unit-tests
@@ -2488,8 +2478,7 @@ export function rollAoeCrit(player, damage, rng = Math.random) {
 // player's reticle, grouping them (downside: it pulls danger toward you too).
 // `gravityWellPull` is the pure per-enemy position nudge (toward the target,
 // capped so it never overshoots); `applyGravityWell` (engine-context) runs it
-// over the enemy pool each frame using the aim point. Bosses are exempt so it
-// can't trivialize boss positioning.
+// over the enemy pool each frame using the aim point.
 export const GRAVITY_WELL_RADIUS = 420;
 export const GRAVITY_WELL_STEP = 0.7; // px/frame — deliberately weak
 // 6.157.1 — inner settle zone: stop pulling once an enemy is this close to the
@@ -2518,7 +2507,7 @@ export function applyGravityWell() {
     const tx = (inp && typeof inp.aimX === 'number') ? inp.aimX : p.x;
     const ty = (inp && typeof inp.aimY === 'number') ? inp.aimY : p.y;
     for (const e of pool) {
-        if (!e || !e.active || e.warping || e._deathFlash > 0 || e.isBoss) continue;
+        if (!e || !e.active || e.warping || e._deathFlash > 0) continue;
         gravityWellPull(e, tx, ty);
     }
 }
@@ -2588,30 +2577,6 @@ export function applySuppressAura() {
 export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (!enemy || !enemy.active) return { blocked: true, destroyed: false };
     if (enemy.warping || enemy._deathFlash > 0) return { blocked: true, destroyed: false };
-    // Boss invuln handling. A HARD invuln (rage / phase-transition / intro) always
-    // drops the hit with sparkle feedback. A core SHIELDED by living weak-points
-    // normally drops it too — UNLESS the boss opts into a partial chip via
-    // `coreChipFactor` in (0,1], in which case a fraction of the hit trickles to
-    // the core while its parts live (THE HARBINGER, 6.225.7) so fire never feels
-    // wasted. Clearing the parts still removes the penalty + stops their attacks.
-    if (enemy.isBoss) {
-        const hardInvuln = (enemy._rageInvulnUntil && Date.now() < enemy._rageInvulnUntil)
-            || phaseBlocksDamage(enemy) || introBlocksDamage(enemy);
-        const shielded = !hardInvuln && coreBlocksDamage(enemy);
-        const chip = enemy.coreChipFactor;
-        if (hardInvuln || (shielded && !(chip > 0))) {
-            if (this.particlePool) {
-                const p = this.particlePool.get(enemy.x, enemy.y, 'starSparkle');
-                if (p) {
-                    p.color = '#ff8888';
-                    p.vel.x = (Math.random() - 0.5) * 2;
-                    p.vel.y = (Math.random() - 0.5) * 2;
-                }
-            }
-            return { blocked: true, destroyed: false };
-        }
-        if (shielded) damage *= chip; // partial trickle to the core while parts live
-    }
 
     // EMP_OVERLOAD — stunned enemies take +20% damage.
     if (enemy.stunUntil && enemy.stunUntil > frameClock.now
@@ -2747,7 +2712,7 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     damage = consumeAbsorbShield(enemy, damage, frameClock.now);
 
     // CD-02 §6c — Apex Predator: finish enemies the hit would leave at/below 15%
-    // max HP (instant execute). Bosses exempt. Default-safe: no passive → no
+    // max HP (instant execute). Default-safe: no passive → no
     // change. Sits AFTER every damage multiplier (crit / Bloodlust / Siege /
     // resist / armor / shields) and BEFORE `enemy.health -= damage`, so the
     // existing destroyed/kill path (result.destroyed → onEnemyKill) fires
@@ -2787,10 +2752,6 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     if (this.game?.stats) this.game.stats.totalDamageDealt += damage;
 
     const destroyed = enemy.health <= 0.001;
-    if (destroyed && enemy.isBoss && !enemy._bossPairNotified) {
-        enemy._bossPairNotified = true;
-        notifyBossDeath(enemy);
-    }
 
     // E4 — on-hit elemental synergy reactions (SHATTER / OIL flare). `damage`
     // is the post-multiplier dealt amount. Fires even on a killing blow so a
@@ -2828,104 +2789,16 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     return { blocked: false, destroyed };
 }
 
-// BOSS-02 — route a player bullet onto a boss WEAK-POINT.
-//
-// Weak-point parts (boss-parts.js) orbit OUTSIDE the boss core radius, so the
-// standard core-radius collision in the bullet loop never reaches them. This
-// pre-pass tests the bullet position against every active modular boss's live
-// parts (`bossPartAt`) and, on a hit:
-//   • resolves the bullet's element(s) vs the part's resist (same multiplier
-//     helper the core damage path uses), so a part can be resistant / weak.
-//   • damages the PART via `damageBossPart`. While any SHIELDING part lives the
-//     core stays invulnerable (`coreBlocksDamage` in applyDamageToEnemy already
-//     enforces this) — clearing the parts is what unlocks the core.
-//   • paints localized hit FX + a destroy burst when the part falls.
-//
-// Returns true when the bullet hit a part (the caller consumes/pierces the
-// bullet and skips the normal enemy hit for it). `this` is the engine.
-export function routeBulletToBossPart(bullet) {
-    const pool = this.enemyPool;
-    if (!pool || !pool.activeObjects || !bullet || !bullet.active) return false;
-    for (const boss of pool.activeObjects) {
-        // Only modular bosses with live parts; skip warping / dying / intro.
-        if (!boss || !boss.bossId || !boss.isBoss || !boss.active) continue;
-        if (boss.warping || boss._deathFlash > 0) continue;
-        if (introBlocksDamage(boss)) continue;       // can't hit parts during intro
-        if (phaseBlocksDamage(boss)) continue;       // phase-transition invuln
-        if (!boss._partsState) continue;
-        const part = bossPartAt(boss, bullet.x, bullet.y);
-        if (!part) continue;
-
-        // Resolve element multiplier vs the part's own resist (falls back to no
-        // resist → ×1). Single- or multi-element bullets both handled.
-        let dmg = this.cheats && this.cheats.onePunchMan ? 99999 : (bullet.damage || this.baseDamage || 1);
-        const els = (bullet.elements && bullet.elements.length) ? bullet.elements : [bullet.element || 'KINETIC'];
-        if (part.resist) {
-            const m = multiElementMultiplier(part.resist, els);
-            if (m !== 1) dmg *= m;
-        }
-        // P6 — global outgoing damage mult applies to weak-points too.
-        if (this.player && typeof this.player.getPassiveDamageMult === 'function') {
-            const pm = this.player.getPassiveDamageMult();
-            if (pm !== 1) dmg *= pm;
-        }
-
-        const res = damageBossPart(boss, part, dmg, this);
-        if (this.game && this.game.stats) {
-            this.game.stats.shotsHit = (this.game.stats.shotsHit | 0) + 1;
-            this.game.stats.totalDamageDealt = (this.game.stats.totalDamageDealt || 0) + dmg;
-        }
-
-        // Surface the boss in the target info panel + register the hit.
-        this._setLastHit(boss);
-        if (this.player && typeof this.player.registerHit === 'function') this.player.registerHit();
-
-        // Damage number on the part.
-        if (typeof this.createDamageNumber === 'function') {
-            this.createDamageNumber(part.x, part.y - (part.radius || 16) - 6, dmg,
-                { isCrit: !!(bullet.isCrit || bullet.isCritical), target: boss });
-        }
-
-        // Hit FX — shrapnel at the impact, brighter burst when the part dies.
-        if (this.particlePool) {
-            const c = boss.glowColor || boss.color || '#ffffff';
-            const n = res && res.destroyed ? 14 : 6;
-            for (let p = 0; p < n; p++) {
-                const a = Math.random() * Math.PI * 2;
-                const sp = random(2, res && res.destroyed ? 9 : 6);
-                this.particlePool.get(part.x, part.y, 'explosionShrapnel', a, sp, p < 3 ? '#ffffff' : c);
-            }
-            if (res && res.destroyed) {
-                this.particlePool.get(part.x, part.y, 'explosionRingColored', (part.radius || 16) * 3, c);
-            }
-        }
-        if (res && res.destroyed && this.isEntityOnScreen && this.isEntityOnScreen(boss)) {
-            this.events.emit('audio:enemy-destroy', 'TITAN');
-        }
-
-        // Consume the bullet through the standard hit path: piercing records
-        // the boss + decrements (so it won't re-hit the same parts this frame),
-        // a non-piercing bullet starts dying. Ricochet caroms expire on parts
-        // (they re-seek on the next enemy hit), matching "boss eats the shot".
-        if (bullet.explosive) bullet.explode(this);
-        bullet.onHit(boss);
-        return true;
-    }
-    return false;
-}
-
 // ENMY-04 — route a player bullet onto a reflecting enemy (PRISM_MIRROR).
 //
 // A "mirror" enemy holds a front-arc MIRROR (`enemy.reflect`) and the
-// `enemy.reflects` flag. This pre-pass — modeled on routeBulletToBossPart —
-// scans active enemies and, for the FIRST one whose front arc this bullet is
-// approaching from (`shouldReflect`, which also rejects beams / melee / already-
-// reflected shots), bounces the shot:
+// `enemy.reflects` flag. This pre-pass scans active enemies and, for the FIRST
+// one whose front arc this bullet is approaching from (`shouldReflect`, which
+// also rejects beams / melee / already-reflected shots), bounces the shot:
 //   • spawns a real ENEMY bullet flying back OUT along the enemy→bullet vector
 //     (so it threatens the player via the existing player-vs-enemy-bullet path),
 //     flagged `reflected:true` so a second mirror can't re-reflect it.
-//   • paints a small reflect-spark FX at the impact (reuses particlePool like
-//     routeBulletToBossPart).
+//   • paints a small reflect-spark FX at the impact.
 //   • CONSUMES the player bullet (startDying → disappear puff + deactivate) and
 //     returns true so the caller skips the normal enemy-damage path — the mirror
 //     takes NO damage from a front-arc hit.
@@ -2981,8 +2854,8 @@ export function routeBulletToReflect(bullet) {
             }
         }
 
-        // Reflect-spark FX at the impact point (same particlePool path as the
-        // boss-part hit burst). A short bright flash that reads as a "ting".
+        // Reflect-spark FX at the impact point. A short bright flash that reads
+        // as a "ting".
         if (this.particlePool) {
             const c = enemy.glowColor || enemy.color || '#ffffff';
             for (let p = 0; p < 6; p++) {
@@ -3014,7 +2887,7 @@ export function routeBulletToReflect(bullet) {
 //     maw.maxShield, stamped to lapse after SHIELD_DURATION_MS). The shield is
 //     soaked against incoming damage in applyDamageToEnemy (consumeAbsorbShield).
 //   • paints a small absorb-spark FX — a few sparks pulled IN toward the maw
-//     (reuses particlePool like routeBulletToReflect / routeBulletToBossPart),
+//     (reuses particlePool like routeBulletToReflect),
 //     reading as the bullet being "swallowed" rather than a bounce-out.
 //   • CONSUMES the player bullet (startDying → disappear puff + deactivate) and
 //     returns true so the caller skips the normal enemy-damage path — the
@@ -3026,11 +2899,10 @@ export function routeBulletToReflect(bullet) {
 // so with no devourer on the field the scan finds nothing and returns false
 // (byte-for-byte no-op for the current roster).
 //
-// ORDER among the three bullet pre-passes (boss-part → reflect → absorb): they
-// are mutually disjoint — a boss weak-point, a PRISM_MIRROR reflector, and a
-// DEVOURER are three different enemies, so a bullet can match at most one. Absorb
-// runs LAST simply as the newest slice; placement among the three doesn't change
-// behavior because no enemy is two of the three at once.
+// ORDER among the two bullet pre-passes (reflect → absorb): they are mutually
+// disjoint — a PRISM_MIRROR reflector and a DEVOURER are different enemies, so a
+// bullet can match at most one. Absorb runs LAST simply as the newest slice;
+// placement doesn't change behavior because no enemy is both at once.
 export function routeBulletToAbsorb(bullet) {
     const pool = this.enemyPool;
     if (!pool || !pool.activeObjects || !bullet || !bullet.active) return false;
@@ -3430,7 +3302,6 @@ export function damageEnemy(enemy, damage, element, canCrit = false) {
         const reward = enemy.getDestructionReward();
         if (this.game.stats) {
             this.game.stats.enemiesKilled++;
-            if (enemy.isBoss) this.game.stats.bossesKilled++;
         }
         this.onEnemyKill(enemy);
         if (this.isEntityOnScreen(enemy)) {

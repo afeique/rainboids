@@ -808,7 +808,7 @@ export function heavyCrawlMovement() {
 // significantly more frequent lunges. Plus a perpendicular weave so the
 // orbit path snakes instead of tracing a clean circle. Combined with the
 // 3-shot rapid-burst fire (firing.js handleBurstShooting hunter_single
-// case) this turns the Hunter into the second most-aggressive non-boss.
+// case) this turns the Hunter into the second most-aggressive enemy.
 //
 // State the pattern owns on the enemy:
 //   • _arcDirection      sticky CW/CCW choice (one-way orbit feel)

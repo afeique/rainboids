@@ -192,35 +192,33 @@ export const RARITY_ORDER = [
 
 // Weighted random pick across all 8 tiers.
 //
-// `bossBias` (0..1) shifts probability mass UP the ladder: each tier's
-// effective weight is scaled by `(1 + bossBias * rank * BOSS_BIAS_K)`,
+// `rarityBias` (0..1) shifts probability mass UP the ladder: each tier's
+// effective weight is scaled by `(1 + rarityBias * rank * RARITY_BIAS_K)`,
 // where `rank` is its position in RARITY_ORDER (common = 0). So at
-// bossBias=0 the table weights are used verbatim; at bossBias=1 the
+// rarityBias=0 the table weights are used verbatim; at rarityBias=1 the
 // higher tiers get a large multiplicative boost, dragging the mean tier
 // upward.
 //
 // Backward-compat: the pre-C.I1 signature was `rollRarity(bonusRare,
-// bonusEpic)` — two probability-space nudges. combat-manager.js still
-// calls it that way. If a second numeric arg is supplied (or the first
-// arg looks like a legacy probability nudge), we fold both into an
-// equivalent bossBias so the old call sites keep biasing upward without
-// needing edits.
-const BOSS_BIAS_K = 6;
+// bonusEpic)` — two probability-space nudges. If a second numeric arg is
+// supplied (or the first arg looks like a legacy probability nudge), we
+// fold both into an equivalent rarityBias.
+const RARITY_BIAS_K = 6;
 
-export function rollRarity(bossBias = 0, legacyBonusEpic) {
+export function rollRarity(rarityBias = 0, legacyBonusEpic) {
     let bias = 0;
     if (legacyBonusEpic !== undefined) {
         // Legacy two-arg form: (bonusRare, bonusEpic). Both are small
-        // probability nudges (e.g. 0.10 / 0.08) → fold into a bossBias.
-        bias = Math.max(0, (bossBias || 0)) + Math.max(0, legacyBonusEpic) * 1.5;
+        // probability nudges (e.g. 0.10 / 0.08) → fold into a rarityBias.
+        bias = Math.max(0, (rarityBias || 0)) + Math.max(0, legacyBonusEpic) * 1.5;
         bias = Math.min(1, bias * 2.5);
     } else {
-        bias = Math.max(0, Math.min(1, bossBias || 0));
+        bias = Math.max(0, Math.min(1, rarityBias || 0));
     }
 
     let total = 0;
     const weights = RARITY_ORDER.map((key, rank) => {
-        const w = RARITY_TIERS[key].weight * (1 + bias * rank * BOSS_BIAS_K);
+        const w = RARITY_TIERS[key].weight * (1 + bias * rank * RARITY_BIAS_K);
         total += w;
         return w;
     });

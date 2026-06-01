@@ -216,7 +216,7 @@ function uniquePaths() {
 //
 // Selection rule: immediate-response combat SFX where first-play
 // latency would be audible as missing-sound. Long-tail sounds
-// (per-weapon hit variants, boss death roars, defense-ability triggers,
+// (per-weapon hit variants, heavy death roars, defense-ability triggers,
 // loops) lazy-load on first use; the player accepts ~50-150 ms one-
 // time fetch delay the first time each fires.
 const EAGER_SOUNDS = new Set([

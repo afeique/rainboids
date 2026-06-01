@@ -1065,7 +1065,7 @@ const AUTO_CAST_BY_POWER = {
     CHARGE_SHOT:    { role: 'snipe', targeting: 'nearest', minThreatLevel: 1 },
     MINE_LAYER:     { role: 'zone', targeting: 'self', aoeRadius: 180, minThreatLevel: 1 },
     NOVA_BLAST:     { role: 'cc', targeting: 'self', aoeRadius: 320, minThreatLevel: 2 },
-    MISSILE_SALVO:  { role: 'snipe', targeting: 'boss', minThreatLevel: 2 },
+    MISSILE_SALVO:  { role: 'snipe', targeting: 'nearest', minThreatLevel: 2 },
     LANCE_BEAM:     { role: 'snipe', targeting: 'nearest', minThreatLevel: 2 },
     LIGHTNING_ARC:  { role: 'snipe', targeting: 'nearest', minThreatLevel: 1 },
     SINGULARITY:    { role: 'nuke', targeting: 'cluster', aoeRadius: 280, minThreatLevel: 2 },

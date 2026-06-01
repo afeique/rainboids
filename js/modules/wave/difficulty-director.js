@@ -396,19 +396,6 @@ export function getThreatLevel(state) {
 }
 
 /**
- * Boss-lock: return a FROZEN snapshot of the current { D_hp, D_thr } for a boss
- * to hold for its whole fight (no mid-fight rubber-band). The returned object is
- * a copy — later recordWave/updateDifficulty calls never mutate it. Boss HP =
- * baseTier × D_hp; boss threat = base × D_thr.
- */
-export function lockForBoss(state) {
-    // Freeze the EFFECTIVE difficulty (reactive × preload × mode, clamped) so the
-    // boss inherits the same difficulty the live game is reading. At neutral
-    // context this equals { D_hp, D_thr } (= prior behavior; existing tests green).
-    return Object.freeze(getDifficulty(state));
-}
-
-/**
  * DIR-04 — compute + EXPOSE the §14 absolute-baseline enemyPower and its split
  * knobs for a given wave. This is the SOURCE the DIR-10 composer will consume to
  * drive the deep-run escalation through enemy HP / damage / density — it does

@@ -13,10 +13,14 @@ import {
   getLevelScaledAsteroidStats,
   getEnemySpeedMultiplier,
   isBossWave,
-  BOSS_TIER_STATS,
   WAVE_DATA,
 } from '../../js/modules/wave/wave-data.js';
-import { MAX_WAVES, BOSS_WAVES } from '../../js/modules/core/constants.js';
+import { MAX_WAVES, WAVES_PER_STAGE } from '../../js/modules/core/constants.js';
+
+// Stage-final waves (the climax wave of each block) — derived from the run
+// cadence. With WAVES_PER_STAGE=5 this is [5,10,…,50].
+const STAGE_FINAL_WAVES = [];
+for (let w = WAVES_PER_STAGE; w <= MAX_WAVES; w += WAVES_PER_STAGE) STAGE_FINAL_WAVES.push(w);
 
 // ---------------------------------------------------------------------------
 // getWaveConfig()
@@ -54,28 +58,15 @@ describe('getWaveConfig() – 50-wave campaign', () => {
     }
   });
 
-  test('boss waves are marked isBossWave + bossTier; the boss is spawned by the manager (not embedded)', () => {
-    // 9.11.0 — boss waves no longer embed a TITAN-with-isBoss spec in subWaves.
-    // The wave-manager spawns the real block boss via getStage(wave,5) →
-    // getBossForStage(); the boss-wave subWaves carry only the light escort
-    // adds, so they must NOT contain any isBoss-flagged group.
-    for (const w of BOSS_WAVES) {
+  test('stage-final waves are detected by isBossWave() and carry their escort groups', () => {
+    // 10.0.0 — bosses removed. Stage-final waves no longer embed any boss
+    // entity or entry flag; isBossWave() (the stage-final predicate) drives the
+    // card-draft + gold cadence, and the wave's subWaves are just combat groups.
+    for (const w of STAGE_FINAL_WAVES) {
+      expect(isBossWave(w, WAVES_PER_STAGE)).toBe(true);
       const cfg = getWaveConfig(w);
-      expect(cfg.isBossWave).toBe(true);
-      expect(cfg.bossTier).toBeGreaterThanOrEqual(1);
-      expect(cfg.bossTier).toBeLessThanOrEqual(4);
       const allGroups = cfg.subWaves.flat();
-      // Escort adds only — no embedded boss spec.
-      expect(allGroups.some(e => e.isBoss)).toBe(false);
       expect(allGroups.length).toBeGreaterThan(0);
-    }
-  });
-
-  test('non-boss waves do not set isBossWave', () => {
-    for (let w = 1; w <= MAX_WAVES; w++) {
-      if (BOSS_WAVES.includes(w)) continue;
-      const cfg = getWaveConfig(w);
-      expect(cfg.isBossWave).toBeFalsy();
     }
   });
 
@@ -93,10 +84,10 @@ describe('getWaveConfig() – 50-wave campaign', () => {
     }
   });
 
-  test('isBossWave matches BOSS_WAVES', () => {
-    for (const w of BOSS_WAVES) expect(isBossWave(w)).toBe(true);
+  test('isBossWave is true exactly on the stage-final waves', () => {
+    for (const w of STAGE_FINAL_WAVES) expect(isBossWave(w)).toBe(true);
     for (let w = 1; w <= MAX_WAVES; w++) {
-      if (!BOSS_WAVES.includes(w)) expect(isBossWave(w)).toBe(false);
+      if (!STAGE_FINAL_WAVES.includes(w)) expect(isBossWave(w)).toBe(false);
     }
   });
 });
@@ -281,17 +272,3 @@ describe('getEnemySpeedMultiplier()', () => {
   });
 });
 
-describe('BOSS_TIER_STATS', () => {
-  test('all four tiers exist and HP/size/points scale upward', () => {
-    for (const tier of [1, 2, 3, 4]) {
-      const t = BOSS_TIER_STATS[tier];
-      expect(t).toBeDefined();
-      expect(t.hpMul).toBeGreaterThan(1);
-      expect(t.sizeMul).toBeGreaterThan(1);
-      expect(t.points).toBeGreaterThan(0);
-    }
-    expect(BOSS_TIER_STATS[4].hpMul).toBeGreaterThan(BOSS_TIER_STATS[1].hpMul);
-    expect(BOSS_TIER_STATS[4].sizeMul).toBeGreaterThan(BOSS_TIER_STATS[1].sizeMul);
-    expect(BOSS_TIER_STATS[4].points).toBeGreaterThan(BOSS_TIER_STATS[1].points);
-  });
-});

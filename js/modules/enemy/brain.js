@@ -16,7 +16,7 @@
 // The brain WRITES enemy.vel only. enemy.js still integrates position
 // (pos += vel·TICK_SCALE) afterwards, so SLOW/CHILL scaling, boundary
 // bounce, status-effect zeroing and the ability overrides (charge/blink/
-// cloak/boss drivers) all keep working unchanged — the brain just supplies a
+// cloak) all keep working unchanged — the brain just supplies a
 // smarter velocity than the legacy patterns did, and only when the enemy opts
 // in via `config.brain`.
 //
