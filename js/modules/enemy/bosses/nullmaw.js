@@ -52,6 +52,7 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawNullmaw } from './render/nullmaw-render.js';
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
 // Most of the fight is spent breaking the maw open (the core is gated while the
@@ -506,6 +507,7 @@ export const NULLMAW = {
     isBoss: true,
     isFinalBoss: false,
     phaseCount: PHASE_GATES.length,
+    draw: drawNullmaw,         // 9.1.x per-boss custom renderer (devourer leviathan)
     // Factory hooks the chassis + (later) the spawner use.
     buildPhaseScript,
     buildIntroScript,

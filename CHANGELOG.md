@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.19.0] - 2026-06-01
+
+### Added
+- **Nullmaw now has a custom renderer** (boss-redesign plan; 9 of 10 bosses now custom-rendered): the "devourer leviathan" — a void-whale maw over a swirling accretion ring and event-horizon body, with jagged bone-rimmed teeth that gape open to expose a pulsing singularity throat-core (the weak point) during its projectile-eat window. Feeding the open maw brightens a greedy warning glow (the maw hardens), the gravity-pull telegraph/active windows drag inward matter streaks, the implosion telegraph charges a collapsing ring, and on enrage the maw turns inside-out into a four-jaw flower. Uses the shared `boss-gfx` toolkit; the generic renderer remains the fallback for the last un-redesigned boss.
+
 ## [9.18.0] - 2026-06-01
 
 ### Added
