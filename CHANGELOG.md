@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.17.0] - 2026-06-01
+
+### Added
+- **Iron Throne now has a custom renderer** (boss-redesign plan; 7 of 10 bosses now custom-rendered): the "siege-citadel" — a stacked iron ziggurat with torch-glow accents and an animated heraldic banner, a royal-gold king enthroned at the peak, and four orbiting gun batteries (the turret weak-points) tinted by the element each is weak to so you can read which counter to cycle; batteries flash muzzle-heat on a volley, the fortress lists and crumbles as they fall, and the king flares once all guns are down. Uses the shared `boss-gfx` toolkit; the generic renderer remains the fallback for the un-redesigned bosses.
+
 ## [9.16.0] - 2026-06-01
 
 ### Added

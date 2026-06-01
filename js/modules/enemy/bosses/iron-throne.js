@@ -54,6 +54,7 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawIronThrone } from './render/iron-throne-render.js';
 import { ELEMENT_IDS } from '../../combat/elements.js';
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
@@ -292,6 +293,7 @@ export const IRON_THRONE = {
     isFinalBoss: false,
     phaseCount: PHASE_GATES.length,
     turretCount: TURRET_COUNT,
+    draw: drawIronThrone,         // 9.1.x per-boss custom renderer (siege-citadel)
     // Factory hooks the chassis + (later) the spawner use.
     buildPhaseScript,
     buildIntroScript,
