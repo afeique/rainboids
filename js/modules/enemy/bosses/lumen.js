@@ -42,6 +42,7 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawLumen } from './render/lumen-render.js';
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
 // Most of the fight is spent clearing drones (the core is gated while they
@@ -239,6 +240,7 @@ export const LUMEN = {
     isBoss: true,
     isFinalBoss: false,
     phaseCount: PHASE_GATES.length,
+    draw: drawLumen,         // 9.1.x per-boss custom renderer (cathedral lens-array)
     // Factory hooks the chassis + (later) the spawner use.
     buildPhaseScript,
     buildIntroScript,

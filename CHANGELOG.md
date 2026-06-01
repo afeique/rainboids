@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.13.0] - 2026-05-31
+
+### Added
+- **Lumen now has a custom renderer** (boss-redesign plan, after Aegis + Harbinger): the "cathedral lens-array" — a brilliant central lens-bloom behind a halo of orbiting prismatic mirror-panels (the shield drones) with rainbow-refraction edges, faint refraction sight-lines lacing the panels into a lattice, drifting light-motes, a blinding-bloom flare on the DISJUNCTION wind-up, and a lens that splits into three co-firing sub-lenses on enrage. Uses the shared `boss-gfx` toolkit; the generic renderer remains the fallback for the un-redesigned bosses.
+
 ## [9.12.0] - 2026-05-31
 
 ### Added
