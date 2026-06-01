@@ -50,6 +50,7 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawHivemother } from './render/hivemother-render.js';
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
 // Most of the fight is spent lancing egg-sacs (the core is gated while they
@@ -369,6 +370,7 @@ export const HIVEMOTHER = {
     isBoss: true,
     isFinalBoss: false,
     phaseCount: PHASE_GATES.length,
+    draw: drawHivemother,         // 9.1.x per-boss custom renderer (brood leviathan)
     // Factory hooks the chassis + (later) the spawner use.
     buildPhaseScript,
     buildIntroScript,

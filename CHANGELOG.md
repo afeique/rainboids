@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.16.0] - 2026-06-01
+
+### Added
+- **Hivemother now has a custom renderer** (boss-redesign plan; 6 of 10 bosses now custom-rendered): the "brood leviathan" — a breathing biomech heart-core wrapped in a segmented chitin carapace that visibly sheds as she phases, ringed by bloated translucent egg-sacs with squirming larvae sub-sprites that flare a birth pulse on each hatch; drifting bioluminescent spores; the CORRODE-cloud wind-up blooms a sickly acid-green area and the bloom belches an expanding acid burst. Uses the shared `boss-gfx` toolkit; the generic renderer remains the fallback for the un-redesigned bosses.
+
 ## [9.15.0] - 2026-06-01
 
 ### Added
