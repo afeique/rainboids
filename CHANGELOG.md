@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.12.0] - 2026-05-31
+
+### Added
+- **The Harbinger now has a custom renderer** (per the boss-redesign plan, mirroring the Aegis prototype): a brushed-steel siege-hulk dreadnought-blade whose hull seams ignite amber as it "boots up" through its phases, its orbiting bolt-heads rendered as lit weak-point heat-nodes, and a molten reactor that bares between the splitting hull halves at low HP / enrage. Uses the shared `boss-gfx` toolkit; the generic modular-boss renderer remains the fallback for the other bosses.
+
 ## [9.11.4] - 2026-05-31
 
 ### Fixed

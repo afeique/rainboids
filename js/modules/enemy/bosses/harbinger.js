@@ -38,6 +38,7 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawHarbinger } from './render/harbinger-render.js';
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
 // Most of the fight is spent clearing bolts (the core is damage-gated while any
@@ -187,6 +188,7 @@ export const HARBINGER = {
     isBoss: true,
     isFinalBoss: false,
     phaseCount: PHASE_GATES.length,
+    draw: drawHarbinger,         // 9.1.x per-boss custom renderer (siege-hulk)
     // Factory hooks the chassis + (later) the spawner use.
     buildPhaseScript,
     buildIntroScript,
