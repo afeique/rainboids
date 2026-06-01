@@ -50,6 +50,7 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawGemini } from './render/gemini-render.js';
 
 // The two twins + their element identities. Each twin RESISTS the element it
 // embodies and is WEAK to the OPPOSITE element — that opposition is the whole
@@ -269,6 +270,7 @@ export const GEMINI = {
     isFinalBoss: false,
     phaseCount: PHASE_GATES.length,
     twinElements: [PYRO_TWIN, CRYO_TWIN],
+    draw: drawGemini,         // 9.1.x per-boss custom renderer (tethered twins)
     // Factory hooks the chassis + (later) the spawner use.
     buildPhaseScript,
     buildIntroScript,

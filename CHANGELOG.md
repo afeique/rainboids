@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.14.0] - 2026-06-01
+
+### Added
+- **Gemini now has a custom renderer** (boss-redesign plan, after Aegis + Harbinger + Lumen): the "tethered twins" — a PYRO twin (hot-orange radial) and a CRYO twin (cold-cyan radial) co-orbiting a void link, joined by a crackling energy bridge (plasma gradient + jittering lightning filaments) while both survive. The tether snaps when one twin dies and the surviving twin erupts into a partner-enrage corona; the central link flares once both twins are down. Uses the shared `boss-gfx` toolkit; the generic renderer remains the fallback for the un-redesigned bosses.
+
 ## [9.13.0] - 2026-05-31
 
 ### Added
