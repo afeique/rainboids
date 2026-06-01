@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.15.0] - 2026-06-01
+
+### Added
+- **Maelstrom now has a custom renderer** (boss-redesign plan, after Aegis + Harbinger + Lumen + Gemini): the "living vortex" — rotating storm-spiral arms of debris and lightning winding around a calm central eye with a pulsing iris; the orbiting conduit storm-nodes arc-flash filaments back to the eye; the CONDUCT-rain wind-up brightens an arena-wide strike-ring and the strike snaps a shockwave burst; on enrage the spiral tightens and a second counter-eye flickers on the far side. Uses the shared `boss-gfx` toolkit; the generic renderer remains the fallback for the un-redesigned bosses.
+
 ## [9.14.0] - 2026-06-01
 
 ### Added

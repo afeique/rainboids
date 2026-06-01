@@ -38,6 +38,7 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawMaelstrom } from './render/maelstrom-render.js';
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
 // Most of the fight is spent clearing conduit nodes (the core is gated while
@@ -267,6 +268,7 @@ export const MAELSTROM = {
     isBoss: true,
     isFinalBoss: false,
     phaseCount: PHASE_GATES.length,
+    draw: drawMaelstrom,         // 9.1.x per-boss custom renderer (living vortex)
     // Factory hooks the chassis + (later) the spawner use.
     buildPhaseScript,
     buildIntroScript,
