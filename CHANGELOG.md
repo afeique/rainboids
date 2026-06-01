@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.11.2] - 2026-05-31
+
+### Added
+- Explosions now emit soft smoke puffs that billow outward, drift upward, and slowly dissipate after the blast, layered beneath the fire and shockwave rings for added depth.
+
+## [9.11.1] - 2026-05-31
+
+### Changed
+- Explosion shockwave rings now render as pseudo-3D tilted ellipses (each blast's concentric rings share a randomized oblique plane) instead of flat overhead circles, for a more realistic 3D feel.
+
 ## [9.11.0] - 2026-05-31
 
 ### Changed

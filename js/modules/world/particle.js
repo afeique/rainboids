@@ -196,13 +196,19 @@ export class Particle {
                 // Massive expanding shockwave — wider quad, slower decay,
                 // thicker stroke than `explosionRingColored`. One per
                 // explosion; reads as the pressure-front of the blast.
-                const [waveRadius, waveColor] = args;
+                const [waveRadius, waveColor, waveTiltAngle, waveTiltSquash] = args;
                 this.life = 1.4;          // ~23 frames; slower than the chromatic rings
                 this.maxLife = 1.4;
                 this.radius = (waveRadius || 80) * 0.25;
                 this.maxRadius = waveRadius || 80;
                 this.color = waveColor || '#ff8855';
                 this.lineWidth = random(8, 14);
+                // Pseudo-3D tilt: render the shockwave as an oblique ellipse so
+                // it reads as a pressure-front lying on a tilted plane, not a
+                // flat overhead circle. Caller may pass a shared tilt so all
+                // rings of one blast are coplanar; otherwise randomize per-ring.
+                this.tiltAngle = waveTiltAngle !== undefined ? waveTiltAngle : Math.random() * 2 * Math.PI;
+                this.tiltSquash = waveTiltSquash !== undefined ? waveTiltSquash : random(0.45, 0.80);
                 break;
             }
             case 'enemyLightning': {
@@ -277,12 +283,16 @@ export class Particle {
             }
             case 'explosionRingColored': {
                 // Expanding ring in a specific color
-                const [ringRadius, ringColor] = args;
+                const [ringRadius, ringColor, ringTiltAngle, ringTiltSquash] = args;
                 this.life = 0.9;
                 this.radius = (ringRadius || 50) * 0.15; // start partially visible
                 this.maxRadius = ringRadius || 50;
                 this.color = ringColor || '#ff8800';
                 this.lineWidth = random(3, 8);
+                // Pseudo-3D tilt (shared per-blast when caller supplies it, else
+                // randomized) — kept on the particle for any tilt-aware renderer.
+                this.tiltAngle = ringTiltAngle !== undefined ? ringTiltAngle : Math.random() * 2 * Math.PI;
+                this.tiltSquash = ringTiltSquash !== undefined ? ringTiltSquash : random(0.45, 0.80);
                 break;
             }
 
@@ -464,6 +474,37 @@ export class Particle {
                     y: random(-0.3, 0.3),
                 };
                 this.color = Math.random() < 0.4 ? '#aaaaaa' : '#555555';
+                break;
+            }
+
+            // 9.11.2 — Explosion smoke. Soft dark puff that billows out,
+            //   drifts upward (buoyancy), expands toward maxRadius, and
+            //   lingers after the fire/rings fade. Canvas2D radial-gradient
+            //   puff (NOT WebGL) drawn with normal alpha blending so the
+            //   dark tone reads as smoke instead of brightening the scene.
+            //   args = [smokeColor?, blastScale?].
+            case 'explosionSmoke': {
+                const [smokeColor, blastScale] = args;
+                const scale = blastScale || 1;
+                // Dark gray/brown smoke tones — picked at random when no
+                // explicit color is passed.
+                const smokeTones = ['#3a3a3a', '#2b2b2b', '#4a4038', '#555555'];
+                this.color = smokeColor || smokeTones[Math.floor(Math.random() * smokeTones.length)];
+                // Small start radius that grows ~3× over its life.
+                this.radius = random(6, 12) * scale;
+                this.maxRadius = this.radius * random(2.2, 3.2);
+                // Slow billowing drift with a slight upward buoyancy bias
+                // (negative y is up on canvas).
+                const sa = Math.random() * Math.PI * 2;
+                const ssp = random(0.3, 1.2) * scale;
+                this.vel = {
+                    x: Math.cos(sa) * ssp,
+                    y: Math.sin(sa) * ssp - random(0.2, 0.6),
+                };
+                // Long, soft life so smoke outlasts the ~0.9s fire rings.
+                this.life = random(0.9, 1.4);
+                this.maxLife = this.life;
+                this.angle = Math.random() * Math.PI * 2;
                 break;
             }
         }
@@ -673,6 +714,21 @@ export class Particle {
                 this.life -= 0.025 * TS;
                 this.radius *= Math.pow(0.97, TS);
                 break;
+
+            // 9.11.2 — Explosion smoke. Drift + decelerate while a gentle
+            //   updraft sustains the rise, slow fade so it lingers, and a
+            //   monotonic ease toward maxRadius (it must NEVER shrink).
+            case 'explosionSmoke':
+                this.x += this.vel.x * TS;
+                this.y += this.vel.y * TS;
+                this.vel.x *= Math.pow(0.95, TS);
+                // Decelerate vertically but keep a small updraft as it slows.
+                this.vel.y = this.vel.y * Math.pow(0.96, TS) - 0.02 * TS;
+                // Slow fade — smoke lingers after the fire is gone.
+                this.life -= 0.012 * TS;
+                // Ease-out growth toward maxRadius (never shrinks).
+                this.radius = this.radius + (this.maxRadius - this.radius) * 0.06 * TS;
+                break;
         }
 
         if (this.life <= 0) {
@@ -795,14 +851,18 @@ export class Particle {
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = this.lineWidth * (1 - t * 0.5);
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+                // Tilted ellipse instead of a flat circle: foreshorten the
+                // minor axis by tiltSquash and orient by tiltAngle so the ring
+                // reads as a shockwave on an oblique plane. Using ctx.ellipse
+                // (not ctx.scale) keeps the stroke width uniform around the ring.
+                ctx.ellipse(this.x, this.y, this.radius, this.radius * this.tiltSquash, this.tiltAngle, 0, 2 * Math.PI);
                 ctx.stroke();
                 // Inner hot highlight — narrower, brighter, sits inside the wave.
                 ctx.globalAlpha = alpha * 0.7;
                 ctx.strokeStyle = '#ffffff';
                 ctx.lineWidth = Math.max(1, this.lineWidth * 0.3);
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius * 0.97, 0, 2 * Math.PI);
+                ctx.ellipse(this.x, this.y, this.radius * 0.97, this.radius * 0.97 * this.tiltSquash, this.tiltAngle, 0, 2 * Math.PI);
                 ctx.stroke();
                 break;
             }
@@ -1017,6 +1077,25 @@ export class Particle {
                 const lifeFrac = Math.max(0, this.life / (this.maxLife || 0.4));
                 ctx.globalAlpha = lifeFrac * 0.6;
                 ctx.fillStyle = this.color || '#888888';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+
+            // 9.11.2 — Explosion smoke. Soft translucent radial-gradient
+            //   puff. Peak alpha kept low (~0.28) so it reads as atmosphere
+            //   and never washes out the bright fire underneath. Fades IN
+            //   briefly then OUT. Default source-over blending (like the
+            //   neighboring shape particles) keeps the dark tone dark.
+            case 'explosionSmoke': {
+                const lifeFrac = Math.max(0, this.life / this.maxLife);
+                const alpha = Math.min(1, lifeFrac * 1.6) * 0.28;
+                const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                g.addColorStop(0, this.color);
+                g.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = g;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();

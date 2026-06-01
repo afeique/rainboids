@@ -72,6 +72,16 @@ export function createDebris(ast) {
         this.triggerCameraKick(kdx, kdy, isLarge ? 12 : 7);
     }
 
+    // 0. Dust puffs (spawned FIRST so they paint UNDER the flash/rings).
+    // 9.11.2 — A couple of soft puffs lend a brief dust cloud to the
+    // shatter; scaled down vs. enemy kills since rock is inert.
+    const dustCount = Math.round(random(1, 2) * sizeScale);
+    for (let i = 0; i < dustCount; i++) {
+        const dx = ast.x + random(-ast.baseRadius, ast.baseRadius) * 0.4;
+        const dy = ast.y + random(-ast.baseRadius, ast.baseRadius) * 0.4;
+        this.particlePool.get(dx, dy, 'explosionSmoke', undefined, sizeScale * 0.7);
+    }
+
     // 1. Soft white core flash — visible during hitstop, refined radius.
     this.particlePool.get(ast.x, ast.y, 'explosionFlash', ast.baseRadius * 1.5 * sizeScale);
 
@@ -284,6 +294,18 @@ export function triggerEnemyFinalExplosion(enemy) {
         this.triggerScreenShake(14, 8, bigR * 1.4);
     }
 
+    // ── 0. Smoke puffs (spawned FIRST so they paint UNDER the fire) ──
+    // 9.11.2 — A handful of soft dark puffs that billow outward, drift
+    // upward, expand, and slowly dissipate after the blast — layered
+    // beneath the plasma cores + rings for added depth. Translucent
+    // (peak alpha ~0.28) so they read as atmosphere, not a screen-filler.
+    const smokeCount = Math.round(random(3, 5) * sizeScale);
+    for (let i = 0; i < smokeCount; i++) {
+        const sx = ex + random(-bigR, bigR) * 0.4;
+        const sy = ey + random(-bigR, bigR) * 0.4;
+        this.particlePool.get(sx, sy, 'explosionSmoke', undefined, sizeScale);
+    }
+
     // ── 1. Chromatic plasma core stack ──
     // Three layered fireballs of decreasing size: white (hottest) → warm
     // → enemy color. They overlap as one defined plasma blob that lingers
@@ -304,15 +326,21 @@ export function triggerEnemyFinalExplosion(enemy) {
     // is ≥80px so even small enemies get a defined shockwave. Per-kill
     // palette drives the warm + hot accents so rings recolor per kill.
     const ringBase = Math.max(80, bigR * 2.2 * sizeScale);
-    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 0.65, '#ffffff');
-    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 0.88, accentWarm);
-    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.1,  color);
-    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.32, accentHot);
+    // One pseudo-3D tilt shared by every ring of this blast so the concentric
+    // rings + shockwave are COPLANAR — they read as a single shockwave lying on
+    // a tilted plane rather than random skews. tiltAngle = plane orientation,
+    // tiltSquash = foreshortening (0.45 oblique → 0.80 near-overhead).
+    const tiltAngle = Math.random() * 2 * Math.PI;
+    const tiltSquash = 0.45 + Math.random() * 0.35;
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 0.65, '#ffffff', tiltAngle, tiltSquash);
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 0.88, accentWarm, tiltAngle, tiltSquash);
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.1,  color, tiltAngle, tiltSquash);
+    this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.32, accentHot, tiltAngle, tiltSquash);
 
     // ── 4. Mega shockwave ──
     // Thick + slow + wide. One pressure-front that outlasts the chromatic
     // rings and reads as the actual blast wave dissipating outward.
-    this.particlePool.get(ex, ey, 'enemyShockwave', ringBase * 1.8, accentEmber);
+    this.particlePool.get(ex, ey, 'enemyShockwave', ringBase * 1.8, accentEmber, tiltAngle, tiltSquash);
 
     // 6.26.1 — Radial lightning crackle removed. The bolts read as
     //   a player-ability (EMP / electric chain) rather than a generic
