@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [10.1.2] - 2026-06-01
+
+### Fixed
+- **Asteroid edges are rainbow in the DEFAULT (`filled`) render mode too.** 10.1.1 only fixed the non-default `wireframe` mode, so the gems most players see still drew their facet edges at `lightness + 26` → ~L92, a washed-out near-white "glow" that hid the hue (the edges read as white, not rainbow). The filled-mode edge pass now strokes each line at vivid lightness + boosted saturation as a `createLinearGradient` between its two vertices' baked rainbow hues (`vertexHueOffsets`) — every line a distinct colour, knitting into one continuous rainbow gradient across the rock (matching the wireframe-mode fix).
+
 ## [10.1.1] - 2026-06-01
 
 ### Fixed

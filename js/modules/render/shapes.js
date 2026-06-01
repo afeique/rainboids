@@ -372,8 +372,15 @@ export function drawAsteroidFilled(ctx, s) {
         const fa = edgeFaces[j];
         return frontFlags[fa[0]] === 1 || (fa.length > 1 && frontFlags[fa[1]] === 1);
     };
-    const edgeSat = sat + 6 > 100 ? 100 : sat + 6;
-    const edgeLight = light + 26 > 92 ? 92 : light + 26;     // brighter than faces → glows
+    // Vivid + SATURATED so the rainbow reads as colour, not a near-white glow.
+    // (Old edgeLight = light+26 pushed lines to L~92 = washed-out white.)
+    const edgeSat = Math.min(100, sat + 18);
+    const edgeLight = Math.min(72, light + 4);
+    const nv = pv.length || 12;
+    // Hue at vertex i — the baked spatial rainbow sweep (vertexHueOffsets);
+    // index-based fallback over a full turn keeps a rainbow without offsets.
+    const vHue = (idx) => (baseHue + hueDrift +
+        (vertexHueOffsets ? vertexHueOffsets[idx] : (idx / nv) * 360)) % 360;
     const edgeW = Math.min(2.6, Math.max(1, radius * 0.028));
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -393,7 +400,10 @@ export function drawAsteroidFilled(ctx, s) {
     }
     ctx.stroke();
 
-    // Colour pass: each VISIBLE edge its own solid rainbow hue, depth-faded.
+    // Colour pass: each VISIBLE edge is its OWN linear gradient from vertex-A's
+    // rainbow hue to vertex-B's, depth-faded. Every line is a different colour,
+    // and connected edges share a vertex (= its colour) → the lines knit into
+    // one continuous rainbow gradient flowing across the rock.
     ctx.lineWidth = edgeW;
     for (let j = 0; j < nEdges; j++) {
         if (!edgeVisible(j)) continue;
@@ -408,8 +418,10 @@ export function drawAsteroidFilled(ctx, s) {
         // whole wireframe shows), brightening to 0.95 on the near side.
         ctx.globalAlpha = 0.5 + 0.45 * lit;
 
-        const hueOff = edgeHueOffsets ? edgeHueOffsets[j] : (j / nEdges) * hueSpread;
-        ctx.strokeStyle = hsl((baseHue + hueDrift + hueOff) % 360, edgeSat, edgeLight);
+        const grad = ctx.createLinearGradient(v1.x, v1.y, v2.x, v2.y);
+        grad.addColorStop(0, hsl(vHue(e[0]), edgeSat, edgeLight));
+        grad.addColorStop(1, hsl(vHue(e[1]), edgeSat, edgeLight));
+        ctx.strokeStyle = grad;
         ctx.beginPath();
         ctx.moveTo(v1.x, v1.y);
         ctx.lineTo(v2.x, v2.y);
