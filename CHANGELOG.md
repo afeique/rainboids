@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.18.0] - 2026-06-01
+
+### Added
+- **Warden Prime now has a custom renderer** (boss-redesign plan; 8 of 10 bosses now custom-rendered): the "panopticon" — a massive armored all-seeing eye-ring with a slowly-rotating violet-seamed plate ring, a central iris and tracking pupil, and a halo of orbiting watcher-lenses (the shield nodes) that each stare outward and run a sightline back to the iris. Its gaze projects a tracking violet scan-cone that locks and intensifies during the ADAPTIVE-PURGE wind-up (the iris opens, exposed, while recharging the scan); on enrage the eye fractures into several smaller eyes surrounding the centre. Uses the shared `boss-gfx` toolkit; the generic renderer remains the fallback for the un-redesigned bosses.
+
 ## [9.17.0] - 2026-06-01
 
 ### Added

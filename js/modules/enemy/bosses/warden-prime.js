@@ -48,6 +48,7 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawWardenPrime } from './render/warden-prime-render.js';
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
 // Most of the fight is spent clearing shield nodes (the core is gated while they
@@ -382,6 +383,7 @@ export const WARDEN_PRIME = {
     isBoss: true,
     isFinalBoss: false,
     phaseCount: PHASE_GATES.length,
+    draw: drawWardenPrime,         // 9.1.x per-boss custom renderer (panopticon)
     // Factory hooks the chassis + (later) the spawner use.
     buildPhaseScript,
     buildIntroScript,
