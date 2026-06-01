@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.11.3] - 2026-05-31
+
+### Changed
+- Asteroid wireframe is now backface-culled: edges whose both adjacent faces point away are hidden, so the rear lines no longer show through the front facets. Silhouette edges stay drawn, keeping the outline complete.
+
 ## [9.11.2] - 2026-05-31
 
 ### Added

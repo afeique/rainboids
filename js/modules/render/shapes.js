@@ -362,16 +362,23 @@ export function drawAsteroidFilled(ctx, s) {
         ctx.fill();
     }
 
-    // ── Pass 2: the COMPLETE rainbow wireframe over the filled gem ──
-    // Every edge of the geometry is drawn (NO hidden-line removal) so the whole
-    // wireframe reads as a cage over the solid faces — filled gem + full
-    // wireframe combined. Each of the 30 edges gets ONE distinct solid colour
-    // (its own per-edge hue offset → a rainbow that sweeps across the rock on
-    // the SAME gradient axis as the facets, so the lines complement the fill).
-    // Back edges are dimmed by depth but stay visible; a thin dark underlayer
-    // makes each colour line crisp against the multicoloured facets beneath.
+    // ── Pass 2: the rainbow wireframe over the filled gem (backface-culled) ──
+    // Only VISIBLE edges are drawn: an edge is skipped when BOTH of its adjacent
+    // faces point away (hidden-line removal via ASTEROID_EDGE_FACES + the pass-1
+    // front-flags), so the rear wireframe no longer shows through the front
+    // facets. Silhouette edges (front face on one side, back face on the other)
+    // stay drawn, keeping the outline complete. Each visible edge gets ONE
+    // distinct solid colour (its own per-edge hue offset → a rainbow that sweeps
+    // across the rock on the SAME gradient axis as the facets, so the lines
+    // complement the fill), depth-faded, over a thin dark underlayer for crispness.
     const edges = ASTEROID_EDGES;
     const nEdges = edges.length;
+    const edgeFaces = ASTEROID_EDGE_FACES;
+    // An edge is visible iff at least one of its two adjacent faces is front-facing.
+    const edgeVisible = (j) => {
+        const fa = edgeFaces[j];
+        return frontFlags[fa[0]] === 1 || (fa.length > 1 && frontFlags[fa[1]] === 1);
+    };
     const edgeSat = sat + 6 > 100 ? 100 : sat + 6;
     const edgeLight = light + 26 > 92 ? 92 : light + 26;     // brighter than faces → glows
     const edgeW = Math.min(2.6, Math.max(1, radius * 0.028));
@@ -384,6 +391,7 @@ export function drawAsteroidFilled(ctx, s) {
     ctx.lineWidth = edgeW + 1.4;
     ctx.beginPath();
     for (let j = 0; j < nEdges; j++) {
+        if (!edgeVisible(j)) continue;
         const e = edges[j];
         const v1 = pv[e[0]], v2 = pv[e[1]];
         if (!v1 || !v2) continue;
@@ -392,9 +400,10 @@ export function drawAsteroidFilled(ctx, s) {
     }
     ctx.stroke();
 
-    // Colour pass: each edge its own solid rainbow hue, depth-faded.
+    // Colour pass: each VISIBLE edge its own solid rainbow hue, depth-faded.
     ctx.lineWidth = edgeW;
     for (let j = 0; j < nEdges; j++) {
+        if (!edgeVisible(j)) continue;
         const e = edges[j];
         const v1 = pv[e[0]], v2 = pv[e[1]];
         if (!v1 || !v2) continue;
