@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.21.0] - 2026-06-01
+
+### Added
+- **Boss signature attacks now fire** (boss-redesign ATK-n track, infrastructure + first boss). New `enemy/boss-attacks.js` consumes the FIRE edge of each boss's telegraphed-attack state machine (whose wind-up the renderers already draw) and spawns the distinctive bullet pattern through the normal enemy-bullet pool. Until now those state machines drove only the telegraph visuals while bosses fell back to the generic chassis fire. First wired: **Maelstrom's Conduct Rain** — each storm strike discharges a Volt nova outward from the eye (denser on enrage), once per strike window. Remaining bosses' signature attacks land in follow-up versions.
+
 ## [9.20.0] - 2026-06-01
 
 ### Added

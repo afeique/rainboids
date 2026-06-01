@@ -36,6 +36,7 @@ import { createCharge, tickCharge } from './abilities/charge.js';
 // when present, updateBrain() supplies the velocity instead of the legacy
 // movePattern switch. Default-safe — brain-less enemies take the old path.
 import { updateBrain } from './brain.js';
+import { updateBossAttacks } from './boss-attacks.js';
 // ENMY-10b — counter-attack on being hit (THORNBACK). `createThorns` builds the
 // per-instance counter state attached on `this.thorns` (only THORNBACK carries
 // `config.thorns`). The counter itself fires from collision-system's universal
@@ -703,6 +704,11 @@ export class Enemy {
         if (this.isBoss && typeof this._bossDriver === 'function') {
             try { this._bossDriver(this, gameEngine, Date.now()); }
             catch (err) { console.error('boss updateBoss failed', err); }
+            // ATK-n — consume the driver's signature-attack FIRE edge to spawn
+            // the boss's distinctive bullet pattern (boss-attacks.js). Additive:
+            // a boss with no entry there keeps its generic chassis fire.
+            try { updateBossAttacks(this, gameEngine, Date.now()); }
+            catch (err) { console.error('boss attack failed', err); }
             updateBossDeath(this, gameEngine);
         } else if (this.isBoss) {
             // Legacy tier-boss path (boss-rage.js) + any boss given the chassis
