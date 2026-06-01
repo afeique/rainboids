@@ -46,7 +46,10 @@ import {
 } from '../boss-intro.js';
 import { drawAegis } from './render/aegis-render.js';
 
-export const AEGIS_MAX_HEALTH = 2600;
+// HP cut ~35% (2600 → 1700) for shorter, snappier boss fights. The Aegis stays
+// the second-toughest boss in the roster (below the Prismarch finale) — the cut
+// keeps the relative ordering while trimming a fight that dragged.
+export const AEGIS_MAX_HEALTH = 1700;
 export const AEGIS_SIZE = 340; // radius 170 — fills a large slice of the screen
 
 // Per-phase config. `count` petals span the FRONT arc (facing ± frontHalf where
@@ -55,8 +58,8 @@ export const AEGIS_SIZE = 340; // radius 170 — fills a large slice of the scre
 // (rad/s) — low enough that a committed orbit can flank it. `rearHalfArc` = half
 // the rear opening (bigger = easier to keep the reactor exposed).
 const PHASE_CFG = [
-    { count: 7, hp: 120, ringR: 150, partRadius: 34, turnRate: 0.85, rearHalfArc: 0.85 },
-    { count: 5, hp: 170, ringR: 145, partRadius: 36, turnRate: 1.30, rearHalfArc: 0.72 },
+    { count: 7, hp: 80, ringR: 150, partRadius: 34, turnRate: 0.85, rearHalfArc: 0.85 },
+    { count: 5, hp: 110, ringR: 145, partRadius: 36, turnRate: 1.30, rearHalfArc: 0.72 },
     { count: 0, hp: 0,   ringR: 0,   partRadius: 0,  turnRate: 1.70, rearHalfArc: Math.PI }, // shield shed → core open everywhere
 ];
 const PHASE_GATES = [1.0, 0.6, 0.3];

@@ -61,11 +61,12 @@ import {
 } from '../boss-intro.js';
 import { ELEMENT_IDS } from '../../combat/elements.js';
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// The final boss is a long fight: FIVE aspects, each gating its core behind a
-// themed ring. Core HP is large; most of the wall clock is spent breaking each
-// aspect's ring before its core window opens. Conservative + easy to retune.
-export const PRISMARCH_MAX_HEALTH = 2500;
+// ── Tuning ──────────────────────────────────────────────────────────────────
+// The final boss is the longest fight: FIVE aspects, each gating its core behind
+// a themed ring. HP cut ~35% (2500 → 1650) — core + every aspect's ring trimmed
+// — for a shorter, snappier finale. The Prismarch remains the clear HP LEADER of
+// the roster (the toughest boss by a wide margin), just no longer a slog.
+export const PRISMARCH_MAX_HEALTH = 1650;
 
 // How many aspects make up the gauntlet (= phase count). FIVE, per the spec.
 export const ASPECT_COUNT = 5;
@@ -88,15 +89,15 @@ export const ASPECTS = [
 // counter-rotating arcs early, tightening into a fast single ring at the finale.
 const ASPECT_RING = [
     // Aspect 0 — PYRO: a wide, slow 6-facet ring.
-    { count: 6, radius: 160, hp: 70,  speed: 0.45, partRadius: 20 },
+    { count: 6, radius: 160, hp: 45,  speed: 0.45, partRadius: 20 },
     // Aspect 1 — CRYO: 5 facets, tighter.
-    { count: 5, radius: 142, hp: 90,  speed: 0.7,  partRadius: 20 },
+    { count: 5, radius: 142, hp: 60,  speed: 0.7,  partRadius: 20 },
     // Aspect 2 — VOLT: 4 facets, faster.
-    { count: 4, radius: 124, hp: 115, speed: 1.0,  partRadius: 22 },
+    { count: 4, radius: 124, hp: 75,  speed: 1.0,  partRadius: 22 },
     // Aspect 3 — TOXIC: 3 facets, heavier.
-    { count: 3, radius: 106, hp: 145, speed: 1.3,  partRadius: 24 },
+    { count: 3, radius: 106, hp: 95,  speed: 1.3,  partRadius: 24 },
     // Aspect 4 — OMEGA finale: 2 heavy facets, fast counter-spin.
-    { count: 2, radius: 90,  hp: 190, speed: 1.7,  partRadius: 26 },
+    { count: 2, radius: 90,  hp: 125, speed: 1.7,  partRadius: 26 },
 ];
 
 // HP fractions at which each aspect opens (descending — boss-phases convention).

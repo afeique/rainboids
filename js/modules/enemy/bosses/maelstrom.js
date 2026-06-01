@@ -39,22 +39,22 @@ import {
     updateBossDeath,
 } from '../boss-intro.js';
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// Core HP is large but most of the fight is spent clearing conduit nodes (the
-// core is gated while they live), so the wall-clock kill time lands in the
-// 45–120s band the boss DoD asks for. Numbers are conservative + easy to retune.
-export const MAELSTROM_MAX_HEALTH = 1100;
+// ── Tuning ──────────────────────────────────────────────────────────────────
+// Most of the fight is spent clearing conduit nodes (the core is gated while
+// they live). HP cut ~35% (1100 → 720) — core + per-phase nodes both trimmed —
+// for shorter, snappier boss fights that don't drag.
+export const MAELSTROM_MAX_HEALTH = 720;
 
 // Conduit-node ring per phase: fewer nodes but tougher + faster orbit each
 // phase. `speed` is rad/s (boss-parts orbit math); alternating sign reads as two
 // counter-rotating arcs early, tightening to a single fast crown at enrage.
 const PHASE_NODES = [
     // Phase 0 — opening: a wide, slow 5-node crown.
-    { count: 5, radius: 140, hp: 55, speed: 0.5, partRadius: 20 },
+    { count: 5, radius: 140, hp: 35, speed: 0.5, partRadius: 20 },
     // Phase 1 — mid: 4 nodes, tighter + faster.
-    { count: 4, radius: 116, hp: 75, speed: 0.9, partRadius: 20 },
+    { count: 4, radius: 116, hp: 50, speed: 0.9, partRadius: 20 },
     // Phase 2 — enrage: 3 heavy nodes, fast counter-spin.
-    { count: 3, radius: 94, hp: 105, speed: 1.5, partRadius: 22 },
+    { count: 3, radius: 94, hp: 70, speed: 1.5, partRadius: 22 },
 ];
 
 // HP fractions at which each phase opens (descending — boss-phases convention).

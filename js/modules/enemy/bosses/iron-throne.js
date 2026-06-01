@@ -56,12 +56,12 @@ import {
 } from '../boss-intro.js';
 import { ELEMENT_IDS } from '../../combat/elements.js';
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// Core HP is large but most of the fight is spent CYCLING elements to shed the
-// four turrets (the core is gated while they live, and each turret resists all
-// but its own counter-element), so wall-clock kill time lands in the 45–120s
-// boss band. Conservative + easy to retune.
-export const IRON_THRONE_MAX_HEALTH = 1500;
+// ── Tuning ──────────────────────────────────────────────────────────────────
+// Most of the fight is spent CYCLING elements to shed the four turrets (the core
+// is gated while they live, and each turret resists all but its own
+// counter-element). HP cut ~35% (1500 → 980) — core + per-phase turrets both
+// trimmed — for shorter, snappier boss fights that don't drag.
+export const IRON_THRONE_MAX_HEALTH = 980;
 
 // How many turrets ring the core every phase. The whole identity is "four
 // per-element weak-points you must counter individually", so this is fixed at 4.
@@ -95,11 +95,11 @@ const PHASE_WEAKNESSES = [
 // into a fast counter-spin at enrage.
 const PHASE_TURRETS = [
     // Phase 0 — opening: a wide, slow ring.
-    { radius: 150, hp: 110, speed: 0.5, partRadius: 26 },
+    { radius: 150, hp: 70, speed: 0.5, partRadius: 26 },
     // Phase 1 — mid: tighter + tougher + faster.
-    { radius: 125, hp: 160, speed: 0.85, partRadius: 26 },
+    { radius: 125, hp: 105, speed: 0.85, partRadius: 26 },
     // Phase 2 — enrage: tight, heavy, fast counter-spin.
-    { radius: 100, hp: 220, speed: 1.35, partRadius: 28 },
+    { radius: 100, hp: 145, speed: 1.35, partRadius: 28 },
 ];
 
 // HP fractions at which each phase opens (descending — boss-phases convention).

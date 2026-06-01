@@ -43,22 +43,22 @@ import {
     updateBossDeath,
 } from '../boss-intro.js';
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// Core HP is large but most of the fight is spent clearing drones (core is
-// gated while they live), so the wall-clock kill time lands in the 45–120s band
-// the boss DoD asks for. Numbers are conservative and easy to retune.
-export const LUMEN_MAX_HEALTH = 1100;
+// ── Tuning ──────────────────────────────────────────────────────────────────
+// Most of the fight is spent clearing drones (the core is gated while they
+// live). HP cut ~35% (1100 → 720) — core + per-phase drones both trimmed — for
+// shorter, snappier boss fights that don't drag.
+export const LUMEN_MAX_HEALTH = 720;
 
 // Shield-drone ring per phase: fewer drones but tougher + faster spin each
 // phase. `speed` is rad/s (boss-parts orbit math); alternating sign reads as two
 // counter-rotating sets early, tightening to a single fast ring at enrage.
 const PHASE_DRONES = [
     // Phase 0 — opening: a wide, slow 6-drone prism ring.
-    { count: 6, radius: 150, hp: 55, speed: 0.5, partRadius: 18 },
+    { count: 6, radius: 150, hp: 35, speed: 0.5, partRadius: 18 },
     // Phase 1 — mid: 4 drones, tighter + faster.
-    { count: 4, radius: 125, hp: 80, speed: 0.9, partRadius: 20 },
+    { count: 4, radius: 125, hp: 50, speed: 0.9, partRadius: 20 },
     // Phase 2 — enrage: 3 heavy drones, fast counter-spin.
-    { count: 3, radius: 100, hp: 115, speed: 1.5, partRadius: 22 },
+    { count: 3, radius: 100, hp: 75, speed: 1.5, partRadius: 22 },
 ];
 
 // HP fractions at which each phase opens (descending — boss-phases convention).

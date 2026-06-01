@@ -51,12 +51,12 @@ import {
     updateBossDeath,
 } from '../boss-intro.js';
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// Core HP is large but most of the fight is spent lancing egg-sacs (the core is
-// gated while they live) AND managing the trickle of adds they hatch, so the
-// wall-clock kill time lands in the 45–120s band the boss DoD asks for. Numbers
-// are conservative + easy to retune.
-export const HIVEMOTHER_MAX_HEALTH = 1200;
+// ── Tuning ──────────────────────────────────────────────────────────────────
+// Most of the fight is spent lancing egg-sacs (the core is gated while they
+// live) AND managing the trickle of adds they hatch. HP cut ~35% (1200 → 780) —
+// core + per-phase sacs both trimmed — for shorter, snappier boss fights that
+// don't drag.
+export const HIVEMOTHER_MAX_HEALTH = 780;
 
 // Egg-sac ring per phase: FEWER sacs but TOUGHER + slower-to-hatch each phase
 // (the brood thins-but-hardens). `speed` is rad/s (boss-parts orbit math);
@@ -66,12 +66,12 @@ export const HIVEMOTHER_MAX_HEALTH = 1200;
 // the player gets a beat before the brood starts trickling.
 const PHASE_SACS = [
     // Phase 0 — opening: a wide, slow 5-sac clutch hatching briskly.
-    { count: 5, radius: 140, hp: 60,  speed: 0.4, partRadius: 24, spawnIntervalMs: 2600, spawnDelayMs: 1800 },
+    { count: 5, radius: 140, hp: 40,  speed: 0.4, partRadius: 24, spawnIntervalMs: 2600, spawnDelayMs: 1800 },
     // Phase 1 — mid: 4 sacs, tougher + hatching a touch slower.
-    { count: 4, radius: 118, hp: 90,  speed: 0.7, partRadius: 24, spawnIntervalMs: 3000, spawnDelayMs: 1600 },
+    { count: 4, radius: 118, hp: 60,  speed: 0.7, partRadius: 24, spawnIntervalMs: 3000, spawnDelayMs: 1600 },
     // Phase 2 — enrage: 3 heavy sacs, hatching slowest individually (but the
     // CORRODE clouds + enrage make up for it).
-    { count: 3, radius: 96,  speed: 1.2, hp: 130, partRadius: 26, spawnIntervalMs: 3400, spawnDelayMs: 1400 },
+    { count: 3, radius: 96,  speed: 1.2, hp: 85, partRadius: 26, spawnIntervalMs: 3400, spawnDelayMs: 1400 },
 ];
 
 // HP fractions at which each phase opens (descending — boss-phases convention).

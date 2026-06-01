@@ -53,11 +53,11 @@ import {
     updateBossDeath,
 } from '../boss-intro.js';
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// Core HP is large but most of the fight is spent breaking the maw open (the
-// core is gated while the maw lives), so the wall-clock kill time lands in the
-// 45–120s band the boss DoD asks for. Numbers are conservative + easy to retune.
-export const NULLMAW_MAX_HEALTH = 1300;
+// ── Tuning ──────────────────────────────────────────────────────────────────
+// Most of the fight is spent breaking the maw open (the core is gated while the
+// maw lives). HP cut ~35% (1300 → 850) — core + per-phase maw both trimmed — for
+// shorter, snappier boss fights that don't drag.
+export const NULLMAW_MAX_HEALTH = 850;
 
 // THE MAW weak-point per phase: a single front gate, tougher each phase. It sits
 // at a boss-local offset and rotates with the boss so it always faces forward.
@@ -66,11 +66,11 @@ export const NULLMAW_MAX_HEALTH = 1300;
 // (the maw gets greedier) while the maw itself gets tougher.
 const PHASE_MAW = [
     // Phase 0 — opening: a modest maw, narrow cone.
-    { hp: 120, radius: 34, offset: 70, coneHalfAngle: 0.45, coneRange: 520 },
+    { hp: 80, radius: 34, offset: 70, coneHalfAngle: 0.45, coneRange: 520 },
     // Phase 1 — mid: tougher maw, wider/longer cone.
-    { hp: 165, radius: 36, offset: 66, coneHalfAngle: 0.55, coneRange: 600 },
+    { hp: 105, radius: 36, offset: 66, coneHalfAngle: 0.55, coneRange: 600 },
     // Phase 2 — enrage: heaviest maw, widest/longest cone.
-    { hp: 210, radius: 40, offset: 62, coneHalfAngle: 0.70, coneRange: 720 },
+    { hp: 135, radius: 40, offset: 62, coneHalfAngle: 0.70, coneRange: 720 },
 ];
 
 // HP fractions at which each phase opens (descending — boss-phases convention).

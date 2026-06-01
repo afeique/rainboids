@@ -49,23 +49,23 @@ import {
     updateBossDeath,
 } from '../boss-intro.js';
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// Core HP is large but most of the fight is spent clearing shield nodes (core is
-// gated while they live) AND rotating elements past the adaptive wall, so the
-// wall-clock kill time lands in the 45–120s band the boss DoD asks for. Numbers
-// are conservative and easy to retune.
-export const WARDEN_PRIME_MAX_HEALTH = 1500;
+// ── Tuning ──────────────────────────────────────────────────────────────────
+// Most of the fight is spent clearing shield nodes (the core is gated while they
+// live) AND rotating elements past the adaptive wall. HP cut ~35% (1500 → 980) —
+// core + per-phase nodes both trimmed — for shorter, snappier boss fights that
+// don't drag.
+export const WARDEN_PRIME_MAX_HEALTH = 980;
 
 // Shield-node ring per phase: fewer nodes but tougher + faster spin each phase.
 // `speed` is rad/s (boss-parts orbit math); alternating sign reads as two
 // counter-rotating sets early, tightening to a single fast ring at enrage.
 const PHASE_NODES = [
     // Phase 0 — opening: a wide, slow 5-node lattice.
-    { count: 5, radius: 155, hp: 70, speed: 0.5, partRadius: 20 },
+    { count: 5, radius: 155, hp: 45, speed: 0.5, partRadius: 20 },
     // Phase 1 — mid: 4 nodes, tighter + faster.
-    { count: 4, radius: 130, hp: 95, speed: 0.95, partRadius: 22 },
+    { count: 4, radius: 130, hp: 60, speed: 0.95, partRadius: 22 },
     // Phase 2 — enrage: 3 heavy nodes, fast counter-spin.
-    { count: 3, radius: 105, hp: 130, speed: 1.5, partRadius: 24 },
+    { count: 3, radius: 105, hp: 85, speed: 1.5, partRadius: 24 },
 ];
 
 // HP fractions at which each phase opens (descending — boss-phases convention).

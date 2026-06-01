@@ -57,12 +57,12 @@ import {
 export const PYRO_TWIN = 'PYRO';
 export const CRYO_TWIN = 'CRYO';
 
-// ── Tuning (placeholder-but-reasonable; balance is a later task) ────────────
-// Core HP is large but most of the fight is spent grinding the twin pair (the
-// LINK is gated while either twin lives, and each twin resists its own element),
-// so wall-clock kill time lands in the 45–120s boss band. Conservative + easy to
-// retune.
-export const GEMINI_MAX_HEALTH = 1300;
+// ── Tuning ──────────────────────────────────────────────────────────────────
+// Most of the fight is spent grinding the twin pair (the LINK is gated while
+// either twin lives, and each twin resists its own element). HP cut ~35%
+// (1300 → 850) — core + both twins per phase trimmed — for shorter, snappier
+// boss fights that don't drag.
+export const GEMINI_MAX_HEALTH = 850;
 
 // How resistant a twin is to the element it embodies (0..1; 1 = immune). High
 // enough that same-element fire is mostly wasted → forces the opposite element.
@@ -78,11 +78,11 @@ const OPPOSITE_WEAKNESS = -0.5;
 // math); the two twins orbit the LINK in opposition (half a turn apart).
 const PHASE_TWINS = [
     // Phase 0 — opening: a wide, slow pair.
-    { radius: 150, hp: 260, speed: 0.45, partRadius: 34 },
+    { radius: 150, hp: 170, speed: 0.45, partRadius: 34 },
     // Phase 1 — mid: tighter + tougher + faster.
-    { radius: 125, hp: 360, speed: 0.75, partRadius: 34 },
+    { radius: 125, hp: 235, speed: 0.75, partRadius: 34 },
     // Phase 2 — enrage: tight, heavy, fast co-spin.
-    { radius: 100, hp: 480, speed: 1.15, partRadius: 36 },
+    { radius: 100, hp: 310, speed: 1.15, partRadius: 36 },
 ];
 
 // HP fractions at which each phase opens (descending — boss-phases convention).

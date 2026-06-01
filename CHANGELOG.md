@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.11.4] - 2026-05-31
+
+### Fixed
+- Boss health-bar name: the top-center target panel showed the chassis name ("TITAN") for every boss instead of the boss's own name. It now reads the boss's display name (e.g. "THE HARBINGER").
+
+### Changed
+- Reduced all 10 boss HP (core + parts/bolts/panels) by ~35% for shorter, snappier boss fights that don't drag. Relative ordering preserved (Prismarch toughest, Harbinger lightest).
+
 ## [9.11.3] - 2026-05-31
 
 ### Changed

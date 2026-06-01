@@ -3299,9 +3299,19 @@ export class GameEngine {
     _setLastHit(target) {
         if (!target || !target.active) return;
         this.lastHitEnemy = target;
-        const name = (target.config && target.config.name)
-            ? target.config.name.toUpperCase()
-            : 'ASTEROID';
+        // Bosses spawn on a generic chassis (e.g. the TITAN enemy), so
+        // `config.name` would read "TITAN" for every boss. Prefer the boss's
+        // own descriptor display name (set by spawnModularBoss → e.g. "THE
+        // HARBINGER") when this target is a boss; fall back to the config name
+        // for regular enemies, then ASTEROID.
+        const bossName = target.isBoss
+            ? (target.name || (target.bossId && String(target.bossId).replace(/_/g, ' ')))
+            : null;
+        const name = bossName
+            ? String(bossName).toUpperCase()
+            : (target.config && target.config.name)
+                ? target.config.name.toUpperCase()
+                : 'ASTEROID';
         this.lastHitInfo = {
             ref: target,
             name,

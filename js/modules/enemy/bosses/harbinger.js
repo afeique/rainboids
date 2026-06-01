@@ -42,11 +42,12 @@ import {
 // ── Tuning ──────────────────────────────────────────────────────────────────
 // Most of the fight is spent clearing bolts (the core is damage-gated while any
 // bolt still shields it), so total kill time = bolt HP across all 3 phases +
-// core HP. 6.225.6 — the original 900 core + 60/80/110 bolts made the Harbinger
-// read as a slow, low-threat meatbag (~1600 effective HP). Cut both the core and
-// the per-phase bolt HP so the core opens up sooner and the fight lands at the
-// LOW end of the 45–120s boss-DoD band rather than dragging past it.
-export const HARBINGER_MAX_HEALTH = 520;
+// core HP. The original 900 core + 60/80/110 bolts read as a slow, low-threat
+// meatbag; 6.225.6 already trimmed it to 520. This pass cuts BOTH the core and
+// every per-phase bolt by a further ~35% (core 520 → 340) for shorter, snappier
+// boss fights — the core opens sooner and the fight stays brisk. The Harbinger
+// remains the LOWEST-HP boss in the roster.
+export const HARBINGER_MAX_HEALTH = 340;
 
 // Fraction of incoming damage the CORE still takes while bolt-heads shield it.
 // 6.225.7 — the old all-or-nothing gate (core fully immune until every bolt was
@@ -63,11 +64,11 @@ export const HARBINGER_CORE_CHIP = 0.4;
 // tightening to a single ring at enrage.
 const PHASE_BOLTS = [
     // Phase 0 — opening: a wide, slow 4-bolt ring.
-    { count: 4, radius: 130, hp: 38, speed: 0.4, partRadius: 34 },
+    { count: 4, radius: 130, hp: 25, speed: 0.4, partRadius: 34 },
     // Phase 1 — mid: 3 bolts, tighter.
-    { count: 3, radius: 110, hp: 50, speed: 0.55, partRadius: 36 },
+    { count: 3, radius: 110, hp: 35, speed: 0.55, partRadius: 36 },
     // Phase 2 — enrage: 2 heavy bolts, counter-spin (still readable).
-    { count: 2, radius: 96, hp: 66, speed: 0.8, partRadius: 40 },
+    { count: 2, radius: 96, hp: 45, speed: 0.8, partRadius: 40 },
 ];
 
 // HP fractions at which each phase opens (descending — boss-phases convention).
