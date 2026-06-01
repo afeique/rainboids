@@ -59,6 +59,7 @@ import {
     initBossDeath,
     updateBossDeath,
 } from '../boss-intro.js';
+import { drawPrismarch } from './render/prismarch-render.js';
 import { ELEMENT_IDS } from '../../combat/elements.js';
 
 // ── Tuning ──────────────────────────────────────────────────────────────────
@@ -349,6 +350,7 @@ export const PRISMARCH = {
     phaseCount: ASPECT_COUNT,
     aspectCount: ASPECT_COUNT,
     aspects: ASPECTS,
+    draw: drawPrismarch,         // 9.1.x per-boss custom renderer (prismatic god-machine)
     // Factory hooks the chassis + (later) the spawner use.
     buildPhaseScript,
     buildIntroScript,

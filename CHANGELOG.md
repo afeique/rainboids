@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [9.20.0] - 2026-06-01
+
+### Added
+- **The Prismarch now has a custom renderer — all 10 bosses are now custom-rendered**, completing the boss-redesign render track. The finale "transforming god-machine" is a prismatic crystalline colossus whose full-spectrum refraction body shifts hue through its five elemental aspects (Pyre → Frost → Storm → Blight → OMEGA), with an orbiting facet weak-point ring tinted to the active aspect's element, reality-fracture cracks + orbiting prismatic light-shards, a full-body charge flare on its signature-attack wind-up, and a blinding multi-core radiant heart on the OMEGA finale. (Render-only — the five-aspect gate mechanics are untouched.)
+
+### Changed
+- Every boss now draws through its own dedicated renderer (Harbinger, Aegis, Lumen, Gemini, Maelstrom, Hivemother, Iron Throne, Warden Prime, Nullmaw, Prismarch) via the descriptor `draw` hook; the generic modular-boss renderer is no longer used in normal play (retained as a safety fallback).
+
 ## [9.19.0] - 2026-06-01
 
 ### Added
