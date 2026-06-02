@@ -42,18 +42,9 @@ export function cleansePlayerStatus(player) {
  * PYRO → BURN (DoT, S1b). VOLT shock still deferred.
  */
 export function applyPlayerStatus(player, element, now) {
-    if (!player || !element) return;
-    if (element === 'CRYO') {
-        player.pChillUntil = Math.max(player.pChillUntil || 0, now + CHILL_DUR);
-    } else if (element === 'TOXIC') {
-        player.pCorrodeStacks = Math.min(CORRODE_MAX_STACKS, (player.pCorrodeStacks || 0) + 1);
-        player.pCorrodeUntil = now + CORRODE_DUR;
-    } else if (element === 'PYRO') {
-        const wasInactive = !(player.pBurnStacks > 0) || (player.pBurnUntil || 0) <= now;
-        player.pBurnStacks = Math.min(BURN_MAX_STACKS, (player.pBurnStacks || 0) + 1);
-        player.pBurnUntil = now + BURN_DUR;
-        if (wasInactive) player.pBurnTickAt = now + BURN_TICK_MS;
-    }
+    // v11.0.0 — elemental effects removed. The player never takes elemental
+    // status (chill/corrode/burn) anymore; this is a no-op.
+    return;
 }
 
 /**

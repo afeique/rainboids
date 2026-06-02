@@ -13,6 +13,8 @@ import { rgba } from '../core/color-cache.js';
 import { frameClock } from '../core/frame-clock.js';
 import { drawShipShape, SHIP_PALETTE_MAGENTA } from '../render/shapes.js';
 import { getSkin } from './skins/index.js';
+// v11.0.0 — the player hull renders as a glowing 3D wireframe dart.
+import { drawPlayerMesh3D } from '../render/entity-meshes.js';
 
 // ── Remote-peer ship draw (MVD multiplayer, 2026-05-13) ────────────────────
 //
@@ -69,8 +71,14 @@ export function draw(ctx) {
     const shear = typeof skin.bankShear === 'number' ? skin.bankShear : 0.12;
     if (shear) ctx.transform(1, 0, (this.bank || 0) * shear, 1, 0, 0);
 
-    // ── Hull (active skin) ──
-    skin.paint.call(this, ctx, r, t);
+    // ── Hull — v11.0.0 glowing 3D wireframe dart ──
+    // The skin module still provides noseY / bankShear above; its 2D hull
+    // paint is superseded by the shared wireframe look so the ship matches the
+    // vector-3D aesthetic of the enemies + asteroids.
+    drawPlayerMesh3D(ctx, {
+        radius: r,
+        hue: typeof this._meshHue === 'number' ? this._meshHue : 190,
+    });
 
     // ── Shared feedback FX (run for every skin) ──
     drawMuzzleFlash.call(this, ctx, r, noseY);

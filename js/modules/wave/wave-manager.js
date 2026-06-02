@@ -14,7 +14,10 @@ import { random } from '../core/utils.js';
 import { GameTimer } from '../core/game-timer.js';
 import { ENEMY_TYPES } from '../enemy/enemy.js';
 import { PRIMARY_WEAPONS, POWER_WEAPONS, getPrimaryUpgrades, getPowerUpgrades, PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES } from '../combat/weapon-data.js';
-import { buildDraft, isCardStage } from '../combat/card-draft.js';
+// v11.0.0 — draft cards removed. The wave LIFECYCLE in this module (updateWaveSystem,
+// startNextWave, openWavePickOverlay, missions, difficulty feed) is no longer driven;
+// the ModeManager owns the campaign loop and calls only the low-level spawn helpers
+// below (spawnLeveledEnemies, requestEnemySpawn, initializeWaveAsteroid, etc.).
 import {
     rerollCost as rerollGoldCost, canReroll as rerollCanReroll,
     repairKitCost as repairKitGoldCost, canRepair as repairCanBuy,
@@ -243,7 +246,7 @@ export function updateWaveSystem() {
         // stage (runConfig-aware → default 10×3 run: waves 3,6,…,27 but NOT
         // wave 30, the run end). Cards-per-run = stages − 1 (default 9).
         // The final stage clear still grants the gold bonus, just no card.
-        const survivorWave = isCardStage(clearedWave, this.game);
+        const survivorWave = false; // v11.0.0 — draft cards removed
 
         // 5.76.1 — recap stats stash for showWaveComplete. Caller passes
         // the bonus gold + pick info to the message renderer.
@@ -1683,7 +1686,7 @@ export function openWavePickOverlay() {
     // Phase R3 — the per-run CARD draft: 2 weapon + 1 ability card, all
     // relevance-filtered to the equipped loadout (card-draft.js). Replaces
     // the old PASSIVE-stat survivor cards; stats now live in the SP menu.
-    let picks = buildDraft(player, { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES });
+    let picks = []; // v11.0.0 — draft cards removed (this overlay is no longer driven)
 
     // If the player has maxed EVERY powerup, fall through to the
     // pre-5.98 pause-menu path so they at least see the wave-clear
@@ -1809,7 +1812,7 @@ export function openWavePickOverlay() {
     // refresh the gold-sink action buttons.
     const pools = { PRIMARY_UPGRADES, POWER_UPGRADES, ABILITY_UPGRADES };
     const redraw = () => {
-        picks = buildDraft(player, pools);
+        picks = []; // v11.0.0 — draft cards removed
         renderCards(picks);
         renderActions();
     };

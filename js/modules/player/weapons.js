@@ -1129,29 +1129,11 @@ export function applyGlobalBulletUpgrades(bullet) {
     // chokepoint to set it. Charge-shot stamps its own weaponId separately.
     bullet.weaponId = this.activePrimary;
 
-    // E1 (Element & Resistance) — stamp the firing primary's element so the
-    // damage path (E2) can apply enemy resistance. One chokepoint for every
-    // primary bullet; falls back to the KINETIC baseline.
-    const _wcfg = PRIMARY_WEAPONS[this.activePrimary];
-    // W1 (Attunements) — a bullet now carries an ELEMENT ARRAY. Priority:
-    //   1. ELEMENTAL_INFUSION override (single element, beats resists)
-    //   2. the equipped attunements' elements for this weapon (the stack)
-    //   3. the weapon's base element (KINETIC for most)
-    // `bullet.element` is kept as elements[0] for single-element consumers.
-    const _baseEl = (_wcfg && _wcfg.element) || 'KINETIC';
-    let _override = (this.activeAbilityEffects
-        && this.activeAbilityEffects.has('ELEMENTAL_INFUSION') && this._infusedElement)
-        ? this._infusedElement : null;
-    // P6 — Prismatic Soul passive: each shot auto-cycles all 6 elements (a
-    // single cycling element per bullet, overriding attunements; the active
-    // ELEMENTAL_INFUSION ability still takes precedence when up).
-    if (!_override && typeof this.hasPassive === 'function' && this.hasPassive('PRISMATIC_SOUL')) {
-        this._prismaticIdx = (this._prismaticIdx | 0) + 1;
-        _override = prismaticElement(this._prismaticIdx);
-    }
-    const _attIds = (this.activeAttunements && this.activeAttunements[this.activePrimary]) || [];
-    bullet.elements = resolveBulletElements(_override, attunementElements(_attIds), _baseEl);
-    bullet.element = bullet.elements[0];
+    // v11.0.0 — elements/attunements removed. All damage is plain (KINETIC).
+    // Bullets carry no element typing; the damage path applies simple
+    // crit / passive / armor math with no resistances or status effects.
+    bullet.element = null;
+    bullet.elements = null;
 
     // Phase 2 (2026-05-19) — global HOMING / PIERCING removed; each
     // weapon's firing path now reads its OWN per-weapon stack. Lookup

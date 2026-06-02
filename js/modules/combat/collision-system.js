@@ -832,21 +832,8 @@ export function handleCollisions() {
                         : 0;
                     if (execStacks > 0) damage *= (1 + execStacks * 0.2);
                 }
-                // SHATTER (Cryo Burst upgrade) — frozen enemies take +30%.
-                if (this.player && typeof this.player.getPowerupStacks === 'function'
-                    && this.player.getPowerupStacks('SHATTER') > 0
-                    && enemy.cryoFrozenUntil && enemy.cryoFrozenUntil > frameClock.now) {
-                    damage *= 1.3;
-                }
-                // Weapon-vs-archetype matchup nudge (rock-paper-scissors). Multiplies
-                // the player-bullet damage by the (weaponClass × enemyArchetype)
-                // factor from matchup-data.js. The source weapon is read from
-                // `bullet.weaponId` (the canonical field the per-weapon hit-SFX path
-                // above already uses); a bullet without one yields a neutral 1.0,
-                // so AoE/shrapnel/split shards that carry no weaponId are unaffected.
-                // Applied ONLY here on the player-bullet→enemy path — enemy-vs-player,
-                // AoE-vs-asteroid, and DoT/status paths are untouched.
-                damage *= matchupMultiplier(bullet.weaponId, enemy.type);
+                // v11.0.0 — elemental SHATTER bonus and weapon-vs-archetype
+                // matchup nudge removed; damage is plain.
                 if (this.game.stats) this.game.stats.shotsHit++;
                 const enemyHpBefore = enemy.health;
                 // P6 — Predator passive: the first hit on a FULL-HP enemy always
@@ -862,9 +849,7 @@ export function handleCollisions() {
                 const destroyed = enemy.takeDamage(damage, {
                     isCrit: _isCrit,
                     isEmpowered: !!bullet.isEmpowered,
-                    element: bullet.element,    // back-compat single element
-                    elements: bullet.elements,  // W1 — multi-element resist split
-                    hitX: bullet.x, hitY: bullet.y, // E8a — SENTINEL frontal-shield angle check
+                    hitX: bullet.x, hitY: bullet.y, // SENTINEL frontal-shield angle check
                 });
                 // 5.107.0 — Vampirism lifesteal on the damage actually
                 // applied to the enemy (clamps overkill so we don't
@@ -909,26 +894,7 @@ export function handleCollisions() {
                         enemy.x += Math.cos(ka) * shove;
                         enemy.y += Math.sin(ka) * shove;
                     }
-                    // E6/W1 — the firing weapon applies EACH active element's
-                    // signature status (Pyro burn, Cryo chill/freeze, Volt
-                    // conduct + shock, Toxic corrode + bleed, Void mark). With
-                    // several elements the per-element share of damage scales
-                    // each status (focus vs coverage). Kinetic/Radiant no-op here.
-                    const _bels = (bullet.elements && bullet.elements.length)
-                        ? bullet.elements : [bullet.element];
-                    for (const _be of _bels) {
-                        applyWeaponElementStatus.call(this, enemy, _be, enemyApplied / _bels.length);
-                    }
-                    // P6 — Static Charge passive: every 5th landed hit emits a
-                    // conduct zap on the struck enemy.
-                    if (this.player && typeof this.player.hasPassive === 'function'
-                        && this.player.hasPassive('STATIC_CHARGE')) {
-                        this.player._staticChargeHits = (this.player._staticChargeHits | 0) + 1;
-                        if (this.player._staticChargeHits >= 5) {
-                            this.player._staticChargeHits = 0;
-                            if (typeof this.applyConduct === 'function') this.applyConduct(enemy);
-                        }
-                    }
+                    // v11.0.0 — elemental on-hit status application removed.
                 }
 
                 if (_isCrit) {
@@ -2639,49 +2605,17 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
         }
     }
 
-    // E2 (Element & Resistance) — scale by the target's resistance to the
-    // incoming element. `opts.element` is the bullet/source element (KINETIC
-    // fallback). Neutral (no resist entry) → ×1; resist >0 reduces; resist <0
-    // is a weakness (>1); resist =1 is immune (×0). Enemy resist maps are
-    // neutral defaults until E8, so this is inert in gameplay today but live
-    // for any populated map (and exercised by the unit tests).
-    // W1 (Attunements) — a hit can carry MULTIPLE elements (`opts.elements`).
-    // Damage divides evenly across them, so the resist multiplier is the
-    // average of the per-element multipliers (focus vs coverage). Single-element
-    // / legacy callers (`opts.element`) behave exactly as before.
-    const _els = (opts.elements && opts.elements.length)
-        ? opts.elements : [opts.element || 'KINETIC'];
-    const _resistMult = multiElementMultiplier(enemy.resist, _els);
-    if (_resistMult !== 1) damage *= _resistMult;
+    // v11.0.0 — elemental resistance / CORRODE / CONDUCT amplifiers removed.
+    // Damage is plain: only the passive/crit multipliers above, then the
+    // non-elemental enemy defenses (ally shield, armor, frontal shield, absorb).
 
-    // E3 — CORRODE amplifies ALL incoming damage (+15% per stack); CONDUCT
-    // amplifies VOLT damage (+50%). Both read the enemy's status timers; the
-    // applicators live in combat-manager. Inert until a weapon/ability applies
-    // them (E6 / synergies in E4).
-    if (enemy.corrodeStacks > 0 && enemy.corrodeUntil > frameClock.now) {
-        damage *= 1 + 0.15 * enemy.corrodeStacks;
-    }
-    if (enemy.conductUntil > frameClock.now && _els.includes('VOLT')) {
-        damage *= 1.5;
-    }
-
-    // A.E9-S7 — ally SHIELD from a support enemy (Lumen Drone) reduces incoming
-    // damage while the stamp is live. Kill the support to drop it.
+    // ally SHIELD from a support enemy (Lumen Drone) reduces incoming damage.
     const _allyMult = allyShieldMult(enemy, frameClock.now);
     if (_allyMult !== 1) damage *= _allyMult;
 
-    // W2 (Radiant) — PURGE: Radiant hits cut through flat ARMOR and the
-    // SENTINEL frontal shield (the anti-armor element — the answer to armored
-    // archetypes). `_purge` gates both reductions below. Inert unless a hit
-    // carries RADIANT (a Radiant attunement, or Lance Beam / Prism).
-    const _purge = _els.includes('RADIANT');
-
-    // E8a — flat ARMOR floor (GUARDIAN archetype): subtract a fixed amount per
-    // hit, down to a 25% floor so chip damage (many small hits) is wasted while
-    // big single hits punch through. Applied AFTER the resist / CORRODE /
-    // CONDUCT multipliers, so a CORRODE-amplified hit overcomes armor — "melts
-    // to Corrode." Inert on enemies with no armor (most).
-    if (enemy.armor > 0 && damage > 0 && !_purge) {
+    // flat ARMOR floor (GUARDIAN archetype): subtract a fixed amount per hit,
+    // down to a 25% floor so chip damage is wasted while big hits punch through.
+    if (enemy.armor > 0 && damage > 0) {
         damage = Math.max(damage * 0.25, damage - enemy.armor);
     }
 
@@ -2691,7 +2625,7 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     // in full. Uses the hit point (opts.hitX/Y) vs the live player position, so
     // it doesn't depend on the enemy's render facing. Only the bullet path
     // passes a hit point; AoE/beam sources (no hitX) bypass the shield.
-    if (enemy.frontalShield && this.player && opts.hitX != null && damage > 0 && !_purge) {
+    if (enemy.frontalShield && this.player && opts.hitX != null && damage > 0) {
         const toPlayer = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
         const toHit = Math.atan2(opts.hitY - enemy.y, opts.hitX - enemy.x);
         let diff = Math.abs(toHit - toPlayer) % (Math.PI * 2);
@@ -2725,38 +2659,21 @@ export function applyDamageToEnemy(enemy, damage, opts = {}) {
     enemy.health -= damage;
     enemy.health = Math.max(0, Math.min(enemy.health, enemy.maxHealth));
 
-    // E8e — WARDEN adaptive resist: AFTER the hit lands (so this hit used the
-    // old resist), bump the enemy's resistance to the hit's element. Spamming
-    // one element walls it; switching resets the pressure. Decay lives in
-    // Enemy._processStatusEffects. Only adaptive enemies have the flag.
-    if (enemy.adaptive && enemy.resist) {
-        for (const _e of _els) adaptResist(enemy.resist, _e);
-    }
+    // v11.0.0 — WARDEN adaptive elemental resist removed.
 
     if (opts.showNumber !== false && typeof this.createDamageNumber === 'function') {
         this.createDamageNumber(
             opts.numberX != null ? opts.numberX : enemy.x,
             opts.numberY != null ? opts.numberY : (enemy.y - (enemy.radius || 15)),
             damage,
-            // Phase 3 — `isBurn` lets the renderer differentiate BRN
-            // tick damage (red, lower alpha) from regular hits. Pure
-            // pass-through; no new branching in this function.
-            // E2 — `isResisted` / `isWeak` let the damage-number renderer tint
-            // resisted hits dim and weakness hits bright (visual cue lands with
-            // E8 when enemy resists are populated; flags are inert until then).
-            { isCrit: !!opts.isCrit, isEmpowered: !!opts.isEmpowered, isBurn: !!opts.isBurn,
-              isResisted: _resistMult < 1, isWeak: _resistMult > 1,
-              effectiveness: _resistMult, target: enemy }
+            { isCrit: !!opts.isCrit, isEmpowered: !!opts.isEmpowered, target: enemy }
         );
     }
     if (this.game?.stats) this.game.stats.totalDamageDealt += damage;
 
     const destroyed = enemy.health <= 0.001;
 
-    // E4 — on-hit elemental synergy reactions (SHATTER / OIL flare). `damage`
-    // is the post-multiplier dealt amount. Fires even on a killing blow so a
-    // frozen enemy still shatters into its neighbors as it dies.
-    _triggerStatusReactions.call(this, enemy, damage, opts);
+    // v11.0.0 — elemental status reactions (SHATTER / OIL flare) removed.
 
     // ENMY-10b — THORNBACK counter-attack. Every damage instance a Thornback
     // SURVIVES triggers a small retaliatory pulse — but only if the player is
@@ -3197,65 +3114,10 @@ function _voidGather(enemy) {
     }
 }
 export function applyWeaponElementStatus(enemy, element, dealt) {
-    if (!enemy || !enemy.active) return;
-    switch (element) {
-        case 'PYRO':
-            if (typeof this.applyBurn === 'function') {
-                const wasBurning = enemy.brnUntil > frameClock.now;
-                this.applyBurn(enemy, dealt);
-                if (wasBurning) _spreadBurn.call(this, enemy, dealt);
-            }
-            break;
-        case 'CRYO': {
-            // W2 (Cryo) — sustained cold escalates: a hard hit freezes outright,
-            // and a soft hit on an ALREADY-CHILLED enemy also freezes (the chill
-            // "locked in"). Otherwise it just chills. Inert unless Cryo-attuned.
-            const wasChilled = enemy.chillUntil > frameClock.now;
-            // P6 — Frostbite passive: chill/freeze builds 25% faster → a 25%
-            // lower hit threshold to escalate straight to FREEZE.
-            const _frostbite = !!(this.player && this.player.hasPassive && this.player.hasPassive('FROSTBITE'));
-            const _freezeHit = _frostbite ? ELEM_FREEZE_HIT * 0.75 : ELEM_FREEZE_HIT;
-            if (dealt >= _freezeHit || wasChilled) {
-                if (typeof this.applyFreeze === 'function') this.applyFreeze(enemy);
-            } else if (typeof this.applyChill === 'function') {
-                this.applyChill(enemy);
-            }
-            break;
-        }
-        case 'VOLT':
-            if (typeof this.applyConduct === 'function') this.applyConduct(enemy);
-            if (Math.random() < ELEM_SHOCK_CHANCE && typeof this.applyStun === 'function') {
-                this.applyStun(enemy, 600);
-            }
-            // W2 (Volt) — the arc FORKS: a fraction of the hit jumps to the
-            // nearest other enemy (conduct + reduced Volt damage). One fork per
-            // hit (no recursion — the fork routes through applyDamageToEnemy,
-            // not the bullet-hit status loop). Inert unless Volt-attuned.
-            _forkVolt.call(this, enemy, dealt);
-            break;
-        case 'TOXIC': {
-            // W2 (Toxic) — corrosion SPREADS: a follow-up Toxic hit on an
-            // already-corroded enemy seeps corrode into nearby enemies (a
-            // plague). Gated to corroded targets (no per-shot scan). Inert
-            // unless Toxic-attuned.
-            const wasCorroded = enemy.corrodeUntil > frameClock.now;
-            if (typeof this.applyCorrode === 'function') this.applyCorrode(enemy);
-            if (typeof this.applyBleed === 'function') this.applyBleed(enemy, dealt);
-            if (wasCorroded) _spreadCorrode.call(this, enemy);
-            break;
-        }
-        case 'VOID': {
-            // W2 (Void) — gravity GATHER: a follow-up Void hit on an already-
-            // marked enemy tugs nearby enemies a small step toward it, clumping
-            // them for AoE follow-up. Gated to marked targets; inert unless
-            // Void-attuned.
-            const wasMarked = enemy.markUntil > frameClock.now;
-            if (typeof this.applyMark === 'function') this.applyMark(enemy);
-            if (wasMarked) _voidGather.call(this, enemy);
-            break;
-        }
-        // KINETIC / RADIANT — no on-hit status here.
-    }
+    // v11.0.0 — elemental status effects removed. Damage is plain; no on-hit
+    // burn/chill/freeze/conduct/corrode/bleed/mark is ever applied. Kept as a
+    // no-op so any straggler caller is safe.
+    return;
 }
 
 export function damageEnemy(enemy, damage, element, canCrit = false) {

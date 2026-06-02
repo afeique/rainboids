@@ -63,6 +63,14 @@ import * as cam from './world/camera-manager.js';
 import { recordVFXFrame } from './debug/vfx-telemetry.js';
 import * as shop from './shop/shop-manager.js';
 import * as wave from './wave/wave-manager.js';
+
+// v11.0.0 — Campaign / map system. Replaces the wave-progression loop: the
+// ModeManager cycles through self-contained map encounters (CHAOS / DUNGEON /
+// ASSAULT / SIEGE) connected by exit portals, driving spawns via the kept
+// low-level helpers in wave-manager. WorldMap owns the (now resizable) field
+// bounds + the dungeon's wall geometry.
+import { WorldMap } from './world/map/world-map.js';
+import { ModeManager } from './world/map/mode-manager.js';
 // RUN-05a — Adaptive Difficulty Director (RUN-04). Instantiated fresh on each
 // new-run init and stored on this.game.difficultyDirector; fed at wave-clear
 // (wave-manager.js) and read at the two difficulty chokepoints (enemy HP +
@@ -100,9 +108,7 @@ import { hasSave, loadSave, writeSave, clearSave, loadMeta, saveMeta } from './c
 // 9.0.0 (reboot) — HANGAR (skin picker) removed; HangarOverlay import dropped.
 import { SettingsOverlay } from './ui/settings-overlay.js';
 // 9.0.0 (reboot) — LoadoutOverlay removed.
-import { DraftOverlay } from './ui/draft-overlay.js';
-import { applyDraftCard, rollDraft } from './combat/draft-engine.js';
-import { DRAFT_CATEGORIES } from './combat/draft-data.js';
+// v11.0.0 — draft cards removed (boon draft + per-run card draft).
 import { AnalogStick } from './ui/analog-stick.js';
 
 // 5.100.0 — localStorage key for the analog-stick side preference.
@@ -788,11 +794,15 @@ export class GameEngine {
             h: btnSize + hitPad * 2
         };
         
-        // Camera and game field system
-        this.gameField = {
-            width: GAME_CONFIG.FIELD_WIDTH,
-            height: GAME_CONFIG.FIELD_HEIGHT
-        };
+        // Camera and game field system. v11.0.0 — the field is now owned by a
+        // WorldMap (resizable per map + carries wall geometry). gameField shares
+        // the same bounds object by reference, so every existing boundary
+        // consumer (player clamp, asteroid bounce, star wrap, camera clamp)
+        // tracks the active map size automatically.
+        this.worldMap = new WorldMap(GAME_CONFIG.FIELD_WIDTH, GAME_CONFIG.FIELD_HEIGHT);
+        this.gameField = this.worldMap.bounds;
+        // The Campaign driver (cycles maps via exit portals).
+        this.modeManager = new ModeManager();
         
         this.camera = {
             x: 0,
@@ -1279,41 +1289,11 @@ export class GameEngine {
             weaponShots: {},
         };
 
-        // Wave 1 intro: title fade-out hands off to a 700ms fade-IN that
-        // reveals the player on the empty playfield, then a brief beat,
-        // then wave-1 entities warp in. The wave intro overlay text is
-        // disabled per the user request — fade transition only.
-        this.waveMessage = {
-            active: true,
-            startTime: Date.now(),
-            duration: 3400,
-            title: 'WAVE 1',
-            subtitle: this.getWaveSubtitle(1),
-            phase: 'intro',
-        };
-
-        // Black-to-clear fade over the first 700ms — picks up where the
-        // title launch animation's fade-to-black left off so the screen
-        // never flashes between the two.
+        // v11.0.0 — start the Campaign. The ModeManager configures the first
+        // map (CHAOS), places the player, and spawns its encounter. The
+        // black-to-clear fade reveals the field; state flips to PLAYING after.
         this._postInitFade = { startTime: Date.now(), duration: 700 };
-
-        // Timeline:
-        //   0-700ms    fade in (black → clear, revealing player)
-        //   700-1100ms hold (player visible, empty field, orientation beat)
-        //   1100ms     spawn wave-1 entities + grant invincibility
-        //   3400ms     state → PLAYING
-        this._gameTimers.push(new GameTimer(1100, () => {
-            if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
-                this.spawnWaveEntities();
-                // 5.88.0 — wave-start invincibility (3s while the field
-                // populates). Kept because spawning enemies on top of
-                // the player would be unfair regardless of the new
-                // tank-based hit model.
-                if (this.player && this.player.active) {
-                    this.player.makeInvincible(3000);
-                }
-            }
-        }));
+        this.modeManager.startCampaign(this);
         this._gameTimers.push(new GameTimer(3400, () => {
             if (this.game.state === GAME_STATES.WAVE_TRANSITION) {
                 this.game.state = GAME_STATES.PLAYING;
@@ -2791,7 +2771,10 @@ export class GameEngine {
     
     drawTitleScreen() { return hudOverlays.drawTitleScreen.call(this); }
     
-    startNextWave() { return wave.startNextWave.call(this); }
+    // v11.0.0 — wave progression removed. "Next wave" is now just a resume of
+    // the running Campaign map (used by shop-close + pause-resume); the
+    // ModeManager owns all spawning/objectives.
+    startNextWave() { this.game.state = GAME_STATES.PLAYING; }
 
     spawnWaveEntities() {
         // DIR-05 — recompute the build PWR right BEFORE the wave spawns so a build
@@ -3674,9 +3657,10 @@ export class GameEngine {
                 this.enemyBulletPool.cleanupInactive();
             }
             
-            // Update wave system to check for completion and progression
-            this.updateWaveSystem();
-            
+            // v11.0.0 — drive the Campaign (map spawns, objective, exit portal,
+            // player↔wall collision) instead of the old wave-progression loop.
+            this.modeManager.update(this, frameClock.dt || 16.67);
+
             this.uiManager.updateScore(this.game.money);
         } else if (this.game.state === GAME_STATES.GAME_OVER || this.game.state === GAME_STATES.PAUSED) {
             this.particlePool.updateActive();
@@ -3914,6 +3898,10 @@ export class GameEngine {
             // AND the ARMORY/LOADOUT screens (all pre-run: pools are empty,
             // player may be null, and the ship would otherwise show under the menu).
             if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT && this.game.state !== GAME_STATES.HANGAR && this.game.state !== GAME_STATES.SETTINGS) {
+                // v11.0.0 — labyrinth walls + exit portal, drawn in world space
+                // behind the combat entities.
+                this.worldMap.draw(this.ctx, vL, vT, vR, vB, frameClock.now);
+                this.modeManager.draw(this, this.ctx, frameClock.now);
                 this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 this.asteroidShardPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
                 // Two-layer particle render — every bright/glowing type
@@ -4607,33 +4595,11 @@ export class GameEngine {
     // 9.0.0 (reboot) — open the between-wave draft. Rolls + applies a chosen
     // boon to the player, then fires onClose so the wave loop can advance.
     // Returns true if the overlay opened (mirrors openStatsForLevelUp's contract).
+    // v11.0.0 — draft cards removed. Kept as a no-op so any straggler caller
+    // (e.g. the dormant wave-clear hook) simply advances instead of opening UI.
     openDraft(onClose) {
-        if (!this.player) return false;
-        // 9.0.0 — autoDraft (AI playtester / tests): pick a random eligible card
-        // without showing the overlay, so multi-wave runs don't hang on the pause.
-        if (this.cheats && this.cheats.autoDraft) {
-            const cat = Math.random() < 0.5 ? DRAFT_CATEGORIES.OFFENSE : DRAFT_CATEGORIES.DEFENSE;
-            let cards = rollDraft(this.player, cat, 3);
-            if (!cards.length) {
-                const other = cat === DRAFT_CATEGORIES.OFFENSE ? DRAFT_CATEGORIES.DEFENSE : DRAFT_CATEGORIES.OFFENSE;
-                cards = rollDraft(this.player, other, 3);
-            }
-            if (cards.length) applyDraftCard(this.player, cards[Math.floor(Math.random() * cards.length)]);
-            if (onClose) onClose();
-            return true;
-        }
-        if (typeof document === 'undefined') { if (onClose) onClose(); return false; }
-        if (!this._draftOverlay) this._draftOverlay = new DraftOverlay();
-        return this._draftOverlay.open(this.player, {
-            waveNumber: this.game ? this.game.currentWave : 0,
-            onComplete: (card) => {
-                if (card) {
-                    applyDraftCard(this.player, card);
-                    try { this.events.emit('audio:powerup'); } catch (_e) {}
-                }
-                if (onClose) onClose();
-            },
-        });
+        if (onClose) onClose();
+        return false;
     }
 
     togglePause() {

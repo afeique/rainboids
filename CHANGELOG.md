@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [11.0.0] - 2026-06-01
+
+Ground-up restructure. The single wave-based arena becomes a **Campaign** that cycles through self-contained **map encounters** connected by exit portals, damage is simplified to plain numbers, and **every entity is re-rendered as glowing 3D wireframe geometry**.
+
+### Added
+- **Map Campaign system** (`js/modules/world/map/`). A continuous cycle of self-contained map encounters: clear a map's objective → an **exit portal** spawns → fly into it to warp to the next map. Each cleared map lifts the enemy level for those that follow. Built to grow (drop new maps/variants into the `CAMPAIGN` rotation).
+  - **`WorldMap`** — a resizable playing field (the field bounds object is shared by-reference with `gameField`, so every existing boundary consumer — player clamp, asteroid bounce, star wrap, camera clamp — tracks the active map size). Carries optional **wall geometry** with circle-vs-AABB push-out collision and a glowing neon render.
+  - **`ModeManager`** — drives the campaign: portal, per-frame objective tick, player↔wall collision, between-map transitions.
+  - **`Portal`** — the swirling rainbow exit gate.
+- **Four map types:**
+  - **CHAOS FIELD** — the original open arena, kept: a few waves of fully-randomized enemies + asteroids.
+  - **THE LABYRINTH** — a **4×-larger world** (3840×2160) carved into a **procedurally-generated glowing dungeon** (`dungeon-generator.js`: rooms + corridors). Enemies are distributed through the maze and **navigate it via a BFS flow-field** toward the player; the exit portal sits in the far room. Walls block ships and bullets.
+  - **ASSAULT RUN** — a **vertical formation shooter** (Galaga-style): the player holds a bottom band (side-to-side + up/down) and clears descending formations.
+  - **THE SIEGE** — a **radial last-stand**: the player is tethered near the centre while enemies converge from every side in rings.
+- **3D wireframe rendering for all entities** (`render/mesh3d.js` + `render/entity-meshes.js`). A reusable glowing-rainbow-edges-over-faint-fill renderer (generalized from the asteroid projection). The player and every enemy archetype now draw as vivid vector-3D solids (themed darts, octahedra, prisms, bipyramids, cubes) instead of flat 2D silhouettes. Asteroids keep their existing 3D wireframe.
+
+### Changed
+- **Damage is now simple and straightforward.** Hits are plain: `base × crit × passive multipliers`, minus flat enemy armor / shields. The bullet→enemy and `applyDamageToEnemy` paths no longer apply elemental resistance, CORRODE/CONDUCT amplifiers, RADIANT purge, adaptive resist, weapon-vs-archetype matchups, or status reactions.
+
+### Removed
+- **All elemental effects & attunements.** Bullets are elementless (KINETIC); no on-hit burn / chill / freeze / conduct / corrode / bleed / mark is ever applied (status applicators stubbed to no-ops). Player-side elemental status (chill/corrode/burn) removed.
+- **All draft cards.** Deleted the boon draft (`draft-data.js`, `draft-engine.js`, `ui/draft-overlay.js`) and the per-run card draft (`card-draft.js`) + their integration. `openDraft` is now a no-op.
+- **Wave progression.** The fixed 50-wave campaign, wave HUD/missions, and the difficulty-director-driven wave loop no longer drive play; the `wave-manager` is retained only as a library of low-level spawn helpers (warp-in, leveled spawns, asteroid init) that the map modes reuse. Shop-close / pause-resume now simply resume the running map.
+
+### Notes
+- **Powerups are intentionally kept in code** (`world/powerup.js`, spawning, collection, effects) per request, even though nothing currently drafts them.
+- Many element/attunement/status/wave/draft **unit tests now fail by design** (their systems were removed); updating or pruning those test files is follow-up work and was left out of this commit.
+
 ## [10.1.2] - 2026-06-01
 
 ### Fixed
