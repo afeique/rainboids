@@ -60,6 +60,23 @@ export class ModeManager {
         if (engine.player && engine.player.active && typeof engine.player.makeInvincible === 'function') {
             engine.player.makeInvincible(2200);
         }
+
+        // v11.1.1 — write the run CHECKPOINT at every map start. This is what
+        // the GAME OVER "RESTART WAVE" button restores: replaying the map you
+        // died on with the gold/loadout you had entering it. Suppressed while a
+        // CONTINUE/restart is mid-restore (so it can't clobber the save being
+        // loaded — engine.persistMapStartSave guards on _suppressWave1Save).
+        if (typeof engine.persistMapStartSave === 'function') engine.persistMapStartSave();
+    }
+
+    /** Jump straight to a specific campaign slot + reload it (used by CONTINUE /
+     *  RESTART WAVE to resume on the map the player died on). */
+    loadMapByIndex(engine, index, mapsCleared) {
+        const len = this.campaign.length;
+        this.index = ((((index | 0) % len) + len) % len);
+        this.mapsCleared = Math.max(0, mapsCleared | 0);
+        this._transitioning = false;
+        this.loadMap(engine, this.campaign[this.index]);
     }
 
     /** Advance to the next map in the cycle. */

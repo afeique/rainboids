@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [11.1.1] - 2026-06-02
+
+### Fixed
+- **"RESTART WAVE" now restarts the map you died on, with your gold/loadout.** After the v11 wave→Campaign overhaul the run checkpoint was only written once at run start (the old writer lived in the now-dead `wave-manager.startNextWave`), and the snapshot had no campaign position — so RESTART WAVE always dumped you back at the first map (CHAOS) with run-start gold. The checkpoint is now written at every **map** start (`ModeManager.loadMap` → `engine.persistMapStartSave`, suppressed mid-restore so it can't clobber the save being loaded), the snapshot records the campaign slot (`{index, mapsCleared}`), and `restoreRunState` reloads that map via `ModeManager.loadMapByIndex` — so RESTART WAVE / CONTINUE resume on the correct encounter with the gold you had entering it.
+- **The on-screen PRM / PWR weapon squares are clickable again.** The bottom-left primary/power squares were drawn but never hit-tested, so clicking them did nothing — the radial weapon controls "didn't work" by mouse/touch (only the F/E keyboard holds did). `drawEquippedWeaponSquares` now publishes click rects, and the desktop click handler + mobile tap handler open the matching weapon radial when a square is clicked/tapped (tap-to-open, then click/tap a slice to commit). Keyboard F (primary) / E (power) holds are unchanged.
+
 ## [11.1.0] - 2026-06-02
 
 ### Added

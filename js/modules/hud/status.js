@@ -1615,6 +1615,14 @@ export function drawEquippedWeaponSquares(ctx, barX, barY, barHeight) {
     const groupX = livesX;
     const groupY = this.canvas.height - squareSize - 80;
 
+    // v11.1.1 — publish click rects so the PRM / PWR squares open the matching
+    // weapon radial (hit-tested in event-setup / mobile-touch). The hit area
+    // extends ~18px below the square to cover the PRM/PWR label strip.
+    this._weaponSquareRects = {
+        primary: { x: groupX, y: groupY, w: squareSize, h: squareSize + 18 },
+        power: { x: groupX + squareSize + gap, y: groupY, w: squareSize, h: squareSize + 18 },
+    };
+
     const primaryCfg = this.player.getActivePrimaryConfig?.() || {};
     const powerCfg = this.player.getActivePowerConfig?.() || {};
     // 9.0.0 (reboot) — abilityCfg dropped (ability system removed).

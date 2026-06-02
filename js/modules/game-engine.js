@@ -1267,12 +1267,12 @@ export class GameEngine {
         this.game.waveComplete = false;
         // 5.88.0 — `updateLives` removed; tanks are rendered on the canvas.
         this.game.state = GAME_STATES.WAVE_TRANSITION;
-        // 5.79.0 — write the initial wave-1 save so a fresh run that
-        //   quits before clearing wave 1 still has something to resume.
-        //   Suppressed when init() is called from startContinueRun()
-        //   so the loaded snapshot isn't clobbered.
-        if (!this._suppressWave1Save) this.persistWaveStartSave?.();
-        this._suppressWave1Save = false;
+        // v11.1.1 — the run CHECKPOINT is now written at each MAP start by the
+        // ModeManager (engine.persistMapStartSave below), not here: at this
+        // point startCampaign hasn't run yet, so the map/campaign position
+        // isn't known. `_suppressWave1Save` stays set through a CONTINUE/restart
+        // init so the first (CHAOS) map load can't clobber the save we're about
+        // to restore; startContinueRun clears it once the restore completes.
         // Reset stats for the new run — Game Complete pulls from this object.
         this.game.stats = {
             gameStartTime: Date.now(),
@@ -1389,6 +1389,11 @@ export class GameEngine {
                 }
                 : { ...DEFAULT_RUN_CONFIG },
             money: this.game.money | 0,
+            // v11.1.1 — campaign position so RESTART WAVE / CONTINUE resumes on
+            // the map the player was on (not always the first map).
+            campaign: this.modeManager
+                ? { index: this.modeManager.index | 0, mapsCleared: this.modeManager.mapsCleared | 0 }
+                : null,
             // 5.88.0 — `lives` removed; energy tanks are now serialized via
             // `engineTanks` below (the runtime owner is `this.healthTanks`,
             // distinct from per-player `p.healthTanks` used in multiplayer
@@ -1419,6 +1424,14 @@ export class GameEngine {
                 powerups,
             },
         };
+    }
+
+    // v11.1.1 — campaign checkpoint writer, called at every map start
+    // (ModeManager.loadMap). Skipped while a CONTINUE/restart is mid-restore so
+    // the save being loaded isn't clobbered by the transient first-map load.
+    persistMapStartSave() {
+        if (this._suppressWave1Save) return;
+        this.persistWaveStartSave();
     }
 
     persistWaveStartSave() {
@@ -1530,6 +1543,14 @@ export class GameEngine {
             if (typeof getEnemyLevel === 'function') this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level, _mw);
             if (typeof getAsteroidLevel === 'function') this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave, _mw);
         } catch {}
+        // v11.1.1 — resume on the saved campaign map. init() already started
+        // the campaign at the first map (CHAOS); reload the map the player was
+        // actually on so RESTART WAVE / CONTINUE replays the right encounter
+        // with the restored gold/loadout. (Map-start save stays suppressed here
+        // via _suppressWave1Save until startContinueRun clears it.)
+        if (snap.campaign && this.modeManager && typeof this.modeManager.loadMapByIndex === 'function') {
+            this.modeManager.loadMapByIndex(this, snap.campaign.index, snap.campaign.mapsCleared);
+        }
         // HUD refresh — tanks render straight from `this.healthTanks` on
         // the canvas, so there's no DOM update to dispatch here.
         if (this.uiManager?.updateScore) this.uiManager.updateScore(this.game.money);
@@ -1772,6 +1793,9 @@ export class GameEngine {
         if (savedHealth != null && this.player) {
             this.player.health = Math.min(savedHealth, this.player.getEffectiveMaxHealth());
         }
+        // v11.1.1 — restore complete: re-enable map-start checkpoint writes so
+        // the next map advance saves a fresh checkpoint.
+        this._suppressWave1Save = false;
         return ok;
     }
 

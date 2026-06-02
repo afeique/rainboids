@@ -17,6 +17,19 @@ function _hitHudButton(engine, sx, sy) {
     return null;
 }
 
+// v11.1.1 — Hit-test the bottom-left PRM / PWR weapon squares (rects published
+// each frame by hud/status.js::drawEquippedWeaponSquares). Returns 'primary' /
+// 'power' / null. Lets a click on the on-screen weapon square open its radial.
+function _hitWeaponSquare(engine, sx, sy) {
+    const rects = engine && engine._weaponSquareRects;
+    if (!rects) return null;
+    for (const kind of ['primary', 'power']) {
+        const r = rects[kind];
+        if (r && sx >= r.x && sx <= r.x + r.w && sy >= r.y && sy <= r.y + r.h) return kind;
+    }
+    return null;
+}
+
 export function setupEventListeners() {
     // Handle window resize
     window.addEventListener('resize', () => {
@@ -270,6 +283,18 @@ export function setupEventListeners() {
                 if (this.togglePause) this.togglePause();
             }
             this._hudPressedButton = null;
+            return;
+        }
+
+        // v11.1.1 — the bottom-left PRM / PWR weapon squares open the matching
+        // weapon radial on click (they were drawn but never hit-tested, so the
+        // radial controls "didn't work" by mouse). A slice is then committed by
+        // the capture-phase mousedown handler above. Keyboard F/E still works.
+        const wsHit = _hitWeaponSquare(this, sx, sy);
+        if (wsHit && this.game.state === GAME_STATES.PLAYING) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (this.radialMenu) this.radialMenu.openFor(wsHit);
             return;
         }
 

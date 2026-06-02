@@ -105,6 +105,21 @@ export class MobileTouchHandler {
         return null;
     }
 
+    // v11.1.1 — Hit-test the bottom-left PRM / PWR weapon squares (rects from
+    // hud/status.js::drawEquippedWeaponSquares). Returns 'primary'/'power'/null.
+    _hitWeaponSquare(canvasX, canvasY) {
+        const rects = this.engine && this.engine._weaponSquareRects;
+        if (!rects) return null;
+        for (const kind of ['primary', 'power']) {
+            const r = rects[kind];
+            if (r && canvasX >= r.x && canvasX <= r.x + r.w &&
+                canvasY >= r.y && canvasY <= r.y + r.h) {
+                return kind;
+            }
+        }
+        return null;
+    }
+
     // Hit-test the GAME OVER screen buttons (newGame / restartWave),
     // mirroring event-setup.js's desktop `_gameOverHitId`.
     _hitGameOverButton(canvasX, canvasY) {
@@ -258,6 +273,18 @@ export class MobileTouchHandler {
             this._dragged = false;
             this._hudPressedId = hudHit;
             this._touchKind = 'hud';
+            return;
+        }
+
+        // 1b) PRM / PWR weapon squares → open the matching radial (v11.1.1).
+        // Leave the radial OPEN (consume this touch without tracking it) so the
+        // next tap on a slice commits via block 2 below — a tap-to-open then
+        // tap-to-pick gesture, matching the desktop click path.
+        const wsHit = this._hitWeaponSquare(x, y);
+        if (wsHit && this.engine.game.state === GAME_STATES.PLAYING
+            && this.engine.radialMenu && !this.engine.radialMenu.isOpen()) {
+            this.engine.radialMenu.openFor(wsHit);
+            this._reset();
             return;
         }
 
