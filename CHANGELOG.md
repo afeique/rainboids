@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [11.1.2] - 2026-06-02
+
+### Changed
+- **The Campaign now cycles maps in RANDOM order.** Instead of the fixed CHAOS → DUNGEON → ASSAULT → SIEGE loop, the ModeManager draws from a shuffled "bag" of every map: the order is random (including the first map of a run), each map appears once before any repeats, and no map repeats back-to-back across bag boundaries. RESTART WAVE / CONTINUE still resume the exact map you were on, then reseed the bag.
+
+### Fixed
+- **DUNGEON: enemies no longer dive-bomb and instantly kill the player.** The labyrinth's flow-field navigation was steering *every* enemy straight onto the player at full speed with no spacing, so the whole pack piled onto the player and stacked ram damage to an instant kill. Enemies now path toward the player only up to a **standoff distance** (then hold at range and engage with their firing AI instead of ramming), **separate** from each other so they don't clump into one blob, and are **wall-collision-resolved** so the separation push can't shove them through walls. (Verified: 8 enemies surrounding a stationary player held a ~150px standoff and the player survived instead of dying instantly.)
+
 ## [11.1.1] - 2026-06-02
 
 ### Fixed

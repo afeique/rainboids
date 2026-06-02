@@ -108,24 +108,74 @@ export const DUNGEON = {
         if (!d) return false;
         const now = _now();
         const p = engine.player;
+        const pr = p.radius || 14;
         // Refresh the BFS flow-field a few times a second.
         if (!state.dist || now - state.distAt > 380) {
             state.dist = buildFlowField(d, p.x, p.y);
             state.distAt = now;
         }
-        // Steer each enemy along the flow-field toward the player (corridors).
         const ts = _tickScale(dt);
         const en = engine.enemyPool.activeObjects;
+        const wm = engine.worldMap;
         for (let i = 0; i < en.length; i++) {
             const e = en[i];
             if (!e.active || e.warping || e._deathFlash > 0) continue;
-            const wp = flowWaypoint(d, state.dist, e.x, e.y);
-            if (!wp) continue;
-            const ang = Math.atan2(wp.y - e.y, wp.x - e.x);
+            const er = e.radius || 18;
             const spd = (e.config && e.config.speed) ? e.config.speed : 2;
-            e.x += Math.cos(ang) * spd * ts;
-            e.y += Math.sin(ang) * spd * ts;
-            if (e.vel) { e.vel.x = Math.cos(ang) * spd; e.vel.y = Math.sin(ang) * spd; }
+            const ddx = p.x - e.x, ddy = p.y - e.y;
+            const distP = Math.hypot(ddx, ddy) || 1;
+            // Hold a STANDOFF gap so the maze nav never herds the whole pack
+            // onto the player and ram-kills them — they path to range, then
+            // engage with their firing AI instead of dive-bombing.
+            const standoff = er + pr + 130;
+
+            // SEPARATION — push apart from nearby enemies so they don't stack
+            // into a single instant-kill blob in the corridors.
+            let sepx = 0, sepy = 0;
+            for (let j = 0; j < en.length; j++) {
+                if (j === i) continue;
+                const o = en[j];
+                if (!o.active || o.warping) continue;
+                const dx = e.x - o.x, dy = e.y - o.y;
+                const dd = dx * dx + dy * dy;
+                const minD = er + (o.radius || 18) + 10;
+                if (dd > 0.001 && dd < minD * minD) {
+                    const dl = Math.sqrt(dd);
+                    sepx += (dx / dl) * (minD - dl);
+                    sepy += (dy / dl) * (minD - dl);
+                }
+            }
+
+            let vx, vy;
+            if (distP > standoff) {
+                // PATH toward the player via the flow-field waypoint (routes
+                // around walls); blend in separation.
+                const wp = flowWaypoint(d, state.dist, e.x, e.y);
+                let ax = wp ? wp.x - e.x : ddx;
+                let ay = wp ? wp.y - e.y : ddy;
+                const al = Math.hypot(ax, ay) || 1;
+                vx = (ax / al) * spd + sepx * 0.5;
+                vy = (ay / al) * spd + sepy * 0.5;
+            } else if (distP < standoff - 24) {
+                // Too close — back off toward the standoff ring (+ separation).
+                vx = (-ddx / distP) * spd + sepx * 0.6;
+                vy = (-ddy / distP) * spd + sepy * 0.6;
+            } else {
+                // At range — orbit slowly so the pack spreads around the player
+                // and keeps line-of-fire, rather than crashing in.
+                vx = (-ddy / distP) * spd * 0.5 + sepx * 0.6;
+                vy = (ddx / distP) * spd * 0.5 + sepy * 0.6;
+            }
+            e.x += vx * ts;
+            e.y += vy * ts;
+            if (e.vel) { e.vel.x = vx; e.vel.y = vy; }
+
+            // Keep enemies out of walls (corridor-bound; also stops separation
+            // from shoving them through a wall).
+            if (wm.hasWalls) {
+                const res = wm.resolveCircle(e.x, e.y, er);
+                if (res.hit) { e.x = res.x; e.y = res.y; }
+            }
         }
         // Bullets are stopped by walls.
         _despawnBulletsInWalls(engine);

@@ -20,13 +20,42 @@ export class ModeManager {
         this.state = {};
         this.portal = new Portal();
         this._transitioning = false;
+        // Random-order cycle state (a shuffled "bag" of map indices).
+        this._bag = null;
+        this._bagPos = 0;
+        this._lastIndex = null;
+    }
+
+    // RANDOM ORDER — draw maps from a shuffled bag of every map, so the cycle
+    // order is random but each map appears once before any repeats, and no map
+    // repeats back-to-back across bag boundaries.
+    _buildBag() {
+        const idxs = this.campaign.map((_, i) => i);
+        for (let i = idxs.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const t = idxs[i]; idxs[i] = idxs[j]; idxs[j] = t;
+        }
+        if (this._lastIndex != null && idxs.length > 1 && idxs[0] === this._lastIndex) {
+            const t = idxs[0]; idxs[0] = idxs[1]; idxs[1] = t;
+        }
+        this._bag = idxs;
+        this._bagPos = 0;
+    }
+
+    _nextIndex() {
+        if (!this._bag || this._bagPos >= this._bag.length) this._buildBag();
+        const idx = this._bag[this._bagPos++];
+        this._lastIndex = idx;
+        return idx;
     }
 
     /** Begin a fresh campaign run (called from engine.init). */
     startCampaign(engine) {
-        this.index = 0;
         this.mapsCleared = 0;
         this._transitioning = false;
+        this._bag = null;
+        this._lastIndex = null;
+        this.index = this._nextIndex();
         this.loadMap(engine, this.campaign[this.index]);
     }
 
@@ -76,15 +105,19 @@ export class ModeManager {
         this.index = ((((index | 0) % len) + len) % len);
         this.mapsCleared = Math.max(0, mapsCleared | 0);
         this._transitioning = false;
+        // Resuming this map seeds the random cycle: the next advance draws a
+        // fresh bag and won't immediately repeat the resumed map.
+        this._lastIndex = this.index;
+        this._bag = null;
         this.loadMap(engine, this.campaign[this.index]);
     }
 
-    /** Advance to the next map in the cycle. */
+    /** Advance to the next (randomly-ordered) map in the cycle. */
     advance(engine) {
         if (this._transitioning) return;
         this._transitioning = true;
         this.mapsCleared++;
-        this.index = (this.index + 1) % this.campaign.length;
+        this.index = this._nextIndex();
         // Quick screen flash to mask the field swap.
         engine._postInitFade = { startTime: Date.now(), duration: 600 };
         this.loadMap(engine, this.campaign[this.index]);
