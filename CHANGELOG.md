@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [11.1.3] - 2026-06-02
+
+### Changed
+- **Enemies render as flat 2D sprites again.** v11.0.0 swapped every enemy's hand-drawn 2D silhouette for a glowing 3D wireframe mesh; they read better flat, so `drawEnemyShape` is reverted to its original per-type 2D drawers (HUNTER fighter, GUARDIAN emerald fortress, TITAN tank, TANGERINE spiked circle, etc. — all still defined and now dispatched again). The player ship keeps its 3D wireframe; asteroids keep their 3D wireframe gems. (`mesh3d.js` / `entity-meshes.js` remain for the player ship.)
+
 ## [11.1.2] - 2026-06-02
 
 ### Changed

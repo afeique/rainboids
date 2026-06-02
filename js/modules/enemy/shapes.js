@@ -7,8 +7,6 @@
 
 import { frameClock } from '../core/frame-clock.js';
 import { rgba } from '../core/color-cache.js';
-// v11.0.0 — all enemies render as glowing 3D wireframe geometry.
-import { drawEnemyMesh3D } from '../render/entity-meshes.js';
 // SYS-11 / ENMY-10b — JUGGERNAUT charge tell. Read-only telegraph reads used to
 // flash the body during the wind-up + draw a forward charge-lane indicator.
 import { telegraphPhase, telegraphProgress } from './telegraph.js';
@@ -332,11 +330,111 @@ function getWhiteProxy(ctx) {
 }
 
 export function drawEnemyShape(ctx) {
-    // v11.0.0 — every enemy renders as a glowing 3D wireframe solid (themed per
-    // archetype) instead of a flat 2D silhouette. Death-flash white is handled
-    // inside the mesh renderer via `this._deathFlashRendering`. The legacy
-    // per-type 2D drawers below remain defined but are no longer dispatched.
-    drawEnemyMesh3D(ctx, this);
+    // When flash-rendering, use a proxy that intercepts all color assignments → white
+    const drawCtx = this._deathFlashRendering ? getWhiteProxy(ctx) : ctx;
+
+    if (!this._deathFlashRendering) {
+        ctx.strokeStyle = this.color;
+        ctx.fillStyle = this.color + '40'; // Semi-transparent fill
+    }
+    drawCtx.lineWidth = 2;
+
+    // 5.79.5 — Removed the `radius × 1.08` black silhouette circle
+    //   that was drawn under each enemy. For non-circular enemies
+    //   (HUNTER triangle, WASP fighter, STALKER blade, etc.) the
+    //   circle extended past the colored body and read as a visible
+    //   dark halo around the ship — exactly the artifact the user
+    //   reported. The colored hull strokes already provide enough
+    //   silhouette definition; if a stronger outline is needed in the
+    //   future, it should be drawn per-shape inside each drawer's
+    //   actual path, not as a generic radial circle.
+
+    switch (this.type) {
+        case 'HUNTER':
+            this.drawTriangle(drawCtx);
+            break;
+        case 'GUARDIAN':
+            this.drawEmeraldGuardian(drawCtx);
+            break;
+        case 'WASP':
+            this.drawWaspShip(drawCtx);
+            break;
+        case 'TITAN':
+            this.drawTitanTank(drawCtx);
+            break;
+        case 'STALKER':
+            this.drawStalkerSword(drawCtx);
+            break;
+        case 'TANGERINE':
+            this.drawSpikedCircle(drawCtx);
+            break;
+        case 'DRIFTER':
+            this.drawLaserTurret(drawCtx);
+            break;
+        case 'PROWLER':
+            this.drawMissileTurret(drawCtx);
+            break;
+        case 'WEAVER':
+            this.drawPulseTurret(drawCtx);
+            break;
+        case 'SENTINEL':
+            this.drawShieldTurret(drawCtx);
+            break;
+        // A.E10-U1 — the 7 new elemental types get their own silhouettes.
+        // Called via the module-local functions (.call(this, …)) so they need no
+        // Enemy-class delegator wired up in enemy.js.
+        case 'CINDER':
+            drawCinderEmber.call(this, drawCtx);
+            break;
+        case 'GLACIER':
+            drawIceCrystal.call(this, drawCtx);
+            break;
+        case 'FROST_LANCE':
+            drawIcicleLance.call(this, drawCtx);
+            break;
+        case 'ASHEN_DETONATOR':
+            drawCrackedBomb.call(this, drawCtx);
+            break;
+        case 'TESLA_WRAITH':
+            drawArcNode.call(this, drawCtx);
+            break;
+        case 'PLAGUEBEARER':
+            drawPlagueSac.call(this, drawCtx);
+            break;
+        case 'WARDEN':
+            drawPrismFacet.call(this, drawCtx);
+            break;
+        case 'HYDRA':
+            // E8e bruiser — reuses the blob silhouette (it splits into blobs).
+            drawPlagueSac.call(this, drawCtx);
+            break;
+        case 'SPORE_CARRIER':
+            // E8c spawner — reuses the sac silhouette (it births drones).
+            drawPlagueSac.call(this, drawCtx);
+            break;
+        case 'LUMEN_DRONE':
+            // E8d support — reuses the shield-turret silhouette (it shields allies).
+            this.drawShieldTurret(drawCtx);
+            break;
+        case 'CONDUIT_NODE':
+            // ENMY-08 support — reuses the shield-turret silhouette (it channels
+            // a HEAL aura to allies, the Volt counterpart to LUMEN_DRONE's shield).
+            this.drawShieldTurret(drawCtx);
+            break;
+        case 'JUGGERNAUT':
+            // ENMY-10b bruiser — bulky charge-and-ram wedge with a SYS-11 windup
+            // lane tell + a recover rear-exposed read.
+            drawJuggernautRam.call(this, drawCtx);
+            break;
+        case 'THORNBACK':
+            // ENMY-10b bruiser — spiky counter-attacker; the thorned silhouette
+            // reads "don't crowd me" (its retaliatory pulse punishes point-blank).
+            drawThornback.call(this, drawCtx);
+            break;
+        default:
+            this.drawTriangle(drawCtx);
+    }
+    // No shadow state to reset — the silhouette is a plain fill now.
 }
 
 export function drawTriangle(ctx) {

@@ -2,9 +2,9 @@
 
 <img src="Rainboids%20-%20Banner.png" alt="RAINBOIDS — Supercharged Asteroids" width="660">
 
-### A twin-stick arcade shooter — now a multi-map Campaign rendered entirely in glowing 3D wireframe.
+### A twin-stick arcade shooter built around a multi-map Campaign.
 
-Cycle a Campaign of distinct map encounters — a chaos arena, a procedural glowing labyrinth, a vertical formation shooter, and a radial last-stand — clearing each to open an exit portal to the next. Every ship, enemy, and asteroid is drawn as vibrant 3D wireframe geometry. All in your browser, no install.
+Cycle a Campaign of distinct map encounters — a chaos arena, a procedural glowing labyrinth, a vertical formation shooter, and a radial last-stand — clearing each to open an exit portal to the next. Asteroids and your ship render as glowing 3D wireframe geometry; enemies keep their hand-drawn 2D silhouettes. All in your browser, no install.
 
 > **v11.0.0 — ground-up restructure.** Elemental effects, attunements, draft cards, and the fixed wave campaign were removed in favor of **simple, straightforward damage**, a **map-cycle Campaign**, and **full 3D-wireframe rendering**. Powerups remain in the codebase.
 
@@ -139,7 +139,7 @@ js/
     world/              # asteroid, particle, powerup, explosion.js (procgen fireball+smoke), starfield, camera
                         #   map/  — Campaign: world-map (bounds+wall geometry), dungeon-generator,
                         #           map-modes (CHAOS/DUNGEON/ASSAULT/SIEGE), mode-manager, portal
-    render/             # shapes, mesh3d (3D wireframe renderer), entity-meshes (player+enemy meshes)
+    render/             # shapes (2D enemy/ship silhouettes), mesh3d (3D wireframe renderer), entity-meshes (player ship mesh)
     hud/ · shop/ · ui/ · wave/ (spawn helpers) · audio/ · performance/
 css/                    # styles.css
 sfx/                    # 47 pre-rendered SFXR WAVs (regen: npm run generate-sfx)
