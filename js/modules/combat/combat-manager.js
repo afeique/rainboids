@@ -260,6 +260,13 @@ export function triggerEnemyFinalExplosion(enemy) {
     // Larger enemies scale up via sizeScale capped at 2.5×.
     const bigR = Math.max(32, r);
     const sizeScale = Math.min(2.5, bigR / 15);
+    // v11.0.1 — BOMB enemies (TANGERINE bomber + any deathFlare/explosive
+    // archetype) detonate HUGE no matter how they die — including a plain
+    // player bullet kill. `bombMult` scales the whole blast; bomb-only extras
+    // (satellite fireballs + double shockwave) fire near the end of this fn.
+    const isBomb = enemy.type === 'TANGERINE' || !!enemy.deathFlare
+        || (enemy.config && enemy.config.explosive);
+    const bombMult = isBomb ? 2.6 : 1;
     const onScreen = this.isEntityOnScreen(enemy);
     const ex = enemy.x;
     const ey = enemy.y;
@@ -269,14 +276,14 @@ export function triggerEnemyFinalExplosion(enemy) {
     // further here so wave-clears still read as distinct kills, not one
     // long shake.
     if (onScreen) {
-        this.triggerHitstop(7);
-        this.triggerScreenFlash(0.14, 7);
+        this.triggerHitstop(isBomb ? 12 : 7);
+        this.triggerScreenFlash(isBomb ? 0.34 : 0.14, isBomb ? 11 : 7);
         if (this.player) {
             const kdx = this.player.x - ex;
             const kdy = this.player.y - ey;
-            this.triggerCameraKick(kdx, kdy, 18);
+            this.triggerCameraKick(kdx, kdy, isBomb ? 42 : 18);
         }
-        this.triggerScreenShake(14, 8, bigR * 1.4);
+        this.triggerScreenShake(isBomb ? 26 : 14, isBomb ? 16 : 8, bigR * 1.4 * bombMult);
     }
 
     // ── 0+1. Procedural fireball + smoke body ──
@@ -287,18 +294,22 @@ export function triggerEnemyFinalExplosion(enemy) {
     // smoke + frame-0 ember stack with one cohesive effect that leaves
     // nothing lingering. The flash / rings / shockwave / sparkles below
     // still supply the sharp "BANG" punch around it.
-    spawnExplosion(this.particlePool, ex, ey, { radius: bigR * sizeScale, power: 1 });
+    spawnExplosion(this.particlePool, ex, ey, {
+        radius: bigR * sizeScale * bombMult,
+        power: isBomb ? 1.5 : 1,
+        puffs: isBomb ? 24 : undefined,
+    });
 
     // ── 2. Bright instantaneous flash ──
     // The "frame-0 punch" — engulfs the area for ~6 frames before the
     // plasma core takes over visually.
-    this.particlePool.get(ex, ey, 'explosionFlash', bigR * 2.8 * sizeScale, '#ffffff');
+    this.particlePool.get(ex, ey, 'explosionFlash', bigR * 2.8 * sizeScale * bombMult, '#ffffff');
 
     // ── 3. Four chromatic wavefront rings ──
     // White (sharp wavefront) → warm → enemy color → hot accent. Largest
     // is ≥80px so even small enemies get a defined shockwave. Per-kill
     // palette drives the warm + hot accents so rings recolor per kill.
-    const ringBase = Math.max(80, bigR * 2.2 * sizeScale);
+    const ringBase = Math.max(80, bigR * 2.2 * sizeScale) * bombMult;
     // One pseudo-3D tilt shared by every ring of this blast so the concentric
     // rings + shockwave are COPLANAR — they read as a single shockwave lying on
     // a tilted plane rather than random skews. tiltAngle = plane orientation,
@@ -340,6 +351,37 @@ export function triggerEnemyFinalExplosion(enemy) {
     // (Frame-0 hot-ember cloud removed in 10.1.0 — the fireball+smoke puff
     // body spawned above now fills the "ship vanishes → debris emerges" gap
     // with motion, and leaves no lingering embers behind.)
+
+    // ── BOMB-ONLY: satellite fireballs + a second mega shockwave ──
+    // A ring of offset fireball clusters around the core + an extra-fat,
+    // slower pressure front makes a bomb kill read as a real detonation
+    // (a fireball that engulfs a wide area), not a slightly-bigger pop.
+    if (isBomb) {
+        const sats = 6;
+        const satR = bigR * 1.15 * sizeScale;
+        for (let i = 0; i < sats; i++) {
+            const a = (i / sats) * Math.PI * 2 + Math.random() * 0.4;
+            const d = ringBase * (0.32 + Math.random() * 0.22);
+            spawnExplosion(this.particlePool, ex + Math.cos(a) * d, ey + Math.sin(a) * d, {
+                radius: satR * random(0.6, 1.0), power: random(1.0, 1.6),
+                puffs: 8,
+            });
+        }
+        // second, wider pressure front behind the first shockwave
+        this.particlePool.get(ex, ey, 'enemyShockwave', ringBase * 2.6, accentEmber, tiltAngle, tiltSquash);
+        this.particlePool.get(ex, ey, 'explosionRingColored', ringBase * 1.7, '#ffffff', tiltAngle, tiltSquash);
+        // a denser sparkle burst thrown wide
+        for (let i = 0; i < 18; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const d = bigR * (0.6 + Math.random() * 0.9) * sizeScale * bombMult;
+            const sp = this.particlePool.get(ex + Math.cos(a) * d, ey + Math.sin(a) * d, 'starSparkle',
+                random(1.8, 3.2), i % 3 === 0 ? '#ffffff' : (i % 3 === 1 ? accentHot : color));
+            if (sp) {
+                sp.life = random(0.6, 1.0);
+                sp.vel = { x: Math.cos(a) * random(0.8, 2.0), y: Math.sin(a) * random(0.8, 2.0) };
+            }
+        }
+    }
 }
 
 // ── BEAT 3: Debris flies through the still-expanding rings ──
@@ -363,6 +405,9 @@ export function triggerEnemyDebrisBurst(enemy) {
     const r = enemy.radius || 18;
     const bigR = Math.max(32, r);
     const sizeScale = Math.min(2.5, bigR / 15);
+    const isBomb = enemy.type === 'TANGERINE' || !!enemy.deathFlare
+        || (enemy.config && enemy.config.explosive);
+    const bombMult = isBomb ? 2.6 : 1;
     const ex = enemy.x;
     const ey = enemy.y;
 
@@ -377,7 +422,7 @@ export function triggerEnemyDebrisBurst(enemy) {
     this.particlePool.get(ex, ey, 'explosionRingColored', bigR * 1.0 * sizeScale, color);
 
     // 1. Dense directional shrapnel — fast streaks in all directions.
-    const shrapnelCount = Math.floor(36 + 18 * sizeScale);
+    const shrapnelCount = Math.floor((36 + 18 * sizeScale) * (isBomb ? 1.8 : 1));
     for (let i = 0; i < shrapnelCount; i++) {
         const angle = (i / shrapnelCount) * Math.PI * 2 + random(-0.4, 0.4);
         const speed = random(6, 18) * sizeScale;
@@ -439,7 +484,11 @@ export function triggerEnemyDebrisBurst(enemy) {
     //    old lingering after-glow ember puff (10.1.0) with a self-resolving
     //    effect. Lower power so it reads as a chamber rupture, not a second
     //    primary blast.
-    spawnExplosion(this.particlePool, ex, ey, { radius: bigR * 0.7 * sizeScale, power: 0.7 });
+    spawnExplosion(this.particlePool, ex, ey, {
+        radius: bigR * 0.7 * sizeScale * bombMult,
+        power: isBomb ? 1.2 : 0.7,
+        puffs: isBomb ? 14 : undefined,
+    });
 }
 
 export function createShapeDebris(enemy) {

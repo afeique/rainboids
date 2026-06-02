@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [11.1.0] - 2026-06-02
+
+### Added
+- **Detailed composite ship meshes.** Every player + enemy 3D wireframe is now a multi-part mesh that echoes its original 2D silhouette instead of a single generic solid (`render/entity-meshes.js` gains a `compose()`/`place()` rig + primitive library): HUNTER red swept-wing fighter (fuselage spindle + raked wings + cockpit), WASP needle-stinger interceptor with razor wings, STALKER mantis with forward blade arms, GUARDIAN hex fortress (hull + shield ring + forward cannon + core), PROWLER missile boat (hex body + side pods + nose sensor), TITAN juggernaut (chunky hex + corner spikes + top turret), TANGERINE spiked bomb, DRIFTER lightning star (stella octangula), WEAVER spoked wheel, SENTINEL twin hex rings + diamond core + emitters. Directional fighters track facing; turret/station archetypes slowly spin.
+
+### Changed
+- **Bomb explosions are substantially bigger — on every death cause.** TANGERINE (the Bomber) — and any `deathFlare`/explosive archetype — now detonates with a ~2.6× blast (a wide fireball + a ring of satellite fireballs + a double shockwave + a heavier screen punch and shrapnel), even when simply shot down by the player. Previously a player-killed bomber produced an ordinary small pop.
+- **Wireframe renderer perf rewrite** (`render/mesh3d.js`). Dropped per-edge `shadowBlur` (the dominant cost) for a cheap two-pass additive glow with cached solid per-edge colours, and reused module scratch arrays (no per-frame allocations). Per-enemy draw cost now scales linearly, so the new, more-complex composite meshes stay performant even with many enemies on screen.
+
 ## [11.0.0] - 2026-06-01
 
 Ground-up restructure. The single wave-based arena becomes a **Campaign** that cycles through self-contained **map encounters** connected by exit portals, damage is simplified to plain numbers, and **every entity is re-rendered as glowing 3D wireframe geometry**.
