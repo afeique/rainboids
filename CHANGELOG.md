@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [12.0.0] - 2026-06-08
+
+### Changed
+- **Back to one open arena.** The v11 multi-map Campaign is gone. Instead of cycling self-contained map encounters connected by exit portals, the game is once again a **single fixed-size open field** (1920×1080) you free-roam and shoot across, with **endless escalating waves** of enemies + asteroids. Difficulty climbs per wave (enemy level ramps ~1.2/wave to a cap of 30; asteroid level half as fast; wave size grows) and the field never transitions — you play until you die. The `ModeManager` was reduced to a thin driver of this one endless map; CONTINUE / GAME OVER → RESTART WAVE now resume on the **wave** you died on (the save's legacy `campaign` field carries the wave checkpoint; old v11 saves resume safely).
+
+### Removed
+- **All distinct map modes removed (CHAOS / ASSAULT / SIEGE; DUNGEON was already gone in 11.2.0).** The per-map movement rules were the cause of the "can't fly to certain regions" boundary problem: **ASSAULT** confined the ship to a bottom band (Galaga-style) and **SIEGE** tethered it to a 250px circle at the centre of a 1500×1500 field, leaving most of the visible arena unreachable; the maps were also smaller than wide viewports, so the field letterboxed with dead borders. The single open arena restores full free roam. `constrainPlayer` (band/tether), `portalAt`, the random map-cycle "bag", and the between-map transition/advance logic were all deleted; the dormant `Portal` + `WorldMap` wall API are retained as no-op infrastructure for any future map.
+
+## [11.3.0] - 2026-06-05
+
+### Added
+- **Enemies now zip, zoom, and dart around.** The brain's smooth Reynolds steering produced deliberate but somewhat sedate motion; a new **dart/juke overlay** (`brain.js` `applyDartOverlay`) layers short, decaying velocity bursts on top of the steady "cruise" velocity on a per-enemy randomized cadence. About half are **zooms** (a lunge along the current heading) and half are **jukes** (a sideways jink), so enemies snap and weave instead of gliding. The overlay brackets the momentum integrator — last frame's burst is stripped before integration so the steering layer only ever clamps the cruise component, then the impulse is re-applied afterward where it's free to briefly exceed cruise speed (the visible dart). A per-archetype **`agility`** factor (0–1, default derived from speed ÷ mass with a small floor) tunes how often and how hard each type darts: light interceptors/swarmers (Wasp, Stalker, Hunter) zip constantly, heavy brutes (Titan, Guardian) only lurch. Darts are dropped while an enemy is stunned/frozen and never override the charge/blink ability lanes.
+
+## [11.2.0] - 2026-06-05
+
+### Removed
+- **THE LABYRINTH (DUNGEON) map is gone.** The procedural-maze map didn't play well — the flow-field navigation and corridor combat never came together — so it's been pulled from the Campaign rotation. The Campaign now cycles **CHAOS → ASSAULT → SIEGE** (in random order). Its dedicated procedural generator (`world/map/dungeon-generator.js`) and the DUNGEON-only enemy-pathing / bullet-in-wall logic were deleted; the orphaned `_tickScale` helper went with them. The generic `WorldMap` wall API (walls, push-out collision, neon rendering) is retained as no-op-without-walls infrastructure for future maps. Old saves that died on DUNGEON resume safely — `loadMapByIndex` wraps the saved campaign slot into the new 3-map range.
+
+## [11.1.4] - 2026-06-03
+
+### Fixed
+- **Bullet collisions work again on every map.** The broad-phase `SpatialGrid` was constructed once at engine startup with the default 1920×1080 bounds and never resized, but v11 maps resize the world per encounter (DUNGEON 3840×2160, SIEGE 1500×1500, ASSAULT 1600×1120). With stale dimensions, `SpatialGrid.insert()` rejected every enemy/asteroid outside the old box, so bullet-vs-enemy and bullet-vs-asteroid hits (the only collision paths that query the grid) silently failed across most of any larger map — and with the v11.1.2 random map order, a run opening on DUNGEON lost collisions over ~75% of the field. `handleCollisions` now re-syncs the grid to the active `gameField` bounds each frame (`resize()` only recomputes cell size for the fixed 8×6 layout, so it's cheap).
+
 ## [11.1.3] - 2026-06-02
 
 ### Changed

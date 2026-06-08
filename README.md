@@ -2,11 +2,11 @@
 
 <img src="Rainboids%20-%20Banner.png" alt="RAINBOIDS — Supercharged Asteroids" width="660">
 
-### A twin-stick arcade shooter built around a multi-map Campaign.
+### A twin-stick arcade shooter set in one open arena.
 
-Cycle a Campaign of distinct map encounters — a chaos arena, a procedural glowing labyrinth, a vertical formation shooter, and a radial last-stand — clearing each to open an exit portal to the next. Asteroids and your ship render as glowing 3D wireframe geometry; enemies keep their hand-drawn 2D silhouettes. All in your browser, no install.
+Free-roam a single open field and blast **endless escalating waves** of enemies + asteroids until you die. Asteroids and your ship render as glowing 3D wireframe geometry; enemies keep their hand-drawn 2D silhouettes. All in your browser, no install.
 
-> **v11.0.0 — ground-up restructure.** Elemental effects, attunements, draft cards, and the fixed wave campaign were removed in favor of **simple, straightforward damage**, a **map-cycle Campaign**, and **full 3D-wireframe rendering**. Powerups remain in the codebase.
+> **v12.0.0 — back to one open arena.** The v11 multi-map Campaign (distinct map encounters connected by exit portals) was removed: its per-map movement rules confined the ship and left the field smaller than the screen. The game is once again a **single fixed-size open map** with **free roam + endless waves**. (v11 had earlier removed elemental effects, attunements, and draft cards in favor of **simple, straightforward damage** and **full 3D-wireframe rendering**; those stay. Powerups remain in the codebase.)
 
 # ▶ Play free now at [**rainboids.com**](https://rainboids.com/)
 
@@ -63,14 +63,9 @@ Open **[rainboids.com](https://rainboids.com/)** in any modern desktop or mobile
 
 **🧿 Passives** — build-defining **rule-modifier** relics (distinct from the numeric STATS), bought permanently with account-gold and equipped into a small set of slots in the BUILD screen's PASSIVES tab. Slots open as you clear stages (3 in a standard run, scaling up to 5 in longer runs), and **at most 2 may be build-defining keystones**; the rest are modular passives that stack safely (Opportunist, Catalyst, Ricochet…). **No-downsides design:** a keystone is defined by the *build it unlocks*, not by an imposed penalty — fragility is emergent (all-offense slotting), never a tax. This anchors distinct **build archetypes**: a **crit/execute** path (Glass Cannon — +40% damage scaling to +90% as your HP falls — plus Apex Predator, which executes enemies under 15% HP); a **blood / lifesteal** path (Bloodshield banks over-heal as a damage-soaking buffer, Bloodlust ramps damage on kills, Sanguine + Hemoglutton feed sustain); and a **power-weapon energy** path (Capacitor/Reactor/Efficiency stats + Overflow Capacitor, Capacitor Bank's overcharge, and the Overclock keystone that fires powers on a flat cooldown with no meter). They're **swappable mid-run** from the pause menu's PASSIVES tab, and **top-tier gear can also roll a passive** (modular on Exceptional+, a keystone only on Transcendental) that's active without using a slot. *(Rolling out — the full system + a curated set of working effects are live; the rest of the catalog lands incrementally.)*
 
-**📈 Progression** — *draft cards were removed in v11.0.0.* Progression is now the **Campaign cycle itself**: each map cleared lifts the enemy level for the maps that follow. A **20-tier kill-streak ladder** (EMPOWERED → … → RAINBOIDS GOD) still buffs damage until you take a hit, and account-gold spent in the BUILD screen still unlocks weapons/abilities. **Powerups** remain in the codebase (orbs, stacks, effects) even though they're no longer drafted.
+**📈 Progression** — *draft cards were removed in v11.0.0.* Progression is the **endless wave climb itself**: each cleared wave ramps the enemy level (and wave size) for the next, to a cap. A **20-tier kill-streak ladder** (EMPOWERED → … → RAINBOIDS GOD) still buffs damage until you take a hit, and account-gold spent in the BUILD screen still unlocks weapons/abilities. **Powerups** remain in the codebase (orbs, stacks, effects) even though they're no longer drafted.
 
-**🗺️ The Campaign** — *v11.0.0 replaced the fixed 50-wave campaign with a continuous **map cycle**.* You move through a sequence of self-contained **map encounters**; clear a map's objective and an **exit portal** spawns — fly into it to warp to the next map. Built to grow (more maps + variants slot into the rotation). The four map types:
-
-- **CHAOS FIELD** — the classic open arena: a few waves of **fully-randomized enemies + asteroids**, pure mayhem.
-- **THE LABYRINTH** — a **4×-larger world** carved into a **procedurally-generated glowing dungeon** of rooms + corridors. Enemies are distributed through the maze and **navigate it via a flow-field** toward you; the exit portal sits in the far room — fight your way there. Walls glow neon and block both ships and bullets.
-- **ASSAULT RUN** — a **vertical formation shooter** (Galaga-style): you hold a bottom band, moving side-to-side and up/down while shooting up at **descending swarms**. Clear the formations to open the portal.
-- **THE SIEGE** — a **radial last-stand**: you're tethered near the centre while enemies **converge from every side** in rings. Survive the rings to open the portal.
+**🗺️ The arena** — *v12.0.0 collapsed the v11 multi-map Campaign back into a **single open field**.* One fixed-size **1920×1080** arena: full free roam, no movement confinement, no exit portals. Enemies + asteroids spawn from the field edges in **endless escalating waves** — clear a wave and the next rolls in, bigger and tougher. You play until you die; CONTINUE / RESTART WAVE resumes on the wave you fell on.
 
 Each cleared map **lifts the enemy level** for the maps that follow. **Meta persists** across runs in `localStorage` — account-gold, unlocks, gear, and upgrades carry over: `NEW GAME` opens the **BUILD** screen (a tabbed bubble tree) where you unlock weapons/abilities with account-gold and pick your loadout, then `START RUN`.
 
@@ -134,11 +129,11 @@ js/
     assist/             # Co-Pilot sense/decide/act helpers for mobile and opt-in assists
     enemy/              # entity, data/archetypes, firing, shapes, abilities/ (cloak, charge, reflect, …)
                         #   steering AI: steering.js (Reynolds + momentum), context-steering.js,
-                        #   strategy.js + brain.js
+                        #   strategy.js + brain.js (brain adds a dart/juke burst overlay)
     combat/             # collision, weapon-data, combat-manager (simple damage — elements removed v11)
     world/              # asteroid, particle, powerup, explosion.js (procgen fireball+smoke), starfield, camera
-                        #   map/  — Campaign: world-map (bounds+wall geometry), dungeon-generator,
-                        #           map-modes (CHAOS/DUNGEON/ASSAULT/SIEGE), mode-manager, portal
+                        #   map/  — open arena: world-map (bounds+wall geometry),
+                        #           map-modes (single OPEN map + endless waves), mode-manager, portal (dormant)
     render/             # shapes (2D enemy/ship silhouettes), mesh3d (3D wireframe renderer), entity-meshes (player ship mesh)
     hud/ · shop/ · ui/ · wave/ (spawn helpers) · audio/ · performance/
 css/                    # styles.css

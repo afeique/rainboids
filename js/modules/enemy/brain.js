@@ -45,6 +45,89 @@ const _force = v2();
 const _tmp = v2();
 const _heading = { x: 0, y: 0, blocked: false };
 
+function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+
+// ── Dart / juke overlay — the "zip and zoom and dart around" ──────────────────
+// Brackets the momentum integrator. Steering (Reynolds + context) produces a
+// smooth, physically-plausible CRUISE velocity — deliberate, but a touch
+// sedate. This overlays a decaying velocity IMPULSE that fires in short bursts
+// on a per-enemy randomized cadence: half "zooms" (a lunge along the heading),
+// half "jukes" (a sideways jink). The impulse is applied AFTER integrate, so it
+// is free to briefly exceed cruise maxSpeed and is not smothered by the force /
+// turn-rate caps — that overshoot is the visible dart. The previous frame's
+// impulse is stripped before integrate so the steering layer only ever sees and
+// clamps the steady cruise component (the burst never compounds or feeds back).
+//
+// `agility` (0..1) sets how often and how hard an enemy darts. It defaults to a
+// speed/mass blend — light/fast types zip, heavy brutes only lurch — with a
+// small floor so the WHOLE roster gains life. Archetypes may override via
+// `brain.agility` (including 0 to opt a type out entirely).
+function applyDartOverlay(enemy, force, st, params, heading) {
+    const b = enemy.config.brain || {};
+    const ms = params.maxSpeed;
+
+    let agility = b.agility;
+    if (agility == null) {
+        agility = Math.max(0.12, clamp01(((ms - 1.0) / 2.4) / Math.max(1, params.mass)));
+    }
+
+    // Recover the steering cruise velocity by removing last frame's overlay. If
+    // something external zeroed the velocity since then (STUN / FREEZE /
+    // charge-end all set vel to exactly 0,0), drop the stale overlay instead —
+    // never re-inject a burst the game meant to cancel.
+    if (enemy.vel.x === 0 && enemy.vel.y === 0) {
+        st.dartX = 0; st.dartY = 0;
+    } else {
+        enemy.vel.x -= st.dartX; enemy.vel.y -= st.dartY;
+    }
+
+    // Integrate the cruise velocity under physical limits (clamped to maxSpeed).
+    integrate(enemy, force, params);
+
+    if (agility <= 0) { st.dartX = 0; st.dartY = 0; return; }
+
+    // Decay the live impulse every tick → each dart fades over ~12-15 ticks.
+    const decay = 0.86;
+    st.dartX *= decay; st.dartY *= decay;
+    if (Math.abs(st.dartX) < 0.02 && Math.abs(st.dartY) < 0.02) { st.dartX = 0; st.dartY = 0; }
+
+    // Fire a fresh dart once the cooldown elapses and we're not mid-burst. Each
+    // enemy jitters its own phase so a crowd darts independently, not in lockstep.
+    const now = frameClock.now;
+    const liveThresh = ms * 0.25;
+    const burstLive = (st.dartX * st.dartX + st.dartY * st.dartY) > liveThresh * liveThresh;
+    if (!burstLive && now >= st.nextDartAt) {
+        // Use the heading the steering layer already chose (obstacle-avoided),
+        // plus a perpendicular jink. ~half the darts ZOOM (mostly forward), half
+        // JUKE (mostly sideways) — that mix is what reads as darting around.
+        let hx = heading.x, hy = heading.y;
+        const hl = Math.hypot(hx, hy);
+        if (hl > 1e-6) { hx /= hl; hy /= hl; }
+        else { hx = Math.cos(enemy.faceAngle || 0); hy = Math.sin(enemy.faceAngle || 0); }
+        const side = Math.random() < 0.5 ? 1 : -1;
+        const px = -hy * side, py = hx * side; // perpendicular to heading
+        const juke = Math.random() < 0.5;
+        const fwd = juke ? 0.3 : 1.0;
+        const lat = juke ? 1.0 : (0.3 + Math.random() * 0.5);
+        let dx = hx * fwd + px * lat;
+        let dy = hy * fwd + py * lat;
+        const dl = Math.hypot(dx, dy) || 1;
+        dx /= dl; dy /= dl;
+        // Burst magnitude: 0.7×→2.0× cruise speed, layered ON TOP of cruise, so
+        // peak speed during a dart is at most ~3× cruise (it decays at once).
+        const burst = ms * (0.7 + agility * 1.3);
+        st.dartX = dx * burst; st.dartY = dy * burst;
+        // Cadence: ~1500ms sluggish → ~650ms very agile, ±35% jitter.
+        const base = 1500 - agility * 850;
+        st.nextDartAt = now + base * (0.65 + Math.random() * 0.7);
+    }
+
+    // Re-apply the (decayed or fresh) impulse on top of cruise — this is the
+    // velocity enemy.js integrates into position, so it can briefly exceed
+    // cruise maxSpeed. That overshoot is the zip/zoom.
+    enemy.vel.x += st.dartX; enemy.vel.y += st.dartY;
+}
+
 // ── Physics-param resolution ────────────────────────────────────────────────
 // Build the per-enemy steering params once, derived from the archetype's
 // `brain` block with size/speed-based fallbacks.
@@ -317,8 +400,10 @@ export function updateBrain(enemy, gameEngine) {
         }
     }
 
-    // Layer 2c: integrate under physical limits → new velocity.
-    integrate(enemy, _force, params);
+    // Layer 2c: integrate cruise velocity under physical limits, then overlay
+    // the dart/juke burst (the "zip and zoom"). applyDartOverlay brackets the
+    // integrate() call — see its header for why.
+    applyDartOverlay(enemy, _force, st, params, _heading);
 
     // Smoothly turn the face toward the target face angle (firing reads this).
     const tf = enemy.targetFaceAngle;

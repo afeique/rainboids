@@ -66,10 +66,14 @@ describe('brain runtime — all 29 archetypes', () => {
                 // Integrate position exactly like enemy.update() does.
                 enemy.x += enemy.vel.x * GAME_CONFIG.TICK_SCALE;
                 enemy.y += enemy.vel.y * GAME_CONFIG.TICK_SCALE;
-                // Velocity must never exceed the archetype's max speed (+ a tiny
-                // epsilon for separation/float drift) — proves the integrator clamps.
+                // Velocity stays bounded. The steering CRUISE component is
+                // clamped to maxSpeed by the integrator; the dart/juke overlay
+                // (brain.js applyDartOverlay) layers a decaying burst of up to
+                // 2× cruise ON TOP, so peak speed during a dart is ~3× cruise.
+                // The bound (3.0× + epsilon) proves the integrator clamps cruise
+                // and the dart impulse never runs away / NaNs.
                 const spd = Math.hypot(enemy.vel.x, enemy.vel.y);
-                expect(spd).toBeLessThanOrEqual(maxSpeed * 1.6 + 0.5);
+                expect(spd).toBeLessThanOrEqual(maxSpeed * 3.0 + 0.5);
                 // No NaNs.
                 expect(Number.isFinite(enemy.x)).toBe(true);
                 expect(Number.isFinite(enemy.y)).toBe(true);

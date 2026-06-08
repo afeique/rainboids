@@ -181,7 +181,17 @@ export const COLLISION_CONFIG = {
 };
 
 export function handleCollisions() {
-    // OPT-8: Populate spatial grid for broad-phase collision culling
+    // OPT-8: Populate spatial grid for broad-phase collision culling.
+    // v11.1.4 — re-sync the grid to the ACTIVE map bounds first. The grid is
+    // built once at engine construction (1920×1080 default). The v11 multi-map
+    // Campaign resized the world per encounter, which left the grid on stale
+    // dimensions so SpatialGrid.insert() rejected every entity outside the old
+    // box — bullet collisions (the only path that queries the grid) silently
+    // failed across most of a larger map. The single OPEN arena (v12.0.0) is
+    // 1920×1080, so this is a no-op match now, but the re-sync is kept as cheap
+    // insurance: resize() only recomputes cellW/cellH for the fixed 8×6 layout
+    // (no reallocation), so running it per frame costs almost nothing.
+    this.spatialGrid.resize(this.gameField.width, this.gameField.height);
     this.spatialGrid.clear();
     this.spatialGrid.insertPool(this.asteroidPool);
     this.spatialGrid.insertPool(this.enemyPool);

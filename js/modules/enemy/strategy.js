@@ -80,6 +80,13 @@ export class StrategyState {
         this.diveState = 'approach'; // approach → strike → peel
         this.diveUntil = 0;
         this.flankSign = 1;
+        // Dart / juke overlay (the brain's "zip and zoom"). dartX/dartY is a
+        // decaying additive velocity impulse layered on top of the steering
+        // cruise velocity each tick; nextDartAt throttles re-triggering.
+        // Driven by applyDartOverlay() in brain.js.
+        this.dartX = 0;
+        this.dartY = 0;
+        this.nextDartAt = 0;
     }
 }
 

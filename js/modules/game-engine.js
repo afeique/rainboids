@@ -64,11 +64,12 @@ import { recordVFXFrame } from './debug/vfx-telemetry.js';
 import * as shop from './shop/shop-manager.js';
 import * as wave from './wave/wave-manager.js';
 
-// v11.0.0 — Campaign / map system. Replaces the wave-progression loop: the
-// ModeManager cycles through self-contained map encounters (CHAOS / DUNGEON /
-// ASSAULT / SIEGE) connected by exit portals, driving spawns via the kept
-// low-level helpers in wave-manager. WorldMap owns the (now resizable) field
-// bounds + the dungeon's wall geometry.
+// v12.0.0 — single OPEN arena. The v11 multi-map Campaign (CHAOS / ASSAULT /
+// SIEGE / DUNGEON, exit portals, per-map confinement) was removed; the game is
+// one fixed-size open field again with free roam + endless escalating waves.
+// The ModeManager now just drives that single endless map and owns spawns via
+// the kept low-level helpers in wave-manager. WorldMap owns the field bounds +
+// a generic wall-geometry API (unused, kept as no-op infra for future maps).
 import { WorldMap } from './world/map/world-map.js';
 import { ModeManager } from './world/map/mode-manager.js';
 // RUN-05a — Adaptive Difficulty Director (RUN-04). Instantiated fresh on each
@@ -1267,12 +1268,12 @@ export class GameEngine {
         this.game.waveComplete = false;
         // 5.88.0 — `updateLives` removed; tanks are rendered on the canvas.
         this.game.state = GAME_STATES.WAVE_TRANSITION;
-        // v11.1.1 — the run CHECKPOINT is now written at each MAP start by the
-        // ModeManager (engine.persistMapStartSave below), not here: at this
-        // point startCampaign hasn't run yet, so the map/campaign position
-        // isn't known. `_suppressWave1Save` stays set through a CONTINUE/restart
-        // init so the first (CHAOS) map load can't clobber the save we're about
-        // to restore; startContinueRun clears it once the restore completes.
+        // v11.1.1 — the run CHECKPOINT is written by the ModeManager (at map
+        // load + each wave start via engine.persistMapStartSave), not here: at
+        // this point startCampaign hasn't run yet, so the wave position isn't
+        // known. `_suppressWave1Save` stays set through a CONTINUE/restart init
+        // so the OPEN map's load can't clobber the save we're about to restore;
+        // startContinueRun clears it once the restore completes.
         // Reset stats for the new run — Game Complete pulls from this object.
         this.game.stats = {
             gameStartTime: Date.now(),
@@ -1289,8 +1290,8 @@ export class GameEngine {
             weaponShots: {},
         };
 
-        // v11.0.0 — start the Campaign. The ModeManager configures the first
-        // map (CHAOS), places the player, and spawns its encounter. The
+        // v12.0.0 — start the run. The ModeManager configures the single OPEN
+        // arena, places the player at centre, and spawns the first wave. The
         // black-to-clear fade reveals the field; state flips to PLAYING after.
         this._postInitFade = { startTime: Date.now(), duration: 700 };
         this.modeManager.startCampaign(this);
@@ -1389,8 +1390,10 @@ export class GameEngine {
                 }
                 : { ...DEFAULT_RUN_CONFIG },
             money: this.game.money | 0,
-            // v11.1.1 — campaign position so RESTART WAVE / CONTINUE resumes on
-            // the map the player was on (not always the first map).
+            // v12.0.0 — run checkpoint so RESTART WAVE / CONTINUE resumes on the
+            // wave the player died on (not always wave 1). Single open arena, so
+            // `index` is always 0; `mapsCleared` carries the wave index. Field
+            // name kept for save-format back-compat with v11 saves.
             campaign: this.modeManager
                 ? { index: this.modeManager.index | 0, mapsCleared: this.modeManager.mapsCleared | 0 }
                 : null,
@@ -1543,11 +1546,12 @@ export class GameEngine {
             if (typeof getEnemyLevel === 'function') this.game.enemyLevel = getEnemyLevel(this.game.currentWave, this.player && this.player.level, _mw);
             if (typeof getAsteroidLevel === 'function') this.game.asteroidLevel = getAsteroidLevel(this.game.currentWave, _mw);
         } catch {}
-        // v11.1.1 — resume on the saved campaign map. init() already started
-        // the campaign at the first map (CHAOS); reload the map the player was
-        // actually on so RESTART WAVE / CONTINUE replays the right encounter
-        // with the restored gold/loadout. (Map-start save stays suppressed here
-        // via _suppressWave1Save until startContinueRun clears it.)
+        // v12.0.0 — resume on the saved WAVE. init() already started the run on
+        // the OPEN arena at wave 1; reload it at the wave the player actually
+        // died on so RESTART WAVE / CONTINUE replays with the restored
+        // gold/loadout. The legacy `campaign.mapsCleared` field now carries the
+        // wave checkpoint. (Save stays suppressed here via _suppressWave1Save
+        // until startContinueRun clears it.)
         if (snap.campaign && this.modeManager && typeof this.modeManager.loadMapByIndex === 'function') {
             this.modeManager.loadMapByIndex(this, snap.campaign.index, snap.campaign.mapsCleared);
         }
@@ -2795,9 +2799,9 @@ export class GameEngine {
     
     drawTitleScreen() { return hudOverlays.drawTitleScreen.call(this); }
     
-    // v11.0.0 — wave progression removed. "Next wave" is now just a resume of
-    // the running Campaign map (used by shop-close + pause-resume); the
-    // ModeManager owns all spawning/objectives.
+    // v12.0.0 — "next wave" is just a resume of the running OPEN arena (used by
+    // shop-close + pause-resume); the ModeManager owns all spawning, rolling
+    // endless waves on the single open field.
     startNextWave() { this.game.state = GAME_STATES.PLAYING; }
 
     spawnWaveEntities() {
@@ -3922,8 +3926,9 @@ export class GameEngine {
             // AND the ARMORY/LOADOUT screens (all pre-run: pools are empty,
             // player may be null, and the ship would otherwise show under the menu).
             if (this.game.state !== GAME_STATES.TITLE_SCREEN && this.game.state !== GAME_STATES.ARMORY && this.game.state !== GAME_STATES.LOADOUT && this.game.state !== GAME_STATES.HANGAR && this.game.state !== GAME_STATES.SETTINGS) {
-                // v11.0.0 — labyrinth walls + exit portal, drawn in world space
-                // behind the combat entities.
+                // v12.0.0 — map walls (none on the open arena) + the dormant
+                // portal, drawn in world space behind the combat entities. Both
+                // are no-ops now, kept wired for future maps.
                 this.worldMap.draw(this.ctx, vL, vT, vR, vB, frameClock.now);
                 this.modeManager.draw(this, this.ctx, frameClock.now);
                 this.lineDebrisPool.drawActiveVisible(this.ctx, vL, vT, vR, vB);
